@@ -57,9 +57,9 @@ private:
   do_cell_integral(IntegratorCell & integrator) const override;
 
   /*
-   * Computes Neumann BC integral
+   * Computes traction boundary integral
    *
-   *  - (v_h, t)_{Gamma_N}
+   *  - (v_h, t)_{Gamma_N} - (v_h, - p * N)_{Gamma_R}
    */
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,

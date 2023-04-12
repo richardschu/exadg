@@ -209,9 +209,9 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type         = ProblemType::QuasiStatic;
+    this->param.problem_type         = ProblemType::Steady;
     this->param.body_force           = use_volume_force;
-    this->param.large_deformation    = true;
+    this->param.large_deformation    = false;
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
 
@@ -367,8 +367,8 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    this->boundary_descriptor->neumann_bc.insert(
-      pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
+      0, std::make_pair(std::array<bool, 2>{{true, true}}, std::array<double, 3>{{0.0, 0.0, 10.0}})));
 
     // left face
     std::vector<bool> mask_left = {true, clamp_at_left_boundary};
