@@ -47,8 +47,8 @@ ElasticityOperatorBase<dim, Number>::get_integrator_flags(bool const unsteady) c
   flags.cell_evaluate  = unsteady_flag | dealii::EvaluationFlags::gradients;
   flags.cell_integrate = unsteady_flag | dealii::EvaluationFlags::gradients;
 
-  // evaluation of Neumann BCs
-  flags.face_evaluate  = dealii::EvaluationFlags::nothing;
+  // evaluation of boundary integrals
+  flags.face_evaluate  = dealii::EvaluationFlags::values;
   flags.face_integrate = dealii::EvaluationFlags::values;
 
   return flags;

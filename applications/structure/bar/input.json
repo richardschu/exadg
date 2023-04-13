@@ -1,14 +1,14 @@
 {
     "General": {
-        "Precision": "double",
+        "Precision": "float",
         "Dim": "3",
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "4",
-        "DegreeMax": "4",
-        "RefineSpaceMin": "1",
-        "RefineSpaceMax": "1"
+        "DegreeMin": "1",
+        "DegreeMax": "1",
+        "RefineSpaceMin": "0",
+        "RefineSpaceMax": "0"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
@@ -22,11 +22,16 @@
         "VolumeForce": "1.0",
         "BoundaryType": "Dirichlet",
         "Displacement": "20.0",
-        "Traction":	"0.0" 
+        "Traction":	"0.0",
+        "NormalSpring": "true",
+        "NormalDashpot": "true",
+        "SpringCoeff": "0.0",
+        "DashpotCoeff": "0.0",
+        "ExteriorPressure": "100.0"
     },
     "Output": {
         "OutputDirectory": "output/bar/",
         "OutputName": "test",
-        "WriteOutput": "false"
+        "WriteOutput": "true"
     }
 }

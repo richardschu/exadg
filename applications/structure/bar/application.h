@@ -193,14 +193,19 @@ public:
 
     // clang-format off
     prm.enter_subsection("Application");
-    prm.add_parameter("Length",           length,           "Length of domain.");
-    prm.add_parameter("Height",           height,           "Height of domain.");
-    prm.add_parameter("Width",            width,            "Width of domain.");
-    prm.add_parameter("UseVolumeForce",   use_volume_force, "Use volume force.");
-    prm.add_parameter("VolumeForce",      volume_force,     "Volume force.");
-    prm.add_parameter("BoundaryType",     boundary_type,    "Type of boundary condition, Dirichlet vs Neumann.", dealii::Patterns::Selection("Dirichlet|Neumann"));
-    prm.add_parameter("Displacement",     displacement,     "Displacement of right boundary in case of Dirichlet BC.");
-    prm.add_parameter("Traction",         area_force,       "Traction acting on right boundary in case of Neumann BC.");
+    prm.add_parameter("Length",           length,            "Length of domain.");
+    prm.add_parameter("Height",           height,            "Height of domain.");
+    prm.add_parameter("Width",            width,             "Width of domain.");
+    prm.add_parameter("UseVolumeForce",   use_volume_force,  "Use volume force.");
+    prm.add_parameter("VolumeForce",      volume_force,      "Volume force.");
+    prm.add_parameter("BoundaryType",     boundary_type,     "Type of boundary condition, Dirichlet vs Neumann.", dealii::Patterns::Selection("Dirichlet|Neumann"));
+    prm.add_parameter("Displacement",     displacement,      "Displacement of right boundary in case of Dirichlet BC.");
+    prm.add_parameter("Traction",         area_force,        "Traction acting on right boundary in case of Neumann BC.");
+    prm.add_parameter("NormalSpring",     normal_spring,     "Spring only active in normal direction.");
+    prm.add_parameter("NormalDashpot",    normal_dashpot,    "Dashpot only active in normal direction.");
+    prm.add_parameter("SpringCoeff",      spring_coeff,      "Spring coefficient.");
+    prm.add_parameter("DashpotCoeff",     dashpot_coeff,     "Dashpot coefficient.");
+    prm.add_parameter("ExteriorPressure", exterior_pressure, "Exterior pressure.");
     prm.leave_subsection();
     // clang-format on
   }
@@ -367,8 +372,9 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
+//    this->boundary_descriptor->neumann_bc.insert(pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
     this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
-      0, std::make_pair(std::array<bool, 2>{{true, true}}, std::array<double, 3>{{0.0, 0.0, 10.0}})));
+      0, std::make_pair(std::array<bool, 2>{{normal_spring, normal_dashpot}}, std::array<double, 3>{{spring_coeff, dashpot_coeff, exterior_pressure}})));
 
     // left face
     std::vector<bool> mask_left = {true, clamp_at_left_boundary};
@@ -527,6 +533,12 @@ private:
 
   double displacement = 1.0; // "Dirichlet"
   double area_force   = 1.0; // "Neumann"
+
+  bool normal_spring = false;
+  bool normal_dashpot = false;
+  double spring_coeff = 0.0;
+  double dashpot_coeff = 0.0;
+  double exterior_pressure = 0.0;
 
   // mesh parameters
   unsigned int const repetitions0 = 4, repetitions1 = 1, repetitions2 = 1;

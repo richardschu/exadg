@@ -38,6 +38,7 @@ private:
   typedef typename Base::IntegratorCell IntegratorCell;
   typedef typename Base::IntegratorFace IntegratorFace;
 
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> vector;
   typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> tensor;
 
   /*
@@ -57,12 +58,17 @@ private:
   do_cell_integral(IntegratorCell & integrator) const override;
 
   /*
-   * Computes traction boundary integral
+   * Computes boundary integral
    *
+   *  inhomogeneous operator:
    *  - (v_h, t)_{Gamma_N} - (v_h, - p * N)_{Gamma_R}
+   *
+   *  homogeneous operator:
+   *  + (v_h, k * d_h)_{Gamma_R}
    */
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
+                                  OperatorType const &               operator_type,
                                   dealii::types::boundary_id const & boundary_id) const override;
 };
 

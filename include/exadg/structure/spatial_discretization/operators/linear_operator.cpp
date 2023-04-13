@@ -55,16 +55,47 @@ template<int dim, typename Number>
 void
 LinearOperator<dim, Number>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator_m,
+  OperatorType const &               operator_type,
   dealii::types::boundary_id const & boundary_id) const
 {
   BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
 
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
-    auto const neumann_value = calculate_neumann_value<dim, Number>(
-      q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+	vector value;
+	if(operator_type == OperatorType::inhomogeneous)
+	{
+	  value -= calculate_neumann_value<dim, Number>(
+		q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+	}
 
-    integrator_m.submit_value(-neumann_value, q);
+	if(operator_type == OperatorType::homogeneous ||
+			  operator_type == OperatorType::full)
+	  {
+		if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
+		{
+		  bool const normal_spring = this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[0];
+		  double const spring_coefficient = this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[0];
+		  double dashpot_coefficient = this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
+
+		  AssertThrow(dashpot_coefficient < 1e-15, dealii::ExcMessage("Dashpot not yet implemented for linear problem."));
+
+		  for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
+		  {
+			if(normal_spring)
+			{
+				vector const N = integrator_m.get_normal_vector(q);
+				value += N * ( spring_coefficient * (N * integrator_m.get_value(q)));
+			}
+			else
+			{
+				value += spring_coefficient * integrator_m.get_value(q);
+			}
+		  }
+		}
+	  }
+
+	integrator_m.submit_value(value, q);
   }
 }
 

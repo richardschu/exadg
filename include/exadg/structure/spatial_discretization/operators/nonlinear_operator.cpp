@@ -174,7 +174,7 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
       this->integrator_m->evaluate(dealii::EvaluationFlags::gradients);
     }
 
-    do_boundary_integral_continuous(*this->integrator_m, matrix_free.get_boundary_id(face));
+    do_boundary_integral_continuous(*this->integrator_m, OperatorType::inhomogeneous, matrix_free.get_boundary_id(face)); // ##+
 
     this->integrator_m->integrate_scatter(this->integrator_flags.face_integrate, dst);
   }
@@ -218,8 +218,11 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator_m,
+  OperatorType const &               operator_type,
   dealii::types::boundary_id const & boundary_id) const
 {
+  AssertThrow(operator_type == OperatorType::homogeneous, dealii::ExcMessage("Homogeneous operator expected."));
+
   BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
 
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
