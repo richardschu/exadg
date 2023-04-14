@@ -60,20 +60,18 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
 {
   BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
 
-  //  if(operator_type == OperatorType::homogeneous)
-  //	std::cout << "operator_type = homogeneous \n";
-  //  else if(operator_type == OperatorType::inhomogeneous)
-  //	std::cout << "operator_type = inhomogeneous \n";
-  //  else if(operator_type == OperatorType::full)
-  //	std::cout << "operator_type = full \n";
-
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
-    vector value;
+    vector traction;
+    traction = 0;
     if(operator_type == OperatorType::inhomogeneous || operator_type == OperatorType::full)
     {
-      value -= calculate_neumann_value<dim, Number>(
-        q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+      if(boundary_type == BoundaryType::Neumann ||
+    	 boundary_type == BoundaryType::RobinSpringDashpotPressure)
+ 	  {
+        traction -= calculate_neumann_value<dim, Number>(
+          q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+	  }
     }
 
     if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
@@ -93,16 +91,16 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
         if(normal_spring)
         {
           vector const N = integrator_m.get_normal_vector(q);
-          value += N * (spring_coefficient * (N * integrator_m.get_value(q)));
+          traction += N * (spring_coefficient * (N * integrator_m.get_value(q)));
         }
         else
         {
-          value += spring_coefficient * integrator_m.get_value(q);
+          traction += spring_coefficient * integrator_m.get_value(q);
         }
       }
     }
 
-    integrator_m.submit_value(value, q);
+    integrator_m.submit_value(traction, q);
   }
 }
 

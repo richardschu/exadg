@@ -216,7 +216,7 @@ private:
   {
     this->param.problem_type         = ProblemType::Unsteady;
     this->param.body_force           = use_volume_force;
-    this->param.large_deformation    = false;
+    this->param.large_deformation    = true;
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
 
@@ -499,9 +499,11 @@ private:
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree;
 
-    pp_data.error_data.time_control_data.is_active = true;
-    pp_data.error_data.calculate_relative_errors   = true;
-    double const vol_force                         = use_volume_force ? this->volume_force : 0.0;
+    pp_data.error_data.time_control_data.is_active        = true;
+    pp_data.error_data.time_control_data.start_time       = start_time;
+    pp_data.error_data.time_control_data.trigger_interval = (end_time - start_time);
+    pp_data.error_data.calculate_relative_errors          = true;
+    double const vol_force = use_volume_force ? this->volume_force : 0.0;
     if(boundary_type == "Dirichlet")
     {
       pp_data.error_data.analytical_solution.reset(

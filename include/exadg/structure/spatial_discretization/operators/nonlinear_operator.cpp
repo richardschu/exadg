@@ -46,7 +46,7 @@ void
 NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType const & src) const
 {
   this->matrix_free->loop(&This::cell_loop_nonlinear,
-                          &This::face_loop_nonlinear,
+                          &This::face_loop_nonlinear /*no contributions added for CG*/,
                           &This::boundary_face_loop_nonlinear,
                           this,
                           dst,
@@ -159,7 +159,6 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
 {
   (void)src;
 
-  // apply Neumann BCs
   for(unsigned int face = range.first; face < range.second; face++)
   {
     this->reinit_boundary_face(face);
@@ -168,15 +167,15 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
     // the displacement gradient to obtain the surface area ratio da/dA.
     // We write the integrator flags explicitly in this case since they
     // depend on the parameter pull_back_traction.
+    this->integrator_m->read_dof_values_plain(src);
     if(this->operator_data.pull_back_traction)
-    {
-      this->integrator_m->read_dof_values_plain(src);
-      this->integrator_m->evaluate(dealii::EvaluationFlags::gradients);
-    }
+      this->integrator_m->evaluate(dealii::EvaluationFlags::gradients | dealii::EvaluationFlags::values);
+    else
+      this->integrator_m->evaluate(dealii::EvaluationFlags::values);
 
     do_boundary_integral_continuous(*this->integrator_m,
-                                    OperatorType::inhomogeneous,
-                                    matrix_free.get_boundary_id(face)); // ##+
+                                    OperatorType::full,
+                                    matrix_free.get_boundary_id(face));
 
     this->integrator_m->integrate_scatter(this->integrator_flags.face_integrate, dst);
   }
@@ -223,28 +222,49 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   OperatorType const &               operator_type,
   dealii::types::boundary_id const & boundary_id) const
 {
-  AssertThrow(operator_type == OperatorType::homogeneous,
-              dealii::ExcMessage("Homogeneous operator expected."));
-
   BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
 
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
-    auto traction = calculate_neumann_value<dim, Number>(
-      q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
-
-    if(this->operator_data.pull_back_traction)
+    vector traction;
+    traction = 0;
+    if(operator_type == OperatorType::inhomogeneous || operator_type == OperatorType::full)
     {
-      tensor F = get_F<dim, Number>(integrator_m.get_gradient(q));
-      vector N = integrator_m.get_normal_vector(q);
-      // da/dA * n = det F F^{-T} * N := n_star
-      // -> da/dA = n_star.norm()
-      vector n_star = determinant(F) * transpose(invert(F)) * N;
-      // t_0 = da/dA * t
-      traction *= n_star.norm();
+      if(boundary_type == BoundaryType::Neumann ||
+         boundary_type == BoundaryType::RobinSpringDashpotPressure)
+ 	  {
+        traction -= calculate_neumann_value<dim, Number>(
+          q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+	  }
     }
 
-    integrator_m.submit_value(-traction, q);
+    if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
+    {
+      if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
+      {
+        bool const normal_spring =
+          this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[0];
+        double const spring_coefficient =
+          this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[0];
+        double dashpot_coefficient =
+          this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
+
+        AssertThrow(dashpot_coefficient < 1e-15,
+                    dealii::ExcMessage("Dashpot not yet implemented for linear problem."));
+
+        if(normal_spring)
+        {
+          vector const N = integrator_m.get_normal_vector(q);
+          traction += N * (spring_coefficient * (N * integrator_m.get_value(q)));
+        }
+        else
+        {
+          traction += spring_coefficient * integrator_m.get_value(q);
+        }
+      }
+    }
+
+    integrator_m.submit_value(traction, q);
   }
 }
 

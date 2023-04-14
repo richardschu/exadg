@@ -301,8 +301,6 @@ template<int dim, typename Number, int n_components>
 void
 OperatorBase<dim, Number, n_components>::apply_add(VectorType & dst, VectorType const & src) const
 {
-  std::cout << "apply_add ##+\n";
-
   if(is_dg)
   {
     if(evaluate_face_integrals())
@@ -396,8 +394,6 @@ void
 OperatorBase<dim, Number, n_components>::evaluate_add(VectorType &       dst,
                                                       VectorType const & src) const
 {
-  std::cout << "evaluate_add ##+\n";
-
   if(is_dg)
   {
     matrix_free->loop(
@@ -461,7 +457,7 @@ OperatorBase<dim, Number, n_components>::add_diagonal(VectorType & diagonal) con
   }
   else
   {
-    // Why do we not use this?
+	std::cout << "WHY DONT WE USE THIS? ##+\n";
     matrix_free->cell_loop(&This::cell_loop_diagonal, this, diagonal, diagonal);
     //    dealii::MatrixFreeTools::
     //      compute_diagonal<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number>>(
@@ -830,7 +826,7 @@ OperatorBase<dim, Number, n_components>::internal_calculate_system_matrix(
   if(evaluate_face_integrals())
   {
     matrix_free->loop(&This::cell_loop_calculate_system_matrix,
-                      &This::face_loop_calculate_system_matrix /*no contributions for CG added*/,
+                      &This::face_loop_calculate_system_matrix /*no contributions added for CG*/,
                       &This::boundary_face_loop_calculate_system_matrix,
                       this,
                       system_matrix,

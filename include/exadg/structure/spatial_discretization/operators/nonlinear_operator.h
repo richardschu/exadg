@@ -127,9 +127,10 @@ private:
   do_cell_integral_nonlinear(IntegratorCell & integrator) const;
 
   /*
-   * Computes Neumann BC integral
+   * Computes boundary integral
    *
-   *  - (v_h, t_0)_{Gamma_N}
+   *  inhomogeneous operator:
+   *  - (v_h, t_0)_{Gamma_N} - (v_h, - p * N)_{Gamma_R}
    *
    * with traction
    *
@@ -138,6 +139,9 @@ private:
    * If the traction is specified as force per surface area of the underformed
    * body, the specified traction t is interpreted as t_0 = t, and no pull-back
    * is necessary.
+   *
+   *  homogeneous operator:
+   *  + (v_h, k * d_h)_{Gamma_R}
    */
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
