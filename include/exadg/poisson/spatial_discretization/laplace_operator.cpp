@@ -378,21 +378,22 @@ LaplaceOperator<dim, Number, n_components>::do_boundary_integral_continuous(
   dealii::types::boundary_id const & boundary_id) const
 {
   if(operator_type == OperatorType::inhomogeneous ||
-	 operator_type == OperatorType::full) // where is this called? before, this was only homogeneous,
+     operator_type ==
+       OperatorType::full) // where is this called? before, this was only homogeneous,
   {
-	  BoundaryType boundary_type = operator_data.bc->get_boundary_type(boundary_id);
+    BoundaryType boundary_type = operator_data.bc->get_boundary_type(boundary_id);
 
-	  for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
-	  {
-		value neumann_value = calculate_neumann_value<dim, Number, n_components, rank>(
-		  q, integrator_m, boundary_type, boundary_id, operator_data.bc, this->time);
+    for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
+    {
+      value neumann_value = calculate_neumann_value<dim, Number, n_components, rank>(
+        q, integrator_m, boundary_type, boundary_id, operator_data.bc, this->time);
 
-		integrator_m.submit_value(-neumann_value, q);
-	  }
+      integrator_m.submit_value(-neumann_value, q);
+    }
   }
   else
   {
-	// do nothing.
+    // do nothing.
   }
 }
 

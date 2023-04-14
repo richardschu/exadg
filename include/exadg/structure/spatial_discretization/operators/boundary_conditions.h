@@ -64,7 +64,7 @@ inline DEAL_II_ALWAYS_INLINE //
   {
     double exterior_pressure =
       boundary_descriptor->robin_k_c_p_param.find(boundary_id)->second.second[2];
-    traction = - exterior_pressure * integrator.get_normal_vector(q);
+    traction = -exterior_pressure * integrator.get_normal_vector(q);
   }
   else
   {

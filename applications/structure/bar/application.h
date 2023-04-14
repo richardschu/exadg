@@ -214,7 +214,7 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type         = ProblemType::Steady;
+    this->param.problem_type         = ProblemType::Unsteady;
     this->param.body_force           = use_volume_force;
     this->param.large_deformation    = false;
     this->param.pull_back_body_force = false;
@@ -372,9 +372,12 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-//    this->boundary_descriptor->neumann_bc.insert(pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    //    this->boundary_descriptor->neumann_bc.insert(pair(0, new
+    //    dealii::Functions::ZeroFunction<dim>(dim)));
     this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
-      0, std::make_pair(std::array<bool, 2>{{normal_spring, normal_dashpot}}, std::array<double, 3>{{spring_coeff, dashpot_coeff, exterior_pressure}})));
+      0,
+      std::make_pair(std::array<bool, 2>{{normal_spring, normal_dashpot}},
+                     std::array<double, 3>{{spring_coeff, dashpot_coeff, exterior_pressure}})));
 
     // left face
     std::vector<bool> mask_left = {true, clamp_at_left_boundary};
@@ -534,10 +537,10 @@ private:
   double displacement = 1.0; // "Dirichlet"
   double area_force   = 1.0; // "Neumann"
 
-  bool normal_spring = false;
-  bool normal_dashpot = false;
-  double spring_coeff = 0.0;
-  double dashpot_coeff = 0.0;
+  bool   normal_spring     = false;
+  bool   normal_dashpot    = false;
+  double spring_coeff      = 0.0;
+  double dashpot_coeff     = 0.0;
   double exterior_pressure = 0.0;
 
   // mesh parameters
