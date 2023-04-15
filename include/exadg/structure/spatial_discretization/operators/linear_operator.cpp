@@ -67,11 +67,11 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
     if(operator_type == OperatorType::inhomogeneous || operator_type == OperatorType::full)
     {
       if(boundary_type == BoundaryType::Neumann ||
-    	 boundary_type == BoundaryType::RobinSpringDashpotPressure)
- 	  {
+         boundary_type == BoundaryType::RobinSpringDashpotPressure)
+      {
         traction -= calculate_neumann_value<dim, Number>(
           q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
-	  }
+      }
     }
 
     if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)

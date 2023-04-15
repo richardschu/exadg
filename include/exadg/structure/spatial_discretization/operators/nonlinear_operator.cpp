@@ -169,7 +169,8 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
     // depend on the parameter pull_back_traction.
     this->integrator_m->read_dof_values_plain(src);
     if(this->operator_data.pull_back_traction)
-      this->integrator_m->evaluate(dealii::EvaluationFlags::gradients | dealii::EvaluationFlags::values);
+      this->integrator_m->evaluate(dealii::EvaluationFlags::gradients |
+                                   dealii::EvaluationFlags::values);
     else
       this->integrator_m->evaluate(dealii::EvaluationFlags::values);
 
@@ -232,10 +233,10 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
     {
       if(boundary_type == BoundaryType::Neumann ||
          boundary_type == BoundaryType::RobinSpringDashpotPressure)
- 	  {
+      {
         traction -= calculate_neumann_value<dim, Number>(
           q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
-	  }
+      }
     }
 
     if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)

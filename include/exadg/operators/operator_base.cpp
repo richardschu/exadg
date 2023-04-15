@@ -457,7 +457,7 @@ OperatorBase<dim, Number, n_components>::add_diagonal(VectorType & diagonal) con
   }
   else
   {
-	std::cout << "WHY DONT WE USE THIS? ##+\n";
+    std::cout << "WHY DONT WE USE THIS? ##+\n";
     matrix_free->cell_loop(&This::cell_loop_diagonal, this, diagonal, diagonal);
     //    dealii::MatrixFreeTools::
     //      compute_diagonal<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number>>(
