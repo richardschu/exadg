@@ -64,7 +64,7 @@ private:
    *  - (v_h, t)_{Gamma_N} - (v_h, - p * N)_{Gamma_R}
    *
    *  homogeneous operator:
-   *  + (v_h, k * d_h)_{Gamma_R}
+   *  + (v_h, d_h * (k + c*scaling_factor_dashpot))_{Gamma_R}
    */
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,

@@ -127,6 +127,12 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   this->compute_const_vector(rhs, displacement_n, velocity_n, acceleration_n);
   pde_operator->apply_mass_operator(const_vector, rhs);
 
+  // add contribution from dashpot boundary integral
+  {
+	this->compute_const_vector_dashpot(rhs, displacement_n, velocity_n, acceleration_n);
+	// pde_operator->apply_add_boundary_mass_operator(const_vector, rhs, boundary_ids)
+  }
+
   if(param.large_deformation == false) // linear case
   {
     // calculate right-hand side vector

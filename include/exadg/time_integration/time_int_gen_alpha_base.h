@@ -57,6 +57,9 @@ protected:
   get_scaling_factor_mass() const;
 
   double
+  get_scaling_factor_dashpot() const;
+
+  double
   get_mid_time() const;
 
   void
@@ -64,6 +67,12 @@ protected:
                        VectorType const & displacement_n,
                        VectorType const & velocity_n,
                        VectorType const & acceleration_n) const;
+
+  void
+  compute_const_vector_dashpot(VectorType &       const_vector,
+                               VectorType const & displacement_n,
+                               VectorType const & velocity_n,
+                               VectorType const & acceleration_n) const;
 
   void
   update_displacement(VectorType & displacement_np, VectorType const & displacement_n) const;

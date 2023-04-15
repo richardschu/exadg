@@ -68,6 +68,7 @@ public:
   solve_nonlinear(VectorType &       sol,
                   VectorType const & rhs,
                   double const       factor,
+				  double const       factor_dashpot,
                   double const       time,
                   bool const         update_preconditioner) const = 0;
 
@@ -75,6 +76,7 @@ public:
   solve_linear(VectorType &       sol,
                VectorType const & rhs,
                double const       factor,
+			   double const       factor_dashpot,
                double const       time) const = 0;
 };
 
