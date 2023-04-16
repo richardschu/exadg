@@ -75,7 +75,7 @@ public:
       VectorType const_vector;
 
       auto const iter = pde_operator->solve_nonlinear(
-        displacement, const_vector, 0.0 /* no mass term */, time, param.update_preconditioner);
+        displacement, const_vector, 0.0 /* no mass terms */, 0.0 /* no mass terms */, time, param.update_preconditioner);
 
       iterations.first += 1;
       std::get<0>(iterations.second) += std::get<0>(iter);
@@ -94,7 +94,7 @@ public:
       pde_operator->initialize_dof_vector(rhs);
       pde_operator->compute_rhs_linear(rhs, time);
 
-      auto const iter = pde_operator->solve_linear(displacement, rhs, 0.0 /* no mass term */, time);
+      auto const iter = pde_operator->solve_linear(displacement, rhs, 0.0 /* no mass terms */, 0.0 /* no mass terms */,  time);
 
       iterations.first += 1;
       std::get<1>(iterations.second) += iter;

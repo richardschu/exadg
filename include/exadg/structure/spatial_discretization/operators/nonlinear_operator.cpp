@@ -268,11 +268,11 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
 		  if(normal_dashpot)
 		  {
 			vector const N = integrator_m.get_normal_vector(q);
-			traction += N * (dashpot_coefficient * this->scaling_factor_dashpot * (N * integrator_m.get_value(q)));
+			traction += N * (dashpot_coefficient * this->scaling_factor_mass_velocity * (N * integrator_m.get_value(q)));
 		  }
 		  else
 		  {
-			traction += dashpot_coefficient * this->scaling_factor_dashpot * integrator_m.get_value(q);
+			traction += dashpot_coefficient * this->scaling_factor_mass_velocity * integrator_m.get_value(q);
 		  }
 		}
       }

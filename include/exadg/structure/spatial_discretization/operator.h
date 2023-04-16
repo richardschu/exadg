@@ -63,7 +63,7 @@ private:
 
 public:
   ResidualOperator()
-    : pde_operator(nullptr), const_vector(nullptr), scaling_factor_mass(0.0), scaling_factor_dashpot(0.0), time(0.0)
+    : pde_operator(nullptr), const_vector(nullptr), scaling_factor_mass(0.0), scaling_factor_mass_velocity(0.0), time(0.0)
   {
   }
 
@@ -74,11 +74,11 @@ public:
   }
 
   void
-  update(VectorType const & const_vector, double const factor, double const factor_dashpot, double const time)
+  update(VectorType const & const_vector, double const factor, double const factor_velocity, double const time)
   {
     this->const_vector           = &const_vector;
     this->scaling_factor_mass    = factor;
-    this->scaling_factor_dashpot = factor_dashpot;
+    this->scaling_factor_mass_velocity = factor_velocity;
     this->time                   = time;
   }
 
@@ -89,7 +89,7 @@ public:
   void
   evaluate_residual(VectorType & dst, VectorType const & src) const
   {
-    pde_operator->evaluate_nonlinear_residual(dst, src, *const_vector, scaling_factor_mass, scaling_factor_dashpot, time);
+    pde_operator->evaluate_nonlinear_residual(dst, src, *const_vector, scaling_factor_mass, scaling_factor_mass_velocity, time);
   }
 
 private:
@@ -98,7 +98,7 @@ private:
   VectorType const * const_vector;
 
   double scaling_factor_mass;
-  double scaling_factor_dashpot;
+  double scaling_factor_mass_velocity;
   double time;
 };
 
@@ -117,7 +117,7 @@ private:
 
 public:
   LinearizedOperator()
-    : dealii::Subscriptor(), pde_operator(nullptr), scaling_factor_mass(0.0), scaling_factor_dashpot(0.0), time(0.0)
+    : dealii::Subscriptor(), pde_operator(nullptr), scaling_factor_mass(0.0), scaling_factor_mass_velocity(0.0), time(0.0)
   {
   }
 
@@ -138,10 +138,10 @@ public:
   }
 
   void
-  update(double const factor, double const factor_dashpot, double const time)
+  update(double const factor, double const factor_velocity, double const time)
   {
     this->scaling_factor_mass    = factor;
-    this->scaling_factor_dashpot = factor_dashpot;
+    this->scaling_factor_mass_velocity = factor_velocity;
     this->time                   = time;
   }
 
@@ -152,14 +152,14 @@ public:
   void
   vmult(VectorType & dst, VectorType const & src) const
   {
-    pde_operator->apply_linearized_operator(dst, src, scaling_factor_mass, scaling_factor_dashpot, time);
+    pde_operator->apply_linearized_operator(dst, src, scaling_factor_mass, scaling_factor_mass_velocity, time);
   }
 
 private:
   PDEOperator const * pde_operator;
 
   double scaling_factor_mass;
-  double scaling_factor_dashpot;
+  double scaling_factor_mass_velocity;
   double time;
 };
 
@@ -240,7 +240,7 @@ public:
                               VectorType const & src,
                               VectorType const & const_vector,
                               double const       factor,
-							  double const       factor_dashpot,
+							  double const       factor_velocity,
                               double const       time) const;
 
   void
@@ -250,21 +250,21 @@ public:
   apply_linearized_operator(VectorType &       dst,
                             VectorType const & src,
                             double const       factor,
-							double const       factor_dashpot,
+							double const       factor_velocity,
                             double const       time) const;
 
   void
   apply_nonlinear_operator(VectorType &       dst,
                            VectorType const & src,
                            double const       factor,
-						   double const       factor_dashpot,
+						   double const       factor_velocity,
                            double const       time) const;
 
   void
   apply_linear_operator(VectorType &       dst,
                         VectorType const & src,
                         double const       factor,
-						double const       factor_dashpot,
+						double const       factor_velocity,
                         double const       time) const;
 
   /*
@@ -274,7 +274,7 @@ public:
   solve_nonlinear(VectorType &       sol,
                   VectorType const & rhs,
                   double const       factor,
-				  double const       factor_dashpot,
+				  double const       factor_velocity,
                   double const       time,
                   bool const         update_preconditioner) const;
 
@@ -282,7 +282,7 @@ public:
   solve_linear(VectorType &       sol,
                VectorType const & rhs,
                double const       factor,
-			   double const       factor_dashpot,
+			   double const       factor_velocity,
                double const       time) const;
 
   /*

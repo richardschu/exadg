@@ -127,9 +127,9 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   this->compute_const_vector(rhs, displacement_n, velocity_n, acceleration_n);
   pde_operator->apply_mass_operator(const_vector, rhs);
 
-  // add contribution from dashpot boundary integral
+  // add contribution from Robin boundary
   {
-	this->compute_const_vector_dashpot(rhs, displacement_n, velocity_n, acceleration_n);
+	this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
 	// pde_operator->apply_add_boundary_mass_operator(const_vector, rhs, boundary_ids)
   }
 
@@ -161,6 +161,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
     auto const iter = pde_operator->solve_nonlinear(displacement_np,
                                                     const_vector,
                                                     this->get_scaling_factor_mass(),
+													this->get_scaling_factor_mass_velocity(),
                                                     this->get_mid_time(),
                                                     update_preconditioner);
 
@@ -180,6 +181,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
     unsigned int const iter = pde_operator->solve_linear(displacement_np,
                                                          rhs,
                                                          this->get_scaling_factor_mass(),
+														 this->get_scaling_factor_mass_velocity(),
                                                          this->get_mid_time());
 
     iterations.first += 1;

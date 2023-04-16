@@ -457,25 +457,25 @@ OperatorBase<dim, Number, n_components>::add_diagonal(VectorType & diagonal) con
   }
   else
   {
-    std::cout << "WHY DONT WE USE THIS? ##+\n";
+	// Why not use the simpler version?
     matrix_free->cell_loop(&This::cell_loop_diagonal, this, diagonal, diagonal);
-    //    dealii::MatrixFreeTools::
-    //      compute_diagonal<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number>>(
-    //        *matrix_free,
-    //        diagonal,
-    //        [&](auto & integrator) -> void {
-    //          // TODO this line is currently needed as bugfix, but should be
-    //          // removed because reinit is now done twice
-    //          this->reinit_cell(integrator.get_current_cell_index());
-    //
-    //          integrator.evaluate(integrator_flags.cell_evaluate);
-    //
-    //          this->do_cell_integral(integrator);
-    //
-    //          integrator.integrate(integrator_flags.cell_integrate);
-    //        },
-    //        data.dof_index,
-    //        data.quad_index);
+//        dealii::MatrixFreeTools::
+//          compute_diagonal<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number>>(
+//            *matrix_free,
+//            diagonal,
+//            [&](auto & integrator) -> void {
+//              // TODO this line is currently needed as bugfix, but should be
+//              // removed because reinit is now done twice
+//              this->reinit_cell(integrator.get_current_cell_index());
+//
+//              integrator.evaluate(integrator_flags.cell_evaluate);
+//
+//              this->do_cell_integral(integrator);
+//
+//              integrator.integrate(integrator_flags.cell_integrate);
+//            },
+//            data.dof_index,
+//            data.quad_index);
   }
 }
 

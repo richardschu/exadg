@@ -716,7 +716,7 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     elasticity_operator_nonlinear.set_time(time);
     // NB: we have to deactivate the mass operator term
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(0.0);
-    elasticity_operator_nonlinear.set_scaling_factor_dashpot_operator(0.0);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(0.0);
 
     // evaluate nonlinear operator including Neumann BCs
     elasticity_operator_nonlinear.evaluate_nonlinear(rhs, displacement);
@@ -735,7 +735,7 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     elasticity_operator_linear.set_time(time);
     // NB: we have to deactivate the mass operator
     elasticity_operator_linear.set_scaling_factor_mass_operator(0.0);
-    elasticity_operator_linear.set_scaling_factor_dashpot_operator(0.0);
+    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(0.0);
 
     // compute action of homogeneous operator
     elasticity_operator_linear.apply(rhs, displacement);
@@ -792,13 +792,13 @@ Operator<dim, Number>::evaluate_nonlinear_residual(VectorType &       dst,
                                                    VectorType const & src,
                                                    VectorType const & const_vector,
                                                    double const       factor,
-												   double const       factor_dashpot,
+												   double const       factor_velocity,
                                                    double const       time) const
 {
   // elasticity operator: make sure that constrained degrees of freedom have been set correctly
   // before evaluating the elasticity operator.
   elasticity_operator_nonlinear.set_scaling_factor_mass_operator(factor);
-  elasticity_operator_nonlinear.set_scaling_factor_dashpot_operator(factor_dashpot);
+  elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(factor_velocity);
   elasticity_operator_nonlinear.set_time(time);
   elasticity_operator_nonlinear.evaluate_nonlinear(dst, src);
 
@@ -836,11 +836,11 @@ void
 Operator<dim, Number>::apply_linearized_operator(VectorType &       dst,
                                                  VectorType const & src,
                                                  double const       factor,
-												 double const       factor_dashpot,
+												 double const       factor_velocity,
                                                  double const       time) const
 {
   elasticity_operator_nonlinear.set_scaling_factor_mass_operator(factor);
-  elasticity_operator_nonlinear.set_scaling_factor_dashpot_operator(factor_dashpot);
+  elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(factor_velocity);
   elasticity_operator_nonlinear.set_time(time);
   elasticity_operator_nonlinear.vmult(dst, src);
 }
@@ -850,11 +850,11 @@ void
 Operator<dim, Number>::apply_nonlinear_operator(VectorType &       dst,
                                                 VectorType const & src,
                                                 double const       factor,
-												double const       factor_dashpot,
+												double const       factor_velocity,
                                                 double const       time) const
 {
   elasticity_operator_nonlinear.set_scaling_factor_mass_operator(factor);
-  elasticity_operator_nonlinear.set_scaling_factor_dashpot_operator(factor_dashpot);
+  elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(factor_velocity);
   elasticity_operator_nonlinear.set_time(time);
   elasticity_operator_nonlinear.evaluate_nonlinear(dst, src);
 }
@@ -864,11 +864,11 @@ void
 Operator<dim, Number>::apply_linear_operator(VectorType &       dst,
                                              VectorType const & src,
                                              double const       factor,
-											 double const       factor_dashpot,
+											 double const       factor_velocity,
                                              double const       time) const
 {
   elasticity_operator_linear.set_scaling_factor_mass_operator(factor);
-  elasticity_operator_linear.set_scaling_factor_dashpot_operator(factor_dashpot);
+  elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(factor_velocity);
   elasticity_operator_linear.set_time(time);
   elasticity_operator_linear.vmult(dst, src);
 }
@@ -878,13 +878,13 @@ std::tuple<unsigned int, unsigned int>
 Operator<dim, Number>::solve_nonlinear(VectorType &       sol,
                                        VectorType const & rhs,
                                        double const       factor,
-									   double const       factor_dashpot,
+									   double const       factor_velocity,
                                        double const       time,
                                        bool const         update_preconditioner) const
 {
   // update operators
-  residual_operator.update(rhs, factor, factor_dashpot, time);
-  linearized_operator.update(factor, factor_dashpot, time);
+  residual_operator.update(rhs, factor, factor_velocity, time);
+  linearized_operator.update(factor, factor_velocity, time);
 
   // set inhomogeneous Dirichlet values (this is necessary since we use
   // FEEvaluation::read_dof_values_plain() to evaluate the operator)
@@ -916,12 +916,12 @@ unsigned int
 Operator<dim, Number>::solve_linear(VectorType &       sol,
                                     VectorType const & rhs,
                                     double const       factor,
-									double const       factor_dashpot,
+									double const       factor_velocity,
                                     double const       time) const
 {
   // unsteady problems
   elasticity_operator_linear.set_scaling_factor_mass_operator(factor);
-  elasticity_operator_linear.set_scaling_factor_dashpot_operator(factor_dashpot);
+  elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(factor_velocity);
   elasticity_operator_linear.set_time(time);
 
   // Set constrained degrees of freedom of rhs vector according to the prescribed

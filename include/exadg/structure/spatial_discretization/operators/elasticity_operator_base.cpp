@@ -31,7 +31,7 @@ namespace ExaDG
 namespace Structure
 {
 template<int dim, typename Number>
-ElasticityOperatorBase<dim, Number>::ElasticityOperatorBase() : scaling_factor_mass(1.0), scaling_factor_dashpot(0.0)
+ElasticityOperatorBase<dim, Number>::ElasticityOperatorBase() : scaling_factor_mass(1.0), scaling_factor_mass_velocity(0.0)
 {
 }
 
@@ -105,10 +105,10 @@ ElasticityOperatorBase<dim, Number>::set_scaling_factor_mass_operator(
 
 template<int dim, typename Number>
 void
-ElasticityOperatorBase<dim, Number>::set_scaling_factor_dashpot_operator(
+ElasticityOperatorBase<dim, Number>::set_scaling_factor_mass_velocity_operator(
   double const scaling_factor) const
 {
-  scaling_factor_dashpot = scaling_factor;
+  scaling_factor_mass_velocity = scaling_factor;
 }
 
 template<int dim, typename Number>

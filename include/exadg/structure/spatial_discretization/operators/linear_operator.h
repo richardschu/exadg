@@ -44,7 +44,7 @@ private:
   /*
    * Calculates the integral
    *
-   *  (v_h, factor * d_h)_Omega + (grad(v_h), sigma_h)_Omega
+   *  (v_h, factor_mass * density * d_h)_Omega + (grad(v_h), sigma_h)_Omega
    *
    * with
    *
@@ -60,11 +60,11 @@ private:
   /*
    * Computes boundary integral
    *
-   *  inhomogeneous operator:
+   * inhomogeneous operator:
    *  - (v_h, t)_{Gamma_N} - (v_h, - p * N)_{Gamma_R}
    *
-   *  homogeneous operator:
-   *  + (v_h, d_h * (k + c*scaling_factor_dashpot))_{Gamma_R}
+   * homogeneous operator:
+   *  + (v_h, k * d_h + c * factor_velocity * d_h)_{Gamma_R}
    */
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,

@@ -98,7 +98,7 @@ public:
   set_scaling_factor_mass_operator(double const scaling_factor) const;
 
   void
-  set_scaling_factor_dashpot_operator(double const scaling_factor) const;
+  set_scaling_factor_mass_velocity_operator(double const scaling_factor) const;
 
   void
   set_constrained_values(VectorType & dst, double const time) const override;
@@ -112,7 +112,7 @@ protected:
   mutable MaterialHandler<dim, Number> material_handler;
 
   mutable double scaling_factor_mass;
-  mutable double scaling_factor_dashpot;
+  mutable double scaling_factor_mass_velocity;
 };
 
 } // namespace Structure
