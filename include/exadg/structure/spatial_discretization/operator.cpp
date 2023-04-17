@@ -374,13 +374,13 @@ Operator<dim, Number>::setup_operators()
     elasticity_operator_linear.initialize(*matrix_free, affine_constraints, operator_data);
   }
 
-  // mass operator and related solver for inversion
+  // (boundary) mass operator and related solver for inversion
   if(param.problem_type == ProblemType::Unsteady)
   {
     MassOperatorData<dim> mass_data;
     mass_data.dof_index  = get_dof_index_mass();
     mass_data.quad_index = get_quad_index();
-    mass_operator.initialize(*matrix_free, constraints_mass, mass_data);
+    mass_operator.initialize(*matrix_free, constraints_mass /*  empty affine constraints  */, mass_data);
 
     mass_operator.set_scaling_factor(param.density);
 
@@ -412,6 +412,25 @@ Operator<dim, Number>::setup_operators()
     typedef Krylov::SolverCG<MassOperator<dim, dim, Number>, PreconditionerBase<Number>, VectorType>
       CG;
     mass_solver = std::make_shared<CG>(mass_operator, *mass_preconditioner, solver_data);
+
+    // setup boundary mass operator
+    BoundaryMassOperatorData<dim> boundary_mass_data;
+    boundary_mass_data.dof_index  = get_dof_index_mass();
+    boundary_mass_data.quad_index = get_quad_index();
+
+    std::set<dealii::types::boundary_id> boundary_ids_dashpot;
+    for(auto const & entry : boundary_descriptor->robin_k_c_p_param)
+    {
+      double dashpot_coefficient = entry.second.second[1];
+      if(std::abs(dashpot_coefficient) > 1e-20)
+    	  boundary_ids_dashpot.insert(entry.first);
+    }
+
+    boundary_mass_data.boundary_ids = boundary_ids_dashpot;
+
+    boundary_mass_operator.initialize(*matrix_free, constraints_mass /* empty affine constraints */, boundary_mass_data);
+
+    boundary_mass_operator.set_scaling_factor(1.0 /* Robin boundary term is not scaled additionally */);
   }
 
   // setup rhs operator
@@ -764,6 +783,13 @@ void
 Operator<dim, Number>::apply_mass_operator(VectorType & dst, VectorType const & src) const
 {
   mass_operator.apply(dst, src);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::apply_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const
+{
+  boundary_mass_operator.apply_add(dst, src);
 }
 
 template<int dim, typename Number>

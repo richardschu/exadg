@@ -2,7 +2,7 @@
  *
  *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
  *
- *  Copyright (C) 2021 by the ExaDG authors
+ *  Copyright (C) 2023 by the ExaDG authors
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,25 +19,27 @@
  *  ______________________________________________________________________
  */
 
-#ifndef INCLUDE_OPERATORS_MASS_OPERATOR_H_
-#define INCLUDE_OPERATORS_MASS_OPERATOR_H_
+#ifndef INCLUDE_OPERATORS_BOUNDARY_MASS_OPERATOR_H_
+#define INCLUDE_OPERATORS_BOUNDARY_MASS_OPERATOR_H_
 
 #include <exadg/matrix_free/integrators.h>
-#include <exadg/operators/mass_kernel.h>
+#include <exadg/operators/boundary_mass_kernel.h>
 #include <exadg/operators/operator_base.h>
 
 namespace ExaDG
 {
 template<int dim>
-struct MassOperatorData : public OperatorBaseData
+struct BoundaryMassOperatorData : public OperatorBaseData
 {
-  MassOperatorData() : OperatorBaseData()
+  BoundaryMassOperatorData() : OperatorBaseData()
   {
   }
+
+  std::set<dealii::types::boundary_id> boundary_ids = {dealii::numbers::invalid_boundary_id};
 };
 
 template<int dim, int n_components, typename Number>
-class MassOperator : public OperatorBase<dim, Number, n_components>
+class BoundaryMassOperator : public OperatorBase<dim, Number, n_components>
 {
 public:
   typedef Number value_type;
@@ -46,13 +48,14 @@ public:
 
   typedef typename Base::VectorType     VectorType;
   typedef typename Base::IntegratorCell IntegratorCell;
+  typedef typename Base::IntegratorFace IntegratorFace;
 
-  MassOperator();
+  BoundaryMassOperator();
 
   void
   initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
              dealii::AffineConstraints<Number> const & affine_constraints,
-             MassOperatorData<dim> const &             data);
+             BoundaryMassOperatorData<dim> const &             data);
 
   void
   set_scaling_factor(Number const & number);
@@ -67,11 +70,26 @@ private:
   void
   do_cell_integral(IntegratorCell & integrator) const;
 
-  MassKernel<dim, Number> kernel;
+  void
+  do_boundary_integral(IntegratorFace &                   integrator_m,
+                       OperatorType const &               operator_type,
+                       dealii::types::boundary_id const & boundary_id) const;
+
+  void
+  do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
+                       OperatorType const &               operator_type,
+                       dealii::types::boundary_id const & boundary_id) const;
+
+  void
+  do_face_integral(IntegratorFace & integrator_m,
+                   IntegratorFace & integrator_p) const;
+
+  BoundaryMassKernel<dim, Number> kernel;
 
   mutable double scaling_factor;
+  std::set<dealii::types::boundary_id> boundary_ids;
 };
 
 } // namespace ExaDG
 
-#endif /* INCLUDE_OPERATORS_MASS_OPERATOR_H_ */
+#endif /* INCLUDE_OPERATORS_BOUNDARY_MASS_OPERATOR_H_ */

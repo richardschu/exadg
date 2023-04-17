@@ -24,9 +24,9 @@
         "Displacement": "20.0",
         "Traction":	"0.0",
         "NormalSpring": "true",
-        "NormalDashpot": "false",
-        "SpringCoeff": "1000.0",
-        "DashpotCoeff": "0.0",
+        "NormalDashpot": "true",
+        "SpringCoeff": "0",
+        "DashpotCoeff": "0",
         "ExteriorPressure": "0.0"
     },
     "Output": {

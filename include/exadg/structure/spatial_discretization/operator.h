@@ -30,6 +30,7 @@
 #include <exadg/matrix_free/matrix_free_data.h>
 #include <exadg/operators/inverse_mass_operator.h>
 #include <exadg/operators/mass_operator.h>
+#include <exadg/operators/boundary_mass_operator.h>
 #include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
 #include <exadg/structure/spatial_discretization/interface.h>
@@ -223,6 +224,9 @@ public:
 
   void
   apply_mass_operator(VectorType & dst, VectorType const & src) const;
+
+  void
+  apply_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
 
   /*
    * This function calculates the right-hand side of the linear system
@@ -418,6 +422,13 @@ private:
   // of new displacements) appearing on the right-hand side for linear
   // problems and in the residual for nonlinear problems.
   MassOperator<dim, dim, Number> mass_operator;
+
+  // The boundary mass operator is only relevant for unsteady problems:
+  // it is used to evaluate the mass operator term stemming from a Robin
+  // boundary applied to a constant vector (independent
+  // of new displacements) appearing on the right-hand side for linear
+  // problems and in the residual for nonlinear problems.
+  BoundaryMassOperator<dim, dim, Number> boundary_mass_operator;
 
   /*
    * Solution of nonlinear systems of equations

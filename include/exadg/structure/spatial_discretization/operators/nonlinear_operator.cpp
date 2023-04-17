@@ -265,6 +265,14 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
 		  double const dashpot_coefficient =
 			this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
 
+		  if(q == 0) //  && std::abs(this->scaling_factor_mass_velocity - 0.998) < 1e-12)
+		  {
+			std::cout << "this->scaling_factor_mass_velocity = " << this->scaling_factor_mass_velocity
+					  << "  this->scaling_factor_mass = " << this->scaling_factor_mass
+					  << "  spring : " << spring_coefficient
+					  << "  dashpot : " << dashpot_coefficient * this->scaling_factor_mass_velocity << "\n";
+		  }
+
 		  if(normal_dashpot)
 		  {
 			vector const N = integrator_m.get_normal_vector(q);

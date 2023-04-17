@@ -62,6 +62,9 @@ public:
   apply_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void
+  apply_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
   compute_rhs_linear(VectorType & dst, double const time) const = 0;
 
   virtual std::tuple<unsigned int, unsigned int>

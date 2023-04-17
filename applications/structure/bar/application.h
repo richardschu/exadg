@@ -224,7 +224,7 @@ private:
 
     this->param.start_time                           = start_time;
     this->param.end_time                             = end_time;
-    this->param.time_step_size                       = end_time / 200.;
+    this->param.time_step_size                       = end_time / 200000.;
     this->param.gen_alpha_type                       = GenAlphaType::BossakAlpha;
     this->param.spectral_radius                      = 0.8;
     this->param.solver_info_data.interval_time_steps = 2;
