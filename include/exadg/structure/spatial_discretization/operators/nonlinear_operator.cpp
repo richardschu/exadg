@@ -167,12 +167,17 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
     // the displacement gradient to obtain the surface area ratio da/dA.
     // We write the integrator flags explicitly in this case since they
     // depend on the parameter pull_back_traction.
-    this->integrator_m->read_dof_values_plain(src);
     if(this->operator_data.pull_back_traction)
+    {
+      this->integrator_m->read_dof_values_plain(src);
       this->integrator_m->evaluate(dealii::EvaluationFlags::gradients |
                                    dealii::EvaluationFlags::values);
-    else
+    }
+    else if(this->operator_data.bc->get_boundary_type(matrix_free.get_boundary_id(face)) == BoundaryType::RobinSpringDashpotPressure)
+    {
+      this->integrator_m->read_dof_values_plain(src);
       this->integrator_m->evaluate(dealii::EvaluationFlags::values);
+    }
 
     do_boundary_integral_continuous(*this->integrator_m,
                                     OperatorType::full,
@@ -228,7 +233,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
     vector traction;
-    traction = 0;
+
     if(boundary_type == BoundaryType::Neumann ||
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
@@ -236,6 +241,17 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
       {
         traction -= calculate_neumann_value<dim, Number>(
           q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+
+        if(this->operator_data.pull_back_traction)
+        {
+          tensor F = get_F<dim, Number>(integrator_m.get_gradient(q));
+          vector N = integrator_m.get_normal_vector(q);
+          // da/dA * n = det F F^{-T} * N := n_star
+          // -> da/dA = n_star.norm()
+          vector n_star = determinant(F) * transpose(invert(F)) * N;
+          // t_0 = da/dA * t
+          traction *= n_star.norm();
+        }
       }
     }
 
@@ -265,12 +281,9 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
 		  double const dashpot_coefficient =
 			this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
 
-		  if(q == 0) //  && std::abs(this->scaling_factor_mass_velocity - 0.998) < 1e-12)
+		  if(q == 0)
 		  {
-			std::cout << "this->scaling_factor_mass_velocity = " << this->scaling_factor_mass_velocity
-					  << "  this->scaling_factor_mass = " << this->scaling_factor_mass
-					  << "  spring : " << spring_coefficient
-					  << "  dashpot : " << dashpot_coefficient * this->scaling_factor_mass_velocity << "\n";
+			std::cout << "this->scaling_factor_mass_velocity = " << this->scaling_factor_mass_velocity << "\n";
 		  }
 
 		  if(normal_dashpot)
@@ -336,11 +349,9 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
     integrator.submit_gradient(delta_P, q);
 
     if(this->operator_data.unsteady)
-    {
       integrator.submit_value(this->scaling_factor_mass * this->operator_data.density *
                                 integrator.get_value(q),
                               q);
-    }
   }
 }
 

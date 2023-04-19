@@ -129,9 +129,9 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
 
   // add contribution from Robin boundary
   {
-	this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
-
-	pde_operator->apply_add_boundary_mass_operator(const_vector, rhs);
+//	this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
+//
+//	pde_operator->apply_add_boundary_mass_operator(const_vector, rhs);
   }
 
   if(param.large_deformation == false) // linear case

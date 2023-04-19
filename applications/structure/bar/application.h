@@ -224,7 +224,7 @@ private:
 
     this->param.start_time                           = start_time;
     this->param.end_time                             = end_time;
-    this->param.time_step_size                       = end_time / 200000.;
+    this->param.time_step_size                       = end_time / 3.;
     this->param.gen_alpha_type                       = GenAlphaType::BossakAlpha;
     this->param.spectral_radius                      = 0.8;
     this->param.solver_info_data.interval_time_steps = 2;
@@ -548,12 +548,12 @@ private:
   // mesh parameters
   unsigned int const repetitions0 = 4, repetitions1 = 1, repetitions2 = 1;
 
-  double const E_modul = 200.0;
+  double const E_modul = 200.0e3;
 
   double const start_time = 0.0;
-  double const end_time   = 100.0;
+  double const end_time   = 100.0e-3;
 
-  double const density = 0.001;
+  double const density = 0.001e6;
 };
 
 } // namespace Structure
