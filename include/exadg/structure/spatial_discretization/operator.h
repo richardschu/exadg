@@ -200,7 +200,7 @@ public:
    * linear systems of equation required for implicit formulations.
    */
   void
-  setup_solver();
+  setup_solver(double const & scaling_factor_mass);
 
   /*
    * Initialization of dof-vector.
@@ -287,7 +287,8 @@ public:
                VectorType const & rhs,
                double const       factor,
 			   double const       factor_velocity,
-               double const       time) const;
+               double const       time,
+               bool const         update_preconditioner) const;
 
   /*
    * Setters and getters.

@@ -153,12 +153,12 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   else
     displacement_np = displacement_last_iter;
 
+  bool const update_preconditioner =
+    this->param.update_preconditioner &&
+    ((this->time_step_number - 1) % this->param.update_preconditioner_every_time_steps == 0);
+
   if(param.large_deformation) // nonlinear case
   {
-    bool const update_preconditioner =
-      this->param.update_preconditioner &&
-      ((this->time_step_number - 1) % this->param.update_preconditioner_every_time_steps == 0);
-
     auto const iter = pde_operator->solve_nonlinear(displacement_np,
                                                     const_vector,
                                                     this->get_scaling_factor_mass(),
@@ -183,7 +183,8 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
                                                          rhs,
                                                          this->get_scaling_factor_mass(),
 														 this->get_scaling_factor_mass_velocity(),
-                                                         this->get_mid_time());
+                                                         this->get_mid_time(),
+                                                         update_preconditioner);
 
     iterations.first += 1;
     std::get<1>(iterations.second) += iter;

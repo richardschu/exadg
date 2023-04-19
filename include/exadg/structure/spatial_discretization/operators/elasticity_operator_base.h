@@ -97,6 +97,9 @@ public:
   void
   set_scaling_factor_mass_operator(double const scaling_factor) const;
 
+  double
+  get_scaling_factor_mass_operator() const;
+
   void
   set_scaling_factor_mass_velocity_operator(double const scaling_factor) const;
 

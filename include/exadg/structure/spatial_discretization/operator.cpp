@@ -447,9 +447,17 @@ Operator<dim, Number>::setup_operators()
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::setup_solver()
+Operator<dim, Number>::setup_solver(double const & scaling_factor_mass)
 {
   pcout << std::endl << "Setup elasticity solver ..." << std::endl;
+
+  double active_scaling_factor_mass =
+    param.problem_type == ProblemType::Unsteady ? scaling_factor_mass : 0.0;
+
+  if(param.large_deformation)
+    elasticity_operator_nonlinear.set_scaling_factor_mass_operator(active_scaling_factor_mass);
+  else
+    elasticity_operator_linear.set_scaling_factor_mass_operator(active_scaling_factor_mass);
 
   initialize_preconditioner();
 
@@ -729,11 +737,14 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
   VectorType rhs(acceleration);
   rhs = 0.0;
 
+  double scaling_factor_mass;
+
   if(param.large_deformation) // nonlinear case
   {
     // elasticity operator
     elasticity_operator_nonlinear.set_time(time);
     // NB: we have to deactivate the mass operator term
+    scaling_factor_mass = elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(0.0);
     elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(0.0);
 
@@ -753,6 +764,7 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     // elasticity operator
     elasticity_operator_linear.set_time(time);
     // NB: we have to deactivate the mass operator
+    scaling_factor_mass = elasticity_operator_linear.get_scaling_factor_mass_operator();
     elasticity_operator_linear.set_scaling_factor_mass_operator(0.0);
     elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(0.0);
 
@@ -776,6 +788,12 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
 
   // invert mass operator to get acceleration
   mass_solver->solve(acceleration, rhs);
+
+  // revert scaling factor to initialized value
+  if(param.large_deformation)
+    elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
+  else
+    elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
 }
 
 template<int dim, typename Number>
@@ -943,12 +961,15 @@ Operator<dim, Number>::solve_linear(VectorType &       sol,
                                     VectorType const & rhs,
                                     double const       factor,
 									double const       factor_velocity,
-                                    double const       time) const
+                                    double const       time,
+                                    bool const         update_preconditioner) const
 {
   // unsteady problems
   elasticity_operator_linear.set_scaling_factor_mass_operator(factor);
   elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(factor_velocity);
   elasticity_operator_linear.set_time(time);
+
+  linear_solver->update_preconditioner(update_preconditioner);
 
   // Set constrained degrees of freedom of rhs vector according to the prescribed
   // Dirichlet boundary conditions.
