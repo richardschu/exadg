@@ -28,25 +28,24 @@
 
 namespace ExaDG
 {
-template<int dim>
+template<int dim, typename Number>
 struct BoundaryMassOperatorData : public OperatorBaseData
 {
   BoundaryMassOperatorData() : OperatorBaseData()
   {
   }
 
-  std::set<dealii::types::boundary_id> boundary_ids = {dealii::numbers::invalid_boundary_id};
+  std::map<dealii::types::boundary_id, std::pair<bool, Number>> ids_normal_coefficients;
 };
 
-template<int dim, int n_components, typename Number>
+template<int dim, typename Number, int n_components>
 class BoundaryMassOperator : public OperatorBase<dim, Number, n_components>
 {
 public:
-  typedef Number value_type;
-
   typedef OperatorBase<dim, Number, n_components> Base;
 
   typedef typename Base::VectorType     VectorType;
+
   typedef typename Base::IntegratorCell IntegratorCell;
   typedef typename Base::IntegratorFace IntegratorFace;
 
@@ -55,20 +54,20 @@ public:
   void
   initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
              dealii::AffineConstraints<Number> const & affine_constraints,
-             BoundaryMassOperatorData<dim> const &             data);
+             BoundaryMassOperatorData<dim, Number> const &     data);
 
   void
-  set_scaling_factor(Number const & number);
+  set_scaling_factor(Number const & number) const;
 
   void
-  apply_scale(VectorType & dst, Number const & factor, VectorType const & src) const;
-
-  void
-  apply_scale_add(VectorType & dst, Number const & factor, VectorType const & src) const;
+  set_ids_normal_coefficients(std::map<dealii::types::boundary_id, std::pair<bool, Number>> const & ids_normal_coefficients_in) const;
 
 private:
   void
   do_cell_integral(IntegratorCell & integrator) const;
+
+  void
+  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
 
   void
   do_boundary_integral(IntegratorFace &                   integrator_m,
@@ -77,17 +76,15 @@ private:
 
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
-                       OperatorType const &               operator_type,
-                       dealii::types::boundary_id const & boundary_id) const;
+                                  OperatorType const &               operator_type,
+                                  dealii::types::boundary_id const & boundary_id) const;
 
-  void
-  do_face_integral(IntegratorFace & integrator_m,
-                   IntegratorFace & integrator_p) const;
+  dealii::MatrixFree<dim, Number> const * matrix_free;
 
   BoundaryMassKernel<dim, Number> kernel;
 
-  mutable double scaling_factor;
-  std::set<dealii::types::boundary_id> boundary_ids;
+  mutable double                                                        scaling_factor;
+  mutable std::map<dealii::types::boundary_id, std::pair<bool, Number>> ids_normal_coefficients;
 };
 
 } // namespace ExaDG

@@ -23,126 +23,104 @@
 
 namespace ExaDG
 {
-template<int dim, int n_components, typename Number>
-BoundaryMassOperator<dim, n_components, Number>::BoundaryMassOperator() : scaling_factor(1.0)
+template<int dim, typename Number, int n_components>
+BoundaryMassOperator<dim, Number, n_components>::BoundaryMassOperator() : matrix_free(nullptr), scaling_factor(1.0)
 {
 }
 
-template<int dim, int n_components, typename Number>
+template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, n_components, Number>::initialize(
-  dealii::MatrixFree<dim, Number> const &   matrix_free,
+BoundaryMassOperator<dim, Number, n_components>::initialize(
+  dealii::MatrixFree<dim, Number> const &   matrix_free_in,
   dealii::AffineConstraints<Number> const & affine_constraints,
-  BoundaryMassOperatorData<dim> const &             data)
+  BoundaryMassOperatorData<dim, Number> const &     data)
 {
-  Base::reinit(matrix_free, affine_constraints, data);
+  Base::reinit(matrix_free_in, affine_constraints, data);
 
-  this->integrator_flags = kernel.get_integrator_flags();
-  this->boundary_ids = data.boundary_ids;
+  this->integrator_flags          = kernel.get_integrator_flags();
+  this->ids_normal_coefficients = data.ids_normal_coefficients;
 }
 
-template<int dim, int n_components, typename Number>
+template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, n_components, Number>::set_scaling_factor(Number const & number)
+BoundaryMassOperator<dim, Number, n_components>::set_scaling_factor(Number const & number) const
 {
   scaling_factor = number;
 }
 
-template<int dim, int n_components, typename Number>
+template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, n_components, Number>::apply_scale(VectorType &       dst,
-                                                             Number const &     factor,
-                                                             VectorType const & src) const
+BoundaryMassOperator<dim, Number, n_components>::set_ids_normal_coefficients(
+  std::map<dealii::types::boundary_id, std::pair<bool, Number>> const & ids_normal_coefficients_in) const
 {
-  scaling_factor = factor;
-
-  this->apply(dst, src);
-
-  scaling_factor = 1.0;
+  this->ids_normal_coefficients = ids_normal_coefficients_in;
 }
 
-template<int dim, int n_components, typename Number>
+template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, n_components, Number>::apply_scale_add(VectorType &       dst,
-                                                                 Number const &     factor,
-                                                                 VectorType const & src) const
-{
-  scaling_factor = factor;
-
-  this->apply_add(dst, src);
-
-  scaling_factor = 1.0;
-}
-
-template<int dim, int n_components, typename Number>
-void
-BoundaryMassOperator<dim, n_components, Number>::do_cell_integral(IntegratorCell & integrator) const
+BoundaryMassOperator<dim, Number, n_components>::do_cell_integral(IntegratorCell & integrator) const
 {
   (void)integrator;
+
+  // do nothing
 }
 
-template<int dim, int n_components, typename Number>
+template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, n_components, Number>::do_boundary_integral(IntegratorFace &                   integrator_m,
-                     OperatorType const &               operator_type,
-                     dealii::types::boundary_id const & boundary_id) const
-{
-  (void)operator_type;
-
-  if(this->boundary_ids.find(boundary_id) != this->boundary_ids.end())
-  {
-    for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
-    {
-	  integrator_m.submit_value(kernel.get_boundary_mass_value(scaling_factor, integrator_m.get_value(q)), q);
-    }
-  }
-}
-
-template<int dim, int n_components, typename Number>
-void
-BoundaryMassOperator<dim, n_components, Number>::do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
-                     OperatorType const &               operator_type,
-                     dealii::types::boundary_id const & boundary_id) const
-{
-  (void)operator_type;
-
-  if(this->boundary_ids.find(boundary_id) != this->boundary_ids.end())
-  {
-    for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
-    {
-	  integrator_m.submit_value(kernel.get_boundary_mass_value(scaling_factor, integrator_m.get_value(q)), q);
-    }
-  }
-}
-
-template<int dim, int n_components, typename Number>
-void
-BoundaryMassOperator<dim, n_components, Number>::do_face_integral(IntegratorFace & integrator_m,
-                                                                  IntegratorFace & integrator_p) const
+BoundaryMassOperator<dim, Number, n_components>::do_face_integral(
+  IntegratorFace & integrator_m,
+  IntegratorFace & integrator_p) const
 {
   (void)integrator_m;
   (void)integrator_p;
+
+  // do nothing
 }
 
-// scalar
-template class BoundaryMassOperator<2, 1, float>;
-template class BoundaryMassOperator<2, 1, double>;
+template<int dim, typename Number, int n_components>
+void
+BoundaryMassOperator<dim, Number, n_components>::do_boundary_integral(
+  IntegratorFace &                   integrator_m,
+  OperatorType const &               operator_type,
+  dealii::types::boundary_id const & boundary_id) const
+{
+  (void)operator_type;
 
-template class BoundaryMassOperator<3, 1, float>;
-template class BoundaryMassOperator<3, 1, double>;
+  if(auto it{this->ids_normal_coefficients.find(boundary_id)}; it != this->ids_normal_coefficients.end())
+  {
+	Number boundary_local_coefficient = it->second.second * scaling_factor;
+    bool normal_projection = it->second.first;
 
-// dim components
-template class BoundaryMassOperator<2, 2, float>;
-template class BoundaryMassOperator<2, 2, double>;
+    for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
+    {
+      if(normal_projection)
+        integrator_m.submit_value(kernel.get_boundary_mass_normal_value(boundary_local_coefficient,
+    		                                                            integrator_m.get_normal_vector(q),
+                                                                        integrator_m.get_value(q)),
+                                  q);
+      else
+        integrator_m.submit_value(kernel.get_boundary_mass_value(boundary_local_coefficient,
+      		                                                     integrator_m.get_value(q)),
+                                  q);
+    }
 
-template class BoundaryMassOperator<3, 3, float>;
-template class BoundaryMassOperator<3, 3, double>;
+    std::cout << "BMO::do_boundary_integral: boundary_local_coefficient = " << boundary_local_coefficient << " , id = " << it->first << ", normal = " << normal_projection << "\n";
+  }
+}
 
-// dim + 1 components
-template class BoundaryMassOperator<2, 3, float>;
-template class BoundaryMassOperator<2, 3, double>;
+template<int dim, typename Number, int n_components>
+void
+BoundaryMassOperator<dim, Number, n_components>::do_boundary_integral_continuous(
+  IntegratorFace &                   integrator_m,
+  OperatorType const &               operator_type,
+  dealii::types::boundary_id const & boundary_id) const
+{
+  this->do_boundary_integral(integrator_m, operator_type, boundary_id);
+}
 
-template class BoundaryMassOperator<3, 4, float>;
-template class BoundaryMassOperator<3, 4, double>;
+template class BoundaryMassOperator<2, float, 2>;
+template class BoundaryMassOperator<2, double, 2>;
 
+template class BoundaryMassOperator<3, float, 3>;
+template class BoundaryMassOperator<3, double, 3>;
 } // namespace ExaDG

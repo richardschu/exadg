@@ -77,8 +77,8 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
 
     if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-	  if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
-	  {
+      if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
+      {
         bool const normal_spring =
           this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[0];
         double const spring_coefficient =
@@ -103,13 +103,14 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
 
           if(normal_dashpot)
           {
-        	vector const N = integrator_m.get_normal_vector(q);
-            traction += N * (dashpot_coefficient * this->scaling_factor_mass_velocity * (N * integrator_m.get_value(q)));
+            vector const N = integrator_m.get_normal_vector(q);
+            traction += N * (dashpot_coefficient * this->scaling_factor_mass_velocity *
+                             (N * integrator_m.get_value(q)));
           }
           else
           {
-            traction += dashpot_coefficient * this->scaling_factor_mass_velocity * integrator_m.get_value(q);
-
+            traction +=
+              dashpot_coefficient * this->scaling_factor_mass_velocity * integrator_m.get_value(q);
           }
         }
       }

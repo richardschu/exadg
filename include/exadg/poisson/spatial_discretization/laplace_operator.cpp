@@ -384,7 +384,7 @@ LaplaceOperator<dim, Number, n_components>::do_boundary_integral_continuous(
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
     value neumann_value = calculate_neumann_value<dim, Number, n_components, rank>(
-	  q, integrator_m, boundary_type, boundary_id, operator_data.bc, this->time);
+      q, integrator_m, boundary_type, boundary_id, operator_data.bc, this->time);
 
     integrator_m.submit_value(-neumann_value, q);
   }

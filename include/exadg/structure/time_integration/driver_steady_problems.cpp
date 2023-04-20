@@ -110,7 +110,7 @@ DriverSteady<dim, Number>::do_solve()
     auto const       iter = pde_operator->solve_nonlinear(solution,
                                                     const_vector_dummy,
                                                     0.0 /* no mass terms */,
-													0.0 /* no mass terms */,
+                                                    0.0 /* no mass terms */,
                                                     0.0 /* time */,
                                                     param.update_preconditioner);
 
@@ -125,8 +125,12 @@ DriverSteady<dim, Number>::do_solve()
     // calculate right-hand side vector
     pde_operator->compute_rhs_linear(rhs_vector, 0.0 /* time */);
 
-    unsigned int const N_iter_linear =
-      pde_operator->solve_linear(solution, rhs_vector, 0.0 /* no mass terms */, 0.0 /* no mass terms */, 0.0 /* time */, param.update_preconditioner);
+    unsigned int const N_iter_linear = pde_operator->solve_linear(solution,
+                                                                  rhs_vector,
+                                                                  0.0 /* no mass terms */,
+                                                                  0.0 /* no mass terms */,
+                                                                  0.0 /* time */,
+                                                                  param.update_preconditioner);
 
     if(not(is_test))
       print_solver_info_linear(pcout, N_iter_linear, timer.wall_time());

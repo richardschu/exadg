@@ -173,7 +173,8 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
       this->integrator_m->evaluate(dealii::EvaluationFlags::gradients |
                                    dealii::EvaluationFlags::values);
     }
-    else if(this->operator_data.bc->get_boundary_type(matrix_free.get_boundary_id(face)) == BoundaryType::RobinSpringDashpotPressure)
+    else if(this->operator_data.bc->get_boundary_type(matrix_free.get_boundary_id(face)) ==
+            BoundaryType::RobinSpringDashpotPressure)
     {
       this->integrator_m->read_dof_values_plain(src);
       this->integrator_m->evaluate(dealii::EvaluationFlags::values);
@@ -257,8 +258,8 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
 
     if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-	  if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
-	  {
+      if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
+      {
         bool const normal_spring =
           this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[0];
         double const spring_coefficient =
@@ -275,27 +276,24 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
         }
 
         if(this->operator_data.unsteady)
-		{
-		  bool const normal_dashpot =
-			this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[1];
-		  double const dashpot_coefficient =
-			this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
+        {
+          bool const normal_dashpot =
+            this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[1];
+          double const dashpot_coefficient =
+            this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
 
-		  if(q == 0)
-		  {
-			std::cout << "this->scaling_factor_mass_velocity = " << this->scaling_factor_mass_velocity << "\n";
-		  }
-
-		  if(normal_dashpot)
-		  {
-			vector const N = integrator_m.get_normal_vector(q);
-			traction += N * (dashpot_coefficient * this->scaling_factor_mass_velocity * (N * integrator_m.get_value(q)));
-		  }
-		  else
-		  {
-			traction += dashpot_coefficient * this->scaling_factor_mass_velocity * integrator_m.get_value(q);
-		  }
-		}
+          if(normal_dashpot)
+          {
+            vector const N = integrator_m.get_normal_vector(q);
+            traction += N * (dashpot_coefficient * this->scaling_factor_mass_velocity *
+                             (N * integrator_m.get_value(q)));
+          }
+          else
+          {
+            traction +=
+              dashpot_coefficient * this->scaling_factor_mass_velocity * integrator_m.get_value(q);
+          }
+        }
       }
     }
 

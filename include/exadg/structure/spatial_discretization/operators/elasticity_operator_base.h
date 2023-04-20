@@ -103,6 +103,9 @@ public:
   void
   set_scaling_factor_mass_velocity_operator(double const scaling_factor) const;
 
+  double
+  get_scaling_factor_mass_velocity_operator() const;
+
   void
   set_constrained_values(VectorType & dst, double const time) const override;
 

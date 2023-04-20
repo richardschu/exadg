@@ -55,10 +55,10 @@ public:
   double
   get_scaling_factor_mass() const;
 
-protected:
   double
   get_scaling_factor_mass_velocity() const;
 
+protected:
   double
   get_mid_time() const;
 

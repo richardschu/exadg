@@ -23,11 +23,14 @@
         "BoundaryType": "Dirichlet",
         "Displacement": "20.0e-3",
         "Traction":	"0.0",
-        "NormalSpring": "true",
-        "NormalDashpot": "true",
-        "SpringCoeff": "0",
-        "DashpotCoeff": "0",
-        "ExteriorPressure": "0.0"
+        "NormalSpring": "false",
+        "NormalDashpot": "false",
+        "SpringCoeff": "123",
+        "DashpotCoeff": "456",
+        "ExteriorPressure": "0.0",
+        "ProblemType": "Unsteady",
+        "Preconditioner": "Multigrid",
+        "LargeDeformation": "true"
     },
     "Output": {
         "OutputDirectory": "./output/bar/",

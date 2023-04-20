@@ -62,7 +62,10 @@ public:
   apply_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void
-  apply_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
+  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
+  update_boundary_mass_operator(Number const scaling_factor) const = 0;
 
   virtual void
   compute_rhs_linear(VectorType & dst, double const time) const = 0;
@@ -71,7 +74,7 @@ public:
   solve_nonlinear(VectorType &       sol,
                   VectorType const & rhs,
                   double const       factor,
-				  double const       factor_velocity,
+                  double const       factor_velocity,
                   double const       time,
                   bool const         update_preconditioner) const = 0;
 
@@ -79,7 +82,7 @@ public:
   solve_linear(VectorType &       sol,
                VectorType const & rhs,
                double const       factor,
-			   double const       factor_velocity,
+               double const       factor_velocity,
                double const       time,
                bool const         update_preconditioner) const = 0;
 };

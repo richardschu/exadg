@@ -110,6 +110,22 @@ MultigridPreconditioner<dim, Number>::set_scaling_factor_mass_operator(
 
 template<int dim, typename Number>
 void
+MultigridPreconditioner<dim, Number>::set_scaling_factor_mass_velocity_operator(
+  double const & scaling_factor_mass_velocity)
+{
+  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
+  {
+    if(nonlinear)
+      get_operator_nonlinear(level)->set_scaling_factor_mass_velocity_operator(
+        scaling_factor_mass_velocity);
+    else
+      get_operator_linear(level)->set_scaling_factor_mass_velocity_operator(
+        scaling_factor_mass_velocity);
+  }
+}
+
+template<int dim, typename Number>
+void
 MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
   MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
   unsigned int const                     level,
@@ -153,6 +169,8 @@ MultigridPreconditioner<dim, Number>::update_operators()
   {
     set_time(pde_operator->get_time());
     set_scaling_factor_mass_operator(pde_operator->get_scaling_factor_mass_operator());
+    set_scaling_factor_mass_velocity_operator(
+      pde_operator->get_scaling_factor_mass_velocity_operator());
   }
 
   if(nonlinear)
@@ -240,6 +258,8 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
       pde_operator_level->set_time(pde_operator->get_time());
       pde_operator_level->set_scaling_factor_mass_operator(
         pde_operator->get_scaling_factor_mass_operator());
+      pde_operator_level->set_scaling_factor_mass_velocity_operator(
+        pde_operator->get_scaling_factor_mass_velocity_operator());
     }
 
     pde_operator_level->initialize(*this->matrix_free_objects[level],
@@ -257,6 +277,8 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
       pde_operator_level->set_time(pde_operator->get_time());
       pde_operator_level->set_scaling_factor_mass_operator(
         pde_operator->get_scaling_factor_mass_operator());
+      pde_operator_level->set_scaling_factor_mass_velocity_operator(
+        pde_operator->get_scaling_factor_mass_velocity_operator());
     }
 
     pde_operator_level->initialize(*this->matrix_free_objects[level],

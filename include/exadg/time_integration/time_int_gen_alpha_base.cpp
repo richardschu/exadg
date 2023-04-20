@@ -131,14 +131,15 @@ TimeIntGenAlphaBase<Number>::compute_const_vector(VectorType &       const_vecto
 
 template<typename Number>
 void
-TimeIntGenAlphaBase<Number>::compute_const_vector_velocity_remainder(VectorType &       const_vector,
-                                                                     VectorType const & displacement_n,
-                                                                     VectorType const & velocity_n,
-                                                                     VectorType const & acceleration_n) const
+TimeIntGenAlphaBase<Number>::compute_const_vector_velocity_remainder(
+  VectorType &       const_vector,
+  VectorType const & displacement_n,
+  VectorType const & velocity_n,
+  VectorType const & acceleration_n) const
 {
-  double const factor_dis = get_scaling_factor_mass_velocity() * alpha_f;
-  double const factor_vel = -(alpha_f - (1.0 - alpha_f) * (gamma - beta) / beta);
-  double const factor_acc = (1.0 - alpha_f) * (gamma - 2.0*beta) / (2.0 * beta) * time_step;
+  double const factor_dis = -get_scaling_factor_mass_velocity();
+  double const factor_vel = alpha_f - (1.0 - alpha_f) * (gamma - beta) / beta;
+  double const factor_acc = -(1.0 - alpha_f) * (gamma - 2.0 * beta) / (2.0 * beta) * time_step;
 
   const_vector.equ(factor_dis, displacement_n);
   const_vector.add(factor_vel, velocity_n);

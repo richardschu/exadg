@@ -99,6 +99,9 @@ private:
   void
   set_scaling_factor_mass_operator(double const & scaling_factor_mass);
 
+  void
+  set_scaling_factor_mass_velocity_operator(double const & scaling_factor_mass_velocity);
+
   /*
    * This function updates solution_linearization.
    * In order to update operators[level] this function has to be called.

@@ -206,6 +206,9 @@ public:
     prm.add_parameter("SpringCoeff",      spring_coeff,      "Spring coefficient.");
     prm.add_parameter("DashpotCoeff",     dashpot_coeff,     "Dashpot coefficient.");
     prm.add_parameter("ExteriorPressure", exterior_pressure, "Exterior pressure.");
+    prm.add_parameter("ProblemType",      problem_type,      "Problem Type, Unsteady vs Steady vs QuasiStatic", dealii::Patterns::Selection("Steady|Unsteady|QuasiStatic"));
+    prm.add_parameter("LargeDeformation", large_deformation, "Consider large deformation", dealii::Patterns::Bool());
+    prm.add_parameter("Preconditioner",   preconditioner,    "Preconditioner", dealii::Patterns::Selection("None|PointJacobi|Multigrid"));
     prm.leave_subsection();
     // clang-format on
   }
@@ -214,9 +217,17 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type         = ProblemType::Unsteady;
+	if(problem_type == "Unsteady")
+      this->param.problem_type = ProblemType::Unsteady;
+	else if(problem_type == "Steady")
+	  this->param.problem_type = ProblemType::Steady;
+	else if(problem_type == "QuasiStatic")
+	  this->param.problem_type = ProblemType::QuasiStatic;
+	else
+	  AssertThrow(false, dealii::ExcMessage("Invalid ProblemType."));
+
     this->param.body_force           = use_volume_force;
-    this->param.large_deformation    = true;
+    this->param.large_deformation    = large_deformation;
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
 
@@ -224,7 +235,7 @@ private:
 
     this->param.start_time                           = start_time;
     this->param.end_time                             = end_time;
-    this->param.time_step_size                       = end_time / 3.;
+    this->param.time_step_size                       = end_time / 100.;
     this->param.gen_alpha_type                       = GenAlphaType::BossakAlpha;
     this->param.spectral_radius                      = 0.8;
     this->param.solver_info_data.interval_time_steps = 2;
@@ -247,7 +258,16 @@ private:
     this->param.newton_solver_data                   = Newton::SolverData(1e2, 1.e-9, 1.e-9);
     this->param.solver                               = Solver::FGMRES;
     this->param.solver_data                          = SolverData(1e3, 1.e-12, 1.e-8, 100);
-    this->param.preconditioner                       = Preconditioner::Multigrid;
+
+    if(preconditioner == "None")
+      this->param.preconditioner = Preconditioner::None;
+    else if(preconditioner == "PointJacobi")
+      this->param.preconditioner = Preconditioner::PointJacobi;
+    else if(preconditioner == "Multigrid")
+      this->param.preconditioner = Preconditioner::Multigrid;
+    else
+      AssertThrow(false, dealii::ExcMessage("Invalid Preconditioner."));
+
     this->param.multigrid_data.type                  = MultigridType::phMG;
     this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::CG;
     this->param.multigrid_data.coarse_problem.preconditioner =
@@ -551,9 +571,13 @@ private:
   double const E_modul = 200.0e3;
 
   double const start_time = 0.0;
-  double const end_time   = 100.0e-3;
+  double const end_time   = 1.0;
 
   double const density = 0.001e6;
+
+  std::string problem_type = "Steady";
+  std::string preconditioner = "None";
+  bool large_deformation = false;
 };
 
 } // namespace Structure

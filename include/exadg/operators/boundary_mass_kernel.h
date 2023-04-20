@@ -31,6 +31,9 @@ namespace ExaDG
 template<int dim, typename Number>
 class BoundaryMassKernel
 {
+private:
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> vector;
+
 public:
   BoundaryMassKernel()
   {
@@ -41,8 +44,7 @@ public:
   {
     IntegratorFlags flags;
 
-    flags.cell_evaluate  = dealii::EvaluationFlags::nothing;
-    flags.cell_integrate = dealii::EvaluationFlags::nothing;
+    // no cell integrals
 
     flags.face_evaluate  = dealii::EvaluationFlags::values;
     flags.face_integrate = dealii::EvaluationFlags::values;
@@ -55,13 +57,22 @@ public:
   {
     MappingFlags flags;
 
-    flags.cells = dealii::update_default;
+    // no cell and inner face integrals
 
-    flags.inner_faces = dealii::update_default;
-
-    flags.boundary_faces = dealii::update_values | dealii::update_JxW_values;
+    flags.boundary_faces = dealii::update_JxW_values | dealii::update_normal_vectors;
 
     return flags;
+  }
+
+  /*
+   * Boundary face integral including scaling factor and normal projection
+   */
+  template<typename T>
+  inline DEAL_II_ALWAYS_INLINE //
+    T
+	get_boundary_mass_normal_value(double scaling_factor, vector const & normal, T const & value) const
+  {
+    return normal * (scaling_factor * (normal * value));
   }
 
   /*
@@ -70,7 +81,7 @@ public:
   template<typename T>
   inline DEAL_II_ALWAYS_INLINE //
     T
-	get_boundary_mass_value(double scaling_factor, T const & value) const
+    get_boundary_mass_value(double scaling_factor, T const & value) const
   {
     return scaling_factor * value;
   }

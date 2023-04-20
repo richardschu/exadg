@@ -28,9 +28,9 @@
 // ExaDG
 #include <exadg/grid/grid.h>
 #include <exadg/matrix_free/matrix_free_data.h>
+#include <exadg/operators/boundary_mass_operator.h>
 #include <exadg/operators/inverse_mass_operator.h>
 #include <exadg/operators/mass_operator.h>
-#include <exadg/operators/boundary_mass_operator.h>
 #include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
 #include <exadg/structure/spatial_discretization/interface.h>
@@ -64,7 +64,11 @@ private:
 
 public:
   ResidualOperator()
-    : pde_operator(nullptr), const_vector(nullptr), scaling_factor_mass(0.0), scaling_factor_mass_velocity(0.0), time(0.0)
+    : pde_operator(nullptr),
+      const_vector(nullptr),
+      scaling_factor_mass(0.0),
+      scaling_factor_mass_velocity(0.0),
+      time(0.0)
   {
   }
 
@@ -75,12 +79,15 @@ public:
   }
 
   void
-  update(VectorType const & const_vector, double const factor, double const factor_velocity, double const time)
+  update(VectorType const & const_vector,
+         double const       factor,
+         double const       factor_velocity,
+         double const       time)
   {
-    this->const_vector           = &const_vector;
-    this->scaling_factor_mass    = factor;
+    this->const_vector                 = &const_vector;
+    this->scaling_factor_mass          = factor;
     this->scaling_factor_mass_velocity = factor_velocity;
-    this->time                   = time;
+    this->time                         = time;
   }
 
   /*
@@ -90,7 +97,8 @@ public:
   void
   evaluate_residual(VectorType & dst, VectorType const & src) const
   {
-    pde_operator->evaluate_nonlinear_residual(dst, src, *const_vector, scaling_factor_mass, scaling_factor_mass_velocity, time);
+    pde_operator->evaluate_nonlinear_residual(
+      dst, src, *const_vector, scaling_factor_mass, scaling_factor_mass_velocity, time);
   }
 
 private:
@@ -118,7 +126,11 @@ private:
 
 public:
   LinearizedOperator()
-    : dealii::Subscriptor(), pde_operator(nullptr), scaling_factor_mass(0.0), scaling_factor_mass_velocity(0.0), time(0.0)
+    : dealii::Subscriptor(),
+      pde_operator(nullptr),
+      scaling_factor_mass(0.0),
+      scaling_factor_mass_velocity(0.0),
+      time(0.0)
   {
   }
 
@@ -141,9 +153,9 @@ public:
   void
   update(double const factor, double const factor_velocity, double const time)
   {
-    this->scaling_factor_mass    = factor;
+    this->scaling_factor_mass          = factor;
     this->scaling_factor_mass_velocity = factor_velocity;
-    this->time                   = time;
+    this->time                         = time;
   }
 
   /*
@@ -153,7 +165,8 @@ public:
   void
   vmult(VectorType & dst, VectorType const & src) const
   {
-    pde_operator->apply_linearized_operator(dst, src, scaling_factor_mass, scaling_factor_mass_velocity, time);
+    pde_operator->apply_linearized_operator(
+      dst, src, scaling_factor_mass, scaling_factor_mass_velocity, time);
   }
 
 private:
@@ -200,7 +213,7 @@ public:
    * linear systems of equation required for implicit formulations.
    */
   void
-  setup_solver(double const & scaling_factor_mass);
+  setup_solver(double const & scaling_factor_mass, double const & scaling_factor_mass_velocity);
 
   /*
    * Initialization of dof-vector.
@@ -226,7 +239,10 @@ public:
   apply_mass_operator(VectorType & dst, VectorType const & src) const;
 
   void
-  apply_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
+  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
+
+  void
+  update_boundary_mass_operator(Number const scaling_factor) const;
 
   /*
    * This function calculates the right-hand side of the linear system
@@ -244,7 +260,7 @@ public:
                               VectorType const & src,
                               VectorType const & const_vector,
                               double const       factor,
-							  double const       factor_velocity,
+                              double const       factor_velocity,
                               double const       time) const;
 
   void
@@ -254,21 +270,21 @@ public:
   apply_linearized_operator(VectorType &       dst,
                             VectorType const & src,
                             double const       factor,
-							double const       factor_velocity,
+                            double const       factor_velocity,
                             double const       time) const;
 
   void
   apply_nonlinear_operator(VectorType &       dst,
                            VectorType const & src,
                            double const       factor,
-						   double const       factor_velocity,
+                           double const       factor_velocity,
                            double const       time) const;
 
   void
   apply_linear_operator(VectorType &       dst,
                         VectorType const & src,
                         double const       factor,
-						double const       factor_velocity,
+                        double const       factor_velocity,
                         double const       time) const;
 
   /*
@@ -278,7 +294,7 @@ public:
   solve_nonlinear(VectorType &       sol,
                   VectorType const & rhs,
                   double const       factor,
-				  double const       factor_velocity,
+                  double const       factor_velocity,
                   double const       time,
                   bool const         update_preconditioner) const;
 
@@ -286,7 +302,7 @@ public:
   solve_linear(VectorType &       sol,
                VectorType const & rhs,
                double const       factor,
-			   double const       factor_velocity,
+               double const       factor_velocity,
                double const       time,
                bool const         update_preconditioner) const;
 
@@ -429,7 +445,7 @@ private:
   // boundary applied to a constant vector (independent
   // of new displacements) appearing on the right-hand side for linear
   // problems and in the residual for nonlinear problems.
-  BoundaryMassOperator<dim, dim, Number> boundary_mass_operator;
+  BoundaryMassOperator<dim, Number, dim> boundary_mass_operator;
 
   /*
    * Solution of nonlinear systems of equations
