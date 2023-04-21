@@ -51,7 +51,17 @@ public:
 
   BoundaryMassOperator();
 
-  void
+  virtual ~BoundaryMassOperator()
+  {
+  }
+
+  IntegratorFlags
+  get_integrator_flags() const;
+
+  static MappingFlags
+  get_mapping_flags();
+
+  virtual void
   initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
              dealii::AffineConstraints<Number> const & affine_constraints,
              BoundaryMassOperatorData<dim, Number> const &     data);

@@ -311,6 +311,8 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   {
     matrix_free_data.insert_dof_handler(&dof_handler, get_dof_name_mass());
     matrix_free_data.insert_constraint(&constraints_mass, get_dof_name_mass());
+
+    matrix_free_data.append_mapping_flags(BoundaryMassOperator<dim,Number,dim>::get_mapping_flags());
   }
 
   // dealii::Quadrature
@@ -423,8 +425,6 @@ Operator<dim, Number>::setup_operators()
     boundary_mass_operator.initialize(*matrix_free,
                                       constraints_mass,
                                       boundary_mass_data);
-
-    this->update_boundary_mass_operator(1.0);
   }
 
   // setup rhs operator
@@ -464,6 +464,8 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
     elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(
       active_scaling_factor_mass_velocity);
   }
+
+  update_boundary_mass_operator(active_scaling_factor_mass_velocity);
 
   initialize_preconditioner();
 

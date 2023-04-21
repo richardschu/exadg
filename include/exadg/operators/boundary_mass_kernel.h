@@ -25,6 +25,8 @@
 #include <exadg/matrix_free/integrators.h>
 #include <exadg/operators/integrator_flags.h>
 #include <exadg/operators/mapping_flags.h>
+#include <deal.II/base/config.h>
+#include <deal.II/matrix_free/fe_evaluation.h>
 
 namespace ExaDG
 {

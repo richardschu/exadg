@@ -151,6 +151,13 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
 	pde_operator->evaluate_add_boundary_mass_operator(tmp2, tmp);
 	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n"; // if c is zero, this should give 0 as well, but does not (same value as above on fact) ---> SOMETHING ELSE CONTRIBUTES HERE?
 
+	std::cout << "\n\n boundary mass operator: zero vector, zero operator only for c = 0 \n\n";
+	tmp = 0.0;
+	tmp2 = 0.0;
+	pde_operator->update_boundary_mass_operator(1.0);
+	pde_operator->evaluate_add_boundary_mass_operator(tmp2, tmp);
+	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n";
+
 	std::cout << "\n\n domain mass operator: zero vector, nonzero operator \n\n";
 	tmp = 0;
 	tmp2 = 0;
