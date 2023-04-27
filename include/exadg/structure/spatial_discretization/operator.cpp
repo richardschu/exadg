@@ -454,15 +454,13 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
 
   if(param.large_deformation)
   {
-    elasticity_operator_nonlinear.set_scaling_factor_mass_operator(active_scaling_factor_mass);
-    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(
-      active_scaling_factor_mass_velocity);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
   }
   else
   {
-    elasticity_operator_linear.set_scaling_factor_mass_operator(active_scaling_factor_mass);
-    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(
-      active_scaling_factor_mass_velocity);
+    elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
+    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
   }
 
   update_boundary_mass_operator(active_scaling_factor_mass_velocity);
@@ -745,18 +743,14 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
   VectorType rhs(acceleration);
   rhs = 0.0;
 
-  // store scaling factors
-  double scaling_factor_mass          = 0.0;
-  double scaling_factor_mass_velocity = 0.0;
-
   if(param.large_deformation) // nonlinear case
   {
     // elasticity operator
     elasticity_operator_nonlinear.set_time(time);
+
     // NB: we have to deactivate the mass operator term
-    scaling_factor_mass = elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
-    scaling_factor_mass_velocity =
-      elasticity_operator_nonlinear.get_scaling_factor_mass_velocity_operator();
+    double const scaling_factor_mass = elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
+    double const scaling_factor_mass_velocity = elasticity_operator_nonlinear.get_scaling_factor_mass_velocity_operator();
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(0.0);
     elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(0.0);
 
@@ -764,6 +758,10 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     elasticity_operator_nonlinear.evaluate_nonlinear(rhs, displacement);
     // shift to right-hand side
     rhs *= -1.0;
+
+    // revert scaling factor to initialized value
+    elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
 
     // body forces
     if(param.body_force)
@@ -775,10 +773,10 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
   {
     // elasticity operator
     elasticity_operator_linear.set_time(time);
+
     // NB: we have to deactivate the mass operator
-    scaling_factor_mass = elasticity_operator_linear.get_scaling_factor_mass_operator();
-    scaling_factor_mass_velocity =
-      elasticity_operator_linear.get_scaling_factor_mass_velocity_operator();
+    double const scaling_factor_mass = elasticity_operator_linear.get_scaling_factor_mass_operator();
+    double const scaling_factor_mass_velocity = elasticity_operator_linear.get_scaling_factor_mass_velocity_operator();
     elasticity_operator_linear.set_scaling_factor_mass_operator(0.0);
     elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(0.0);
 
@@ -786,6 +784,10 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     elasticity_operator_linear.apply(rhs, displacement);
     // shift to right-hand side
     rhs *= -1.0;
+
+    // revert scaling factor to initialized value
+    elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
+    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
 
     // Neumann BCs and inhomogeneous Dirichlet BCs
     // (has already the correct sign, since rhs_add())
@@ -802,20 +804,6 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
 
   // invert mass operator to get acceleration
   mass_solver->solve(acceleration, rhs);
-
-  // revert scaling factor to initialized value
-  if(param.large_deformation)
-  {
-    elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
-    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(
-      scaling_factor_mass_velocity);
-  }
-  else
-  {
-    elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
-    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(
-      scaling_factor_mass_velocity);
-  }
 }
 
 template<int dim, typename Number>
