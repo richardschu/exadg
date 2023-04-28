@@ -42,9 +42,11 @@ template<int dim, typename Number, int n_components>
 class BoundaryMassOperator : public OperatorBase<dim, Number, n_components>
 {
 public:
-  typedef OperatorBase<dim, Number, n_components> Base;
+  typedef OperatorBase<dim, Number, n_components>         Base;
+  typedef BoundaryMassOperator<dim, Number, n_components> This;
 
-  typedef typename Base::VectorType     VectorType;
+  typedef std::pair<unsigned int, unsigned int> Range;
+  typedef typename Base::VectorType             VectorType;
 
   typedef typename Base::IntegratorCell IntegratorCell;
   typedef typename Base::IntegratorFace IntegratorFace;
@@ -65,34 +67,43 @@ public:
   get_mapping_flags();
 
   virtual void
-  initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
-             dealii::AffineConstraints<Number> const & affine_constraints,
-             BoundaryMassOperatorData<dim, Number> const &     data);
+  initialize(dealii::MatrixFree<dim, Number> const &       matrix_free,
+             dealii::AffineConstraints<Number> const &     affine_constraints,
+             BoundaryMassOperatorData<dim, Number> const & data);
 
   void
   set_scaling_factor(Number const & number) const;
 
   void
-  set_ids_normal_coefficients(std::map<dealii::types::boundary_id, std::pair<bool, Number>> const & ids_normal_coefficients_in) const;
+  set_ids_normal_coefficients(std::map<dealii::types::boundary_id, std::pair<bool, Number>> const &
+                                ids_normal_coefficients_in) const;
+
+  void
+  evaluate_add(VectorType & dst, VectorType const & src) const;
 
 private:
   void
-  do_cell_integral(IntegratorCell & integrator) const;
+  cell_loop_empty(dealii::MatrixFree<dim, Number> const & matrix_free,
+                  VectorType &                            dst,
+                  VectorType const &                      src,
+                  Range const &                           range) const;
 
   void
-  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  face_loop_empty(dealii::MatrixFree<dim, Number> const & matrix_free,
+                  VectorType &                            dst,
+                  VectorType const &                      src,
+                  Range const &                           range) const;
 
   void
-  do_boundary_integral(IntegratorFace &                   integrator_m,
-                       OperatorType const &               operator_type,
-                       dealii::types::boundary_id const & boundary_id) const;
+  boundary_face_loop_full_operator(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                   VectorType &                            dst,
+                                   VectorType const &                      src,
+                                   Range const &                           range) const;
 
   void
-  do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
-                                  OperatorType const &               operator_type,
-                                  dealii::types::boundary_id const & boundary_id) const;
-
-  dealii::MatrixFree<dim, Number> const * matrix_free;
+  do_boundary_segment_integral(IntegratorFace & integrator_m,
+                               Number const &   scaled_coefficient,
+                               bool const       normal_projection) const;
 
   BoundaryMassKernel<dim, Number> kernel;
 

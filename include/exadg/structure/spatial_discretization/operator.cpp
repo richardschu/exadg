@@ -312,7 +312,8 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
     matrix_free_data.insert_dof_handler(&dof_handler, get_dof_name_mass());
     matrix_free_data.insert_constraint(&constraints_mass, get_dof_name_mass());
 
-    matrix_free_data.append_mapping_flags(BoundaryMassOperator<dim,Number,dim>::get_mapping_flags());
+    matrix_free_data.append_mapping_flags(
+      BoundaryMassOperator<dim, Number, dim>::get_mapping_flags());
   }
 
   // dealii::Quadrature
@@ -445,12 +446,14 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
   if(param.large_deformation)
   {
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
-    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(
+      scaling_factor_mass_velocity);
   }
   else
   {
     elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
-    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
+    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(
+      scaling_factor_mass_velocity);
   }
 
   if(param.problem_type == ProblemType::Unsteady)
@@ -740,8 +743,10 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     elasticity_operator_nonlinear.set_time(time);
 
     // NB: we have to deactivate the mass operator term
-    double const scaling_factor_mass = elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
-    double const scaling_factor_mass_velocity = elasticity_operator_nonlinear.get_scaling_factor_mass_velocity_operator();
+    double const scaling_factor_mass =
+      elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
+    double const scaling_factor_mass_velocity =
+      elasticity_operator_nonlinear.get_scaling_factor_mass_velocity_operator();
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(0.0);
     elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(0.0);
 
@@ -752,7 +757,8 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
 
     // revert scaling factor to initialized value
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
-    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_velocity_operator(
+      scaling_factor_mass_velocity);
 
     // body forces
     if(param.body_force)
@@ -766,8 +772,10 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
     elasticity_operator_linear.set_time(time);
 
     // NB: we have to deactivate the mass operator
-    double const scaling_factor_mass = elasticity_operator_linear.get_scaling_factor_mass_operator();
-    double const scaling_factor_mass_velocity = elasticity_operator_linear.get_scaling_factor_mass_velocity_operator();
+    double const scaling_factor_mass =
+      elasticity_operator_linear.get_scaling_factor_mass_operator();
+    double const scaling_factor_mass_velocity =
+      elasticity_operator_linear.get_scaling_factor_mass_velocity_operator();
     elasticity_operator_linear.set_scaling_factor_mass_operator(0.0);
     elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(0.0);
 
@@ -778,7 +786,8 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       accelerat
 
     // revert scaling factor to initialized value
     elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
-    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
+    elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(
+      scaling_factor_mass_velocity);
 
     // Neumann BCs and inhomogeneous Dirichlet BCs
     // (has already the correct sign, since rhs_add())
@@ -814,8 +823,10 @@ Operator<dim, Number>::non_empty_boundary_mass_operator() const
 template<int dim, typename Number>
 void
 Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       dst,
-                                                       VectorType const & src) const
+                                                           VectorType const & src) const
 {
+std::cout << "in evaluate_add\n";
+
   if(this->non_empty_boundary_mass_operator())
     boundary_mass_operator.evaluate_add(dst, src);
 }
@@ -826,19 +837,19 @@ Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor
 {
   boundary_mass_operator.set_scaling_factor(scaling_factor);
 
-  std::map<dealii::types::boundary_id, std::pair<bool, Number>>
-    robin_c_param;
+  std::map<dealii::types::boundary_id, std::pair<bool, Number>> robin_c_param;
 
   // update data from dashpots on Robin boundary
   for(auto const & entry : boundary_descriptor->robin_k_c_p_param)
   {
-    dealii::types::boundary_id boundary_id = entry.first;
-	bool normal_dashpot = entry.second.first[1];
-    Number dashpot_coefficient = entry.second.second[1];
+    dealii::types::boundary_id boundary_id         = entry.first;
+    bool                       normal_dashpot      = entry.second.first[1];
+    Number                     dashpot_coefficient = entry.second.second[1];
 
     if(std::abs(dashpot_coefficient) > 1e-20)
     {
-      robin_c_param.insert(std::make_pair(boundary_id, std::make_pair(normal_dashpot, dashpot_coefficient)));
+      robin_c_param.insert(
+        std::make_pair(boundary_id, std::make_pair(normal_dashpot, dashpot_coefficient)));
     }
   }
 

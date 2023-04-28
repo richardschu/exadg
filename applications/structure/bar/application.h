@@ -217,14 +217,14 @@ private:
   void
   set_parameters() final
   {
-	if(problem_type == "Unsteady")
+    if(problem_type == "Unsteady")
       this->param.problem_type = ProblemType::Unsteady;
-	else if(problem_type == "Steady")
-	  this->param.problem_type = ProblemType::Steady;
-	else if(problem_type == "QuasiStatic")
-	  this->param.problem_type = ProblemType::QuasiStatic;
-	else
-	  AssertThrow(false, dealii::ExcMessage("Invalid ProblemType."));
+    else if(problem_type == "Steady")
+      this->param.problem_type = ProblemType::Steady;
+    else if(problem_type == "QuasiStatic")
+      this->param.problem_type = ProblemType::QuasiStatic;
+    else
+      AssertThrow(false, dealii::ExcMessage("Invalid ProblemType."));
 
     this->param.body_force           = use_volume_force;
     this->param.large_deformation    = large_deformation;
@@ -255,9 +255,9 @@ private:
 
     this->param.load_increment = 0.1;
 
-    this->param.newton_solver_data                   = Newton::SolverData(1e2, 1.e-9, 1.e-9);
-    this->param.solver                               = Solver::FGMRES;
-    this->param.solver_data                          = SolverData(1e3, 1.e-12, 1.e-8, 100);
+    this->param.newton_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-9);
+    this->param.solver             = Solver::FGMRES;
+    this->param.solver_data        = SolverData(1e3, 1.e-12, 1.e-8, 100);
 
     if(preconditioner == "None")
       this->param.preconditioner = Preconditioner::None;
@@ -575,9 +575,9 @@ private:
 
   double const density = 0.001e6;
 
-  std::string problem_type = "Steady";
-  std::string preconditioner = "None";
-  bool large_deformation = false;
+  std::string problem_type      = "Steady";
+  std::string preconditioner    = "None";
+  bool        large_deformation = false;
 };
 
 } // namespace Structure

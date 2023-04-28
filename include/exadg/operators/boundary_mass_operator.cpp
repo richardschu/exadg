@@ -24,7 +24,8 @@
 namespace ExaDG
 {
 template<int dim, typename Number, int n_components>
-BoundaryMassOperator<dim, Number, n_components>::BoundaryMassOperator() : matrix_free(nullptr), scaling_factor(1.0)
+BoundaryMassOperator<dim, Number, n_components>::BoundaryMassOperator()
+  : scaling_factor(1.0)
 {
 }
 
@@ -46,15 +47,15 @@ template<int dim, typename Number, int n_components>
 MappingFlags
 BoundaryMassOperator<dim, Number, n_components>::get_mapping_flags()
 {
-  return BoundaryMassKernel<dim,Number>::get_mapping_flags();
+  return BoundaryMassKernel<dim, Number>::get_mapping_flags();
 }
 
 template<int dim, typename Number, int n_components>
 void
 BoundaryMassOperator<dim, Number, n_components>::initialize(
-  dealii::MatrixFree<dim, Number> const &   matrix_free_in,
-  dealii::AffineConstraints<Number> const & affine_constraints,
-  BoundaryMassOperatorData<dim, Number> const &     data)
+  dealii::MatrixFree<dim, Number> const &       matrix_free_in,
+  dealii::AffineConstraints<Number> const &     affine_constraints,
+  BoundaryMassOperatorData<dim, Number> const & data)
 {
   Base::reinit(matrix_free_in, affine_constraints, data);
 
@@ -72,84 +73,127 @@ BoundaryMassOperator<dim, Number, n_components>::set_scaling_factor(Number const
 template<int dim, typename Number, int n_components>
 void
 BoundaryMassOperator<dim, Number, n_components>::set_ids_normal_coefficients(
-  std::map<dealii::types::boundary_id, std::pair<bool, Number>> const & ids_normal_coefficients_in) const
+  std::map<dealii::types::boundary_id, std::pair<bool, Number>> const & ids_normal_coefficients_in)
+  const
 {
   this->ids_normal_coefficients = ids_normal_coefficients_in;
 }
 
 template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, Number, n_components>::do_cell_integral(IntegratorCell & integrator) const
+BoundaryMassOperator<dim, Number, n_components>::evaluate_add(VectorType &       dst,
+                                                              VectorType const & src) const
 {
-  (void)integrator;
+  std::cout << "pre loop\n";
 
-  std::cout << "new cell integral \n";
+  this->matrix_free->loop(&This::cell_loop_empty,
+                    &This::face_loop_empty,
+                    &This::boundary_face_loop_full_operator,
+                    this,
+                    dst,
+                    src,
+					false /* zero_dst_vector */);
 
-  // do nothing
-  for(unsigned int i = 0; i < integrator.dofs_per_cell; ++i)
-    integrator.begin_dof_values()[i] = dealii::make_vectorized_array<Number>(0.);
-
-  for(unsigned int q = 0; q < integrator.n_q_points; ++q)
-    integrator.submit_value(0.0 * integrator.get_value(q), q);
-
+  std::cout << "post loop\n";
 }
 
 template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, Number, n_components>::do_face_integral(
-  IntegratorFace & integrator_m,
-  IntegratorFace & integrator_p) const
+BoundaryMassOperator<dim, Number, n_components>::cell_loop_empty(
+  dealii::MatrixFree<dim, Number> const & matrix_free,
+  VectorType &                            dst,
+  VectorType const &                      src,
+  Range const &                           range) const
 {
-  (void)integrator_m;
-  (void)integrator_p;
+  (void)matrix_free;
+  (void)dst;
+  (void)src;
+  (void)range;
 
   // do nothing
 }
 
 template<int dim, typename Number, int n_components>
 void
-BoundaryMassOperator<dim, Number, n_components>::do_boundary_integral(
-  IntegratorFace &                   integrator_m,
-  OperatorType const &               operator_type,
-  dealii::types::boundary_id const & boundary_id) const
+BoundaryMassOperator<dim, Number, n_components>::face_loop_empty(
+  dealii::MatrixFree<dim, Number> const & matrix_free,
+  VectorType &                            dst,
+  VectorType const &                      src,
+  Range const &                           range) const
 {
-  (void)operator_type;
+  (void)matrix_free;
+  (void)dst;
+  (void)src;
+  (void)range;
 
-  if(auto it{this->ids_normal_coefficients.find(boundary_id)}; it != this->ids_normal_coefficients.end())
+  // do nothing
+}
+
+template<int dim, typename Number, int n_components>
+void
+BoundaryMassOperator<dim, Number, n_components>::boundary_face_loop_full_operator(
+  dealii::MatrixFree<dim, Number> const & matrix_free,
+  VectorType &                            dst,
+  VectorType const &                      src,
+  Range const &                           range) const
+{
+  std::cout << "1\n";
+
+  for(unsigned int face = range.first; face < range.second; face++)
   {
-	Number scaled_coefficient = it->second.second * scaling_factor;
-    bool normal_projection = it->second.first;
+    dealii::types::boundary_id boundary_id = matrix_free.get_boundary_id(face);
 
+	std::cout << "2\n";
+
+    // integrate over selected boundaries and *do not* gather_evaluate/integrate_scatter on others
+    if(auto it{this->ids_normal_coefficients.find(boundary_id)};
+       it != this->ids_normal_coefficients.end())
+    {
+    	std::cout << "3\n";
+
+      Number scaled_coefficient = it->second.second * scaling_factor;
+      bool   normal_projection  = it->second.first;
+
+  	std::cout << "4\n";
+      this->integrator_m->reinit(face);
+      this->integrator_m->gather_evaluate(src, this->integrator_flags.face_evaluate);
+    	std::cout << "5\n";
+      this->do_boundary_segment_integral(*this->integrator_m,
+                                         scaled_coefficient,
+                                         normal_projection);
+  	std::cout << "6\n";
+      this->integrator_m->integrate_scatter(this->integrator_flags.face_integrate, dst);
+    }
+  }
+}
+
+template<int dim, typename Number, int n_components>
+void
+BoundaryMassOperator<dim, Number, n_components>::do_boundary_segment_integral(
+  IntegratorFace & integrator_m,
+  Number const &   scaled_coefficient,
+  bool const       normal_projection) const
+{
+  if(normal_projection)
+  {
     for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
     {
-      if(normal_projection)
-        integrator_m.submit_value(kernel.get_boundary_mass_normal_value(scaled_coefficient,
-    		                                                            integrator_m.get_normal_vector(q),
-                                                                        integrator_m.get_value(q)),
-                                  q);
-      else
-        integrator_m.submit_value(kernel.get_boundary_mass_value(scaled_coefficient,
-      		                                                     integrator_m.get_value(q)),
-                                  q);
+      integrator_m.submit_value(
+        kernel.get_boundary_mass_normal_value(scaled_coefficient,
+                                              integrator_m.get_normal_vector(q),
+                                              integrator_m.get_value(q)),
+        q);
     }
   }
   else
   {
-	for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
-	{
-	  integrator_m.submit_value(0.0 * integrator_m.get_value(q),q);
-	}
+    for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
+    {
+      integrator_m.submit_value(kernel.get_boundary_mass_value(scaled_coefficient,
+                                                               integrator_m.get_value(q)),
+                                q);
+    }
   }
-}
-
-template<int dim, typename Number, int n_components>
-void
-BoundaryMassOperator<dim, Number, n_components>::do_boundary_integral_continuous(
-  IntegratorFace &                   integrator_m,
-  OperatorType const &               operator_type,
-  dealii::types::boundary_id const & boundary_id) const
-{
-  this->do_boundary_integral(integrator_m, operator_type, boundary_id);
 }
 
 template class BoundaryMassOperator<2, float, 2>;

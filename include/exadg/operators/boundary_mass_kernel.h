@@ -22,11 +22,11 @@
 #ifndef INCLUDE_OPERATORS_BOUNDARY_MASS_KERNEL_H_
 #define INCLUDE_OPERATORS_BOUNDARY_MASS_KERNEL_H_
 
+#include <deal.II/base/config.h>
+#include <deal.II/matrix_free/fe_evaluation.h>
 #include <exadg/matrix_free/integrators.h>
 #include <exadg/operators/integrator_flags.h>
 #include <exadg/operators/mapping_flags.h>
-#include <deal.II/base/config.h>
-#include <deal.II/matrix_free/fe_evaluation.h>
 
 namespace ExaDG
 {
@@ -72,7 +72,7 @@ public:
   template<typename T>
   inline DEAL_II_ALWAYS_INLINE //
     T
-	get_boundary_mass_normal_value(double coefficient, vector const & normal, T const & value) const
+    get_boundary_mass_normal_value(double coefficient, vector const & normal, T const & value) const
   {
     return normal * (coefficient * (normal * value));
   }
