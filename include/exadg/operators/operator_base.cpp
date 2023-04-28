@@ -330,8 +330,7 @@ OperatorBase<dim, Number, n_components>::apply_add(VectorType & dst, VectorType 
     {
       matrix_free->cell_loop(&This::cell_loop, this, dst, src);
     }
-    for(unsigned int const constrained_index :
-		matrix_free->get_constrained_dofs(this->data.dof_index))
+    for(unsigned int const constrained_index : matrix_free->get_constrained_dofs(this->data.dof_index))
 	  dst.local_element(constrained_index) += src.local_element(constrained_index);
   }
 }
@@ -401,7 +400,7 @@ OperatorBase<dim, Number, n_components>::evaluate_add(VectorType &       dst,
   }
   else
   {
-    matrix_free->loop(&This::cell_loop,
+	matrix_free->loop(&This::cell_loop,
                       &This::face_loop_empty,
                       &This::boundary_face_loop_full_operator,
                       this,
@@ -826,7 +825,7 @@ OperatorBase<dim, Number, n_components>::internal_calculate_system_matrix(
   if(evaluate_face_integrals())
   {
     matrix_free->loop(&This::cell_loop_calculate_system_matrix,
-                      &This::face_loop_calculate_system_matrix /*no contributions added for CG*/,
+                      &This::face_loop_calculate_system_matrix /* no contributions added for CG */,
                       &This::boundary_face_loop_calculate_system_matrix,
                       this,
                       system_matrix,

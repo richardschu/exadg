@@ -382,9 +382,7 @@ Operator<dim, Number>::setup_operators()
     MassOperatorData<dim> mass_data;
     mass_data.dof_index  = get_dof_index_mass();
     mass_data.quad_index = get_quad_index();
-    mass_operator.initialize(*matrix_free,
-                             constraints_mass,
-                             mass_data);
+    mass_operator.initialize(*matrix_free, constraints_mass, mass_data);
 
     mass_operator.set_scaling_factor(param.density);
 
@@ -422,9 +420,7 @@ Operator<dim, Number>::setup_operators()
     boundary_mass_data.dof_index  = get_dof_index_mass();
     boundary_mass_data.quad_index = get_quad_index();
 
-    boundary_mass_operator.initialize(*matrix_free,
-                                      constraints_mass,
-                                      boundary_mass_data);
+    boundary_mass_operator.initialize(*matrix_free, constraints_mass, boundary_mass_data);
   }
 
   // setup rhs operator
@@ -446,12 +442,6 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
 {
   pcout << std::endl << "Setup elasticity solver ..." << std::endl;
 
-  double active_scaling_factor_mass =
-    param.problem_type == ProblemType::Unsteady ? scaling_factor_mass : 0.0;
-
-  double active_scaling_factor_mass_velocity =
-    param.problem_type == ProblemType::Unsteady ? scaling_factor_mass_velocity : 0.0;
-
   if(param.large_deformation)
   {
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
@@ -463,7 +453,8 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
     elasticity_operator_linear.set_scaling_factor_mass_velocity_operator(scaling_factor_mass_velocity);
   }
 
-  update_boundary_mass_operator(active_scaling_factor_mass_velocity);
+  if(param.problem_type == ProblemType::Unsteady)
+    update_boundary_mass_operator(1.0);
 
   initialize_preconditioner();
 
@@ -814,11 +805,19 @@ Operator<dim, Number>::apply_mass_operator(VectorType & dst, VectorType const & 
 }
 
 template<int dim, typename Number>
+bool
+Operator<dim, Number>::non_empty_boundary_mass_operator() const
+{
+  return boundary_mass_operator.non_empty();
+}
+
+template<int dim, typename Number>
 void
 Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       dst,
-                                                           VectorType const & src) const
+                                                       VectorType const & src) const
 {
-  boundary_mass_operator.evaluate_add(dst, src);
+  if(this->non_empty_boundary_mass_operator())
+    boundary_mass_operator.evaluate_add(dst, src);
 }
 
 template<int dim, typename Number>

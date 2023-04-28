@@ -72,9 +72,9 @@ public:
   template<typename T>
   inline DEAL_II_ALWAYS_INLINE //
     T
-	get_boundary_mass_normal_value(double scaling_factor, vector const & normal, T const & value) const
+	get_boundary_mass_normal_value(double coefficient, vector const & normal, T const & value) const
   {
-    return normal * (scaling_factor * (normal * value));
+    return normal * (coefficient * (normal * value));
   }
 
   /*
@@ -83,9 +83,9 @@ public:
   template<typename T>
   inline DEAL_II_ALWAYS_INLINE //
     T
-    get_boundary_mass_value(double scaling_factor, T const & value) const
+    get_boundary_mass_value(double coefficient, T const & value) const
   {
-    return scaling_factor * value;
+    return coefficient * value;
   }
 };
 

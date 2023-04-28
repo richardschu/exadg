@@ -29,6 +29,13 @@ BoundaryMassOperator<dim, Number, n_components>::BoundaryMassOperator() : matrix
 }
 
 template<int dim, typename Number, int n_components>
+bool
+BoundaryMassOperator<dim, Number, n_components>::non_empty() const
+{
+  return this->ids_normal_coefficients.size() > 0;
+}
+
+template<int dim, typename Number, int n_components>
 IntegratorFlags
 BoundaryMassOperator<dim, Number, n_components>::get_integrator_flags() const
 {
@@ -51,7 +58,7 @@ BoundaryMassOperator<dim, Number, n_components>::initialize(
 {
   Base::reinit(matrix_free_in, affine_constraints, data);
 
-  this->integrator_flags        = kernel.get_integrator_flags();
+  this->integrator_flags        = this->get_integrator_flags();
   this->ids_normal_coefficients = data.ids_normal_coefficients;
 }
 
@@ -76,7 +83,15 @@ BoundaryMassOperator<dim, Number, n_components>::do_cell_integral(IntegratorCell
 {
   (void)integrator;
 
+  std::cout << "new cell integral \n";
+
   // do nothing
+  for(unsigned int i = 0; i < integrator.dofs_per_cell; ++i)
+    integrator.begin_dof_values()[i] = dealii::make_vectorized_array<Number>(0.);
+
+  for(unsigned int q = 0; q < integrator.n_q_points; ++q)
+    integrator.submit_value(0.0 * integrator.get_value(q), q);
+
 }
 
 template<int dim, typename Number, int n_components>
@@ -102,29 +117,28 @@ BoundaryMassOperator<dim, Number, n_components>::do_boundary_integral(
 
   if(auto it{this->ids_normal_coefficients.find(boundary_id)}; it != this->ids_normal_coefficients.end())
   {
-	Number boundary_local_coefficient = it->second.second * scaling_factor;
+	Number scaled_coefficient = it->second.second * scaling_factor;
     bool normal_projection = it->second.first;
 
     for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
     {
-      if(q==0)
-      {
-    	  std::cout << "integrator_m.get_normal_vector(q) = [" << integrator_m.get_normal_vector(q) << "\n"
-    			    << "integrator_m.get_value(q) = " << integrator_m.get_value(q) << "\n";
-      }
-
-//      if(normal_projection)
-//        integrator_m.submit_value(kernel.get_boundary_mass_normal_value(boundary_local_coefficient,
-//    		                                                            integrator_m.get_normal_vector(q),
-//                                                                        integrator_m.get_value(q)),
-//                                  q);
-//      else
-//        integrator_m.submit_value(kernel.get_boundary_mass_value(boundary_local_coefficient,
-//      		                                                     integrator_m.get_value(q)),
-//                                  q);
+      if(normal_projection)
+        integrator_m.submit_value(kernel.get_boundary_mass_normal_value(scaled_coefficient,
+    		                                                            integrator_m.get_normal_vector(q),
+                                                                        integrator_m.get_value(q)),
+                                  q);
+      else
+        integrator_m.submit_value(kernel.get_boundary_mass_value(scaled_coefficient,
+      		                                                     integrator_m.get_value(q)),
+                                  q);
     }
-
-    std::cout << "BMO::do_boundary_integral (EMPTY): boundary_local_coefficient = " << boundary_local_coefficient << " , id = " << it->first << ", normal = " << normal_projection << "\n";
+  }
+  else
+  {
+	for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
+	{
+	  integrator_m.submit_value(0.0 * integrator_m.get_value(q),q);
+	}
   }
 }
 

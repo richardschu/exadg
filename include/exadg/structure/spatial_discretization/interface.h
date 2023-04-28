@@ -61,6 +61,9 @@ public:
   virtual void
   apply_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
+  virtual bool
+  non_empty_boundary_mass_operator() const = 0;
+
   virtual void
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 

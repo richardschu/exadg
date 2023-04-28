@@ -55,6 +55,9 @@ public:
   {
   }
 
+  bool
+  non_empty() const;
+
   IntegratorFlags
   get_integrator_flags() const;
 

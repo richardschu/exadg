@@ -238,6 +238,9 @@ public:
   void
   apply_mass_operator(VectorType & dst, VectorType const & src) const;
 
+  bool
+  non_empty_boundary_mass_operator() const;
+
   void
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
 
@@ -346,9 +349,6 @@ private:
   get_dof_name_mass() const;
 
   std::string
-  get_dof_name_mass_boundary() const;
-
-  std::string
   get_quad_name() const;
 
   std::string
@@ -356,9 +356,6 @@ private:
 
   unsigned int
   get_dof_index_mass() const;
-
-  unsigned int
-  get_dof_index_mass_boundary() const;
 
   unsigned int
   get_quad_index() const;
@@ -415,7 +412,6 @@ private:
 
   std::string const dof_index                = "dof";
   std::string const dof_index_mass           = "dof_mass";
-  std::string const dof_index_mass_boundary  = "dof_mass_boundary";
   std::string const quad_index               = "quad";
   std::string const quad_index_gauss_lobatto = "quad_gauss_lobatto";
 

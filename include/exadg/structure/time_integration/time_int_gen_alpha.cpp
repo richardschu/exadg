@@ -121,68 +121,18 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   timer.restart();
 
   // compute const_vector
-
-  // some sanity checks here:
-  {
-	VectorType tmp, tmp2;
-	tmp.reinit(displacement_n);
-	tmp2.reinit(displacement_n);
-
-	std::cout << "\n\n boundary mass operator: zero vector, zero operator \n\n";
-	tmp = 0.0;
-	tmp2 = 0.0;
-	pde_operator->update_boundary_mass_operator(0.0);
-	pde_operator->evaluate_add_boundary_mass_operator(tmp2, tmp);
-	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n";
-
-	std::cout << "\n\n boundary mass operator: nonzero vector, zero operator \n\n";
-	tmp = 0.0;
-	tmp2 = 0.0;
-	tmp.add(1.0);
-	pde_operator->update_boundary_mass_operator(0.0);
-	pde_operator->evaluate_add_boundary_mass_operator(tmp2, tmp);
-	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n"; // this should give zero, but does not??! constraints are empty for applications/structure/bar ??!
-
-	std::cout << "\n\n boundary mass operator: nonzero vector, zero operator only for c = 0 \n\n";
-	tmp = 0.0;
-	tmp2 = 0.0;
-	tmp.add(1.0);
-	pde_operator->update_boundary_mass_operator(1.0);
-	pde_operator->evaluate_add_boundary_mass_operator(tmp2, tmp);
-	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n"; // if c is zero, this should give 0 as well, but does not (same value as above on fact) ---> SOMETHING ELSE CONTRIBUTES HERE?
-
-	std::cout << "\n\n boundary mass operator: zero vector, zero operator only for c = 0 \n\n";
-	tmp = 0.0;
-	tmp2 = 0.0;
-	pde_operator->update_boundary_mass_operator(1.0);
-	pde_operator->evaluate_add_boundary_mass_operator(tmp2, tmp);
-	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n";
-
-	std::cout << "\n\n domain mass operator: zero vector, nonzero operator \n\n";
-	tmp = 0;
-	tmp2 = 0;
-	pde_operator->apply_mass_operator(tmp, tmp2);
-	std::cout << "tmp2.linfty_norm() = " << tmp2.linfty_norm() << "\n";
-  }
-
-
-
   VectorType const_vector, rhs;
   const_vector.reinit(displacement_n);
   rhs.reinit(displacement_n);
 
-  // the final version would look something like this:
-  // do the boundary integral with const_vector_velocity_remainder, take rhs as container
-//	this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n,
-//     acceleration_n);
-//	pde_operator->update_boundary_mass_operator(1.0); // this can be ommitted in the final version, since we set it once in the init phase
-//    pde_operator->apply_boundary_mass_operator(const_vector, rhs);
-//
-  // then add the domain mass operator applied to the const_vector
-  // the Dirichlet BCs in the mass operators need to be handled with care here (for the applications/structure/bar these are empty ...)!
-
   this->compute_const_vector(rhs, displacement_n, velocity_n, acceleration_n);
   pde_operator->apply_mass_operator(const_vector, rhs);
+
+  if(pde_operator->non_empty_boundary_mass_operator())
+  {
+	  this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
+	  pde_operator->evaluate_add_boundary_mass_operator(const_vector, rhs);
+  }
 
   if(param.large_deformation == false) // linear case
   {
