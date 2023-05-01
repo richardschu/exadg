@@ -236,6 +236,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
     vector traction;
 
     if(boundary_type == BoundaryType::Neumann ||
+       boundary_type == BoundaryType::NeumannCached ||
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
       if(operator_type == OperatorType::inhomogeneous || operator_type == OperatorType::full)

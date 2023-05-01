@@ -5,8 +5,8 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "2",
-        "DegreeMax": "2",
+        "DegreeMin": "4",
+        "DegreeMax": "4",
         "RefineSpaceMin": "1",
         "RefineSpaceMax": "1"
     },
@@ -15,18 +15,18 @@
         "RefineTimeMax": "0"
     },
     "Application": {
-        "Length": "100.0e-3",
-        "Height": "10.0e-3",
-        "Width": "10.0e-3",
+        "Length": "100.0",
+        "Height": "10.0",
+        "Width": "10.0",
         "UseVolumeForce": "false",
         "VolumeForce": "1.0",
         "BoundaryType": "Dirichlet",
-        "Displacement": "20.0e-3",
+        "Displacement": "20.0",
         "Traction":	"0.0",
         "NormalSpring": "true",
         "NormalDashpot": "true",
-        "SpringCoeff": "0",
-        "DashpotCoeff": "1e8",
+        "SpringCoeff": "1e6",
+        "DashpotCoeff": "1e6",
         "ExteriorPressure": "0.0",
         "ProblemType": "Unsteady",
         "Preconditioner": "Multigrid",
@@ -35,6 +35,6 @@
     "Output": {
         "OutputDirectory": "./output/bar/",
         "OutputName": "test",
-        "WriteOutput": "true"
+        "WriteOutput": "false"
     }
 }
