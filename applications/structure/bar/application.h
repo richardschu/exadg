@@ -130,10 +130,10 @@ template<int dim>
 class SolutionNBC : public dealii::Function<dim>
 {
 public:
-  SolutionNBC(double length, double area_force, double volume_force, double E_modul)
+  SolutionNBC(double length, double area_force, double volume_force, double youngs_modulus)
     : dealii::Function<dim>(dim),
-      A(-volume_force / 2 / E_modul),
-      B(+area_force / E_modul - length * 2 * this->A)
+      A(-volume_force / 2 / youngs_modulus),
+      B(+area_force / youngs_modulus - length * 2 * this->A)
   {
   }
 
@@ -156,9 +156,9 @@ template<int dim>
 class SolutionDBC : public dealii::Function<dim>
 {
 public:
-  SolutionDBC(double length, double displacement, double volume_force, double E_modul)
+  SolutionDBC(double length, double displacement, double volume_force, double youngs_modulus)
     : dealii::Function<dim>(dim),
-      A(-volume_force / 2 / E_modul),
+      A(-volume_force / 2 / youngs_modulus),
       B(+displacement / length - this->A * length)
   {
   }
@@ -235,7 +235,7 @@ private:
 
     this->param.start_time                           = start_time;
     this->param.end_time                             = end_time;
-    this->param.time_step_size                       = end_time / 100.;
+    this->param.time_step_size                       = end_time / 200.;
     this->param.gen_alpha_type                       = GenAlphaType::BossakAlpha;
     this->param.spectral_radius                      = 0.8;
     this->param.solver_info_data.interval_time_steps = 2;
@@ -392,8 +392,6 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    //    this->boundary_descriptor->neumann_bc.insert(pair(0, new
-    //    dealii::Functions::ZeroFunction<dim>(dim)));
     this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
       0,
       std::make_pair(std::array<bool, 2>{{normal_spring, normal_dashpot}},
@@ -482,7 +480,7 @@ private:
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
     MaterialType const type = MaterialType::StVenantKirchhoff;
-    double const       E = E_modul, nu = 0.3;
+    double const       E = youngs_modulus, nu = 0.3;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
     this->material_descriptor->insert(
@@ -513,7 +511,7 @@ private:
     PostProcessorData<dim> pp_data;
     pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
     pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 200000.0;
+    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 20.0;
     pp_data.output_data.directory          = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename           = this->output_parameters.filename;
     pp_data.output_data.write_higher_order = true;
@@ -527,12 +525,12 @@ private:
     if(boundary_type == "Dirichlet")
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->E_modul));
+        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->youngs_modulus));
     }
     else if(boundary_type == "Neumann")
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->E_modul));
+        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->youngs_modulus));
     }
     else
     {
@@ -568,12 +566,12 @@ private:
   // mesh parameters
   unsigned int const repetitions0 = 4, repetitions1 = 1, repetitions2 = 1;
 
-  double const E_modul = 200.0e3;
+  double const youngs_modulus = 200.0;
 
   double const start_time = 0.0;
-  double const end_time   = 1.0;
+  double const end_time   = 100.0;
 
-  double const density = 0.001e6;
+  double const density = 0.001;
 
   std::string problem_type      = "Steady";
   std::string preconditioner    = "None";
