@@ -30,6 +30,8 @@ struct Parameters
 {
   Parameters()
     : method("Aitken"),
+	  coupling_scheme("Dirichlet-Neumann"),
+	  robin_parameter_scale(0.0),
       abs_tol(1.e-12),
       rel_tol(1.e-3),
       omega_init(0.1),
@@ -52,8 +54,13 @@ struct Parameters
       prm.add_parameter("CouplingScheme",
     		            coupling_scheme,
 						"Partitioned coupling scheme.",
-						dealii::Patterns::Selection("Dirichlet-Neumann|Dirichlet-Robin"),
-						true)
+						dealii::Patterns::Selection("Dirichlet-Neumann|Dirichlet-Robin: fixed|Dirichlet-Robin: adaptive"),
+						false);
+      prm.add_parameter("RobinParameterScale",
+    		            robin_parameter_scale,
+						"Additional scaling for Robin parameter.",
+						dealii::Patterns::Double(),
+						false);
       prm.add_parameter("AbsTol",
                         abs_tol,
                         "Absolute solver tolerance.",
@@ -90,6 +97,7 @@ struct Parameters
 
   std::string  method;
   std::string  coupling_scheme;
+  double       robin_parameter_scale;
   double       abs_tol;
   double       rel_tol;
   double       omega_init;

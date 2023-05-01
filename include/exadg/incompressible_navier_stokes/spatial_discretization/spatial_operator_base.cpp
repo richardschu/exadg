@@ -970,15 +970,12 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::interpolate_stress_bc(VectorType &       stress,
                                                         VectorType const & velocity,
-                                                        VectorType const & pressure,
-														double const &     robin_parameter) const
+                                                        VectorType const & pressure) const
 {
   velocity_ptr = &velocity;
   pressure_ptr = &pressure;
 
   stress = 0.0;
-
-  this->robin_parameter = robin_parameter;
 
   VectorType src_dummy;
   matrix_free->loop(&This::cell_loop_empty,
@@ -990,6 +987,13 @@ SpatialOperatorBase<dim, Number>::interpolate_stress_bc(VectorType &       stres
 
   velocity_ptr = nullptr;
   pressure_ptr = nullptr;
+}
+
+template<int dim, typename Number>
+void
+SpatialOperatorBase<dim, Number>::set_robin_parameter(double const & robin_parameter_in) const
+{
+  this->robin_parameter = robin_parameter_in;
 }
 
 template<int dim, typename Number>
@@ -1774,6 +1778,8 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
 
   FaceIntegratorU integrator_u(matrix_free, true, dof_index_u, quad_index);
   FaceIntegratorP integrator_p(matrix_free, true, dof_index_p, quad_index);
+
+  pcout << "fluid: robin parameter = " << this->robin_parameter << "\n";
 
   for(unsigned int face = face_range.first; face < face_range.second; face++)
   {

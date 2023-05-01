@@ -77,11 +77,16 @@ private:
   coupling_structure_to_fluid(bool const extrapolate) const;
 
   void
-  coupling_fluid_to_structure(bool const end_of_time_step,
-		  double const & robin_parameter) const;
+  coupling_fluid_to_structure(bool const end_of_time_step) const;
+
+  double
+  compute_robin_parameter() const;
 
   void
-  apply_dirichlet_neumann_scheme(VectorType &       d_tilde,
+  update_robin_parameters(double const & robin_parameter_in) const;
+
+  void
+  apply_dirichlet_robin_scheme(VectorType &       d_tilde,
                                  VectorType const & d,
                                  unsigned int       iteration) const;
 

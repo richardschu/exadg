@@ -240,8 +240,7 @@ Driver<dim, Number>::coupling_structure_to_fluid(bool const extrapolate) const
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step,
-		                                         double const & robin_parameter) const
+Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) const
 {
   dealii::Timer sub_timer;
   sub_timer.restart();
@@ -253,15 +252,13 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step,
   {
     fluid->pde_operator->interpolate_stress_bc(stress_fluid,
                                                fluid->time_integrator->get_velocity_np(),
-                                               fluid->time_integrator->get_pressure_np(),
-											   robin_parameter);
+                                               fluid->time_integrator->get_pressure_np());
   }
   else
   {
     fluid->pde_operator->interpolate_stress_bc(stress_fluid,
                                                fluid->time_integrator->get_velocity(),
-                                               fluid->time_integrator->get_pressure(),
-											   robin_parameter);
+                                               fluid->time_integrator->get_pressure());
   }
 
   stress_fluid *= -1.0;
@@ -271,11 +268,47 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step,
 }
 
 template<int dim, typename Number>
+double
+Driver<dim, Number>::compute_robin_parameter() const
+{
+  if(parameters.coupling_scheme == "Dirichlet-Neumann")
+  {
+	return 0.0;
+  }
+  else if(parameters.coupling_scheme == "Dirichlet-Robin: fixed")
+  {
+	return parameters.robin_parameter_scale;
+  }
+  else if(parameters.coupling_scheme == "Dirichlet-Robin: adaptive")
+  {
+	return parameters.robin_parameter_scale * application->fluid->get_parameters().density / fluid->time_integrator->get_time_step_size();
+  }
+  else
+  {
+	AssertThrow(false, dealii::ExcMessage("This coupling scheme is not defined."));
+  }
+
+  return 0.0;
+}
+
+template<int dim, typename Number>
+void
+Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) const
+{
+  fluid->pde_operator->set_robin_parameter(robin_parameter_in);
+
+  std::cout << "structure solver is missing the update and the implicit part ... \n";
+}
+
+
+template<int dim, typename Number>
 void
 Driver<dim, Number>::apply_dirichlet_robin_scheme(VectorType &       d_tilde,
                                                     VectorType const & d,
                                                     unsigned int       iteration) const
 {
+  update_robin_parameters(compute_robin_parameter());
+
   coupling_structure_to_ale(d);
 
   // move the fluid mesh and update dependent data structures
@@ -284,19 +317,13 @@ Driver<dim, Number>::apply_dirichlet_robin_scheme(VectorType &       d_tilde,
   // update velocity boundary condition for fluid
   coupling_structure_to_fluid(iteration == 0);
 
-  // update Robin parameter
-  std::cout << "check for the coupling_scheme and set the parameter accordingly in a method (including global scaling)\n";
-  this->robin_parameter = 0.0 * fluid->pde_operator->param.density / fluid->time_integrator->get_time_step_size();
-
   // solve fluid problem
   fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
 
   // update stress boundary condition for solid
-  coupling_fluid_to_structure(/* end_of_time_step = */ true,
-		                      this->robin_parameter);
+  coupling_fluid_to_structure(/* end_of_time_step = */ true);
 
   // solve structural problem
-  std::cout << "structure is missing the implicit part of the robin term\n";
   structure->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
 
   d_tilde = structure->time_integrator->get_displacement_np();
@@ -313,8 +340,8 @@ Driver<dim, Number>::solve() const
   // compute initial acceleration for structural problem
   {
     // update stress boundary condition for solid at time t_n (not t_{n+1})
-    coupling_fluid_to_structure(false /* end_of_time_step */,
-    		                    0.0 /* robin_parameter */);
+	update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
+    coupling_fluid_to_structure(false /* end_of_time_step */);
     structure->time_integrator->compute_initial_acceleration(
       application->structure->get_parameters().restarted_simulation);
   }

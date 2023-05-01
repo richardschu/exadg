@@ -225,8 +225,10 @@ public:
   void
   interpolate_stress_bc(VectorType &       stress,
                         VectorType const & velocity,
-                        VectorType const & pressure,
-						double const &     robin_parameter) const;
+                        VectorType const & pressure) const;
+
+  void
+  set_robin_parameter(double const & robin_parameter_in) const;
 
   /*
    * Time step calculation.
