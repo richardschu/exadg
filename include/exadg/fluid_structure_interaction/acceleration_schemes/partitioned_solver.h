@@ -52,7 +52,7 @@ public:
 
   void
   solve(std::function<void(VectorType &, VectorType const &, unsigned int)> const &
-          apply_dirichlet_neumann_scheme);
+          apply_dirichlet_robin_scheme);
 
   void
   print_iterations(dealii::ConditionalOStream const & pcout) const;
@@ -176,7 +176,7 @@ template<int dim, typename Number>
 void
 PartitionedSolver<dim, Number>::solve(
   std::function<void(VectorType &, VectorType const &, unsigned int)> const &
-    apply_dirichlet_neumann_scheme)
+    apply_dirichlet_robin_scheme)
 {
   // iteration counter
   unsigned int k = 0;
@@ -200,7 +200,7 @@ PartitionedSolver<dim, Number>::solve(
         d = structure->time_integrator->get_displacement_np();
 
       VectorType d_tilde(d);
-      apply_dirichlet_neumann_scheme(d_tilde, d, k);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
 
       // compute residual and check convergence
       VectorType r = d_tilde;
@@ -262,7 +262,7 @@ PartitionedSolver<dim, Number>::solve(
       else
         d = structure->time_integrator->get_displacement_np();
 
-      apply_dirichlet_neumann_scheme(d_tilde, d, k);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
 
       // compute residual and check convergence
       r = d_tilde;
@@ -390,7 +390,7 @@ PartitionedSolver<dim, Number>::solve(
       else
         d = structure->time_integrator->get_displacement_np();
 
-      apply_dirichlet_neumann_scheme(d_tilde, d, k);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
 
       // compute residual and check convergence
       r = d_tilde;

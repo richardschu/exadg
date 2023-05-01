@@ -59,6 +59,7 @@ SpatialOperatorBase<dim, Number>::SpatialOperatorBase(
     dof_handler_p(*grid_in->triangulation),
     dof_handler_u_scalar(*grid_in->triangulation),
     pressure_level_is_undefined(false),
+	robin_parameter(0.0),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0),
     velocity_ptr(nullptr),
@@ -969,12 +970,15 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::interpolate_stress_bc(VectorType &       stress,
                                                         VectorType const & velocity,
-                                                        VectorType const & pressure) const
+                                                        VectorType const & pressure,
+														double const &     robin_parameter) const
 {
   velocity_ptr = &velocity;
   pressure_ptr = &pressure;
 
   stress = 0.0;
+
+  this->robin_parameter = robin_parameter;
 
   VectorType src_dummy;
   matrix_free->loop(&This::cell_loop_empty,
@@ -1782,7 +1786,7 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
     if(boundary_type == BoundaryTypeU::DirichletCached)
     {
       integrator_u.reinit(face);
-      integrator_u.gather_evaluate(*velocity_ptr, dealii::EvaluationFlags::gradients);
+      integrator_u.gather_evaluate(*velocity_ptr, dealii::EvaluationFlags::gradients | dealii::EvaluationFlags::values);
 
       integrator_p.reinit(face);
       integrator_p.gather_evaluate(*pressure_ptr, dealii::EvaluationFlags::values);
@@ -1797,13 +1801,14 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         // compute traction acting on structure with normal vector in opposite direction
         // as compared to the fluid domain
         vector normal = integrator_u.get_normal_vector(q);
+        vector u      = integrator_u.get_value(q);
         tensor grad_u = integrator_u.get_gradient(q);
         scalar p      = integrator_p.get_value(q);
 
         // incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
         // pressure
         // -> multiply by density to get true traction in N/m^2.
-        vector traction =
+        vector traction = this->robin_parameter * u +
           param.density * (param.viscosity * (grad_u + transpose(grad_u)) * normal - p * normal);
 
         integrator_u.submit_dof_value(traction, index);

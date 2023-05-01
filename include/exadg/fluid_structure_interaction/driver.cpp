@@ -240,7 +240,8 @@ Driver<dim, Number>::coupling_structure_to_fluid(bool const extrapolate) const
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) const
+Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step,
+		                                         double const & robin_parameter) const
 {
   dealii::Timer sub_timer;
   sub_timer.restart();
@@ -252,13 +253,15 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
   {
     fluid->pde_operator->interpolate_stress_bc(stress_fluid,
                                                fluid->time_integrator->get_velocity_np(),
-                                               fluid->time_integrator->get_pressure_np());
+                                               fluid->time_integrator->get_pressure_np(),
+											   robin_parameter);
   }
   else
   {
     fluid->pde_operator->interpolate_stress_bc(stress_fluid,
                                                fluid->time_integrator->get_velocity(),
-                                               fluid->time_integrator->get_pressure());
+                                               fluid->time_integrator->get_pressure(),
+											   robin_parameter);
   }
 
   stress_fluid *= -1.0;
@@ -269,7 +272,7 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::apply_dirichlet_neumann_scheme(VectorType &       d_tilde,
+Driver<dim, Number>::apply_dirichlet_robin_scheme(VectorType &       d_tilde,
                                                     VectorType const & d,
                                                     unsigned int       iteration) const
 {
@@ -281,13 +284,19 @@ Driver<dim, Number>::apply_dirichlet_neumann_scheme(VectorType &       d_tilde,
   // update velocity boundary condition for fluid
   coupling_structure_to_fluid(iteration == 0);
 
+  // update Robin parameter
+  std::cout << "check for the coupling_scheme and set the parameter accordingly in a method (including global scaling)\n";
+  this->robin_parameter = 0.0 * fluid->pde_operator->param.density / fluid->time_integrator->get_time_step_size();
+
   // solve fluid problem
   fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
 
   // update stress boundary condition for solid
-  coupling_fluid_to_structure(/* end_of_time_step = */ true);
+  coupling_fluid_to_structure(/* end_of_time_step = */ true,
+		                      this->robin_parameter);
 
   // solve structural problem
+  std::cout << "structure is missing the implicit part of the robin term\n";
   structure->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
 
   d_tilde = structure->time_integrator->get_displacement_np();
@@ -304,7 +313,8 @@ Driver<dim, Number>::solve() const
   // compute initial acceleration for structural problem
   {
     // update stress boundary condition for solid at time t_n (not t_{n+1})
-    coupling_fluid_to_structure(/* end_of_time_step = */ false);
+    coupling_fluid_to_structure(false /* end_of_time_step */,
+    		                    0.0 /* robin_parameter */);
     structure->time_integrator->compute_initial_acceleration(
       application->structure->get_parameters().restarted_simulation);
   }
@@ -317,11 +327,11 @@ Driver<dim, Number>::solve() const
     structure->time_integrator->advance_one_timestep_pre_solve(false);
 
     // solve (using strongly-coupled partitioned scheme)
-    auto const lambda_dirichlet_neumann =
+    auto const lambda_dirichlet_robin =
       [&](VectorType & d_tilde, VectorType const & d, unsigned int k) {
-        apply_dirichlet_neumann_scheme(d_tilde, d, k);
+        apply_dirichlet_robin_scheme(d_tilde, d, k);
       };
-    partitioned_solver->solve(lambda_dirichlet_neumann);
+    partitioned_solver->solve(lambda_dirichlet_robin);
 
     // post-solve
     fluid->time_integrator->advance_one_timestep_post_solve();

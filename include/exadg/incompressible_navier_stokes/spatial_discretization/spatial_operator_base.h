@@ -225,7 +225,8 @@ public:
   void
   interpolate_stress_bc(VectorType &       stress,
                         VectorType const & velocity,
-                        VectorType const & pressure) const;
+                        VectorType const & pressure,
+						double const &     robin_parameter) const;
 
   /*
    * Time step calculation.
@@ -515,6 +516,7 @@ private:
    * Interface coupling
    */
   std::shared_ptr<ContainerInterfaceData<1, dim, double>> interface_data_dirichlet_cached;
+  mutable double robin_parameter;
 
 protected:
   /*

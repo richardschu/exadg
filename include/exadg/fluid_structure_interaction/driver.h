@@ -77,7 +77,8 @@ private:
   coupling_structure_to_fluid(bool const extrapolate) const;
 
   void
-  coupling_fluid_to_structure(bool const end_of_time_step) const;
+  coupling_fluid_to_structure(bool const end_of_time_step,
+		  double const & robin_parameter) const;
 
   void
   apply_dirichlet_neumann_scheme(VectorType &       d_tilde,
@@ -113,6 +114,8 @@ private:
 
   // Partitioned FSI solver
   std::shared_ptr<PartitionedSolver<dim, Number>> partitioned_solver;
+
+  mutable double robin_parameter;
 };
 
 } // namespace FSI

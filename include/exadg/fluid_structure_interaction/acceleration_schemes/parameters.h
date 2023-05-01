@@ -49,6 +49,11 @@ struct Parameters
                         "Acceleration method.",
                         dealii::Patterns::Selection("Aitken|IQN-ILS|IQN-IMVLS"),
                         true);
+      prm.add_parameter("CouplingScheme",
+    		            coupling_scheme,
+						"Partitioned coupling scheme.",
+						dealii::Patterns::Selection("Dirichlet-Neumann|Dirichlet-Robin"),
+						true)
       prm.add_parameter("AbsTol",
                         abs_tol,
                         "Absolute solver tolerance.",
@@ -84,6 +89,7 @@ struct Parameters
   }
 
   std::string  method;
+  std::string  coupling_scheme;
   double       abs_tol;
   double       rel_tol;
   double       omega_init;
