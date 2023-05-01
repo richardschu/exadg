@@ -24,8 +24,7 @@
 namespace ExaDG
 {
 template<int dim, typename Number, int n_components>
-BoundaryMassOperator<dim, Number, n_components>::BoundaryMassOperator()
-  : scaling_factor(1.0)
+BoundaryMassOperator<dim, Number, n_components>::BoundaryMassOperator() : scaling_factor(1.0)
 {
 }
 
@@ -84,17 +83,13 @@ void
 BoundaryMassOperator<dim, Number, n_components>::evaluate_add(VectorType &       dst,
                                                               VectorType const & src) const
 {
-  std::cout << "pre loop\n";
-
   this->matrix_free->loop(&This::cell_loop_empty,
-                    &This::face_loop_empty,
-                    &This::boundary_face_loop_full_operator,
-                    this,
-                    dst,
-                    src,
-					false /* zero_dst_vector */);
-
-  std::cout << "post loop\n";
+                          &This::face_loop_empty,
+                          &This::boundary_face_loop_full_operator,
+                          this,
+                          dst,
+                          src,
+                          false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number, int n_components>
@@ -137,31 +132,24 @@ BoundaryMassOperator<dim, Number, n_components>::boundary_face_loop_full_operato
   VectorType const &                      src,
   Range const &                           range) const
 {
-  std::cout << "1\n";
-
   for(unsigned int face = range.first; face < range.second; face++)
   {
     dealii::types::boundary_id boundary_id = matrix_free.get_boundary_id(face);
-
-	std::cout << "2\n";
 
     // integrate over selected boundaries and *do not* gather_evaluate/integrate_scatter on others
     if(auto it{this->ids_normal_coefficients.find(boundary_id)};
        it != this->ids_normal_coefficients.end())
     {
-    	std::cout << "3\n";
-
       Number scaled_coefficient = it->second.second * scaling_factor;
       bool   normal_projection  = it->second.first;
 
-  	std::cout << "4\n";
       this->integrator_m->reinit(face);
       this->integrator_m->gather_evaluate(src, this->integrator_flags.face_evaluate);
-    	std::cout << "5\n";
+
       this->do_boundary_segment_integral(*this->integrator_m,
                                          scaled_coefficient,
                                          normal_projection);
-  	std::cout << "6\n";
+
       this->integrator_m->integrate_scatter(this->integrator_flags.face_integrate, dst);
     }
   }

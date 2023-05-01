@@ -825,8 +825,6 @@ void
 Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       dst,
                                                            VectorType const & src) const
 {
-std::cout << "in evaluate_add\n";
-
   if(this->non_empty_boundary_mass_operator())
     boundary_mass_operator.evaluate_add(dst, src);
 }
