@@ -39,6 +39,7 @@ class SolverStructure
 public:
   void
   setup(std::shared_ptr<StructureFSI::ApplicationBase<dim, Number>> application,
+		Number const &                                              robin_parameter_in,
         MPI_Comm const                                              mpi_comm,
         bool const                                                  is_test);
 
@@ -60,6 +61,7 @@ template<int dim, typename Number>
 void
 SolverStructure<dim, Number>::setup(
   std::shared_ptr<StructureFSI::ApplicationBase<dim, Number>> application,
+  Number const &                                              robin_parameter_in,
   MPI_Comm const                                              mpi_comm,
   bool const                                                  is_test)
 {
@@ -96,8 +98,17 @@ SolverStructure<dim, Number>::setup(
 
   time_integrator->setup(application->get_parameters().restarted_simulation);
 
+  // Robin parameters need to be known *at* solver setup
+  std::map<dealii::types::boundary_id, Number> robin_fsi_param;
+  for(auto const & entry : application->get_boundary_descriptor()->neumann_cached_bc)
+  {
+	std::cout << "robin structure solver setup: id = " << entry.first << " c = " << robin_parameter_in << "\n";
+	robin_fsi_param.insert(std::make_pair(entry.first, robin_parameter_in));
+  }
+
   pde_operator->setup_solver(time_integrator->get_scaling_factor_mass(),
-                             time_integrator->get_scaling_factor_mass_velocity());
+                             time_integrator->get_scaling_factor_mass_velocity(),
+							 robin_fsi_param);
 }
 
 } // namespace FSI

@@ -1779,7 +1779,7 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
   FaceIntegratorU integrator_u(matrix_free, true, dof_index_u, quad_index);
   FaceIntegratorP integrator_p(matrix_free, true, dof_index_p, quad_index);
 
-  pcout << "fluid: robin parameter = " << this->robin_parameter << "\n";
+  pcout << "fluid: robin parameter = " << this->robin_parameter << " ##+ \n";
 
   for(unsigned int face = face_range.first; face < face_range.second; face++)
   {

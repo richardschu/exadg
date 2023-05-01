@@ -213,7 +213,9 @@ public:
    * linear systems of equation required for implicit formulations.
    */
   void
-  setup_solver(double const & scaling_factor_mass, double const & scaling_factor_mass_velocity);
+  setup_solver(double const & scaling_factor_mass,
+		       double const & scaling_factor_mass_velocity,
+		       std::map<dealii::types::boundary_id, Number> const & robin_fsi_param);
 
   /*
    * Initialization of dof-vector.
@@ -245,7 +247,12 @@ public:
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
 
   void
-  update_boundary_mass_operator(Number const scaling_factor) const;
+  update_boundary_mass_operator(Number const scaling_factor,
+		                        std::map<dealii::types::boundary_id, Number> robin_fsi_param) const;
+
+  void
+  set_robin_parameter(double const & robin_parameter_in,
+		              dealii::types::boundary_id const boundary_id_in) const;
 
   /*
    * This function calculates the right-hand side of the linear system

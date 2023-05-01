@@ -439,7 +439,8 @@ Operator<dim, Number>::setup_operators()
 template<int dim, typename Number>
 void
 Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
-                                    double const & scaling_factor_mass_velocity)
+                                    double const & scaling_factor_mass_velocity,
+									std::map<dealii::types::boundary_id, Number> const & robin_fsi_param)
 {
   pcout << std::endl << "Setup elasticity solver ..." << std::endl;
 
@@ -457,7 +458,9 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
   }
 
   if(param.problem_type == ProblemType::Unsteady)
-    update_boundary_mass_operator(1.0);
+  {
+    update_boundary_mass_operator(1.0, robin_fsi_param);
+  }
 
   initialize_preconditioner();
 
@@ -831,7 +834,8 @@ Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       ds
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor) const
+Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor,
+		std::map<dealii::types::boundary_id, Number> robin_fsi_param) const
 {
   boundary_mass_operator.set_scaling_factor(scaling_factor);
 
@@ -848,6 +852,21 @@ Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor
     {
       robin_c_param.insert(
         std::make_pair(boundary_id, std::make_pair(normal_dashpot, dashpot_coefficient)));
+    }
+  }
+
+  // update data from Robin coupling in FSI
+  for(auto const & entry : robin_fsi_param)
+  {
+    dealii::types::boundary_id boundary_id       = entry.first;
+    Number                     robin_coefficient = entry.second;
+
+    if(std::abs(robin_coefficient) > 1e-20)
+    {
+      std::cout << "added robin_coefficient = " << robin_coefficient << " on boundary_id = " << boundary_id << " ##+ \n";
+
+      robin_c_param.insert(
+        std::make_pair(boundary_id, std::make_pair(false /* normal_projection */, robin_coefficient)));
     }
   }
 

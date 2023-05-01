@@ -68,15 +68,6 @@ Driver<dim, Number>::setup()
     timer_tree.insert({"FSI", "Setup", "Application"}, timer_local.wall_time());
   }
 
-  // setup structure
-  {
-    dealii::Timer timer_local;
-
-    structure->setup(application->structure, mpi_comm, is_test);
-
-    timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
-  }
-
   // setup fluid
   {
     dealii::Timer timer_local;
@@ -84,6 +75,17 @@ Driver<dim, Number>::setup()
     fluid->setup(application->fluid, mpi_comm, is_test);
 
     timer_tree.insert({"FSI", "Setup", "Fluid"}, timer_local.wall_time());
+  }
+
+  // setup structure
+  {
+    dealii::Timer timer_local;
+
+    std::cout << "##+ initial robin parameter computed was : ";
+    std::cout << compute_robin_parameter() << "\n";
+    structure->setup(application->structure, compute_robin_parameter(), mpi_comm, is_test);
+
+    timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
   }
 
   setup_interface_coupling();
@@ -297,9 +299,16 @@ Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) 
 {
   fluid->pde_operator->set_robin_parameter(robin_parameter_in);
 
-  std::cout << "structure solver is missing the update and the implicit part ... \n";
-}
+  AssertThrow(application->structure->get_boundary_descriptor()->neumann_cached_bc.size() > 0, dealii::ExcMessage("FSI boundary id on structure side expected as cached Neumann BC."));
 
+  std::map<dealii::types::boundary_id, Number> robin_fsi_param;
+  for(auto const & entry : application->structure->get_boundary_descriptor()->neumann_cached_bc)
+  {
+	robin_fsi_param.insert(std::make_pair(entry.first, robin_parameter_in));
+  }
+
+  structure->pde_operator->update_boundary_mass_operator(1.0 /* scaling_factor */, robin_fsi_param);
+}
 
 template<int dim, typename Number>
 void
@@ -307,6 +316,9 @@ Driver<dim, Number>::apply_dirichlet_robin_scheme(VectorType &       d_tilde,
                                                     VectorType const & d,
                                                     unsigned int       iteration) const
 {
+  std::cout << "##+ updated robin parameter computed was : ";
+  std::cout << compute_robin_parameter() << "\n";
+
   update_robin_parameters(compute_robin_parameter());
 
   coupling_structure_to_ale(d);

@@ -68,7 +68,8 @@ public:
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void
-  update_boundary_mass_operator(Number const scaling_factor) const = 0;
+  update_boundary_mass_operator(Number const scaling_factor,
+		  		std::map<dealii::types::boundary_id, Number> robin_fsi_param) const = 0;
 
   virtual void
   compute_rhs_linear(VectorType & dst, double const time) const = 0;
