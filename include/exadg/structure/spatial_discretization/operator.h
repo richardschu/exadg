@@ -214,8 +214,7 @@ public:
    */
   void
   setup_solver(double const & scaling_factor_mass,
-		       double const & scaling_factor_mass_velocity,
-		       std::map<dealii::types::boundary_id, Number> const & robin_fsi_param);
+		       double const & scaling_factor_mass_velocity);
 
   /*
    * Initialization of dof-vector.
@@ -247,8 +246,10 @@ public:
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
 
   void
-  update_boundary_mass_operator(Number const scaling_factor,
-		                        std::map<dealii::types::boundary_id, Number> robin_fsi_param) const;
+  set_combine_robin_param(std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> const & robin_k_c_p_param_in) const;
+
+  void
+  update_boundary_mass_operator(Number const scaling_factor) const;
 
   void
   set_robin_parameter(double const & robin_parameter_in,

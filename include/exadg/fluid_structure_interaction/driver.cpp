@@ -297,17 +297,22 @@ template<int dim, typename Number>
 void
 Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) const
 {
+  // update fluid operator's Robin parameter
   fluid->pde_operator->set_robin_parameter(robin_parameter_in);
 
+  // update structure operator's Robin parameter
   AssertThrow(application->structure->get_boundary_descriptor()->neumann_cached_bc.size() > 0, dealii::ExcMessage("FSI boundary id on structure side expected as cached Neumann BC."));
 
-  std::map<dealii::types::boundary_id, Number> robin_fsi_param;
+  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> robin_k_c_p_param_fsi;
   for(auto const & entry : application->structure->get_boundary_descriptor()->neumann_cached_bc)
   {
-	robin_fsi_param.insert(std::make_pair(entry.first, robin_parameter_in));
+	  robin_k_c_p_param_fsi.insert(std::make_pair(
+			entry.first /* boundary_id */,
+			std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
+						   std::array<double, 3>{{0.0 /* spring_coeff */, robin_parameter_in /* dashpot_coeff */, 0.0 /* exterior_pressure */}})));
   }
 
-  structure->pde_operator->update_boundary_mass_operator(1.0 /* scaling_factor */, robin_fsi_param);
+  structure->pde_operator->set_combine_robin_param(robin_k_c_p_param_fsi);
 }
 
 template<int dim, typename Number>

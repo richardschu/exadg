@@ -98,17 +98,21 @@ SolverStructure<dim, Number>::setup(
 
   time_integrator->setup(application->get_parameters().restarted_simulation);
 
-  // Robin parameters need to be known *at* solver setup
-  std::map<dealii::types::boundary_id, Number> robin_fsi_param;
+  // Robin parameter needs to be set *before* solver setup
+  AssertThrow(application->get_boundary_descriptor()->neumann_cached_bc.size() > 0, dealii::ExcMessage("FSI boundary id on structure side expected as cached Neumann BC."));
+
+  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> robin_k_c_p_param_fsi;
   for(auto const & entry : application->get_boundary_descriptor()->neumann_cached_bc)
   {
-	std::cout << "robin structure solver setup: id = " << entry.first << " c = " << robin_parameter_in << "\n";
-	robin_fsi_param.insert(std::make_pair(entry.first, robin_parameter_in));
+	  robin_k_c_p_param_fsi.insert(std::make_pair(
+			entry.first /* boundary_id */,
+			std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
+						   std::array<double, 3>{{0.0 /* spring_coeff */, robin_parameter_in /* dashpot_coeff */, 0.0 /* exterior_pressure */}})));
   }
+  pde_operator->set_combine_robin_param(robin_k_c_p_param_fsi);
 
   pde_operator->setup_solver(time_integrator->get_scaling_factor_mass(),
-                             time_integrator->get_scaling_factor_mass_velocity(),
-							 robin_fsi_param);
+                             time_integrator->get_scaling_factor_mass_velocity());
 }
 
 } // namespace FSI

@@ -113,10 +113,9 @@ Driver<dim, Number>::setup()
 
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
       pde_operator->setup_solver(time_integrator->get_scaling_factor_mass(),
-                                 time_integrator->get_scaling_factor_mass_velocity(),
-								 std::map<dealii::types::boundary_id, Number>() /* robin_fsi_param */);
+                                 time_integrator->get_scaling_factor_mass_velocity());
     else
-      pde_operator->setup_solver(0.0, 0.0, std::map<dealii::types::boundary_id, Number>() /* robin_fsi_param */);
+      pde_operator->setup_solver(0.0, 0.0);
   }
 
   timer_tree.insert({"Elasticity", "Setup"}, timer.wall_time());

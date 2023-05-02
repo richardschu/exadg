@@ -439,8 +439,7 @@ Operator<dim, Number>::setup_operators()
 template<int dim, typename Number>
 void
 Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
-                                    double const & scaling_factor_mass_velocity,
-									std::map<dealii::types::boundary_id, Number> const & robin_fsi_param)
+                                    double const & scaling_factor_mass_velocity)
 {
   pcout << std::endl << "Setup elasticity solver ..." << std::endl;
 
@@ -459,7 +458,7 @@ Operator<dim, Number>::setup_solver(double const & scaling_factor_mass,
 
   if(param.problem_type == ProblemType::Unsteady)
   {
-    update_boundary_mass_operator(1.0, robin_fsi_param);
+    update_boundary_mass_operator(1.0);
   }
 
   initialize_preconditioner();
@@ -834,39 +833,36 @@ Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       ds
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor,
-		std::map<dealii::types::boundary_id, Number> robin_fsi_param) const
+Operator<dim, Number>::set_combine_robin_param(std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> const & robin_k_c_p_param_in) const
+{
+  // copy
+  auto tmp = robin_k_c_p_param_in;
+
+  // duplicate entries are not copied in the following
+  tmp.insert(this->boundary_descriptor->robin_k_c_p_param.begin(), this->boundary_descriptor->robin_k_c_p_param.end());
+
+  this->boundary_descriptor->robin_k_c_p_param = tmp;
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor) const
 {
   boundary_mass_operator.set_scaling_factor(scaling_factor);
 
   std::map<dealii::types::boundary_id, std::pair<bool, Number>> robin_c_param;
 
-  // update data for dashpots on Robin boundary
-  for(auto const & entry : boundary_descriptor->robin_k_c_p_param)
+  // update operator data from boundary_descriptor's velocity part from Robin boundaries
+  for(auto const & entry : this->boundary_descriptor->robin_k_c_p_param)
   {
-    dealii::types::boundary_id boundary_id         = entry.first;
-    bool                       normal_dashpot      = entry.second.first[1];
-    Number                     dashpot_coefficient = entry.second.second[1];
+    dealii::types::boundary_id boundary_id          = entry.first;
+    bool                       normal_projection    = entry.second.first[1];
+    Number                     velocity_coefficient = entry.second.second[1];
 
-    if(std::abs(dashpot_coefficient) > 1e-20)
+    if(std::abs(velocity_coefficient) > 1e-20)
     {
       robin_c_param.insert(
-        std::make_pair(boundary_id, std::make_pair(normal_dashpot, dashpot_coefficient)));
-    }
-  }
-
-  // update data for Robin coupling in FSI
-  for(auto const & entry : robin_fsi_param)
-  {
-    dealii::types::boundary_id boundary_id       = entry.first;
-    Number                     robin_coefficient = entry.second;
-
-    if(std::abs(robin_coefficient) > 1e-20)
-    {
-      std::cout << "added robin_coefficient = " << robin_coefficient << " on boundary_id = " << boundary_id << " ##+ \n";
-
-      robin_c_param.insert(
-        std::make_pair(boundary_id, std::make_pair(false /* normal_projection */, robin_coefficient)));
+        std::make_pair(boundary_id, std::make_pair(normal_projection, velocity_coefficient)));
     }
   }
 
