@@ -841,7 +841,7 @@ Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor
 
   std::map<dealii::types::boundary_id, std::pair<bool, Number>> robin_c_param;
 
-  // update data from dashpots on Robin boundary
+  // update data for dashpots on Robin boundary
   for(auto const & entry : boundary_descriptor->robin_k_c_p_param)
   {
     dealii::types::boundary_id boundary_id         = entry.first;
@@ -855,7 +855,7 @@ Operator<dim, Number>::update_boundary_mass_operator(Number const scaling_factor
     }
   }
 
-  // update data from Robin coupling in FSI
+  // update data for Robin coupling in FSI
   for(auto const & entry : robin_fsi_param)
   {
     dealii::types::boundary_id boundary_id       = entry.first;

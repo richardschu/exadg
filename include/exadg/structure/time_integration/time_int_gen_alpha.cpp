@@ -128,6 +128,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   this->compute_const_vector(rhs, displacement_n, velocity_n, acceleration_n);
   pde_operator->apply_mass_operator(const_vector, rhs);
 
+  // non-empty boundary mass operator signals velocity remainder to be integrated
   if(pde_operator->non_empty_boundary_mass_operator())
   {
     this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
