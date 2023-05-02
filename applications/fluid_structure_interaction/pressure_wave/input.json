@@ -15,7 +15,7 @@
     "FSI" : {
         "Method": "IQN-ILS",
         "CouplingScheme": "Dirichlet-Robin: adaptive",
-        "RobinParameterScale": "0.1",
+        "RobinParameterScale": "0.01",
         "AbsTol": "1.e-9",
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
@@ -26,7 +26,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/pressure_wave/",
+        "OutputDirectory": "output/pressure_wave_2/",
         "OutputName": "fsi_test",
         "WriteOutput": "true"
     }

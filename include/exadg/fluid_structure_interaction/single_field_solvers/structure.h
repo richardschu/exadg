@@ -39,7 +39,7 @@ class SolverStructure
 public:
   void
   setup(std::shared_ptr<StructureFSI::ApplicationBase<dim, Number>> application,
-		Number const &                                              robin_parameter_in,
+        Number const &                                              robin_parameter_in,
         MPI_Comm const                                              mpi_comm,
         bool const                                                  is_test);
 
@@ -99,15 +99,20 @@ SolverStructure<dim, Number>::setup(
   time_integrator->setup(application->get_parameters().restarted_simulation);
 
   // Robin parameter needs to be set *before* solver setup
-  AssertThrow(application->get_boundary_descriptor()->neumann_cached_bc.size() > 0, dealii::ExcMessage("FSI boundary id on structure side expected as cached Neumann BC."));
+  AssertThrow(application->get_boundary_descriptor()->neumann_cached_bc.size() > 0,
+              dealii::ExcMessage(
+                "FSI boundary id on structure side expected as cached Neumann BC."));
 
-  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> robin_k_c_p_param_fsi;
+  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>>
+    robin_k_c_p_param_fsi;
   for(auto const & entry : application->get_boundary_descriptor()->neumann_cached_bc)
   {
-	  robin_k_c_p_param_fsi.insert(std::make_pair(
-			entry.first /* boundary_id */,
-			std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
-						   std::array<double, 3>{{0.0 /* spring_coeff */, robin_parameter_in /* dashpot_coeff */, 0.0 /* exterior_pressure */}})));
+    robin_k_c_p_param_fsi.insert(std::make_pair(
+      entry.first /* boundary_id */,
+      std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
+                     std::array<double, 3>{{0.0 /* spring_coeff */,
+                                            robin_parameter_in /* dashpot_coeff */,
+                                            0.0 /* exterior_pressure */}})));
   }
   pde_operator->set_combine_robin_param(robin_k_c_p_param_fsi);
 

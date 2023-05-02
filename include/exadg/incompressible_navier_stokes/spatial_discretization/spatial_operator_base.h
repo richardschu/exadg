@@ -518,7 +518,7 @@ private:
    * Interface coupling
    */
   std::shared_ptr<ContainerInterfaceData<1, dim, double>> interface_data_dirichlet_cached;
-  mutable double robin_parameter;
+  mutable double                                          robin_parameter;
 
 protected:
   /*

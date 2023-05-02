@@ -68,7 +68,9 @@ public:
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void
-  set_combine_robin_param(std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> const & robin_k_c_p_param_in) const = 0;
+  set_combine_robin_param(std::map<dealii::types::boundary_id,
+                                   std::pair<std::array<bool, 2>, std::array<double, 3>>> const &
+                            robin_k_c_p_param_in) const = 0;
 
   virtual void
   compute_rhs_linear(VectorType & dst, double const time) const = 0;

@@ -81,8 +81,6 @@ Driver<dim, Number>::setup()
   {
     dealii::Timer timer_local;
 
-    std::cout << "##+ initial robin parameter computed was : ";
-    std::cout << compute_robin_parameter() << "\n";
     structure->setup(application->structure, compute_robin_parameter(), mpi_comm, is_test);
 
     timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
@@ -275,19 +273,20 @@ Driver<dim, Number>::compute_robin_parameter() const
 {
   if(parameters.coupling_scheme == "Dirichlet-Neumann")
   {
-	return 0.0;
+    return 0.0;
   }
   else if(parameters.coupling_scheme == "Dirichlet-Robin: fixed")
   {
-	return parameters.robin_parameter_scale;
+    return parameters.robin_parameter_scale;
   }
   else if(parameters.coupling_scheme == "Dirichlet-Robin: adaptive")
   {
-	return parameters.robin_parameter_scale * application->fluid->get_parameters().density / fluid->time_integrator->get_time_step_size();
+    return parameters.robin_parameter_scale * application->fluid->get_parameters().density /
+           fluid->time_integrator->get_time_step_size();
   }
   else
   {
-	AssertThrow(false, dealii::ExcMessage("This coupling scheme is not defined."));
+    AssertThrow(false, dealii::ExcMessage("This coupling scheme is not defined."));
   }
 
   return 0.0;
@@ -301,15 +300,20 @@ Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) 
   fluid->pde_operator->set_robin_parameter(robin_parameter_in);
 
   // update structure operator's Robin parameter
-  AssertThrow(application->structure->get_boundary_descriptor()->neumann_cached_bc.size() > 0, dealii::ExcMessage("FSI boundary id on structure side expected as cached Neumann BC."));
+  AssertThrow(application->structure->get_boundary_descriptor()->neumann_cached_bc.size() > 0,
+              dealii::ExcMessage(
+                "FSI boundary id on structure side expected as cached Neumann BC."));
 
-  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> robin_k_c_p_param_fsi;
+  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>>
+    robin_k_c_p_param_fsi;
   for(auto const & entry : application->structure->get_boundary_descriptor()->neumann_cached_bc)
   {
-	  robin_k_c_p_param_fsi.insert(std::make_pair(
-			entry.first /* boundary_id */,
-			std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
-						   std::array<double, 3>{{0.0 /* spring_coeff */, robin_parameter_in /* dashpot_coeff */, 0.0 /* exterior_pressure */}})));
+    robin_k_c_p_param_fsi.insert(std::make_pair(
+      entry.first /* boundary_id */,
+      std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
+                     std::array<double, 3>{{0.0 /* spring_coeff */,
+                                            robin_parameter_in /* dashpot_coeff */,
+                                            0.0 /* exterior_pressure */}})));
   }
 
   structure->pde_operator->set_combine_robin_param(robin_k_c_p_param_fsi);
@@ -318,12 +322,9 @@ Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) 
 template<int dim, typename Number>
 void
 Driver<dim, Number>::apply_dirichlet_robin_scheme(VectorType &       d_tilde,
-                                                    VectorType const & d,
-                                                    unsigned int       iteration) const
+                                                  VectorType const & d,
+                                                  unsigned int       iteration) const
 {
-  std::cout << "##+ updated robin parameter computed was : ";
-  std::cout << compute_robin_parameter() << "\n";
-
   update_robin_parameters(compute_robin_parameter());
 
   coupling_structure_to_ale(d);
@@ -357,7 +358,7 @@ Driver<dim, Number>::solve() const
   // compute initial acceleration for structural problem
   {
     // update stress boundary condition for solid at time t_n (not t_{n+1})
-	update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
+    update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
     coupling_fluid_to_structure(false /* end_of_time_step */);
     structure->time_integrator->compute_initial_acceleration(
       application->structure->get_parameters().restarted_simulation);

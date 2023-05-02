@@ -189,13 +189,13 @@ public:
   /*
    * Constructor.
    */
-  Operator(std::shared_ptr<Grid<dim> const>               grid_in,
-           std::shared_ptr<BoundaryDescriptor<dim> const> boundary_descriptor_in,
-           std::shared_ptr<FieldFunctions<dim> const>     field_functions_in,
-           std::shared_ptr<MaterialDescriptor const>      material_descriptor_in,
-           Parameters const &                             param_in,
-           std::string const &                            field_in,
-           MPI_Comm const &                               mpi_comm_in);
+  Operator(std::shared_ptr<Grid<dim> const>           grid_in,
+           std::shared_ptr<BoundaryDescriptor<dim>>   boundary_descriptor_in,
+           std::shared_ptr<FieldFunctions<dim> const> field_functions_in,
+           std::shared_ptr<MaterialDescriptor const>  material_descriptor_in,
+           Parameters const &                         param_in,
+           std::string const &                        field_in,
+           MPI_Comm const &                           mpi_comm_in);
 
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
@@ -213,8 +213,7 @@ public:
    * linear systems of equation required for implicit formulations.
    */
   void
-  setup_solver(double const & scaling_factor_mass,
-		       double const & scaling_factor_mass_velocity);
+  setup_solver(double const & scaling_factor_mass, double const & scaling_factor_mass_velocity);
 
   /*
    * Initialization of dof-vector.
@@ -246,14 +245,16 @@ public:
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
 
   void
-  set_combine_robin_param(std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> const & robin_k_c_p_param_in) const;
+  set_combine_robin_param(std::map<dealii::types::boundary_id,
+                                   std::pair<std::array<bool, 2>, std::array<double, 3>>> const &
+                            robin_k_c_p_param_in) const;
 
   void
   update_boundary_mass_operator(Number const scaling_factor) const;
 
   void
-  set_robin_parameter(double const & robin_parameter_in,
-		              dealii::types::boundary_id const boundary_id_in) const;
+  set_robin_parameter(double const &                   robin_parameter_in,
+                      dealii::types::boundary_id const boundary_id_in) const;
 
   /*
    * This function calculates the right-hand side of the linear system
@@ -397,9 +398,9 @@ private:
   /*
    * User interface.
    */
-  std::shared_ptr<BoundaryDescriptor<dim> const> boundary_descriptor;
-  std::shared_ptr<FieldFunctions<dim> const>     field_functions;
-  std::shared_ptr<MaterialDescriptor const>      material_descriptor;
+  std::shared_ptr<BoundaryDescriptor<dim>>   boundary_descriptor;
+  std::shared_ptr<FieldFunctions<dim> const> field_functions;
+  std::shared_ptr<MaterialDescriptor const>  material_descriptor;
 
   /*
    * List of parameters.

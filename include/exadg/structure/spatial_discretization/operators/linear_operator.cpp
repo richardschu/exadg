@@ -63,55 +63,55 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
     vector traction;
-    traction = 0;
-    if(boundary_type == BoundaryType::Neumann ||
-       boundary_type == BoundaryType::NeumannCached ||
+
+    if(boundary_type == BoundaryType::Neumann or boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-      if(operator_type == OperatorType::inhomogeneous || operator_type == OperatorType::full)
+      if(operator_type == OperatorType::inhomogeneous or operator_type == OperatorType::full)
       {
         traction -= calculate_neumann_value<dim, Number>(
           q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
       }
     }
 
-
-    if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
+    if(boundary_type == BoundaryType::NeumannCached or
+       boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-      if(operator_type == OperatorType::homogeneous || operator_type == OperatorType::full)
+      if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
       {
-        bool const normal_spring =
-          this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[0];
-        double const spring_coefficient =
-          this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[0];
+        auto const it = this->operator_data.bc->robin_k_c_p_param.find(boundary_id);
 
-        if(normal_spring)
+        if(it != this->operator_data.bc->robin_k_c_p_param.end())
         {
-          vector const N = integrator_m.get_normal_vector(q);
-          traction += N * (spring_coefficient * (N * integrator_m.get_value(q)));
-        }
-        else
-        {
-          traction += spring_coefficient * integrator_m.get_value(q);
-        }
+          bool const   normal_projection_displacement = it->second.first[0];
+          double const coefficient_displacement       = it->second.second[0];
 
-        if(this->operator_data.unsteady)
-        {
-          bool const normal_dashpot =
-            this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.first[1];
-          double const dashpot_coefficient =
-            this->operator_data.bc->robin_k_c_p_param.find(boundary_id)->second.second[1];
-
-          if(normal_dashpot)
+          if(normal_projection_displacement)
           {
             vector const N = integrator_m.get_normal_vector(q);
-            traction += N * (dashpot_coefficient * this->scaling_factor_mass_velocity *
-                             (N * integrator_m.get_value(q)));
+            traction += N * (coefficient_displacement * (N * integrator_m.get_value(q)));
           }
           else
           {
-            traction +=
-              dashpot_coefficient * this->scaling_factor_mass_velocity * integrator_m.get_value(q);
+            traction += coefficient_displacement * integrator_m.get_value(q);
+          }
+
+          if(this->operator_data.unsteady)
+          {
+            bool const   normal_projection_velocity = it->second.first[1];
+            double const coefficient_velocity       = it->second.second[1];
+
+            if(normal_projection_velocity)
+            {
+              vector const N = integrator_m.get_normal_vector(q);
+              traction += N * (coefficient_velocity * this->scaling_factor_mass_velocity *
+                               (N * integrator_m.get_value(q)));
+            }
+            else
+            {
+              traction += coefficient_velocity * this->scaling_factor_mass_velocity *
+                          integrator_m.get_value(q);
+            }
           }
         }
       }

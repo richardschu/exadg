@@ -38,14 +38,13 @@ namespace ExaDG
 namespace Structure
 {
 template<int dim, typename Number>
-Operator<dim, Number>::Operator(
-  std::shared_ptr<Grid<dim> const>               grid_in,
-  std::shared_ptr<BoundaryDescriptor<dim> const> boundary_descriptor_in,
-  std::shared_ptr<FieldFunctions<dim> const>     field_functions_in,
-  std::shared_ptr<MaterialDescriptor const>      material_descriptor_in,
-  Parameters const &                             param_in,
-  std::string const &                            field_in,
-  MPI_Comm const &                               mpi_comm_in)
+Operator<dim, Number>::Operator(std::shared_ptr<Grid<dim> const>           grid_in,
+                                std::shared_ptr<BoundaryDescriptor<dim>>   boundary_descriptor_in,
+                                std::shared_ptr<FieldFunctions<dim> const> field_functions_in,
+                                std::shared_ptr<MaterialDescriptor const>  material_descriptor_in,
+                                Parameters const &                         param_in,
+                                std::string const &                        field_in,
+                                MPI_Comm const &                           mpi_comm_in)
   : dealii::Subscriptor(),
     grid(grid_in),
     boundary_descriptor(boundary_descriptor_in),
@@ -833,15 +832,16 @@ Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       ds
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::set_combine_robin_param(std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>> const & robin_k_c_p_param_in) const
+Operator<dim, Number>::set_combine_robin_param(
+  std::map<dealii::types::boundary_id,
+           std::pair<std::array<bool, 2>, std::array<double, 3>>> const & robin_k_c_p_param_in)
+  const
 {
-  // copy
-  auto tmp = robin_k_c_p_param_in;
-
-  // duplicate entries are not copied in the following
-  tmp.insert(this->boundary_descriptor->robin_k_c_p_param.begin(), this->boundary_descriptor->robin_k_c_p_param.end());
-
-  this->boundary_descriptor->robin_k_c_p_param = tmp;
+  // merge maps with automatic insertion for missing keys
+  for(auto const & it : robin_k_c_p_param_in)
+  {
+    this->boundary_descriptor->robin_k_c_p_param[it.first] = it.second;
+  }
 }
 
 template<int dim, typename Number>

@@ -30,8 +30,8 @@ struct Parameters
 {
   Parameters()
     : method("Aitken"),
-	  coupling_scheme("Dirichlet-Neumann"),
-	  robin_parameter_scale(0.0),
+      coupling_scheme("Dirichlet-Neumann"),
+      robin_parameter_scale(0.0),
       abs_tol(1.e-12),
       rel_tol(1.e-3),
       omega_init(0.1),

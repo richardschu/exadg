@@ -87,8 +87,8 @@ private:
 
   void
   apply_dirichlet_robin_scheme(VectorType &       d_tilde,
-                                 VectorType const & d,
-                                 unsigned int       iteration) const;
+                               VectorType const & d,
+                               unsigned int       iteration) const;
 
   // MPI communicator
   MPI_Comm const mpi_comm;
