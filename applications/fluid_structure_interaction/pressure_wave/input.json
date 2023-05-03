@@ -26,7 +26,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/pressure_wave_2/",
+        "OutputDirectory": "output/pressure_wave/",
         "OutputName": "fsi_test",
         "WriteOutput": "true"
     }
