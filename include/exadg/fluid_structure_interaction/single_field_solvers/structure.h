@@ -109,9 +109,9 @@ SolverStructure<dim, Number>::setup(
   {
     robin_k_c_p_param_fsi.insert(std::make_pair(
       entry.first /* boundary_id */,
-      std::make_pair(std::array<bool, 2>{{false /* normal_spring */, false /* normal_dashpot */}},
-                     std::array<double, 3>{{0.0 /* spring_coeff */,
-                                            robin_parameter_in /* dashpot_coeff */,
+      std::make_pair(std::array<bool, 2>{{false /* normal_projection_displacement */, false /* normal_projection_velocity */}},
+                     std::array<double, 3>{{0.0 /* coefficient_displacement */,
+                                            robin_parameter_in /* coefficient_velocity */,
                                             0.0 /* exterior_pressure */}})));
   }
   pde_operator->set_combine_robin_param(robin_k_c_p_param_fsi);

@@ -99,6 +99,25 @@ public:
   {
   }
 
+  void
+  add_parameters(dealii::ParameterHandler & prm) final
+  {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
+    // clang-format off
+    prm.enter_subsection("Fluid");
+      prm.add_parameter("TemporalDiscretization",
+                        temporal_discretization_string,
+                        "Temporal discretisation.",
+                        dealii::Patterns::Anything());
+      prm.add_parameter("TreatmentOfConvectiveTerm",
+                        treatment_of_convective_term_string,
+                        "Treatment of convective term.",
+                        dealii::Patterns::Anything());
+    prm.leave_subsection();
+    // clang-format on
+  }
+
 private:
   void
   set_parameters() final
@@ -128,8 +147,15 @@ private:
 
     // TEMPORAL DISCRETIZATION
     param.solver_type                     = SolverType::Unsteady;
-    param.temporal_discretization         = TemporalDiscretization::BDFDualSplittingScheme;
-    param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
+
+    TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFDualSplittingScheme;
+    Utilities::string_to_enum(temporal_discretization, temporal_discretization_string);
+    param.temporal_discretization = temporal_discretization;
+
+    TreatmentOfConvectiveTerm treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
+    Utilities::string_to_enum(treatment_of_convective_term, treatment_of_convective_term_string);
+    param.treatment_of_convective_term = treatment_of_convective_term;
+
     param.order_time_integrator           = 2;
     param.start_with_low_order            = true;
     param.adaptive_time_stepping          = false;
@@ -592,6 +618,9 @@ private:
     field_functions->initial_displacement.reset(new dealii::Functions::ZeroFunction<dim>(dim));
     field_functions->initial_velocity.reset(new dealii::Functions::ZeroFunction<dim>(dim));
   }
+
+  std::string temporal_discretization_string = "BDFDualSplittingScheme";
+  std::string treatment_of_convective_term_string = "Explicit";
 };
 } // namespace FluidFSI
 

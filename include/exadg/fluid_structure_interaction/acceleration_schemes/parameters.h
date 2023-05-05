@@ -26,11 +26,37 @@ namespace ExaDG
 {
 namespace FSI
 {
+
+enum class AccelerationMethod
+{
+  Undefined,
+  Aitken,
+  IQN_ILS,
+  IQN_IMVLS
+};
+
+enum class CouplingScheme
+{
+  Undefined,
+  DirichletNeumann,
+  DirichletRobinFixedParam,
+  DirichletRobinAdaptiveParam
+};
+
+enum class FieldUpdateVariant
+{
+  Undefined,
+  Implicit,
+  GeometricExplicit,
+  ImplicitPressureStructure
+};
+
 struct Parameters
 {
   Parameters()
-    : method("Aitken"),
-      coupling_scheme("Dirichlet-Neumann"),
+    : acceleration_method(AccelerationMethod::Aitken),
+      coupling_scheme(CouplingScheme::DirichletNeumann),
+	  field_update_variant(FieldUpdateVariant::Implicit),
       robin_parameter_scale(0.0),
       abs_tol(1.e-12),
       rel_tol(1.e-3),
@@ -46,16 +72,21 @@ struct Parameters
   {
     // clang-format off
     prm.enter_subsection(subsection_name);
-      prm.add_parameter("Method",
-                        method,
+      prm.add_parameter("AccelerationMethod",
+                        acceleration_method_string,
                         "Acceleration method.",
-                        dealii::Patterns::Selection("Aitken|IQN-ILS|IQN-IMVLS"),
+                        dealii::Patterns::Anything(),
                         true);
       prm.add_parameter("CouplingScheme",
-    		            coupling_scheme,
+    		            coupling_scheme_string,
 						"Partitioned coupling scheme.",
-						dealii::Patterns::Selection("Dirichlet-Neumann|Dirichlet-Robin: fixed|Dirichlet-Robin: adaptive"),
+						dealii::Patterns::Anything(),
 						false);
+      prm.add_parameter("FieldUpdateVariant",
+          		        field_update_variant_string,
+      					"Update variants in partitioned coupling.",
+      					dealii::Patterns::Anything(),
+      					false);
       prm.add_parameter("RobinParameterScale",
     		            robin_parameter_scale,
 						"Additional scaling for Robin parameter.",
@@ -95,8 +126,26 @@ struct Parameters
     // clang-format on
   }
 
-  std::string  method;
-  std::string  coupling_scheme;
+  void
+  parse_parameters(dealii::ParameterHandler & prm, std::string const & subsection_name = "FSI")
+  {
+	  prm.enter_subsection(subsection_name);
+
+      Utilities::string_to_enum(acceleration_method, prm.get("AccelerationMethod"));
+
+      std::string const coupling_scheme_string = prm.get("CouplingScheme");
+      Utilities::string_to_enum(coupling_scheme, coupling_scheme_string);
+
+      std::string const field_update_variant_string = prm.get("FieldUpdateVariant");
+      Utilities::string_to_enum(field_update_variant, field_update_variant_string);
+
+      prm.leave_subsection();
+  }
+
+  AccelerationMethod acceleration_method;
+  CouplingScheme     coupling_scheme;
+  FieldUpdateVariant field_update_variant;
+
   double       robin_parameter_scale;
   double       abs_tol;
   double       rel_tol;
@@ -106,6 +155,11 @@ struct Parameters
 
   // tolerance used to locate points at the fluid-structure interface
   double geometric_tolerance;
+
+private:
+  std::string acceleration_method_string;
+  std::string coupling_scheme_string;
+  std::string field_update_variant_string;
 };
 } // namespace FSI
 } // namespace ExaDG

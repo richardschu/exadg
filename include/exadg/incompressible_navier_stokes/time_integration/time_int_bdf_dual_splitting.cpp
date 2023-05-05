@@ -303,24 +303,31 @@ template<int dim, typename Number>
 void
 TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
 {
+  // Velocity and pressure updates treated independently in semi-implicit FSI
+  AssertThrow(this->update_pressure or this->update_velocity, dealii::ExcMessage("No update triggered in BDF pressure-correction solver.\n"));
+
   // pre-computations
   pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc_np, this->get_next_time());
 
   // perform the sub-steps of the dual-splitting method
-  convective_step();
+  if(this->update_velocity)
+    convective_step();
 
-  pressure_step();
+  if(this->update_pressure)
+    pressure_step();
 
-  projection_step();
+  if(this->update_velocity)
+  {
+    projection_step();
 
-  viscous_step();
+    viscous_step();
 
-  if(this->param.apply_penalty_terms_in_postprocessing_step)
-    penalty_step();
+    if(this->param.apply_penalty_terms_in_postprocessing_step)
+      penalty_step();
 
-  // evaluate convective term once the final solution at time
-  // t_{n+1} is known
-  evaluate_convective_term();
+    // evaluate convective term once the final solution at time t_{n+1} is known
+    evaluate_convective_term();
+  }
 }
 
 template<int dim, typename Number>

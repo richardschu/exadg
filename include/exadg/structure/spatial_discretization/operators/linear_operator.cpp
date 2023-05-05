@@ -74,8 +74,7 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
       }
     }
 
-    if(boundary_type == BoundaryType::NeumannCached or
-       boundary_type == BoundaryType::RobinSpringDashpotPressure)
+    if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
       if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
       {
