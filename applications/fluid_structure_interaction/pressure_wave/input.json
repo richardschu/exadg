@@ -15,8 +15,8 @@
     "FSI" : {
         "AccelerationMethod": "IQN_ILS",
         "CouplingScheme": "DirichletRobinAdaptiveParam",
-        "FieldUpdateVariant": "Implicit",
-        "RobinParameterScale": "0.000",
+        "FieldUpdateVariant": "ImplicitPressureStructure",
+        "RobinParameterScale": "0.005",
         "AbsTol": "1.e-9",
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
@@ -25,13 +25,13 @@
         "GeometricTolerance": "1.e-8"
     },
     "Fluid" : {
-        "TemporalDiscretization" : "BDFCoupledSolution",
+        "TemporalDiscretization" : "BDFDualSplitting",
         "TreatmentOfConvectiveTerm" : "Explicit"
     },
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/pressure_wave_iDN_coupled/",
+        "OutputDirectory": "output/pressure_wave_ipsDR_PC/",
         "OutputName": "fsi_test",
         "WriteOutput": "true"
     }
