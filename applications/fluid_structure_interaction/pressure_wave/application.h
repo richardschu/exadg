@@ -294,6 +294,8 @@ private:
   void
   create_grid() final
   {
+	AssertThrow(dim == 3, dealii::ExcMessage("3D grid generation implemented only."));
+
     dealii::Triangulation<2> tria_2d;
     dealii::GridGenerator::hyper_ball(tria_2d, dealii::Point<2>(), R_INNER);
     dealii::GridGenerator::extrude_triangulation(tria_2d,
@@ -305,7 +307,7 @@ private:
     {
       for(auto const & f : cell->face_indices())
       {
-        double const z = cell->face(f)->center()(2);
+        double const z = cell->face(f)->center()(dim-1);
 
         // inflow
         if(std::fabs(z - 0.0) < GEOMETRY_TOL)
@@ -680,6 +682,8 @@ private:
   void
   create_grid() final
   {
+    AssertThrow(dim == 3, dealii::ExcMessage("3D grid generation implemented only."));
+
     dealii::Triangulation<2> tria_2d;
     dealii::GridGenerator::hyper_shell(
       tria_2d, dealii::Point<2>(), R_INNER, R_OUTER, N_CELLS_AXIAL, true);
@@ -697,7 +701,7 @@ private:
       {
         if(cell->face(f)->at_boundary())
         {
-          double const z   = cell->face(f)->center()(2);
+          double const z   = cell->face(f)->center()(dim-1);
           double const TOL = 1.e-10;
 
           // left boundary
