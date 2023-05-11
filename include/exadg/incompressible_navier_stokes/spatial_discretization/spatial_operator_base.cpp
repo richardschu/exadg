@@ -1850,7 +1850,7 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         // pressure
         // -> multiply by density to get true traction in N/m^2.
         vector traction = this->robin_parameter * u +
-          param.density * (param.viscosity * (grad_u + transpose(grad_u)) * normal - p * normal);
+          param.density * (viscosity * ((grad_u + transpose(grad_u)) * normal) - p * normal);
 
         integrator_u.submit_dof_value(traction, index);
       }
