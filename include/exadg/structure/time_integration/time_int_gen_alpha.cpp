@@ -124,8 +124,16 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   VectorType const_vector, rhs;
   const_vector.reinit(displacement_n);
   rhs.reinit(displacement_n);
+
   this->compute_const_vector(rhs, displacement_n, velocity_n, acceleration_n);
   pde_operator->apply_mass_operator(const_vector, rhs);
+
+  // non-empty boundary mass operator signals velocity remainder to be integrated
+  if(pde_operator->non_empty_boundary_mass_operator())
+  {
+    this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
+    pde_operator->evaluate_add_boundary_mass_operator(const_vector, rhs);
+  }
 
   if(param.large_deformation == false) // linear case
   {
@@ -155,6 +163,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
     auto const iter = pde_operator->solve_nonlinear(displacement_np,
                                                     const_vector,
                                                     this->get_scaling_factor_mass(),
+                                                    this->get_scaling_factor_mass_velocity(),
                                                     this->get_mid_time(),
                                                     update_preconditioner);
 
@@ -174,6 +183,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
     unsigned int const iter = pde_operator->solve_linear(displacement_np,
                                                          rhs,
                                                          this->get_scaling_factor_mass(),
+                                                         this->get_scaling_factor_mass_velocity(),
                                                          this->get_mid_time(),
                                                          update_preconditioner);
 

@@ -112,9 +112,10 @@ Driver<dim, Number>::setup()
     }
 
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
-      pde_operator->setup_solver(time_integrator->get_scaling_factor_mass());
+      pde_operator->setup_solver(time_integrator->get_scaling_factor_mass(),
+                                 time_integrator->get_scaling_factor_mass_velocity());
     else
-      pde_operator->setup_solver(0.0);
+      pde_operator->setup_solver(0.0, 0.0);
   }
 
   timer_tree.insert({"Elasticity", "Setup"}, timer.wall_time());
@@ -246,17 +247,17 @@ Driver<dim, Number>::apply_operator(std::string const & operator_type_string,
     {
       if(operator_type == OperatorType::Nonlinear)
       {
-        pde_operator->apply_nonlinear_operator(dst, src, 1.0, 0.0);
+        pde_operator->apply_nonlinear_operator(dst, src, 1.0, 1.0, 0.0);
       }
       else if(operator_type == OperatorType::Linearized)
       {
         pde_operator->set_solution_linearization(linearization);
-        pde_operator->apply_linearized_operator(dst, src, 1.0, 0.0);
+        pde_operator->apply_linearized_operator(dst, src, 1.0, 1.0, 0.0);
       }
     }
     else
     {
-      pde_operator->apply_linear_operator(dst, src, 1.0, 0.0);
+      pde_operator->apply_linear_operator(dst, src, 1.0, 1.0, 0.0);
     }
   };
 

@@ -55,6 +55,9 @@ public:
   double
   get_scaling_factor_mass() const;
 
+  double
+  get_scaling_factor_mass_velocity() const;
+
 protected:
   double
   get_mid_time() const;
@@ -64,6 +67,12 @@ protected:
                        VectorType const & displacement_n,
                        VectorType const & velocity_n,
                        VectorType const & acceleration_n) const;
+
+  void
+  compute_const_vector_velocity_remainder(VectorType &       const_vector,
+                                          VectorType const & displacement_n,
+                                          VectorType const & velocity_n,
+                                          VectorType const & acceleration_n) const;
 
   void
   update_displacement(VectorType & displacement_np, VectorType const & displacement_n) const;

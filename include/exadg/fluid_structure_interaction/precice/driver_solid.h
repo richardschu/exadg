@@ -61,7 +61,6 @@ public:
     structure = std::make_shared<SolverStructure<dim, Number>>();
   }
 
-
   void
   setup_application()
   {
@@ -73,19 +72,16 @@ public:
     this->timer_tree.insert({"FSI", "Setup", "Application"}, timer_local.wall_time());
   }
 
-
   void
   setup_structure()
   {
     dealii::Timer timer_local;
     timer_local.restart();
 
-    structure->setup(this->application->structure, this->mpi_comm, this->is_test);
+    structure->setup(this->application->structure, 0.0 /* robin_parameter */, this->mpi_comm, this->is_test);
 
     this->timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
   }
-
-
 
   void
   setup_interface_coupling()
@@ -123,8 +119,6 @@ public:
     this->precice->initialize_precice(displacement_structure);
   }
 
-
-
   void
   setup() override
   {
@@ -141,8 +135,6 @@ public:
 
     this->timer_tree.insert({"FSI", "Setup"}, timer.wall_time());
   }
-
-
 
   void
   solve() const final

@@ -52,6 +52,8 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     operator_base(operator_in),
     vec_convective_term(this->order),
     use_extrapolation(true),
+	update_velocity(true),
+	update_pressure(true),
     store_solution(false),
     postprocessor(postprocessor_in),
     vec_grid_coordinates(param_in.order_time_integrator)
@@ -165,9 +167,13 @@ TimeIntBDF<dim, Number>::ale_update()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation)
+TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+																bool const update_velocity,
+																bool const update_pressure)
 {
   this->use_extrapolation = use_extrapolation;
+  this->update_velocity   = update_velocity;
+  this->update_pressure   = update_pressure;
   this->store_solution    = true;
 
   Base::advance_one_timestep_solve();

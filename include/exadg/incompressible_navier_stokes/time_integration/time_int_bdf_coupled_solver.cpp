@@ -161,6 +161,9 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   dealii::Timer timer;
   timer.restart();
 
+  // Velocity and pressure updates treated independently in semi-implicit FSI
+  AssertThrow(this->update_pressure and this->update_velocity, dealii::ExcMessage("BDF coupled solver cannot recover velocity and pressure independently."));
+
   // extrapolate old solutions to obtain a good initial guess for the solver, or
   // to update the viscosity model or the penalty parameters based on this
   // extrapolated solution

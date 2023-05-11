@@ -40,7 +40,8 @@ enum class BoundaryType
   Dirichlet,
   DirichletCached,
   Neumann,
-  NeumannCached
+  NeumannCached,
+  RobinSpringDashpotPressure
 };
 
 template<int dim>
@@ -70,6 +71,16 @@ struct BoundaryDescriptor
   // is required for fluid-structure interaction problems)
   std::map<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>> neumann_cached_bc;
 
+  // Robin boundary condition of the form
+  // + ( v_h, k * d_h + c * d/dt(d_h) +  p * N )
+  // or
+  // + ( v_h, k * N * (d_h . N) + c * N . (d/dt(d_h) . N) + p * N )
+  // using normal projections of displacement/velocity terms controlled via the
+  // std::array<bool, 2> for the displacement (index 0) and velocity terms (index 1)
+  // The std::array<double, 3> contains the parameters k (index 0), c (index 1) and p (index 2).
+  std::map<dealii::types::boundary_id, std::pair<std::array<bool, 2>, std::array<double, 3>>>
+    robin_k_c_p_param;
+
   inline DEAL_II_ALWAYS_INLINE //
     BoundaryType
     get_boundary_type(dealii::types::boundary_id const & boundary_id) const
@@ -82,6 +93,8 @@ struct BoundaryDescriptor
       return BoundaryType::Neumann;
     else if(this->neumann_cached_bc.find(boundary_id) != this->neumann_cached_bc.end())
       return BoundaryType::NeumannCached;
+    else if(this->robin_k_c_p_param.find(boundary_id) != this->robin_k_c_p_param.end())
+      return BoundaryType::RobinSpringDashpotPressure;
 
     AssertThrow(false,
                 dealii::ExcMessage(
@@ -122,6 +135,9 @@ struct BoundaryDescriptor
       counter++;
 
     if(periodic_boundary_ids.find(boundary_id) != periodic_boundary_ids.end())
+      counter++;
+
+    if(robin_k_c_p_param.find(boundary_id) != robin_k_c_p_param.end())
       counter++;
 
     AssertThrow(counter == 1,

@@ -128,7 +128,7 @@ public:
     return grid;
   }
 
-  std::shared_ptr<BoundaryDescriptor<dim> const>
+  std::shared_ptr<BoundaryDescriptor<dim>>
   get_boundary_descriptor() const
   {
     return boundary_descriptor;

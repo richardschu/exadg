@@ -315,20 +315,27 @@ template<int dim, typename Number>
 void
 TimeIntBDFPressureCorrection<dim, Number>::do_timestep_solve()
 {
+  // Velocity and pressure updates treated independently in semi-implicit FSI
+  AssertThrow(this->update_pressure or this->update_velocity, dealii::ExcMessage("No update triggered in BDF pressure-correction solver.\n"));
+
   // perform the sub-steps of the pressure-correction scheme
+  if(this->update_velocity)
+    momentum_step();
 
-  momentum_step();
+  if(this->update_pressure)
+  {
+	  VectorType pressure_increment;
+	  pressure_increment.reinit(pressure_np, false /* init with zero */);
 
-  VectorType pressure_increment;
-  pressure_increment.reinit(pressure_np, false /* init with zero */);
+	  pressure_step(pressure_increment);
 
-  pressure_step(pressure_increment);
+	  if(this->update_velocity)
+	    projection_step(pressure_increment);
+  }
 
-  projection_step(pressure_increment);
-
-  // evaluate convective term once the final solution at time
-  // t_{n+1} is known
-  evaluate_convective_term();
+  // evaluate convective term once the final solution at time t_{n+1} is known
+  if(this->update_velocity)
+    evaluate_convective_term();
 }
 
 template<int dim, typename Number>

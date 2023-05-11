@@ -51,8 +51,8 @@ public:
         std::shared_ptr<SolverStructure<dim, Number>> structure_);
 
   void
-  solve(std::function<void(VectorType &, VectorType const &, unsigned int)> const &
-          apply_dirichlet_neumann_scheme);
+  solve(std::function<void(VectorType &, VectorType const &, unsigned int const)> const &
+          apply_dirichlet_robin_scheme);
 
   void
   print_iterations(dealii::ConditionalOStream const & pcout) const;
@@ -175,14 +175,14 @@ PartitionedSolver<dim, Number>::get_timings() const
 template<int dim, typename Number>
 void
 PartitionedSolver<dim, Number>::solve(
-  std::function<void(VectorType &, VectorType const &, unsigned int)> const &
-    apply_dirichlet_neumann_scheme)
+  std::function<void(VectorType &, VectorType const &, unsigned int const)> const &
+    apply_dirichlet_robin_scheme)
 {
   // iteration counter
   unsigned int k = 0;
 
   // fixed-point iteration with dynamic relaxation (Aitken relaxation)
-  if(parameters.method == "Aitken")
+  if(parameters.acceleration_method == AccelerationMethod::Aitken)
   {
     VectorType r_old, d;
     structure->pde_operator->initialize_dof_vector(r_old);
@@ -200,7 +200,7 @@ PartitionedSolver<dim, Number>::solve(
         d = structure->time_integrator->get_displacement_np();
 
       VectorType d_tilde(d);
-      apply_dirichlet_neumann_scheme(d_tilde, d, k);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
 
       // compute residual and check convergence
       VectorType r = d_tilde;
@@ -236,7 +236,7 @@ PartitionedSolver<dim, Number>::solve(
       ++k;
     }
   }
-  else if(parameters.method == "IQN-ILS")
+  else if(parameters.acceleration_method == AccelerationMethod::IQN_ILS)
   {
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
@@ -262,7 +262,7 @@ PartitionedSolver<dim, Number>::solve(
       else
         d = structure->time_integrator->get_displacement_np();
 
-      apply_dirichlet_neumann_scheme(d_tilde, d, k);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
 
       // compute residual and check convergence
       r = d_tilde;
@@ -357,7 +357,7 @@ PartitionedSolver<dim, Number>::solve(
 
     timer_tree->insert({"IQN-ILS"}, timer.wall_time());
   }
-  else if(parameters.method == "IQN-IMVLS")
+  else if(parameters.acceleration_method == AccelerationMethod::IQN_IMVLS)
   {
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
@@ -390,7 +390,7 @@ PartitionedSolver<dim, Number>::solve(
       else
         d = structure->time_integrator->get_displacement_np();
 
-      apply_dirichlet_neumann_scheme(d_tilde, d, k);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
 
       // compute residual and check convergence
       r = d_tilde;

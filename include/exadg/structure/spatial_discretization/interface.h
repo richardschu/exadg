@@ -61,6 +61,17 @@ public:
   virtual void
   apply_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
+  virtual bool
+  non_empty_boundary_mass_operator() const = 0;
+
+  virtual void
+  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
+  set_combine_robin_param(std::map<dealii::types::boundary_id,
+                                   std::pair<std::array<bool, 2>, std::array<double, 3>>> const &
+                            robin_k_c_p_param_in) const = 0;
+
   virtual void
   compute_rhs_linear(VectorType & dst, double const time) const = 0;
 
@@ -68,6 +79,7 @@ public:
   solve_nonlinear(VectorType &       sol,
                   VectorType const & rhs,
                   double const       factor,
+                  double const       factor_velocity,
                   double const       time,
                   bool const         update_preconditioner) const = 0;
 
@@ -75,6 +87,7 @@ public:
   solve_linear(VectorType &       sol,
                VectorType const & rhs,
                double const       factor,
+               double const       factor_velocity,
                double const       time,
                bool const         update_preconditioner) const = 0;
 };

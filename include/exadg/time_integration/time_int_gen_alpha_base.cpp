@@ -101,6 +101,13 @@ TimeIntGenAlphaBase<Number>::get_scaling_factor_mass() const
 
 template<typename Number>
 double
+TimeIntGenAlphaBase<Number>::get_scaling_factor_mass_velocity() const
+{
+  return gamma / (beta * time_step);
+}
+
+template<typename Number>
+double
 TimeIntGenAlphaBase<Number>::get_mid_time() const
 {
   return this->time + (1.0 - alpha_f) * this->time_step;
@@ -116,6 +123,23 @@ TimeIntGenAlphaBase<Number>::compute_const_vector(VectorType &       const_vecto
   double const factor_dis = -get_scaling_factor_mass();
   double const factor_vel = -(1.0 - alpha_m) / (beta * time_step);
   double const factor_acc = -(1.0 - alpha_m - 2.0 * beta) / (2.0 * beta);
+
+  const_vector.equ(factor_dis, displacement_n);
+  const_vector.add(factor_vel, velocity_n);
+  const_vector.add(factor_acc, acceleration_n);
+}
+
+template<typename Number>
+void
+TimeIntGenAlphaBase<Number>::compute_const_vector_velocity_remainder(
+  VectorType &       const_vector,
+  VectorType const & displacement_n,
+  VectorType const & velocity_n,
+  VectorType const & acceleration_n) const
+{
+  double const factor_dis = -get_scaling_factor_mass_velocity();
+  double const factor_vel = alpha_f - (1.0 - alpha_f) * (gamma - beta) / beta;
+  double const factor_acc = -(1.0 - alpha_f) * (gamma - 2.0 * beta) / (2.0 * beta) * time_step;
 
   const_vector.equ(factor_dis, displacement_n);
   const_vector.add(factor_vel, velocity_n);

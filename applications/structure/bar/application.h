@@ -130,10 +130,10 @@ template<int dim>
 class SolutionNBC : public dealii::Function<dim>
 {
 public:
-  SolutionNBC(double length, double area_force, double volume_force, double E_modul)
+  SolutionNBC(double length, double area_force, double volume_force, double youngs_modulus)
     : dealii::Function<dim>(dim),
-      A(-volume_force / 2 / E_modul),
-      B(+area_force / E_modul - length * 2 * this->A)
+      A(-volume_force / 2 / youngs_modulus),
+      B(+area_force / youngs_modulus - length * 2 * this->A)
   {
   }
 
@@ -156,9 +156,9 @@ template<int dim>
 class SolutionDBC : public dealii::Function<dim>
 {
 public:
-  SolutionDBC(double length, double displacement, double volume_force, double E_modul)
+  SolutionDBC(double length, double displacement, double volume_force, double youngs_modulus)
     : dealii::Function<dim>(dim),
-      A(-volume_force / 2 / E_modul),
+      A(-volume_force / 2 / youngs_modulus),
       B(+displacement / length - this->A * length)
   {
   }
@@ -193,14 +193,22 @@ public:
 
     // clang-format off
     prm.enter_subsection("Application");
-    prm.add_parameter("Length",           length,           "Length of domain.");
-    prm.add_parameter("Height",           height,           "Height of domain.");
-    prm.add_parameter("Width",            width,            "Width of domain.");
-    prm.add_parameter("UseVolumeForce",   use_volume_force, "Use volume force.");
-    prm.add_parameter("VolumeForce",      volume_force,     "Volume force.");
-    prm.add_parameter("BoundaryType",     boundary_type,    "Type of boundary condition, Dirichlet vs Neumann.", dealii::Patterns::Selection("Dirichlet|Neumann"));
-    prm.add_parameter("Displacement",     displacement,     "Displacement of right boundary in case of Dirichlet BC.");
-    prm.add_parameter("Traction",         area_force,       "Traction acting on right boundary in case of Neumann BC.");
+    prm.add_parameter("Length",           length,            "Length of domain.");
+    prm.add_parameter("Height",           height,            "Height of domain.");
+    prm.add_parameter("Width",            width,             "Width of domain.");
+    prm.add_parameter("UseVolumeForce",   use_volume_force,  "Use volume force.");
+    prm.add_parameter("VolumeForce",      volume_force,      "Volume force.");
+    prm.add_parameter("BoundaryType",     boundary_type,     "Type of boundary condition, Dirichlet vs Neumann.", dealii::Patterns::Selection("Dirichlet|Neumann"));
+    prm.add_parameter("Displacement",     displacement,      "Displacement of right boundary in case of Dirichlet BC.");
+    prm.add_parameter("Traction",         area_force,        "Traction acting on right boundary in case of Neumann BC.");
+    prm.add_parameter("NormalSpring",     normal_spring,     "Spring only active in normal direction.");
+    prm.add_parameter("NormalDashpot",    normal_dashpot,    "Dashpot only active in normal direction.");
+    prm.add_parameter("SpringCoeff",      spring_coeff,      "Spring coefficient.");
+    prm.add_parameter("DashpotCoeff",     dashpot_coeff,     "Dashpot coefficient.");
+    prm.add_parameter("ExteriorPressure", exterior_pressure, "Exterior pressure.");
+    prm.add_parameter("ProblemType",      problem_type,      "Problem Type, Unsteady vs Steady vs QuasiStatic", dealii::Patterns::Selection("Steady|Unsteady|QuasiStatic"));
+    prm.add_parameter("LargeDeformation", large_deformation, "Consider large deformation", dealii::Patterns::Bool());
+    prm.add_parameter("Preconditioner",   preconditioner,    "Preconditioner", dealii::Patterns::Selection("None|PointJacobi|Multigrid"));
     prm.leave_subsection();
     // clang-format on
   }
@@ -209,9 +217,17 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type         = ProblemType::QuasiStatic;
+    if(problem_type == "Unsteady")
+      this->param.problem_type = ProblemType::Unsteady;
+    else if(problem_type == "Steady")
+      this->param.problem_type = ProblemType::Steady;
+    else if(problem_type == "QuasiStatic")
+      this->param.problem_type = ProblemType::QuasiStatic;
+    else
+      AssertThrow(false, dealii::ExcMessage("Invalid ProblemType."));
+
     this->param.body_force           = use_volume_force;
-    this->param.large_deformation    = true;
+    this->param.large_deformation    = large_deformation;
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
 
@@ -239,10 +255,19 @@ private:
 
     this->param.load_increment = 0.1;
 
-    this->param.newton_solver_data                   = Newton::SolverData(1e2, 1.e-9, 1.e-9);
-    this->param.solver                               = Solver::FGMRES;
-    this->param.solver_data                          = SolverData(1e3, 1.e-12, 1.e-8, 100);
-    this->param.preconditioner                       = Preconditioner::Multigrid;
+    this->param.newton_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-9);
+    this->param.solver             = Solver::FGMRES;
+    this->param.solver_data        = SolverData(1e3, 1.e-12, 1.e-8, 100);
+
+    if(preconditioner == "None")
+      this->param.preconditioner = Preconditioner::None;
+    else if(preconditioner == "PointJacobi")
+      this->param.preconditioner = Preconditioner::PointJacobi;
+    else if(preconditioner == "Multigrid")
+      this->param.preconditioner = Preconditioner::Multigrid;
+    else
+      AssertThrow(false, dealii::ExcMessage("Invalid Preconditioner."));
+
     this->param.multigrid_data.type                  = MultigridType::phMG;
     this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::CG;
     this->param.multigrid_data.coarse_problem.preconditioner =
@@ -374,8 +399,10 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    this->boundary_descriptor->neumann_bc.insert(
-      pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
+      0,
+      std::make_pair(std::array<bool, 2>{{normal_spring, normal_dashpot}},
+                     std::array<double, 3>{{spring_coeff, dashpot_coeff, exterior_pressure}})));
 
     // left face
     std::vector<bool> mask_left = {true, clamp_at_left_boundary};
@@ -460,7 +487,7 @@ private:
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
     MaterialType const type = MaterialType::StVenantKirchhoff;
-    double const       E = E_modul, nu = 0.3;
+    double const       E = youngs_modulus, nu = 0.3;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
     this->material_descriptor->insert(
@@ -497,18 +524,20 @@ private:
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree;
 
-    pp_data.error_data.time_control_data.is_active = true;
-    pp_data.error_data.calculate_relative_errors   = true;
-    double const vol_force                         = use_volume_force ? this->volume_force : 0.0;
+    pp_data.error_data.time_control_data.is_active        = true;
+    pp_data.error_data.time_control_data.start_time       = start_time;
+    pp_data.error_data.time_control_data.trigger_interval = (end_time - start_time);
+    pp_data.error_data.calculate_relative_errors          = true;
+    double const vol_force = use_volume_force ? this->volume_force : 0.0;
     if(boundary_type == "Dirichlet")
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->E_modul));
+        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->youngs_modulus));
     }
     else if(boundary_type == "Neumann")
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->E_modul));
+        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->youngs_modulus));
     }
     else
     {
@@ -535,15 +564,25 @@ private:
   double displacement = 1.0; // "Dirichlet"
   double area_force   = 1.0; // "Neumann"
 
+  bool   normal_spring     = false;
+  bool   normal_dashpot    = false;
+  double spring_coeff      = 0.0;
+  double dashpot_coeff     = 0.0;
+  double exterior_pressure = 0.0;
+
   // mesh parameters
   unsigned int const repetitions0 = 4, repetitions1 = 1, repetitions2 = 1;
 
-  double const E_modul = 200.0;
+  double const youngs_modulus = 200.0;
 
   double const start_time = 0.0;
   double const end_time   = 100.0;
 
   double const density = 0.001;
+
+  std::string problem_type      = "Steady";
+  std::string preconditioner    = "None";
+  bool        large_deformation = false;
 };
 
 } // namespace Structure

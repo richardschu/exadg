@@ -79,10 +79,25 @@ private:
   void
   coupling_fluid_to_structure(bool const end_of_time_step) const;
 
+  double
+  compute_robin_parameter() const;
+
   void
-  apply_dirichlet_neumann_scheme(VectorType &       d_tilde,
-                                 VectorType const & d,
-                                 unsigned int       iteration) const;
+  update_robin_parameters(double const & robin_parameter_in) const;
+
+  void
+  solve_subproblem_mesh(VectorType const & d, unsigned int const iteration) const;
+
+  void
+  solve_subproblem_fluid(unsigned int const iteration) const;
+
+  void
+  solve_subproblem_structure(VectorType & d_tilde, unsigned int const iteration) const;
+
+  void
+  apply_dirichlet_robin_scheme(VectorType &       d_tilde,
+                               VectorType const & d,
+                               unsigned int       iteration) const;
 
   // MPI communicator
   MPI_Comm const mpi_comm;
@@ -113,6 +128,8 @@ private:
 
   // Partitioned FSI solver
   std::shared_ptr<PartitionedSolver<dim, Number>> partitioned_solver;
+
+  mutable double robin_parameter;
 };
 
 } // namespace FSI

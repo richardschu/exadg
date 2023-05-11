@@ -46,7 +46,7 @@ void
 NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType const & src) const
 {
   this->matrix_free->loop(&This::cell_loop_nonlinear,
-                          &This::face_loop_nonlinear,
+                          &This::face_loop_nonlinear /*no contributions added for CG*/,
                           &This::boundary_face_loop_nonlinear,
                           this,
                           dst,
@@ -159,7 +159,6 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
 {
   (void)src;
 
-  // apply Neumann BCs
   for(unsigned int face = range.first; face < range.second; face++)
   {
     this->reinit_boundary_face(face);
@@ -171,10 +170,19 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
     if(this->operator_data.pull_back_traction)
     {
       this->integrator_m->read_dof_values_plain(src);
-      this->integrator_m->evaluate(dealii::EvaluationFlags::gradients);
+      this->integrator_m->evaluate(dealii::EvaluationFlags::gradients |
+                                   dealii::EvaluationFlags::values);
+    }
+    else if(this->operator_data.bc->get_boundary_type(matrix_free.get_boundary_id(face)) ==
+            BoundaryType::RobinSpringDashpotPressure)
+    {
+      this->integrator_m->read_dof_values_plain(src);
+      this->integrator_m->evaluate(dealii::EvaluationFlags::values);
     }
 
-    do_boundary_integral_continuous(*this->integrator_m, matrix_free.get_boundary_id(face));
+    do_boundary_integral_continuous(*this->integrator_m,
+                                    OperatorType::full,
+                                    matrix_free.get_boundary_id(face));
 
     this->integrator_m->integrate_scatter(this->integrator_flags.face_integrate, dst);
   }
@@ -218,27 +226,80 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator_m,
+  OperatorType const &               operator_type,
   dealii::types::boundary_id const & boundary_id) const
 {
   BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
 
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
-    auto traction = calculate_neumann_value<dim, Number>(
-      q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+    vector traction;
 
-    if(this->operator_data.pull_back_traction)
+    if(boundary_type == BoundaryType::Neumann or boundary_type == BoundaryType::NeumannCached or
+       boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-      tensor F = get_F<dim, Number>(integrator_m.get_gradient(q));
-      vector N = integrator_m.get_normal_vector(q);
-      // da/dA * n = det F F^{-T} * N := n_star
-      // -> da/dA = n_star.norm()
-      vector n_star = determinant(F) * transpose(invert(F)) * N;
-      // t_0 = da/dA * t
-      traction *= n_star.norm();
+      if(operator_type == OperatorType::inhomogeneous or operator_type == OperatorType::full)
+      {
+        traction -= calculate_neumann_value<dim, Number>(
+          q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+
+        if(this->operator_data.pull_back_traction)
+        {
+          tensor F = get_F<dim, Number>(integrator_m.get_gradient(q));
+          vector N = integrator_m.get_normal_vector(q);
+          // da/dA * n = det F F^{-T} * N := n_star
+          // -> da/dA = n_star.norm()
+          vector n_star = determinant(F) * transpose(invert(F)) * N;
+          // t_0 = da/dA * t
+          traction *= n_star.norm();
+        }
+      }
     }
 
-    integrator_m.submit_value(-traction, q);
+    if(boundary_type == BoundaryType::NeumannCached or
+       boundary_type == BoundaryType::RobinSpringDashpotPressure)
+    {
+      if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
+      {
+        auto const it = this->operator_data.bc->robin_k_c_p_param.find(boundary_id);
+
+        if(it != this->operator_data.bc->robin_k_c_p_param.end())
+        {
+          bool const   normal_projection_displacement = it->second.first[0];
+          double const coefficient_displacement       = it->second.second[0];
+
+          if(normal_projection_displacement)
+          {
+            vector const N = integrator_m.get_normal_vector(q);
+            traction += N * (coefficient_displacement * (N * integrator_m.get_value(q)));
+          }
+          else
+          {
+            traction += coefficient_displacement * integrator_m.get_value(q);
+          }
+
+          if(this->operator_data.unsteady)
+          {
+            bool const   normal_projection_velocity = it->second.first[1];
+            double const coefficient_velocity       = it->second.second[1];
+
+            if(normal_projection_velocity)
+            {
+              vector const N = integrator_m.get_normal_vector(q);
+              traction += N * (coefficient_velocity * this->scaling_factor_mass_velocity *
+                               (N * integrator_m.get_value(q)));
+            }
+            else
+            {
+              traction += coefficient_velocity * this->scaling_factor_mass_velocity *
+                          integrator_m.get_value(q);
+            }
+          }
+        }
+      }
+    }
+
+    integrator_m.submit_value(traction, q);
   }
 }
 
@@ -288,11 +349,9 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
     integrator.submit_gradient(delta_P, q);
 
     if(this->operator_data.unsteady)
-    {
       integrator.submit_value(this->scaling_factor_mass * this->operator_data.density *
                                 integrator.get_value(q),
                               q);
-    }
   }
 }
 

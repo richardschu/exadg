@@ -31,7 +31,8 @@ namespace ExaDG
 namespace Structure
 {
 template<int dim, typename Number>
-ElasticityOperatorBase<dim, Number>::ElasticityOperatorBase() : scaling_factor_mass(1.0)
+ElasticityOperatorBase<dim, Number>::ElasticityOperatorBase()
+  : scaling_factor_mass(1.0), scaling_factor_mass_velocity(1.0)
 {
 }
 
@@ -47,8 +48,8 @@ ElasticityOperatorBase<dim, Number>::get_integrator_flags(bool const unsteady) c
   flags.cell_evaluate  = unsteady_flag | dealii::EvaluationFlags::gradients;
   flags.cell_integrate = unsteady_flag | dealii::EvaluationFlags::gradients;
 
-  // evaluation of Neumann BCs
-  flags.face_evaluate  = dealii::EvaluationFlags::nothing;
+  // evaluation of boundary integrals
+  flags.face_evaluate  = dealii::EvaluationFlags::values;
   flags.face_integrate = dealii::EvaluationFlags::values;
 
   return flags;
@@ -109,6 +110,22 @@ ElasticityOperatorBase<dim, Number>::get_scaling_factor_mass_operator() const
 {
   return scaling_factor_mass;
 }
+
+template<int dim, typename Number>
+void
+ElasticityOperatorBase<dim, Number>::set_scaling_factor_mass_velocity_operator(
+  double const scaling_factor) const
+{
+  scaling_factor_mass_velocity = scaling_factor;
+}
+
+template<int dim, typename Number>
+double
+ElasticityOperatorBase<dim, Number>::get_scaling_factor_mass_velocity_operator() const
+{
+  return scaling_factor_mass_velocity;
+}
+
 
 template<int dim, typename Number>
 void
@@ -191,7 +208,8 @@ ElasticityOperatorBase<dim, Number>::set_constrained_values(VectorType & dst,
       {
         AssertThrow(boundary_type == BoundaryType::Dirichlet or
                       boundary_type == BoundaryType::Neumann or
-                      boundary_type == BoundaryType::NeumannCached,
+                      boundary_type == BoundaryType::NeumannCached or
+                      boundary_type == BoundaryType::RobinSpringDashpotPressure,
                     dealii::ExcMessage("BoundaryType not implemented."));
       }
     }

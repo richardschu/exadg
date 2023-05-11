@@ -22,10 +22,18 @@
         "VolumeForce": "1.0",
         "BoundaryType": "Dirichlet",
         "Displacement": "20.0",
-        "Traction":	"0.0" 
+        "Traction":	"0.0",
+        "NormalSpring": "true",
+        "NormalDashpot": "true",
+        "SpringCoeff": "1e6",
+        "DashpotCoeff": "1e6",
+        "ExteriorPressure": "0.0",
+        "ProblemType": "Unsteady",
+        "Preconditioner": "Multigrid",
+        "LargeDeformation": "true"
     },
     "Output": {
-        "OutputDirectory": "output/bar/",
+        "OutputDirectory": "./output/bar/",
         "OutputName": "test",
         "WriteOutput": "true"
     }
