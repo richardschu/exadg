@@ -9,14 +9,14 @@
         "RefineSpace": "0"
     },
     "SpatialResolutionStructure": {
-        "Degree": "2",
+        "Degree": "1",
         "RefineSpace": "0"
     },
     "FSI" : {
         "AccelerationMethod": "IQN_ILS",
         "CouplingScheme": "DirichletRobinAdaptiveParam",
-        "FieldUpdateVariant": "ImplicitPressureStructure",
-        "RobinParameterScale": "0.005",
+        "FieldUpdateVariant": "GeometricExplicit",
+        "RobinParameterScale": "0.00",
         "AbsTol": "1.e-9",
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
@@ -25,13 +25,13 @@
         "GeometricTolerance": "1.0e-6"
     },
     "Fluid" : {
-        "TemporalDiscretization" : "BDFDualSplitting",
+        "TemporalDiscretization" : "BDFDualSplittingScheme",
         "TreatmentOfConvectiveTerm" : "Explicit"
     },
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/pressure_wave_ipsDR_PC/",
+        "OutputDirectory": "output/bent_pressure_wave_iDN_DS/",
         "OutputName": "fsi_test",
         "WriteOutput": "true"
     }

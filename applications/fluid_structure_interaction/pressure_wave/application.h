@@ -50,7 +50,7 @@ dealii::types::boundary_id const BOUNDARY_ID_WALLS   = 3;
 
 unsigned int MANIFOLD_ID_CYLINDER = 1;
 
-unsigned int const MAPPING_DEGREE = 2; // 2;
+unsigned int const MAPPING_DEGREE = 1; // 2;
 
 double const TIME_PRESSURE  = 3.0e-3;
 double const TIME_STEP_SIZE = 0.0001;
@@ -879,8 +879,15 @@ private:
       pair_mask(BOUNDARY_ID_OUTFLOW, dealii::ComponentMask()));
 
     // zero traction at wall boundaries
-    boundary_descriptor->neumann_bc.insert(
-      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+//    boundary_descriptor->neumann_bc.insert(
+//      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+
+    this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
+      BOUNDARY_ID_WALLS,
+      std::make_pair(std::array<bool, 2>{{true /* normal_spring */, true /* normal_dashpot */}},
+                     std::array<double, 3>{{E_STRUCTURE * 1e2 /* spring_coeff */,
+                    	                    E_STRUCTURE /* dashpot_coeff */,
+											0.0 /* exterior_pressure */}})));
 
     // fluid-structure interface
     boundary_descriptor->neumann_cached_bc.insert(

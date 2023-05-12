@@ -1,12 +1,12 @@
 {
     "General": {
-        "Precision": "float",
+        "Precision": "double",
         "Dim": "3",
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "2",
-        "DegreeMax": "2",
+        "DegreeMin": "4",
+        "DegreeMax": "4",
         "RefineSpaceMin": "1",
         "RefineSpaceMax": "1"
     },
@@ -22,11 +22,11 @@
         "VolumeForce": "1.0",
         "BoundaryType": "Dirichlet",
         "Displacement": "20.0",
-        "Traction":	"0.0",
+        "Traction":	"10.0",
         "NormalSpring": "true",
         "NormalDashpot": "true",
-        "SpringCoeff": "0",
-        "DashpotCoeff": "0",
+        "SpringCoeff": "1e4",
+        "DashpotCoeff": "1e2",
         "ExteriorPressure": "0.0",
         "ProblemType": "Unsteady",
         "Preconditioner": "Multigrid",

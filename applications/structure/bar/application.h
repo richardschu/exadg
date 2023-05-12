@@ -24,96 +24,6 @@
 
 namespace ExaDG
 {
-
-namespace GridMap
-{
-template<int dim, typename Number>
-class DeformedMesh : public MappingDoFVector<dim, Number>
-{
-public:
-  typedef typename MappingDoFVector<dim, Number>::VectorType VectorType;
-
-  DeformedMesh(dealii::Triangulation<dim> & tria, unsigned int const mapping_degree)
-    : MappingDoFVector<dim, Number>(mapping_degree), mapping_degree(mapping_degree), tria(tria)
-  {
-    undeformed_mapping = std::make_shared<dealii::MappingQGeneric<dim>>(mapping_degree);
-  }
-
-  void
-  initialize(double const & length_beam)
-  {
-    // some dummy functionality to fill the displacement vector
-    dealii::DoFHandler<dim> dof_handler(tria);
-    dealii::FESystem<dim>   fe_mapping(dealii::FE_Q<dim>(mapping_degree), dim);
-
-    dof_handler.distribute_dofs(fe_mapping);
-
-    dealii::QGaussLobatto<dim> quadrature(mapping_degree + 1);
-    dealii::FE_Nothing<dim>    dummy_fe;
-    dealii::FEValues<dim>      fe_values(*undeformed_mapping,
-                                    dummy_fe,
-                                    quadrature,
-                                    dealii::update_quadrature_points);
-
-    std::vector<std::array<unsigned int, dim>> component_to_system_index(
-      fe_mapping.base_element(0).dofs_per_cell);
-
-    std::vector<unsigned int> hierarchic_to_lexicographic_numbering =
-      dealii::FETools::hierarchic_to_lexicographic_numbering<dim>(mapping_degree);
-    for(unsigned int i = 0; i < fe_mapping.dofs_per_cell; ++i)
-    {
-      component_to_system_index
-        [hierarchic_to_lexicographic_numbering[fe_mapping.system_to_component_index(i).second]]
-        [fe_mapping.system_to_component_index(i).first] = i;
-    }
-
-    std::vector<dealii::types::global_dof_index> dof_indices(fe_mapping.dofs_per_cell);
-
-    VectorType displacement_vector;
-    displacement_vector.reinit(dof_handler.locally_owned_dofs(), tria.get_communicator());
-
-    for(auto const & cell : dof_handler.active_cell_iterators())
-    {
-      if(cell->is_locally_owned())
-      {
-        fe_values.reinit(typename dealii::Triangulation<dim>::cell_iterator(cell));
-        cell->get_dof_indices(dof_indices);
-
-        for(unsigned int i = 0; i < fe_values.n_quadrature_points; ++i)
-        {
-          dealii::Point<dim> const point = fe_values.quadrature_point(i);
-
-          for(unsigned int d = 0; d < dim; ++d)
-          {
-            if(displacement_vector.get_partitioner()->in_local_range(
-                 dof_indices[component_to_system_index[i][d]]))
-            {
-              if(d == 1)
-                displacement_vector(dof_indices[component_to_system_index[i][d]]) =
-                  length_beam * 0.05 * std::sin(point[0] * dealii::numbers::PI / length_beam);
-              else if(d == 2)
-                displacement_vector(dof_indices[component_to_system_index[i][d]]) =
-                  length_beam * 0.05 * std::sin(point[0] * dealii::numbers::PI / length_beam);
-            }
-          }
-        }
-      }
-    }
-    displacement_vector.compress(dealii::VectorOperation::insert);
-
-    MappingDoFVector<dim, Number>::initialize_mapping_q_cache(undeformed_mapping,
-                                                              displacement_vector,
-                                                              dof_handler);
-  }
-
-private:
-  std::shared_ptr<dealii::Mapping<dim>> undeformed_mapping;
-
-  unsigned int const           mapping_degree;
-  dealii::Triangulation<dim> & tria;
-};
-} // namespace GridMap
-
 namespace Structure
 {
 template<int dim>
@@ -220,10 +130,10 @@ template<int dim>
 class SolutionNBC : public dealii::Function<dim>
 {
 public:
-  SolutionNBC(double length, double area_force, double volume_force, double youngs_modulus)
+  SolutionNBC(double length, double area_force, double volume_force, double E_modul)
     : dealii::Function<dim>(dim),
-      A(-volume_force / 2 / youngs_modulus),
-      B(+area_force / youngs_modulus - length * 2 * this->A)
+      A(-volume_force / 2 / E_modul),
+      B(+area_force / E_modul - length * 2 * this->A)
   {
   }
 
@@ -246,9 +156,9 @@ template<int dim>
 class SolutionDBC : public dealii::Function<dim>
 {
 public:
-  SolutionDBC(double length, double displacement, double volume_force, double youngs_modulus)
+  SolutionDBC(double length, double displacement, double volume_force, double E_modul)
     : dealii::Function<dim>(dim),
-      A(-volume_force / 2 / youngs_modulus),
+      A(-volume_force / 2 / E_modul),
       B(+displacement / length - this->A * length)
   {
   }
@@ -345,9 +255,9 @@ private:
 
     this->param.load_increment = 0.1;
 
-    this->param.newton_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.newton_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-9);
     this->param.solver             = Solver::FGMRES;
-    this->param.solver_data        = SolverData(1e3, 1.e-12, 1.e-6, 100);
+    this->param.solver_data        = SolverData(1e3, 1.e-12, 1.e-8, 100);
 
     if(preconditioner == "None")
       this->param.preconditioner = Preconditioner::None;
@@ -473,13 +383,6 @@ private:
                                                               this->param.grid,
                                                               this->param.involves_h_multigrid(),
                                                               lambda_create_triangulation);
-
-//    // set mapping vector
-//    std::shared_ptr<GridMap::DeformedMesh<dim, double>> mapping =
-//      std::make_shared<GridMap::DeformedMesh<dim, double>>(*this->grid->triangulation,
-//                                                           this->param.grid.mapping_degree);
-//    mapping->initialize(this->length);
-//    this->grid->mapping = mapping;
   }
 
   void
@@ -577,7 +480,7 @@ private:
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
     MaterialType const type = MaterialType::StVenantKirchhoff;
-    double const       E = youngs_modulus, nu = 0.3;
+    double const       E = E_modul, nu = 0.3;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
     this->material_descriptor->insert(
@@ -622,12 +525,12 @@ private:
     if(boundary_type == "Dirichlet")
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->youngs_modulus));
+        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->E_modul));
     }
     else if(boundary_type == "Neumann")
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->youngs_modulus));
+        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->E_modul));
     }
     else
     {
@@ -661,9 +564,9 @@ private:
   double exterior_pressure = 0.0;
 
   // mesh parameters
-  unsigned int const repetitions0 = 4, repetitions1 = 1, repetitions2 = 1;
+  unsigned int const repetitions0 = 6, repetitions1 = 1, repetitions2 = 1;
 
-  double const youngs_modulus = 200.0;
+  double const E_modul = 200.0;
 
   double const start_time = 0.0;
   double const end_time   = 100.0;

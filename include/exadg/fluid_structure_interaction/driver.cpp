@@ -42,9 +42,7 @@ Driver<dim, Number>::Driver(std::string const &                           input_
 
   dealii::ParameterHandler prm;
   parameters.add_parameters(prm);
-std::cout << "parsing\n";
   prm.parse_input(input_file, "", true, true);
-std::cout << "parsing enums\n";
   parameters.parse_parameters(prm);
 
   structure = std::make_shared<SolverStructure<dim, Number>>();
