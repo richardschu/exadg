@@ -316,7 +316,8 @@ void
 TimeIntBDFPressureCorrection<dim, Number>::do_timestep_solve()
 {
   // Velocity and pressure updates treated independently in semi-implicit FSI
-  AssertThrow(this->update_pressure or this->update_velocity, dealii::ExcMessage("No update triggered in BDF pressure-correction solver.\n"));
+  AssertThrow(this->update_pressure or this->update_velocity,
+              dealii::ExcMessage("No update triggered in BDF pressure-correction solver.\n"));
 
   // perform the sub-steps of the pressure-correction scheme
   if(this->update_velocity)
@@ -324,13 +325,13 @@ TimeIntBDFPressureCorrection<dim, Number>::do_timestep_solve()
 
   if(this->update_pressure)
   {
-	  VectorType pressure_increment;
-	  pressure_increment.reinit(pressure_np, false /* init with zero */);
+    VectorType pressure_increment;
+    pressure_increment.reinit(pressure_np, false /* init with zero */);
 
-	  pressure_step(pressure_increment);
+    pressure_step(pressure_increment);
 
-	  if(this->update_velocity)
-	    projection_step(pressure_increment);
+    if(this->update_velocity)
+      projection_step(pressure_increment);
   }
 
   // evaluate convective term once the final solution at time t_{n+1} is known

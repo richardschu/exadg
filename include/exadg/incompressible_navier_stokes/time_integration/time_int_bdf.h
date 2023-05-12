@@ -85,8 +85,8 @@ public:
 
   void
   advance_one_timestep_partitioned_solve(bool const use_extrapolation,
-		                                 bool const update_velocity,
-										 bool const update_pressure);
+                                         bool const update_velocity,
+                                         bool const update_pressure);
 
   virtual void
   print_iterations() const = 0;

@@ -78,7 +78,10 @@ public:
     dealii::Timer timer_local;
     timer_local.restart();
 
-    structure->setup(this->application->structure, 0.0 /* robin_parameter */, this->mpi_comm, this->is_test);
+    structure->setup(this->application->structure,
+                     0.0 /* robin_parameter */,
+                     this->mpi_comm,
+                     this->is_test);
 
     this->timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
   }

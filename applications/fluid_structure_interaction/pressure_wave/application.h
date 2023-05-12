@@ -235,7 +235,7 @@ private:
     param.density    = FLUID_DENSITY;
 
     // TEMPORAL DISCRETIZATION
-    param.solver_type                     = SolverType::Unsteady;
+    param.solver_type = SolverType::Unsteady;
 
     TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFDualSplittingScheme;
     Utilities::string_to_enum(temporal_discretization, temporal_discretization_string);
@@ -383,7 +383,7 @@ private:
   void
   create_grid() final
   {
-	AssertThrow(dim == 3, dealii::ExcMessage("3D grid generation implemented only."));
+    AssertThrow(dim == 3, dealii::ExcMessage("3D grid generation implemented only."));
 
     dealii::Triangulation<2> tria_2d;
     dealii::GridGenerator::hyper_ball(tria_2d, dealii::Point<2>(), R_INNER);
@@ -396,7 +396,7 @@ private:
     {
       for(auto const & f : cell->face_indices())
       {
-        double const z = cell->face(f)->center()(dim-1);
+        double const z = cell->face(f)->center()(dim - 1);
 
         // inflow
         if(std::fabs(z - 0.0) < GEOMETRY_TOL)
@@ -474,8 +474,6 @@ private:
     }
 
     this->grid->triangulation->refine_global(this->param.grid.n_refine_global + 2);
-
-    std::cout << "I attached the mapping in FluidFSI ##+ \n";
 
     std::shared_ptr<GridMap::DeformedMesh<dim, Number>> mapping =
       std::make_shared<GridMap::DeformedMesh<dim, Number>>(*this->grid->triangulation,
@@ -719,7 +717,7 @@ private:
     field_functions->initial_velocity.reset(new dealii::Functions::ZeroFunction<dim>(dim));
   }
 
-  std::string temporal_discretization_string = "BDFDualSplittingScheme";
+  std::string temporal_discretization_string      = "BDFDualSplittingScheme";
   std::string treatment_of_convective_term_string = "Explicit";
 };
 } // namespace FluidFSI
@@ -799,7 +797,7 @@ private:
       {
         if(cell->face(f)->at_boundary())
         {
-          double const z   = cell->face(f)->center()(dim-1);
+          double const z   = cell->face(f)->center()(dim - 1);
           double const TOL = 1.e-10;
 
           // left boundary
@@ -844,8 +842,6 @@ private:
 
     this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
 
-    std::cout << "I attached the mapping in StructureFSI ##+ \n";
-
     std::shared_ptr<GridMap::DeformedMesh<dim, Number>> mapping =
       std::make_shared<GridMap::DeformedMesh<dim, Number>>(*this->grid->triangulation,
                                                            this->param.grid.mapping_degree);
@@ -879,15 +875,15 @@ private:
       pair_mask(BOUNDARY_ID_OUTFLOW, dealii::ComponentMask()));
 
     // zero traction at wall boundaries
-//    boundary_descriptor->neumann_bc.insert(
-//      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+    //    boundary_descriptor->neumann_bc.insert(
+    //      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
 
     this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
       BOUNDARY_ID_WALLS,
       std::make_pair(std::array<bool, 2>{{true /* normal_spring */, true /* normal_dashpot */}},
                      std::array<double, 3>{{E_STRUCTURE * 1e2 /* spring_coeff */,
-                    	                    E_STRUCTURE /* dashpot_coeff */,
-											0.0 /* exterior_pressure */}})));
+                                            E_STRUCTURE /* dashpot_coeff */,
+                                            0.0 /* exterior_pressure */}})));
 
     // fluid-structure interface
     boundary_descriptor->neumann_cached_bc.insert(

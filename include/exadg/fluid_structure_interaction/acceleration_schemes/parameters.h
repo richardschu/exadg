@@ -26,7 +26,6 @@ namespace ExaDG
 {
 namespace FSI
 {
-
 enum class AccelerationMethod
 {
   Undefined,
@@ -56,7 +55,7 @@ struct Parameters
   Parameters()
     : acceleration_method(AccelerationMethod::Aitken),
       coupling_scheme(CouplingScheme::DirichletNeumann),
-	  field_update_variant(FieldUpdateVariant::Implicit),
+      field_update_variant(FieldUpdateVariant::Implicit),
       robin_parameter_scale(0.0),
       abs_tol(1.e-12),
       rel_tol(1.e-3),
@@ -129,17 +128,17 @@ struct Parameters
   void
   parse_parameters(dealii::ParameterHandler & prm, std::string const & subsection_name = "FSI")
   {
-	  prm.enter_subsection(subsection_name);
+    prm.enter_subsection(subsection_name);
 
-      Utilities::string_to_enum(acceleration_method, prm.get("AccelerationMethod"));
+    Utilities::string_to_enum(acceleration_method, prm.get("AccelerationMethod"));
 
-      std::string const coupling_scheme_string = prm.get("CouplingScheme");
-      Utilities::string_to_enum(coupling_scheme, coupling_scheme_string);
+    std::string const coupling_scheme_string = prm.get("CouplingScheme");
+    Utilities::string_to_enum(coupling_scheme, coupling_scheme_string);
 
-      std::string const field_update_variant_string = prm.get("FieldUpdateVariant");
-      Utilities::string_to_enum(field_update_variant, field_update_variant_string);
+    std::string const field_update_variant_string = prm.get("FieldUpdateVariant");
+    Utilities::string_to_enum(field_update_variant, field_update_variant_string);
 
-      prm.leave_subsection();
+    prm.leave_subsection();
   }
 
   AccelerationMethod acceleration_method;

@@ -311,7 +311,8 @@ Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) 
   {
     robin_k_c_p_param_fsi.insert(std::make_pair(
       entry.first /* boundary_id */,
-      std::make_pair(std::array<bool, 2>{{false /* normal_projection_displacement */, false /* normal_projection_velocity */}},
+      std::make_pair(std::array<bool, 2>{{false /* normal_projection_displacement */,
+                                          false /* normal_projection_velocity */}},
                      std::array<double, 3>{{0.0 /* coefficient_displacement */,
                                             robin_parameter_in /* coefficient_velocity */,
                                             0.0 /* exterior_pressure */}})));
@@ -322,27 +323,30 @@ Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) 
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::solve_subproblem_mesh(VectorType const & d,
-		                                   unsigned int const iteration) const
+Driver<dim, Number>::solve_subproblem_mesh(VectorType const & d, unsigned int const iteration) const
 {
   if(parameters.field_update_variant == FieldUpdateVariant::Implicit or
-	 (iteration == 0 and parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit) or
-	 (iteration == 0 and parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
+     (iteration == 0 and
+      parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit) or
+     (iteration == 0 and
+      parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
   {
-	// update structure to ALE data
-	coupling_structure_to_ale(d);
+    // update structure to ALE data
+    coupling_structure_to_ale(d);
 
-	// move the fluid mesh and update dependent data structures
-	fluid->solve_ale(application->fluid, is_test);
+    // move the fluid mesh and update dependent data structures
+    fluid->solve_ale(application->fluid, is_test);
   }
-  else if((iteration != 0 and parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit) or
-		  (iteration != 0 and parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
+  else if((iteration != 0 and
+           parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit) or
+          (iteration != 0 and
+           parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
   {
-	// do not perform a mesh update
+    // do not perform a mesh update
   }
   else
   {
-	AssertThrow(false, dealii::ExcMessage("FieldUpdateVariant not implemented."));
+    AssertThrow(false, dealii::ExcMessage("FieldUpdateVariant not implemented."));
   }
 }
 
@@ -354,40 +358,47 @@ Driver<dim, Number>::solve_subproblem_fluid(unsigned int const iteration) const
   coupling_structure_to_fluid(iteration == 0);
 
   if(parameters.field_update_variant == FieldUpdateVariant::Implicit or
-	 parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit or
-	 (iteration == 0 and parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
+     parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit or
+     (iteration == 0 and
+      parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
   {
     // perform all substeps of the fluid subproblem solver
-	fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0 /* use_extrapolation */, true /* update_velocity */, true /* update_pressure */);
+    fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration ==
+                                                                     0 /* use_extrapolation */,
+                                                                   true /* update_velocity */,
+                                                                   true /* update_pressure */);
   }
-  else if(iteration != 0 and parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure)
+  else if(iteration != 0 and
+          parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure)
   {
-	// perform only the pressure update of the subproblem solver
-	fluid->time_integrator->advance_one_timestep_partitioned_solve(false /* use_extrapolation */, false /* update_velocity */, true /* update_pressure */);
+    // perform only the pressure update of the subproblem solver
+    fluid->time_integrator->advance_one_timestep_partitioned_solve(false /* use_extrapolation */,
+                                                                   false /* update_velocity */,
+                                                                   true /* update_pressure */);
   }
   else
   {
-	AssertThrow(false, dealii::ExcMessage("FieldUpdateVariant not implemented."));
+    AssertThrow(false, dealii::ExcMessage("FieldUpdateVariant not implemented."));
   }
 }
 
 template<int dim, typename Number>
 void
 Driver<dim, Number>::solve_subproblem_structure(VectorType &       d_tilde,
-		                                        unsigned int const iteration) const
+                                                unsigned int const iteration) const
 {
   if(parameters.field_update_variant == FieldUpdateVariant::Implicit or
-	 parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit or
-	 parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure)
+     parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit or
+     parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure)
   {
-	// update stress boundary condition for solid
-	coupling_fluid_to_structure(/* end_of_time_step = */ true);
+    // update stress boundary condition for solid
+    coupling_fluid_to_structure(/* end_of_time_step = */ true);
 
-	// solve structural problem
-	structure->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
+    // solve structural problem
+    structure->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
 
-	// update displacement iterate in partitioned scheme
-	d_tilde = structure->time_integrator->get_displacement_np();
+    // update displacement iterate in partitioned scheme
+    d_tilde = structure->time_integrator->get_displacement_np();
   }
   else
   {

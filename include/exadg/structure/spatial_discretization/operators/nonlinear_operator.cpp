@@ -235,12 +235,10 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   {
     vector traction;
 
-    if(boundary_type == BoundaryType::Neumann or
-       boundary_type == BoundaryType::NeumannCached or
+    if(boundary_type == BoundaryType::Neumann or boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-      if(operator_type == OperatorType::inhomogeneous or
-    	 operator_type == OperatorType::full)
+      if(operator_type == OperatorType::inhomogeneous or operator_type == OperatorType::full)
       {
         traction -= calculate_neumann_value<dim, Number>(
           q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
@@ -261,8 +259,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
     if(boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-      if(operator_type == OperatorType::homogeneous or
-    	 operator_type == OperatorType::full)
+      if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
       {
         auto const it = this->operator_data.bc->robin_k_c_p_param.find(boundary_id);
 
