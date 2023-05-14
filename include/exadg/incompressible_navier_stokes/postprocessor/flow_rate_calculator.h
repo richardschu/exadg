@@ -95,7 +95,7 @@ public:
                      FlowRateCalculatorData<dim> const &     data_in,
                      MPI_Comm const &                        mpi_comm_in);
 
-  Number
+  void
   calculate_flow_rates(VectorType const &                             velocity,
                        double const &                                 time,
                        std::map<dealii::types::boundary_id, Number> & flow_rates);
@@ -103,7 +103,9 @@ public:
 
 private:
   void
-  write_output(Number const & value, double const & time, std::string const & name);
+  write_output(std::vector<Number> const & flow_rates,
+  		       std::vector<dealii::types::boundary_id> const & boundary_ids,
+               double const &      time);
 
   void
   do_calculate_flow_rates(VectorType const &                             velocity,

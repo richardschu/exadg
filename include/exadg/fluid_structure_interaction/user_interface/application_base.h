@@ -81,7 +81,7 @@ public:
     output_parameters.add_parameters(prm, "Output");
   }
 
-  void
+  virtual void
   parse_parameters()
   {
     dealii::ParameterHandler prm;
@@ -92,7 +92,7 @@ public:
   void
   setup()
   {
-    parse_parameters();
+    this->parse_parameters();
 
     set_resolution_parameters();
 
@@ -224,7 +224,7 @@ public:
     output_parameters.add_parameters(prm, "Output");
   }
 
-  void
+  virtual void
   parse_parameters()
   {
     dealii::ParameterHandler prm;
@@ -235,7 +235,7 @@ public:
   void
   setup()
   {
-    parse_parameters();
+    this->parse_parameters();
 
     set_resolution_parameters();
 

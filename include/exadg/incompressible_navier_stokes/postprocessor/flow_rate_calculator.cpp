@@ -49,7 +49,7 @@ FlowRateCalculator<dim, Number>::FlowRateCalculator(
 }
 
 template<int dim, typename Number>
-Number
+void
 FlowRateCalculator<dim, Number>::calculate_flow_rates(
   VectorType const &                             velocity,
   double const &                                 time,
@@ -59,28 +59,24 @@ FlowRateCalculator<dim, Number>::calculate_flow_rates(
   {
     do_calculate_flow_rates(velocity, flow_rates);
 
-    // initialize with zero since we accumulate into this variable
-    Number flow_rate = 0.0;
-    for(auto it = flow_rates.begin(); it != flow_rates.end(); ++it)
+    // copy flow rates and boundary IDs
+    std::vector<Number> values;
+    std::vector<dealii::types::boundary_id> boundary_ids;
+    for(auto const & it : flow_rates)
     {
-      flow_rate += it->second;
+      boundary_ids.push_back(it.first);
+      values.push_back(it.second);
     }
 
-    write_output(flow_rate, time, "Flow rate [m^3/s]");
-
-    return flow_rate;
-  }
-  else
-  {
-    return -1.0;
+    write_output(values, boundary_ids, time);
   }
 }
 
 template<int dim, typename Number>
 void
-FlowRateCalculator<dim, Number>::write_output(Number const &      value,
-                                              double const &      time,
-                                              std::string const & name)
+FlowRateCalculator<dim, Number>::write_output(std::vector<Number> const & flow_rates,
+		                                      std::vector<dealii::types::boundary_id> const & boundary_ids,
+                                              double const &      time)
 {
   // write output file
   if(data.write_to_file == true and dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
@@ -91,7 +87,10 @@ FlowRateCalculator<dim, Number>::write_output(Number const &      value,
     if(clear_files == true)
     {
       f.open(filename.c_str(), std::ios::trunc);
-      f << std::endl << "  Time                " + name << std::endl;
+      f << std::endl << "  Time.  Q on IDs:";
+      for (unsigned int i = 0; i<boundary_ids.size(); ++i)
+        f << std::setw(5) << boundary_ids[i] << "               ";
+      f << std::endl;
 
       clear_files = false;
     }
@@ -101,8 +100,10 @@ FlowRateCalculator<dim, Number>::write_output(Number const &      value,
     }
 
     unsigned int precision = 12;
-    f << std::scientific << std::setprecision(precision) << std::setw(precision + 8) << time
-      << std::setw(precision + 8) << value << std::endl;
+    f << std::scientific << std::setprecision(precision) << std::setw(precision + 8) << time;
+    for (unsigned int i = 0; i<flow_rates.size(); ++i)
+      f << std::setw(precision + 8) << flow_rates[i];
+    f << std::endl;
   }
 }
 
@@ -148,6 +149,7 @@ FlowRateCalculator<dim, Number>::do_calculate_flow_rates(
     }
   }
 
+  // copy, sum with communication, and store flow rates
   std::vector<double> flow_rates_vector(flow_rates.size());
   auto                iterator = flow_rates.begin();
   for(unsigned int counter = 0; counter < flow_rates.size(); ++counter)
