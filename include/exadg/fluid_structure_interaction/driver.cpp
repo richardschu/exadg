@@ -97,6 +97,8 @@ template<int dim, typename Number>
 void
 Driver<dim, Number>::setup_interface_coupling()
 {
+  bool const mark_entire_cell = true;
+
   // structure to ALE
   {
     dealii::Timer timer_local;
@@ -107,7 +109,7 @@ Driver<dim, Number>::setup_interface_coupling()
     auto const & tria         = structure->pde_operator->get_dof_handler().get_triangulation();
     auto const   boundary_ids = extract_set_of_keys_from_map(
       application->structure->get_boundary_descriptor()->neumann_cached_bc);
-    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids, mark_entire_cell);
 
     if(application->fluid->get_parameters().mesh_movement_type == IncNS::MeshMovementType::Poisson)
     {
@@ -149,7 +151,7 @@ Driver<dim, Number>::setup_interface_coupling()
     auto const & tria         = structure->pde_operator->get_dof_handler().get_triangulation();
     auto const   boundary_ids = extract_set_of_keys_from_map(
       application->structure->get_boundary_descriptor()->neumann_cached_bc);
-    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids, mark_entire_cell);
 
     structure_to_fluid = std::make_shared<InterfaceCoupling<1, dim, Number>>();
     structure_to_fluid->setup(fluid->pde_operator->get_container_interface_data(),
@@ -176,7 +178,7 @@ Driver<dim, Number>::setup_interface_coupling()
     auto const & tria         = fluid->pde_operator->get_dof_handler_u().get_triangulation();
     auto const   boundary_ids = extract_set_of_keys_from_map(
       application->fluid->get_boundary_descriptor()->velocity->dirichlet_cached_bc);
-    auto const marked_vertices_fluid = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    auto const marked_vertices_fluid = get_marked_vertices_via_boundary_ids(tria, boundary_ids, mark_entire_cell);
 
     fluid_to_structure = std::make_shared<InterfaceCoupling<1, dim, Number>>();
     fluid_to_structure->setup(structure->pde_operator->get_container_interface_data_neumann(),

@@ -41,28 +41,47 @@ extract_set_of_keys_from_map(std::map<Key, Data> const & map)
 template<int dim>
 std::vector<bool>
 get_marked_vertices_via_boundary_ids(dealii::Triangulation<dim> const &           triangulation,
-                                     std::set<dealii::types::boundary_id> const & boundary_ids)
+                                     std::set<dealii::types::boundary_id> const & boundary_ids,
+									 bool const                                   mark_entire_cell)
 {
-  // mark vertices at interface in order to make search of active cells around point more
-  // efficient
+  // mark vertices at faces on any of the boundary_ids in order to make search of active cells around point more efficient
   std::vector<bool> marked_vertices(triangulation.n_vertices(), false);
 
   for(auto const & cell : triangulation.active_cell_iterators())
   {
     if(not(cell->is_artificial()) and cell->at_boundary())
     {
+      bool any_face_on_boundary_id = false;
+
       for(auto const & f : cell->face_indices())
       {
         if(cell->face(f)->at_boundary())
         {
           if(boundary_ids.find(cell->face(f)->boundary_id()) != boundary_ids.end())
           {
-            for(auto const & v : cell->face(f)->vertex_indices())
-            {
-              marked_vertices[cell->face(f)->vertex_index(v)] = true;
-            }
+        	// mark the cell and break face loop
+        	if(mark_entire_cell)
+        	{
+        	  any_face_on_boundary_id = true;
+        	  break;
+        	}
+        	else
+        	{
+				for(auto const & v : cell->face(f)->vertex_indices())
+				{
+				  marked_vertices[cell->face(f)->vertex_index(v)] = true;
+				}
+        	}
           }
         }
+      }
+
+      if(mark_entire_cell and any_face_on_boundary_id)
+      {
+  		for(auto const & v : cell->vertex_indices())
+		{
+		  marked_vertices[cell->vertex_index(v)] = true;
+		}
       }
     }
   }
