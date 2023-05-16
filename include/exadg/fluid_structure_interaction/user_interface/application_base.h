@@ -75,13 +75,13 @@ public:
   }
 
   virtual void
-  add_parameters(dealii::ParameterHandler & prm) final
+  add_parameters(dealii::ParameterHandler & prm)
   {
     resolution.add_parameters(prm, "SpatialResolutionStructure");
     output_parameters.add_parameters(prm, "Output");
   }
 
-  void
+  virtual void
   parse_parameters()
   {
     dealii::ParameterHandler prm;
@@ -92,7 +92,7 @@ public:
   void
   setup()
   {
-    parse_parameters();
+    this->parse_parameters();
 
     set_resolution_parameters();
 
@@ -218,13 +218,13 @@ public:
   }
 
   virtual void
-  add_parameters(dealii::ParameterHandler & prm) final
+  add_parameters(dealii::ParameterHandler & prm)
   {
     resolution.add_parameters(prm, "SpatialResolutionFluid");
     output_parameters.add_parameters(prm, "Output");
   }
 
-  void
+  virtual void
   parse_parameters()
   {
     dealii::ParameterHandler prm;
@@ -235,7 +235,7 @@ public:
   void
   setup()
   {
-    parse_parameters();
+    this->parse_parameters();
 
     set_resolution_parameters();
 

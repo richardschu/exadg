@@ -61,15 +61,15 @@ InterfaceCoupling<rank, dim, Number>::setup(
 //                              return marked_vertices_src_;
 //                            }));
 
-//	std::vector<bool> marked_vertices(dof_handler_src_.get_triangulation().n_vertices(), true);
-//    map_evaluator.emplace(quad_index,
-//    		              dealii::Utilities::MPI::RemotePointEvaluation<dim>(
-//    		                tolerance_, false, 0, [marked_vertices](){
-//    	                      return marked_vertices;
-//                            }));
+	std::vector<bool> marked_vertices(dof_handler_src_.get_triangulation().n_vertices(), true);
+    map_evaluator.emplace(quad_index,
+    		              dealii::Utilities::MPI::RemotePointEvaluation<dim>(
+    		                tolerance_, false, 0, [marked_vertices](){
+    	                      return marked_vertices;
+                            }));
 
-	map_evaluator.emplace(quad_index,
-						  dealii::Utilities::MPI::RemotePointEvaluation<dim>(tolerance_));
+//	map_evaluator.emplace(quad_index,
+//						  dealii::Utilities::MPI::RemotePointEvaluation<dim>(tolerance_));
 
     auto const * points = &interface_data_dst->get_array_q_points(quad_index);
 

@@ -23,6 +23,7 @@
 #define APPLICATIONS_FSI_PRESSURE_WAVE_H_
 
 #include <exadg/grid/one_sided_cylindrical_manifold.h>
+#include <exadg/postprocessor/write_output.h>
 
 namespace ExaDG
 {
@@ -50,7 +51,7 @@ dealii::types::boundary_id const BOUNDARY_ID_WALLS   = 3;
 
 unsigned int MANIFOLD_ID_CYLINDER = 1;
 
-unsigned int const MAPPING_DEGREE = 2; // 2;
+unsigned int const MAPPING_DEGREE = 1; // 2;
 
 double const TIME_PRESSURE  = 3.0e-3;
 double const TIME_STEP_SIZE = 0.0001;
@@ -67,14 +68,101 @@ double const ABS_TOL_LINEARIZED = 1.e-12;
 
 namespace GridMap
 {
+template<int dim>
+double
+get_displacement(dealii::Point<dim> const & point,
+		         unsigned int const         component,
+				 double const &             length_beam)
+{
+  double constexpr factor = 0.5;
+
+  if(component == 0)
+    return (length_beam * factor * std::sin(point[2] * dealii::numbers::PI / length_beam));
+
+  return 0.0;
+}
+
+template<int dim>
+void
+move_vertices(dealii::Triangulation<dim> & triangulation,
+		      unsigned int const           mapping_degree,
+			  double const &               length_beam)
+{
+  // Move the vertices of the triangulation directly.
+  dealii::DoFHandler<dim> dof_handler(triangulation);
+  dealii::FESystem<dim>   fe_mapping(dealii::FE_Q<dim>(mapping_degree), dim);
+  dof_handler.distribute_dofs(fe_mapping);
+
+  dealii::IndexSet locally_relevant_dofs = dealii::DoFTools::extract_locally_relevant_dofs(dof_handler);
+
+  // Vertex quantities.
+  std::vector <bool> is_mapped(locally_relevant_dofs.n_elements(),false);
+  dealii::Point<dim> vertex_disp;
+  unsigned int vertex_df1_dof_index, index_within_set;
+  bool is_rel_index, map_vertex;
+
+  // Loop over locally owned cells and map.
+  for(auto const & cell : dof_handler.active_cell_iterators())
+  {
+    if(cell->is_locally_owned())
+    {
+	  for(unsigned int v=0; v<cell->reference_cell().n_vertices(); v++)
+	  {
+		// Reset vertex data.
+		map_vertex   = true;
+		is_rel_index = false;
+
+		vertex_df1_dof_index = cell->vertex_dof_index(v,0);
+
+		// Check if DoF df1 is locally relevant.
+		if(locally_relevant_dofs.is_element(vertex_df1_dof_index))
+		{
+		  index_within_set = locally_relevant_dofs.index_within_set(vertex_df1_dof_index);
+
+		  if(index_within_set != dealii::numbers::invalid_dof_index)
+		  {
+		    // Check relevant vertices.
+			is_rel_index = true;
+
+			if(is_mapped[index_within_set])
+			{
+			  // Break for already mapped vertices.
+			  map_vertex = false;
+			}
+			else
+			{
+			  // Leave true since it will be mapped.
+			  map_vertex = true;
+			  is_mapped[index_within_set] = true;
+
+			  for(unsigned int d=0; d<dim; d++)
+			  {
+				// Get node displacement.
+				vertex_disp[d] = get_displacement(cell->vertex(v), d, length_beam);
+			  }
+     	    }
+	      }
+		}
+
+		// Map own, non-mapped vertices.
+		if(map_vertex && is_rel_index)
+		{
+		  cell->vertex(v) += vertex_disp;
+		}
+	  }
+	}
+  }
+}
+
+
 template<int dim, typename Number>
 class DeformedMesh : public MappingDoFVector<dim, Number>
 {
 public:
   typedef typename MappingDoFVector<dim, Number>::VectorType VectorType;
 
-  DeformedMesh(dealii::Triangulation<dim> & tria, unsigned int const mapping_degree)
-    : MappingDoFVector<dim, Number>(mapping_degree), mapping_degree(mapping_degree), tria(tria)
+  DeformedMesh(dealii::Triangulation<dim> & triangulation, unsigned int const mapping_degree)
+    : MappingDoFVector<dim, Number>(mapping_degree), mapping_degree(mapping_degree), triangulation(triangulation)
   {
     undeformed_mapping = std::make_shared<dealii::MappingQGeneric<dim>>(mapping_degree);
   }
@@ -83,7 +171,7 @@ public:
   initialize(double const & length_beam)
   {
     // some dummy functionality to fill the displacement vector
-    dealii::DoFHandler<dim> dof_handler(tria);
+    dealii::DoFHandler<dim> dof_handler(triangulation);
     dealii::FESystem<dim>   fe_mapping(dealii::FE_Q<dim>(mapping_degree), dim);
 
     dof_handler.distribute_dofs(fe_mapping);
@@ -91,9 +179,9 @@ public:
     dealii::QGaussLobatto<dim> quadrature(mapping_degree + 1);
     dealii::FE_Nothing<dim>    dummy_fe;
     dealii::FEValues<dim>      fe_values(*undeformed_mapping,
-                                    dummy_fe,
-                                    quadrature,
-                                    dealii::update_quadrature_points);
+                                         dummy_fe,
+                                         quadrature,
+                                         dealii::update_quadrature_points);
 
     std::vector<std::array<unsigned int, dim>> component_to_system_index(
       fe_mapping.base_element(0).dofs_per_cell);
@@ -110,7 +198,7 @@ public:
     std::vector<dealii::types::global_dof_index> dof_indices(fe_mapping.dofs_per_cell);
 
     VectorType displacement_vector;
-    displacement_vector.reinit(dof_handler.locally_owned_dofs(), tria.get_communicator());
+    displacement_vector.reinit(dof_handler.locally_owned_dofs(), triangulation.get_communicator());
 
     for(auto const & cell : dof_handler.active_cell_iterators())
     {
@@ -128,14 +216,8 @@ public:
             if(displacement_vector.get_partitioner()->in_local_range(
                  dof_indices[component_to_system_index[i][d]]))
             {
-              if(d == 0)
-                displacement_vector(dof_indices[component_to_system_index[i][d]]) =
-                  point[d] +
-                  length_beam * 0.5 * std::sin(point[2] * dealii::numbers::PI / length_beam);
-              else if(d == 1)
-                displacement_vector(dof_indices[component_to_system_index[i][d]]) =
-                  point[d] +
-                  length_beam * 0.5 * std::sin(point[2] * dealii::numbers::PI / length_beam);
+              displacement_vector(dof_indices[component_to_system_index[i][d]]) =
+                get_displacement(point, d, length_beam);
             }
           }
         }
@@ -152,7 +234,7 @@ private:
   std::shared_ptr<dealii::Mapping<dim>> undeformed_mapping;
 
   unsigned int const           mapping_degree;
-  dealii::Triangulation<dim> & tria;
+  dealii::Triangulation<dim> & triangulation;
 };
 } // namespace GridMap
 
@@ -451,12 +533,22 @@ private:
 
     std::cout << "I attached the mapping in FluidFSI ##+ \n";
 
-    std::shared_ptr<GridMap::DeformedMesh<dim, Number>> mapping =
-      std::make_shared<GridMap::DeformedMesh<dim, Number>>(*this->grid->triangulation,
-                                                           this->param.grid.mapping_degree);
+//    std::shared_ptr<GridMap::DeformedMesh<dim, Number>> mapping =
+//      std::make_shared<GridMap::DeformedMesh<dim, Number>>(*this->grid->triangulation,
+//                                                           this->param.grid.mapping_degree);
+//    mapping->initialize(L);
+//    this->grid->mapping = mapping;
 
-    mapping->initialize(L);
-    this->grid->mapping = mapping;
+    GridMap::move_vertices(*this->grid->triangulation, this->param.grid.mapping_degree, L);
+
+    // output the grid
+    write_grid(*this->grid->triangulation,
+    		   *this->grid->mapping,
+			   4,
+			   "./",
+			   "fluid_grid",
+			   0,
+			   this->grid->triangulation->get_communicator());
   }
 
   void
@@ -815,12 +907,22 @@ private:
 
     std::cout << "I attached the mapping in StructureFSI ##+ \n";
 
-    std::shared_ptr<GridMap::DeformedMesh<dim, Number>> mapping =
-      std::make_shared<GridMap::DeformedMesh<dim, Number>>(*this->grid->triangulation,
-                                                           this->param.grid.mapping_degree);
+//    std::shared_ptr<GridMap::DeformedMesh<dim, Number>> mapping =
+//      std::make_shared<GridMap::DeformedMesh<dim, Number>>(*this->grid->triangulation,
+//                                                           this->param.grid.mapping_degree);
+//    mapping->initialize(L);
+//    this->grid->mapping = mapping;
 
-    mapping->initialize(L);
-    this->grid->mapping = mapping;
+    GridMap::move_vertices(*this->grid->triangulation, this->param.grid.mapping_degree, L);
+
+    // output the grid
+    write_grid(*this->grid->triangulation,
+    		   *this->grid->mapping,
+			   4,
+			   "./",
+			   "structure_grid",
+			   0,
+			   this->grid->triangulation->get_communicator());
   }
 
   void
