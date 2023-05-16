@@ -18,12 +18,12 @@
         "RelTol": "1.e-3",
         "OmegaInit": "0.1",
         "PartitionedIterMax": "100",
-        "GeometricTolerance": "1e-8"
+        "GeometricTolerance": "1e-3"
     },
     "Application": {
-        "MappingDegree": "1",
-        "MappingStrength": "30",
-        "MapVertices": "true"
+        "MappingDegree": "2",
+        "MappingStrength": "0",
+        "MapVertices": "false"
     },
     "Output": {
         "OutputDirectory": "output/bending_wall/",
