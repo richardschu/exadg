@@ -79,7 +79,7 @@ public:
                                 ids_normal_coefficients_in) const;
 
   void
-  evaluate_add(VectorType & dst, VectorType const & src) const;
+  evaluate_add(VectorType & dst, VectorType const & src) const override;
 
 private:
   void

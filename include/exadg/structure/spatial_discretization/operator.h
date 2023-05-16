@@ -239,15 +239,15 @@ public:
   apply_mass_operator(VectorType & dst, VectorType const & src) const final;
 
   bool
-  non_empty_boundary_mass_operator() const;
+  non_empty_boundary_mass_operator() const override;
 
   void
-  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const;
+  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const override;
 
   void
   set_combine_robin_param(std::map<dealii::types::boundary_id,
                                    std::pair<std::array<bool, 2>, std::array<double, 3>>> const &
-                            robin_k_c_p_param_in) const;
+                            robin_k_c_p_param_in) const override;
 
   void
   update_boundary_mass_operator(Number const scaling_factor) const;
