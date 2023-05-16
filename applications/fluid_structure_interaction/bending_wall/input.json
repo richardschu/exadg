@@ -18,7 +18,7 @@
         "RelTol": "1.e-3",
         "OmegaInit": "0.1",
         "PartitionedIterMax": "100",
-        "GeometricTolerance": "1.e-8"
+        "GeometricTolerance": "1e-8"
     },
     "Application": {
         "MappingDegree": "1",
