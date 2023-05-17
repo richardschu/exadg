@@ -9,7 +9,7 @@
         "RefineSpace": "0"
     },
     "SpatialResolutionStructure": {
-        "Degree": "1",
+        "Degree": "2",
         "RefineSpace": "0"
     },
     "FSI" : {
@@ -22,7 +22,7 @@
         "OmegaInit": "0.3",
         "PartitionedIterMax": "100",
         "ReusedTimeSteps": "10",
-        "GeometricTolerance": "1.0e-6"
+        "GeometricTolerance": "1.0e-8"
     },
     "Fluid" : {
         "TemporalDiscretization" : "BDFDualSplittingScheme",
