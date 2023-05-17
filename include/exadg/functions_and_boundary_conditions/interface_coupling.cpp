@@ -55,18 +55,18 @@ InterfaceCoupling<rank, dim, Number>::setup(
   for(auto quad_index : interface_data_dst->get_quad_indices())
   {
     // exchange quadrature points with their owners
-//    map_evaluator.emplace(quad_index,
-//                          dealii::Utilities::MPI::RemotePointEvaluation<dim>(
-//                            tolerance_, false, 0, [marked_vertices_src_]() {
-//                              return marked_vertices_src_;
-//                            }));
-
-	std::vector<bool> marked_vertices(dof_handler_src_.get_triangulation().n_vertices(), true);
     map_evaluator.emplace(quad_index,
-    		              dealii::Utilities::MPI::RemotePointEvaluation<dim>(
-    		                tolerance_, false, 0, [marked_vertices](){
-    	                      return marked_vertices;
+                          dealii::Utilities::MPI::RemotePointEvaluation<dim>(
+                            tolerance_, false, 0, [marked_vertices_src_]() {
+                              return marked_vertices_src_;
                             }));
+
+//	std::vector<bool> marked_vertices(dof_handler_src_.get_triangulation().n_vertices(), true);
+//    map_evaluator.emplace(quad_index,
+//    		              dealii::Utilities::MPI::RemotePointEvaluation<dim>(
+//    		                tolerance_, false, 0, [marked_vertices](){
+//    	                      return marked_vertices;
+//                            }));
 
 //	map_evaluator.emplace(quad_index,
 //						  dealii::Utilities::MPI::RemotePointEvaluation<dim>(tolerance_));

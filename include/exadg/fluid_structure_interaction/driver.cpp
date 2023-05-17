@@ -97,7 +97,7 @@ template<int dim, typename Number>
 void
 Driver<dim, Number>::setup_interface_coupling()
 {
-  bool const mark_entire_cell = true;
+  bool const mark_entire_cell = false;
 
   // structure to ALE
   {
