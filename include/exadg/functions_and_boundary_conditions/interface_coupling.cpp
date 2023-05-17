@@ -60,21 +60,11 @@ InterfaceCoupling<rank, dim, Number>::setup(
   for(auto quad_index : interface_data_dst->get_quad_indices())
   {
     // exchange quadrature points with their owners
-//    map_evaluator.emplace(quad_index,
-//                          dealii::Utilities::MPI::RemotePointEvaluation<dim>(
-//                            tolerance_, false, 0, [marked_vertices_src_]() {
-//                              return marked_vertices_src_;
-//                            }));
-
-//	std::vector<bool> marked_vertices(dof_handler_src_.get_triangulation().n_vertices(), true);
-//	map_evaluator.emplace(quad_index,
-//						  dealii::Utilities::MPI::RemotePointEvaluation<dim>(
-//							tolerance_, false, 0, [marked_vertices]() {
-//							  return marked_vertices;
-//							}));
-
     map_evaluator.emplace(quad_index,
-                          dealii::Utilities::MPI::RemotePointEvaluation<dim>(tolerance_));
+                          dealii::Utilities::MPI::RemotePointEvaluation<dim>(
+                            tolerance_, false, 0, [marked_vertices_src_]() {
+                              return marked_vertices_src_;
+                            }));
 
     map_evaluator[quad_index].reinit(interface_data_dst->get_array_q_points(quad_index),
                                      dof_handler_src_.get_triangulation(),
@@ -82,32 +72,63 @@ InterfaceCoupling<rank, dim, Number>::setup(
 
     if(not map_evaluator[quad_index].all_points_found())
     {
-      std::vector<dealii::Point<dim>> non_found_points;
-      unsigned int const n_points = interface_data_dst->get_array_q_points(quad_index).size();
-      non_found_points.reserve(n_points);
-      unsigned int n_non_found_points = 0;
-      for(unsigned int i = 0; i < n_points; ++i)
-      {
-    	if(not map_evaluator[quad_index].point_found(i))
-    	{
-    	  non_found_points.push_back(interface_data_dst->get_array_q_points(quad_index)[i]);
-    	  n_non_found_points += 1;
-    	}
-      }
-      dealii::Utilities::MPI::sum(n_non_found_points, dof_handler_src->get_communicator());
+      auto const [n_non_found_points_marked_vertices, non_found_points] =
+        extract_non_found_points(map_evaluator[quad_index], dof_handler_src_.get_communicator());
 
-      std::string const file_name =
-        "interface_coupling_quad_index_" + dealii::Utilities::to_string(quad_index);
       plot_points_and_triangulation(non_found_points,
                                     dof_handler_src_,
                                     mapping_src_,
-                                    file_name);
-      AssertThrow(
-        map_evaluator[quad_index].all_points_found(),
-        dealii::ExcMessage(std::string("Setup of InterfaceCoupling was not successful: "
-        		+ std::to_string(n_non_found_points) + " points have not been found.")));
+									"try_interface_coupling_quad_index_" + dealii::Utilities::to_string(quad_index));
+
+      // try to rescue the point search using no marked vertices
+      map_evaluator.emplace(quad_index,dealii::Utilities::MPI::RemotePointEvaluation<dim>(tolerance_));
+
+      map_evaluator[quad_index].reinit(interface_data_dst->get_array_q_points(quad_index),
+                                       dof_handler_src_.get_triangulation(),
+                                       mapping_src_);
+
+      if(not map_evaluator[quad_index].all_points_found())
+      {
+        auto const [n_non_found_points, non_found_points] =
+          extract_non_found_points(map_evaluator[quad_index], dof_handler_src_.get_communicator());
+
+        plot_points_and_triangulation(non_found_points,
+                                      dof_handler_src_,
+                                      mapping_src_,
+    								  "recover_interface_coupling_quad_index_" + dealii::Utilities::to_string(quad_index));
+
+        AssertThrow(
+          map_evaluator[quad_index].all_points_found(),
+          dealii::ExcMessage(std::string("Setup of InterfaceCoupling was not successful: "
+        		  + std::to_string(n_non_found_points_marked_vertices) + " (accelerated search) | "
+				  + std::to_string(n_non_found_points) + "(general search) points have not been found.")));
+      }
     }
   }
+}
+
+template<int rank, int dim, typename Number>
+std::tuple<unsigned int, std::vector<dealii::Point<dim>>>
+extract_non_found_points(dealii::Utilities::MPI::RemotePointEvaluation<dim> const & remote_point_evaluator,
+		                 MPI_Comm const & mpi_comm)
+{
+  auto const point_ptrs = remote_point_evaluator.get_point_ptrs();
+
+  unsigned int const n_points = point_ptrs->size();
+  std::vector<dealii::Point<dim>> non_found_points;
+  non_found_points.reserve(n_points);
+
+  for(unsigned int i = 0; i < n_points; ++i)
+  {
+	if(not remote_point_evaluator.point_found(i))
+	{
+	  non_found_points.push_back(*point_ptrs[i]);
+	}
+  }
+
+  unsigned int n_non_found_points = dealii::Utilities::MPI::sum(non_found_points.size(), mpi_comm);
+
+  return {n_non_found_points, non_found_points};
 }
 
 template<int rank, int dim, typename Number>
