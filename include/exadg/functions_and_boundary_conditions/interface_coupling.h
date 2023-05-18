@@ -65,10 +65,6 @@ public:
   update_data(VectorType const & dof_vector_src);
 
 private:
-  std::tuple<unsigned int, std::vector<dealii::Point<dim>>>
-  extract_non_found_points(dealii::Utilities::MPI::RemotePointEvaluation<dim> const & remote_point_evaluator,
-                           MPI_Comm const & mpi_comm);
-
   void
   plot_points_and_triangulation(std::vector<dealii::Point<dim>> const & points,
                                 dealii::DoFHandler<dim> const &         dof_handler,
