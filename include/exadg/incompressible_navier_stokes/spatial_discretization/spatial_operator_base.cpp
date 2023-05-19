@@ -1815,7 +1815,6 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
   for(unsigned int face = face_range.first; face < face_range.second; face++)
   {
     dealii::types::boundary_id const boundary_id = matrix_free.get_boundary_id(face);
-
     BoundaryTypeU const boundary_type =
       this->boundary_descriptor->velocity->get_boundary_type(boundary_id);
 
@@ -1826,14 +1825,12 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
       integrator_u.gather_evaluate(*velocity_ptr,
                                    dealii::EvaluationFlags::gradients |
                                      dealii::EvaluationFlags::values);
-
       integrator_p.reinit(face);
-      integrator_p.gather_evaluate(*pressure_ptr, dealii::EvaluationFlags::values);
+      integrator_p.gather_evaluate(*pressure_ptr, dealii::EvaluationFlags::gradients | dealii::EvaluationFlags::values);
 
       for(unsigned int q = 0; q < integrator_u.n_q_points; ++q)
       {
         unsigned int const local_face_number = matrix_free.get_face_info(face).interior_face_no;
-
         unsigned int const index = matrix_free.get_shape_info(dof_index_u, quad_index)
                                      .face_to_cell_index_nodal[local_face_number][q];
 
@@ -1843,7 +1840,6 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         vector u      = integrator_u.get_value(q);
         tensor grad_u = integrator_u.get_gradient(q);
         scalar p      = integrator_p.get_value(q);
-
         scalar viscosity = get_viscosity_boundary_face(face, q);
 
         // incompressible flow solver is formulated in terms of kinematic viscosity and kinematic

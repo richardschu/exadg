@@ -222,17 +222,29 @@ Driver<dim, Number>::coupling_structure_to_ale(VectorType const & displacement_s
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::coupling_structure_to_fluid(bool const extrapolate) const
+Driver<dim, Number>::coupling_structure_to_fluid(unsigned int const iteration,
+		                                         bool const         extrapolate) const
 {
   dealii::Timer sub_timer;
   sub_timer.restart();
 
   VectorType velocity_structure;
   structure->pde_operator->initialize_dof_vector(velocity_structure);
-  if(extrapolate)
-    structure->time_integrator->extrapolate_velocity_to_np(velocity_structure);
+  if(iteration == 0)
+  {
+	if(extrapolate)
+    {
+	  structure->time_integrator->extrapolate_velocity_to_np(velocity_structure);
+    }
+	else
+	{
+	  velocity_structure = structure->time_integrator->get_velocity_n();
+	}
+  }
   else
+  {
     velocity_structure = structure->time_integrator->get_velocity_np();
+  }
 
   structure_to_fluid->update_data(velocity_structure);
 
@@ -355,7 +367,7 @@ void
 Driver<dim, Number>::solve_subproblem_fluid(unsigned int const iteration) const
 {
   // update velocity boundary condition for fluid
-  coupling_structure_to_fluid(iteration == 0);
+  coupling_structure_to_fluid(iteration, parameters.use_extrapolation);
 
   if(parameters.field_update_variant == FieldUpdateVariant::Implicit or
      parameters.field_update_variant == FieldUpdateVariant::GeometricExplicit or
@@ -363,8 +375,7 @@ Driver<dim, Number>::solve_subproblem_fluid(unsigned int const iteration) const
       parameters.field_update_variant == FieldUpdateVariant::ImplicitPressureStructure))
   {
     // perform all substeps of the fluid subproblem solver
-    fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration ==
-                                                                     0 /* use_extrapolation */,
+    fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0 /* use_extrapolation */,
                                                                    true /* update_velocity */,
                                                                    true /* update_pressure */);
   }

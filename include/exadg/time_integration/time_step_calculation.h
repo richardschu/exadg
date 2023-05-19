@@ -40,13 +40,48 @@ namespace ExaDG
 inline void
 limit_time_step_change(double & new_time_step, double const & last_time_step, double const & fac)
 {
-  if(new_time_step >= fac * last_time_step)
+  (void) fac;
+//  if(new_time_step >= fac * last_time_step)
+//  {
+//    new_time_step = fac * last_time_step;
+//  }
+//  else if(new_time_step <= last_time_step / fac)
+//  {
+//    new_time_step = last_time_step / fac;
+//  }
+
+  // compute used growth factor
+  double growth_factor = std::min(1.02, new_time_step / last_time_step);
+//  if(std::abs(growth_factor - 1.0) < 0.005)
+//  {
+//	// keep time step size to avoid ringing
+//	new_time_step = last_time_step;
+//	return;
+//  }
+
+  // transition
+  double weight = 0.5;
+  new_time_step = weight * (growth_factor * last_time_step) + (1.0 - weight) * last_time_step;
+
+//  // compute used growth factor
+//  growth_factor = new_time_step / last_time_step;
+//  if(std::abs(growth_factor - 1.0) < 0.005)
+//  {
+//	// keep time step size to avoid ringing
+//	new_time_step = last_time_step;
+//	return;
+//  }
+
+  // limit
+  double max_fac = 1.02;
+  double min_fac = 0.1;
+  if(new_time_step >= max_fac * last_time_step)
   {
-    new_time_step = fac * last_time_step;
+    new_time_step = max_fac * last_time_step;
   }
-  else if(new_time_step <= last_time_step / fac)
+  else if(new_time_step <= min_fac * last_time_step)
   {
-    new_time_step = last_time_step / fac;
+    new_time_step = min_fac * last_time_step;
   }
 }
 
