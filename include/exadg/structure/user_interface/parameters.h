@@ -149,6 +149,9 @@ public:
   // spectral radius rho_infty for generalized alpha time integration scheme
   double spectral_radius;
 
+  // mass proportional damping coefficient for unsteady problems
+  double mass_damping_coefficient;
+
   // configure printing of solver performance (wall time, number of iterations)
   SolverInfoData solver_info_data;
 

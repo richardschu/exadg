@@ -117,7 +117,7 @@ SolverStructure<dim, Number>::setup(
   }
   pde_operator->set_combine_robin_param(robin_k_c_p_param_fsi);
 
-  pde_operator->setup_solver(time_integrator->get_scaling_factor_mass(),
+  pde_operator->setup_solver(time_integrator->get_scaling_factor_mass() + application->get_parameters().mass_damping_coefficient*time_integrator->get_scaling_factor_mass_velocity(),
                              time_integrator->get_scaling_factor_mass_velocity());
 }
 

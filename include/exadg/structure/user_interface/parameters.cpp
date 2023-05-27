@@ -49,6 +49,7 @@ Parameters::Parameters()
     n_refine_time(0),
     gen_alpha_type(GenAlphaType::GenAlpha),
     spectral_radius(1.0),
+	mass_damping_coefficient(0.0),
     solver_info_data(SolverInfoData()),
     restarted_simulation(false),
     restart_data(RestartData()),
@@ -179,6 +180,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
     print_parameter(pcout, "Temporal refinements", n_refine_time);
     print_parameter(pcout, "Time integration type", gen_alpha_type);
     print_parameter(pcout, "Spectral radius", spectral_radius);
+    print_parameter(pcout, "Mass damping coefficient", mass_damping_coefficient);
     solver_info_data.print(pcout);
     if(restarted_simulation)
       restart_data.print(pcout);

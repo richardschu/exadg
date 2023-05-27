@@ -125,7 +125,14 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   const_vector.reinit(displacement_n);
   rhs.reinit(displacement_n);
 
+  // add constant vectors of acceleration and damping terms
   this->compute_const_vector(rhs, displacement_n, velocity_n, acceleration_n);
+  if(param.mass_damping_coefficient > 1e-20)
+  {
+	this->compute_const_vector_velocity_remainder(const_vector, displacement_n, velocity_n, acceleration_n);
+	rhs.add(param.mass_damping_coefficient, const_vector);
+	std::cout << "##+ mass_damping_coefficient = " << param.mass_damping_coefficient << "\n";
+  }
   pde_operator->apply_mass_operator(const_vector, rhs);
 
   // non-empty boundary mass operator signals velocity remainder to be integrated
@@ -162,7 +169,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   {
     auto const iter = pde_operator->solve_nonlinear(displacement_np,
                                                     const_vector,
-                                                    this->get_scaling_factor_mass(),
+                                                    this->get_scaling_factor_mass() + param.mass_damping_coefficient*this->get_scaling_factor_mass_velocity(),
                                                     this->get_scaling_factor_mass_velocity(),
                                                     this->get_mid_time(),
                                                     update_preconditioner);
@@ -182,7 +189,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
     // solve linear system of equations
     unsigned int const iter = pde_operator->solve_linear(displacement_np,
                                                          rhs,
-                                                         this->get_scaling_factor_mass(),
+                                                         this->get_scaling_factor_mass() + param.mass_damping_coefficient*this->get_scaling_factor_mass_velocity(),
                                                          this->get_scaling_factor_mass_velocity(),
                                                          this->get_mid_time(),
                                                          update_preconditioner);

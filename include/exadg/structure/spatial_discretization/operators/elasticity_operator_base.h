@@ -38,6 +38,7 @@ struct OperatorData : public OperatorBaseData
     : OperatorBaseData(),
       pull_back_traction(false),
       unsteady(false),
+	  mass_damping_coefficient(0.0),
       density(1.0),
       quad_index_gauss_lobatto(0)
   {
@@ -53,6 +54,9 @@ struct OperatorData : public OperatorBaseData
 
   // activates mass operator in operator evaluation for unsteady problems
   bool unsteady;
+
+  // mass proportial damping coefficient for unsteady problems
+  double mass_damping_coefficient;
 
   // density
   double density;
