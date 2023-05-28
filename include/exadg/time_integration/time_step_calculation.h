@@ -52,25 +52,25 @@ limit_time_step_change(double & new_time_step, double const & last_time_step, do
 
   // compute used growth factor
   double growth_factor = std::min(1.02, new_time_step / last_time_step);
-//  if(std::abs(growth_factor - 1.0) < 0.005)
-//  {
-//	// keep time step size to avoid ringing
-//	new_time_step = last_time_step;
-//	return;
-//  }
+  if(std::abs(growth_factor - 1.0) < 0.01)
+  {
+	// keep time step size to avoid ringing
+	new_time_step = last_time_step;
+	return;
+  }
 
   // transition
   double weight = 0.5;
   new_time_step = weight * (growth_factor * last_time_step) + (1.0 - weight) * last_time_step;
 
-//  // compute used growth factor
-//  growth_factor = new_time_step / last_time_step;
-//  if(std::abs(growth_factor - 1.0) < 0.005)
-//  {
-//	// keep time step size to avoid ringing
-//	new_time_step = last_time_step;
-//	return;
-//  }
+  // compute used growth factor
+  growth_factor = new_time_step / last_time_step;
+  if(std::abs(growth_factor - 1.0) < 0.01)
+  {
+	// keep time step size to avoid ringing
+	new_time_step = last_time_step;
+	return;
+  }
 
   // limit
   double max_fac = 1.02;
