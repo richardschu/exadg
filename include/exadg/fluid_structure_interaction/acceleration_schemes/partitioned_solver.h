@@ -61,6 +61,10 @@ public:
   get_timings() const;
 
 private:
+  void
+  update_structure_displacement(VectorType &       displacement_structure,
+                                unsigned int const iteration) const;
+
   bool
   check_convergence(VectorType const & residual) const;
 
@@ -174,6 +178,28 @@ PartitionedSolver<dim, Number>::get_timings() const
 
 template<int dim, typename Number>
 void
+PartitionedSolver<dim, Number>::update_structure_displacement(VectorType & displacement_structure,
+                                                              unsigned int const iteration) const
+{
+  if(iteration == 0)
+  {
+    if(parameters.use_extrapolation)
+    {
+      structure->time_integrator->extrapolate_displacement_to_np(displacement_structure);
+    }
+    else
+    {
+      displacement_structure = structure->time_integrator->get_displacement_n();
+    }
+  }
+  else
+  {
+    displacement_structure = structure->time_integrator->get_displacement_np();
+  }
+}
+
+template<int dim, typename Number>
+void
 PartitionedSolver<dim, Number>::solve(
   std::function<void(VectorType &, VectorType const &, unsigned int)> const &
     apply_dirichlet_neumann_scheme)
@@ -182,7 +208,7 @@ PartitionedSolver<dim, Number>::solve(
   unsigned int k = 0;
 
   // fixed-point iteration with dynamic relaxation (Aitken relaxation)
-  if(parameters.method == AccelerationMethod::Aitken)
+  if(parameters.acceleration_method == AccelerationMethod::Aitken)
   {
     VectorType r_old, d;
     structure->pde_operator->initialize_dof_vector(r_old);
@@ -194,10 +220,7 @@ PartitionedSolver<dim, Number>::solve(
     {
       print_solver_info_header(k);
 
-      if(k == 0)
-        structure->time_integrator->extrapolate_displacement_to_np(d);
-      else
-        d = structure->time_integrator->get_displacement_np();
+      update_structure_displacement(d, k);
 
       VectorType d_tilde(d);
       apply_dirichlet_neumann_scheme(d_tilde, d, k);
@@ -236,7 +259,7 @@ PartitionedSolver<dim, Number>::solve(
       ++k;
     }
   }
-  else if(parameters.method == AccelerationMethod::IQN_ILS)
+  else if(parameters.acceleration_method == AccelerationMethod::IQN_ILS)
   {
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
@@ -257,10 +280,7 @@ PartitionedSolver<dim, Number>::solve(
     {
       print_solver_info_header(k);
 
-      if(k == 0)
-        structure->time_integrator->extrapolate_displacement_to_np(d);
-      else
-        d = structure->time_integrator->get_displacement_np();
+      update_structure_displacement(d, k);
 
       apply_dirichlet_neumann_scheme(d_tilde, d, k);
 
@@ -357,7 +377,7 @@ PartitionedSolver<dim, Number>::solve(
 
     timer_tree->insert({"IQN-ILS"}, timer.wall_time());
   }
-  else if(parameters.method == AccelerationMethod::IQN_IMVLS)
+  else if(parameters.acceleration_method == AccelerationMethod::IQN_IMVLS)
   {
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
@@ -385,10 +405,7 @@ PartitionedSolver<dim, Number>::solve(
     {
       print_solver_info_header(k);
 
-      if(k == 0)
-        structure->time_integrator->extrapolate_displacement_to_np(d);
-      else
-        d = structure->time_integrator->get_displacement_np();
+      update_structure_displacement(d, k);
 
       apply_dirichlet_neumann_scheme(d_tilde, d, k);
 
@@ -486,7 +503,7 @@ PartitionedSolver<dim, Number>::solve(
   }
   else
   {
-    AssertThrow(false, dealii::ExcMessage("This method is not implemented."));
+    AssertThrow(false, dealii::ExcMessage("This AccelerationMethod is not implemented."));
   }
 
   partitioned_iterations.first += 1;

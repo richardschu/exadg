@@ -28,18 +28,30 @@ namespace FSI
 {
 enum class AccelerationMethod
 {
+  Undefined,
   Aitken,
   IQN_ILS,
   IQN_IMVLS
 };
 
+enum class UpdateMethod
+{
+  Undefined,
+  Implicit,
+  GeometricExplicit,
+  ImplicitPressureStructure,
+  ImplicitVelocityStructure
+};
+
 struct Parameters
 {
   Parameters()
-    : method(AccelerationMethod::Aitken),
+    : acceleration_method(AccelerationMethod::Undefined),
+      update_method(UpdateMethod::Implicit),
       abs_tol(1.e-12),
       rel_tol(1.e-3),
       omega_init(0.1),
+      use_extrapolation(true),
       reused_time_steps(0),
       partitioned_iter_max(100),
       geometric_tolerance(1.e-10)
@@ -51,8 +63,13 @@ struct Parameters
   {
     prm.enter_subsection(subsection_name);
     {
+      prm.add_parameter("AccelerationMethod",
+                        acceleration_method,
+                        "Acceleration method.",
+                        Patterns::Enum<AccelerationMethod>(),
+                        true);
       prm.add_parameter(
-        "Method", method, "Acceleration method.", Patterns::Enum<AccelerationMethod>(), true);
+        "UpdateMethod", update_method, "Update method.", Patterns::Enum<UpdateMethod>(), false);
       prm.add_parameter(
         "AbsTol", abs_tol, "Absolute solver tolerance.", dealii::Patterns::Double(0.0, 1.0), true);
       prm.add_parameter(
@@ -62,6 +79,11 @@ struct Parameters
                         "Initial relaxation parameter.",
                         dealii::Patterns::Double(0.0, 1.0),
                         true);
+      prm.add_parameter("UseExtrapolation",
+                        use_extrapolation,
+                        "Extrapolate for initial guess in coupling scheme.",
+                        dealii::Patterns::Bool(),
+                        false);
       prm.add_parameter("ReusedTimeSteps",
                         reused_time_steps,
                         "Number of time steps reused for acceleration.",
@@ -81,10 +103,12 @@ struct Parameters
     prm.leave_subsection();
   }
 
-  AccelerationMethod method;
+  AccelerationMethod acceleration_method;
+  UpdateMethod       update_method;
   double             abs_tol;
   double             rel_tol;
   double             omega_init;
+  bool               use_extrapolation;
   unsigned int       reused_time_steps;
   unsigned int       partitioned_iter_max;
 

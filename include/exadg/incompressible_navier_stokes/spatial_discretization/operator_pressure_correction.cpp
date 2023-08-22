@@ -55,12 +55,9 @@ OperatorPressureCorrection<dim, Number>::~OperatorPressureCorrection()
 
 template<int dim, typename Number>
 void
-OperatorPressureCorrection<dim, Number>::setup(
-  std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free,
-  std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data,
-  std::string const &                                    dof_index_temperature)
+OperatorPressureCorrection<dim, Number>::setup_derived()
 {
-  ProjectionBase::setup(matrix_free, matrix_free_data, dof_index_temperature);
+  ProjectionBase::setup_derived();
 
   setup_inverse_mass_operator_pressure();
 }
@@ -329,8 +326,11 @@ OperatorPressureCorrection<dim, Number>::evaluate_nonlinear_residual(
 
   this->mass_operator.apply_scale(dst, scaling_factor_mass, src);
 
-  if(this->param.convective_problem())
+  // implicitly treated convective term
+  if(this->param.implicit_convective_problem())
+  {
     this->convective_operator.evaluate_nonlinear_operator_add(dst, src, time);
+  }
 
   // viscous term
   this->viscous_operator.set_time(time);
@@ -370,8 +370,10 @@ OperatorPressureCorrection<dim, Number>::evaluate_nonlinear_residual_steady(
     dst_u *= -1.0;
   }
 
-  if(this->param.convective_problem())
+  if(this->param.implicit_convective_problem())
+  {
     this->convective_operator.evaluate_nonlinear_operator_add(dst_u, src_u, time);
+  }
 
   if(this->param.viscous_problem())
   {

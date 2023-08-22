@@ -318,19 +318,26 @@ void
 TimeIntBDFPressureCorrection<dim, Number>::do_timestep_solve()
 {
   // perform the sub-steps of the pressure-correction scheme
+  if(this->update_velocity)
+  {
+    momentum_step();
+  }
 
-  momentum_step();
+  if(this->update_pressure)
+  {
+    VectorType pressure_increment;
+    pressure_increment.reinit(pressure_np, false /* init with zero */);
 
-  VectorType pressure_increment;
-  pressure_increment.reinit(pressure_np, false /* init with zero */);
+    pressure_step(pressure_increment);
 
-  pressure_step(pressure_increment);
+    projection_step(pressure_increment);
+  }
 
-  projection_step(pressure_increment);
-
-  // evaluate convective term once the final solution at time
-  // t_{n+1} is known
-  evaluate_convective_term();
+  // evaluate convective term once the final solution at time t_{n+1} is known
+  if(this->update_velocity)
+  {
+    evaluate_convective_term();
+  }
 }
 
 template<int dim, typename Number>
@@ -355,10 +362,10 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
   }
 
   /*
-   *  if a variable viscosity is used: update
-   *  viscosity model before calculating rhs_momentum
+   *  explicit variable viscosity update executed prior to calculation of rhs_momentum
    */
-  if(this->param.viscosity_is_variable())
+  if(this->param.viscosity_is_variable() and
+     this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
   {
     dealii::Timer timer_viscosity_update;
     timer_viscosity_update.restart();
@@ -371,7 +378,6 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
       print_wall_time(this->pcout, timer_viscosity_update.wall_time());
     }
   }
-
 
   /*
    *  Calculate the right-hand side of the linear system of equations

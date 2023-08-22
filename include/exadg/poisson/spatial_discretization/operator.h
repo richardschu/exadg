@@ -61,6 +61,17 @@ public:
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
 
+  /**
+   * Call this setup() function if the dealii::MatrixFree object can be set up by the present class.
+   */
+  void
+  setup();
+
+  /**
+   * Call this setup() function if the dealii::MatrixFree object needs to be created outside this
+   * class. The typical use case would be multiphysics-coupling with one MatrixFree object handed
+   * over to several single-field solvers.
+   */
   void
   setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free,
         std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data);
@@ -93,7 +104,7 @@ public:
    * Setters and getters.
    */
 
-  dealii::MatrixFree<dim, Number> const &
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const>
   get_matrix_free() const;
 
   dealii::DoFHandler<dim> const &
@@ -145,7 +156,10 @@ private:
   get_quad_index_gauss_lobatto() const;
 
   void
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
+
+  void
+  setup_coupling_boundary_conditions();
 
   void
   setup_operators();

@@ -63,58 +63,14 @@ Operator<dim, Number>::Operator(
 {
   pcout << std::endl << "Construct elasticity operator ..." << std::endl;
 
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
 
   pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free_in,
-                             std::shared_ptr<MatrixFreeData<dim, Number> const> matrix_free_data_in)
-{
-  pcout << std::endl << "Setup elasticity operator ..." << std::endl;
-
-  matrix_free      = matrix_free_in;
-  matrix_free_data = matrix_free_data_in;
-
-  if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
-  {
-    interface_data_dirichlet_cached = std::make_shared<ContainerInterfaceData<1, dim, double>>();
-    std::vector<unsigned int> quad_indices;
-    // Gauss-Lobatto quadrature rule for DirichletCached boundary conditions!
-    quad_indices.emplace_back(get_quad_index_gauss_lobatto());
-
-    interface_data_dirichlet_cached->setup(*matrix_free,
-                                           get_dof_index(),
-                                           quad_indices,
-                                           boundary_descriptor->dirichlet_cached_bc);
-
-    boundary_descriptor->set_dirichlet_cached_data(interface_data_dirichlet_cached);
-  }
-
-  if(not(boundary_descriptor->neumann_cached_bc.empty()))
-  {
-    interface_data_neumann_cached = std::make_shared<ContainerInterfaceData<1, dim, double>>();
-    std::vector<unsigned int> quad_indices;
-    quad_indices.emplace_back(get_quad_index());
-
-    interface_data_neumann_cached->setup(*matrix_free,
-                                         get_dof_index(),
-                                         quad_indices,
-                                         boundary_descriptor->neumann_cached_bc);
-
-    boundary_descriptor->set_neumann_cached_data(interface_data_neumann_cached);
-  }
-
-  setup_operators();
-
-  pcout << std::endl << "... done!" << std::endl;
-}
-
-template<int dim, typename Number>
-void
-Operator<dim, Number>::distribute_dofs()
+Operator<dim, Number>::initialize_dof_handler_and_constraints()
 {
   // create finite element
   fe = create_finite_element<dim>(param.grid.element_type,
@@ -172,89 +128,6 @@ Operator<dim, Number>::distribute_dofs()
 }
 
 template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_dof_name() const
-{
-  return field + "_" + dof_index;
-}
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_dof_name_periodicity_and_hanging_node_constraints() const
-{
-  return field + "_" + dof_index_periodicity_and_handing_node_constraints;
-}
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_quad_name() const
-{
-  return field + "_" + quad_index;
-}
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_quad_gauss_lobatto_name() const
-{
-  return field + "_" + quad_index_gauss_lobatto;
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_dof_index() const
-{
-  return matrix_free_data->get_dof_index(get_dof_name());
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_dof_index_periodicity_and_hanging_node_constraints() const
-{
-  return matrix_free_data->get_dof_index(get_dof_name_periodicity_and_hanging_node_constraints());
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_quad_index() const
-{
-  return matrix_free_data->get_quad_index(get_quad_name());
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_quad_index_gauss_lobatto() const
-{
-  return matrix_free_data->get_quad_index(get_quad_gauss_lobatto_name());
-}
-
-template<int dim, typename Number>
-double
-Operator<dim, Number>::compute_scaling_factor_mass(double const scaling_factor_acceleration,
-                                                   double const scaling_factor_velocity) const
-{
-  double scaling_factor_mass = scaling_factor_acceleration;
-  if(param.weak_damping_active)
-  {
-    scaling_factor_mass += param.weak_damping_coefficient * scaling_factor_velocity;
-  }
-  return scaling_factor_mass;
-}
-
-template<int dim, typename Number>
-std::shared_ptr<ContainerInterfaceData<1, dim, double>>
-Operator<dim, Number>::get_container_interface_data_neumann() const
-{
-  return interface_data_neumann_cached;
-}
-
-template<int dim, typename Number>
-std::shared_ptr<ContainerInterfaceData<1, dim, double>>
-Operator<dim, Number>::get_container_interface_data_dirichlet() const
-{
-  return interface_data_dirichlet_cached;
-}
-
-template<int dim, typename Number>
 void
 Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const
 {
@@ -299,6 +172,40 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
 
     matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.degree + 1),
                                        get_quad_gauss_lobatto_name());
+  }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::setup_coupling_boundary_conditions()
+{
+  if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
+  {
+    interface_data_dirichlet_cached = std::make_shared<ContainerInterfaceData<1, dim, double>>();
+    std::vector<unsigned int> quad_indices;
+    // Gauss-Lobatto quadrature rule for DirichletCached boundary conditions!
+    quad_indices.emplace_back(get_quad_index_gauss_lobatto());
+
+    interface_data_dirichlet_cached->setup(*matrix_free,
+                                           get_dof_index(),
+                                           quad_indices,
+                                           boundary_descriptor->dirichlet_cached_bc);
+
+    boundary_descriptor->set_dirichlet_cached_data(interface_data_dirichlet_cached);
+  }
+
+  if(not(boundary_descriptor->neumann_cached_bc.empty()))
+  {
+    interface_data_neumann_cached = std::make_shared<ContainerInterfaceData<1, dim, double>>();
+    std::vector<unsigned int> quad_indices;
+    quad_indices.emplace_back(get_quad_index());
+
+    interface_data_neumann_cached->setup(*matrix_free,
+                                         get_dof_index(),
+                                         quad_indices,
+                                         boundary_descriptor->neumann_cached_bc);
+
+    boundary_descriptor->set_neumann_cached_data(interface_data_neumann_cached);
   }
 }
 
@@ -401,6 +308,46 @@ Operator<dim, Number>::setup_operators()
   else
     body_force_data.pull_back_body_force = false;
   body_force_operator.initialize(*matrix_free, body_force_data);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::setup()
+{
+  // initialize MatrixFree and MatrixFreeData
+  std::shared_ptr<dealii::MatrixFree<dim, Number>> mf =
+    std::make_shared<dealii::MatrixFree<dim, Number>>();
+  std::shared_ptr<MatrixFreeData<dim, Number>> mf_data =
+    std::make_shared<MatrixFreeData<dim, Number>>();
+
+  fill_matrix_free_data(*mf_data);
+
+  mf->reinit(get_mapping(),
+             mf_data->get_dof_handler_vector(),
+             mf_data->get_constraint_vector(),
+             mf_data->get_quadrature_vector(),
+             mf_data->data);
+
+  // Subsequently, call the other setup function with MatrixFree/MatrixFreeData objects as
+  // arguments.
+  this->setup(mf, mf_data);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free_in,
+                             std::shared_ptr<MatrixFreeData<dim, Number> const> matrix_free_data_in)
+{
+  pcout << std::endl << "Setup elasticity operator ..." << std::endl;
+
+  matrix_free      = matrix_free_in;
+  matrix_free_data = matrix_free_data_in;
+
+  setup_coupling_boundary_conditions();
+
+  setup_operators();
+
+  pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, typename Number>
@@ -648,6 +595,89 @@ Operator<dim, Number>::initialize_solver()
                                                    linearized_operator,
                                                    *linear_solver);
   }
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_dof_name() const
+{
+  return field + "_" + dof_index;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_dof_name_periodicity_and_hanging_node_constraints() const
+{
+  return field + "_" + dof_index_periodicity_and_handing_node_constraints;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_quad_name() const
+{
+  return field + "_" + quad_index;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_quad_gauss_lobatto_name() const
+{
+  return field + "_" + quad_index_gauss_lobatto;
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_dof_index() const
+{
+  return matrix_free_data->get_dof_index(get_dof_name());
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_dof_index_periodicity_and_hanging_node_constraints() const
+{
+  return matrix_free_data->get_dof_index(get_dof_name_periodicity_and_hanging_node_constraints());
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_quad_index() const
+{
+  return matrix_free_data->get_quad_index(get_quad_name());
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_quad_index_gauss_lobatto() const
+{
+  return matrix_free_data->get_quad_index(get_quad_gauss_lobatto_name());
+}
+
+template<int dim, typename Number>
+double
+Operator<dim, Number>::compute_scaling_factor_mass(double const scaling_factor_acceleration,
+                                                   double const scaling_factor_velocity) const
+{
+  double scaling_factor_mass = scaling_factor_acceleration;
+  if(param.weak_damping_active)
+  {
+    scaling_factor_mass += param.weak_damping_coefficient * scaling_factor_velocity;
+  }
+  return scaling_factor_mass;
+}
+
+template<int dim, typename Number>
+std::shared_ptr<ContainerInterfaceData<1, dim, double>>
+Operator<dim, Number>::get_container_interface_data_neumann() const
+{
+  return interface_data_neumann_cached;
+}
+
+template<int dim, typename Number>
+std::shared_ptr<ContainerInterfaceData<1, dim, double>>
+Operator<dim, Number>::get_container_interface_data_dirichlet() const
+{
+  return interface_data_dirichlet_cached;
 }
 
 template<int dim, typename Number>
@@ -1062,10 +1092,10 @@ Operator<dim, Number>::solve_linear(VectorType &       sol,
 }
 
 template<int dim, typename Number>
-dealii::MatrixFree<dim, Number> const &
+std::shared_ptr<dealii::MatrixFree<dim, Number> const>
 Operator<dim, Number>::get_matrix_free() const
 {
-  return *matrix_free;
+  return matrix_free;
 }
 
 template<int dim, typename Number>
