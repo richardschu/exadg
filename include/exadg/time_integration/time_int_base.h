@@ -99,6 +99,15 @@ public:
   void
   advance_one_timestep_post_solve();
 
+  /**
+   * Perform adaptive refinement.
+   */
+  virtual void
+  do_adaptive_refinement(unsigned int const time_step_number)
+  {
+    (void)time_step_number;
+  }
+
   /*
    * Reset the current time.
    */

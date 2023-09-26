@@ -26,6 +26,7 @@
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
+#include <exadg/time_integration/lambda_functions_amr.h>
 
 namespace ExaDG
 {
@@ -38,11 +39,13 @@ template<int dim, typename Number>
 std::shared_ptr<TimeIntBDF<dim, Number>>
 create_time_integrator(std::shared_ptr<SpatialOperatorBase<dim, Number>> pde_operator,
                        std::shared_ptr<HelpersALE<Number> const>         helpers_ale,
+                       std::shared_ptr<HelpersAMR<dim, Number> const>    helpers_amr,
                        std::shared_ptr<PostProcessorInterface<Number>>   postprocessor,
                        Parameters const &                                parameters,
                        MPI_Comm const &                                  mpi_comm,
                        bool const                                        is_test)
 {
+  (void)helpers_amr;
   std::shared_ptr<TimeIntBDF<dim, Number>> time_integrator;
 
   if(parameters.temporal_discretization == TemporalDiscretization::BDFCoupledSolution)

@@ -91,6 +91,11 @@ TimeIntBase::advance_one_timestep_pre_solve(bool const print_header)
 
       postprocessing();
     }
+    else
+    {
+      // ##+
+      do_adaptive_refinement(time_step_number);
+    }
 
     do_timestep_pre_solve(print_header);
   }

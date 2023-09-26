@@ -53,7 +53,8 @@ public:
         bool const                             is_test)
   {
     // ALE is not used for this solver
-    std::shared_ptr<HelpersALE<Number>> helpers_ale_dummy;
+    std::shared_ptr<HelpersALE<Number>>      helpers_ale_dummy;
+    std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr_dummy;
 
     // initialize pde_operator
     pde_operator = create_operator<dim, Number>(domain->get_grid(),
@@ -86,8 +87,13 @@ public:
     postprocessor->setup(*pde_operator);
 
     // Setup time integrator
-    time_integrator = create_time_integrator<dim, Number>(
-      pde_operator, helpers_ale_dummy, postprocessor, domain->get_parameters(), mpi_comm, is_test);
+    time_integrator = create_time_integrator<dim, Number>(pde_operator,
+                                                          helpers_ale_dummy,
+                                                          helpers_amr_dummy,
+                                                          postprocessor,
+                                                          domain->get_parameters(),
+                                                          mpi_comm,
+                                                          is_test);
 
     // setup time integrator before calling setup_solvers (this is necessary since the setup of the
     // solvers depends on quantities such as the time_step_size or gamma0!)

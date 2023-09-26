@@ -26,7 +26,9 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/grid/adaptive_mesh_refinement.h>
 #include <exadg/time_integration/lambda_functions_ale.h>
+#include <exadg/time_integration/lambda_functions_amr.h>
 #include <exadg/time_integration/time_int_multistep_base.h>
 
 namespace ExaDG
@@ -53,6 +55,7 @@ public:
 
   TimeIntBDF(std::shared_ptr<Operator<dim, Number>>          operator_in,
              std::shared_ptr<HelpersALE<Number> const>       helpers_ale_in,
+             std::shared_ptr<HelpersAMR<dim, Number> const>  helpers_amr_in,
              std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
              Parameters const &                              param_in,
              MPI_Comm const &                                mpi_comm_in,
@@ -70,6 +73,9 @@ public:
 
   void
   print_iterations() const;
+
+  void
+  do_adaptive_refinement(unsigned int const time_step_number) final;
 
 private:
   void
@@ -139,6 +145,9 @@ private:
 
   // This object allows to access utility functions needed for ALE
   std::shared_ptr<HelpersALE<Number> const> helpers_ale;
+
+  // This object allows to access utility functions needed for ALE
+  std::shared_ptr<HelpersAMR<dim, Number> const> helpers_amr;
 
   // ALE
   VectorType              grid_velocity;

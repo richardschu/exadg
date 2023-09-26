@@ -89,6 +89,12 @@ public:
   void
   setup_solver(double const scaling_factor_mass = -1.0, VectorType const * velocity = nullptr);
 
+  /**
+   * Initializes dealii::DoFHandlers and dealii::AffineConstraints.
+   */
+  void
+  initialize_dof_handler_and_constraints();
+
   /*
    * Initialization of dof-vector.
    */
@@ -282,13 +288,10 @@ public:
   std::shared_ptr<dealii::Mapping<dim> const>
   get_mapping() const;
 
-private:
-  /**
-   * Initializes dealii::DoFHandlers and dealii::AffineConstraints.
-   */
-  void
-  initialize_dof_handler_and_constraints();
+  dealii::AffineConstraints<Number> const &
+  get_constraints() const;
 
+private:
   /**
    * Performs setup of operators.
    */
