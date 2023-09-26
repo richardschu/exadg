@@ -149,7 +149,7 @@ private:
 
     // MG smoother
     this->param.multigrid_data.smoother_data.smoother       = MultigridSmoother::Jacobi;
-    this->param.multigrid_data.smoother_data.preconditioner = PreconditionerSmoother::BlockJacobi;
+    this->param.multigrid_data.smoother_data.preconditioner = PreconditionerSmoother::PointJacobi;
     this->param.multigrid_data.smoother_data.iterations     = 5;
     this->param.multigrid_data.smoother_data.relaxation_factor = 0.8;
 
@@ -160,7 +160,7 @@ private:
     this->param.solver_info_data.interval_time = (end_time - start_time) / 20;
 
     // NUMERICAL PARAMETERS
-    this->param.use_cell_based_face_loops               = true;
+    this->param.use_cell_based_face_loops               = false;
     this->param.store_analytical_velocity_in_dof_vector = false;
   }
 

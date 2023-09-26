@@ -589,7 +589,7 @@ TimeIntBDF<dim, Number>::do_adaptive_refinement(unsigned int const time_step_num
 {
   AdaptiveMeshingData data;
   data.do_amr       = true;
-  data.every_n_step = 100;
+  data.every_n_step = 20;
   //	  {
   //	    bool         do_amr                       = false;
   //	    bool         do_not_modify_boundary_cells = false;

@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/rotating_hill/",
+        "OutputDirectory": "/scratch/munch/",
         "OutputName": "test",
         "WriteOutput": "true"
     }

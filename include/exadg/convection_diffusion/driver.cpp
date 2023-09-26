@@ -115,11 +115,8 @@ Driver<dim, Number>::setup()
     };
 
     helpers_amr->setup = [&]() {
-      std::cout << "##+ 1 \n";
       pde_operator->initialize_dof_handler_and_constraints();
       pde_operator->setup();
-
-      std::cout << "##+ 2 \n";
 
       postprocessor->setup(*pde_operator);
 

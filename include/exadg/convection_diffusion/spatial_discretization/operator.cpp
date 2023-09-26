@@ -308,19 +308,13 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::setup()
 {
-  std::cout << "##+ Operator::setup() -> 1 \n";
-
   // initialize MatrixFree and MatrixFreeData
   std::shared_ptr<dealii::MatrixFree<dim, Number>> mf =
     std::make_shared<dealii::MatrixFree<dim, Number>>();
   std::shared_ptr<MatrixFreeData<dim, Number>> mf_data =
     std::make_shared<MatrixFreeData<dim, Number>>();
 
-  std::cout << "##+ Operator::setup() -> 2 \n";
-
   fill_matrix_free_data(*mf_data);
-
-  std::cout << "##+ Operator::setup() -> 3 \n";
 
   if(param.use_cell_based_face_loops)
     Categorization::do_cell_based_loops(*grid->triangulation, mf_data->data);
@@ -332,13 +326,8 @@ Operator<dim, Number>::setup()
              mf_data->get_quadrature_vector(),
              mf_data->data);
 
-  std::cout << "##+ Operator::setup() -> 4 \n";
-
   if(param.ale_formulation)
     matrix_free_own_storage = mf;
-
-
-  std::cout << "##+ Operator::setup() -> 5 \n";
 
   // Subsequently, call the other setup function with MatrixFree/MatrixFreeData objects as
   // arguments.
