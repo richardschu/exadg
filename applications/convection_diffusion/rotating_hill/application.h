@@ -134,8 +134,8 @@ private:
     this->param.solver      = Solver::GMRES;
     this->param.solver_data = SolverData(1e3, 1.e-20, 1.e-8, 100);
     this->param.preconditioner =
-      Preconditioner::Multigrid; // Multigrid; // None; //InverseMassMatrix; //PointJacobi;
-                                 // //BlockJacobi; //Multigrid;
+      Preconditioner::Multigrid; // None; //InverseMassMatrix; //PointJacobi;
+                                 // BlockJacobi; //Multigrid;
     this->param.update_preconditioner = true;
 
     // BlockJacobi (these parameters are also relevant if used as a smoother in multigrid)

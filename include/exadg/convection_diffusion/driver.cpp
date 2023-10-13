@@ -31,7 +31,6 @@
 // ExaDG
 #include <exadg/convection_diffusion/driver.h>
 #include <exadg/convection_diffusion/time_integration/create_time_integrator.h>
-#include <exadg/convection_diffusion/time_integration/time_int_bdf.h>
 #include <exadg/grid/get_dynamic_mapping.h>
 #include <exadg/operators/throughput_parameters.h>
 #include <exadg/utilities/print_solver_results.h>
@@ -107,16 +106,16 @@ Driver<dim, Number>::setup()
   // Setup lambda functions for adaptive mesh refinement
   if(application->get_parameters().enable_adaptivity)
   {
-	// Initialize AMR data structure
-	this->amr_data.do_amr = true;
-	this->amr_data.every_n_step = 20;
-	this->amr_data.upper_perc_to_refine = 0.1;
-	this->amr_data.lower_perc_to_coarsen = 0.3;
-	this->amr_data.refine_space_max = 0;
-	this->amr_data.refine_space_min = 10;
-	this->amr_data.do_not_modify_boundary_cells = false;
+    // Initialize AMR data structure
+    this->amr_data.do_amr                       = true;
+    this->amr_data.every_n_step                 = 20;
+    this->amr_data.upper_perc_to_refine         = 0.1;
+    this->amr_data.lower_perc_to_coarsen        = 0.3;
+    this->amr_data.refine_space_max             = 0;
+    this->amr_data.refine_space_min             = 10;
+    this->amr_data.do_not_modify_boundary_cells = false;
 
-	// Setup helper functions for AMR
+    // Setup helper functions for AMR
     helpers_amr = std::make_shared<HelpersAMR<dim, Number>>();
 
     helpers_amr->get_dof_handler = [&]() { return &pde_operator->get_dof_handler(); };
@@ -131,9 +130,8 @@ Driver<dim, Number>::setup()
 
       postprocessor->setup(*pde_operator);
 
-      typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
-      VectorType const *                                         velocity_ptr = nullptr;
-      VectorType                                                 velocity;
+      VectorType const * velocity_ptr = nullptr;
+      VectorType         velocity;
 
       if(application->get_parameters().problem_type == ProblemType::Unsteady)
       {
@@ -172,7 +170,6 @@ Driver<dim, Number>::setup()
       }
     };
 
-    typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
     helpers_amr->set_refine_flags = [&](dealii::Triangulation<dim> & tria,
                                         VectorType const &           solution) {
       Vector<float> estimated_error_per_cell(tria.n_active_cells());
@@ -197,7 +194,10 @@ Driver<dim, Number>::setup()
                                                  estimated_error_per_cell);
 
       dealii::parallel::distributed::GridRefinement::refine_and_coarsen_fixed_number(
-        tria, estimated_error_per_cell, this->amr_data.upper_perc_to_refine, this->amr_data.lower_perc_to_coarsen);
+        tria,
+        estimated_error_per_cell,
+        this->amr_data.upper_perc_to_refine,
+        this->amr_data.lower_perc_to_coarsen);
 
       return true;
     };
@@ -212,12 +212,8 @@ Driver<dim, Number>::setup()
     // initialize time integrator or driver for steady problems
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
     {
-      time_integrator = create_time_integrator<dim, Number>(pde_operator,
-                                                            helpers_ale,
-                                                            postprocessor,
-                                                            application->get_parameters(),
-                                                            mpi_comm,
-                                                            is_test);
+      time_integrator = create_time_integrator<dim, Number>(
+        pde_operator, helpers_ale, postprocessor, application->get_parameters(), mpi_comm, is_test);
 
       time_integrator->setup(application->get_parameters().restarted_simulation);
     }
@@ -234,9 +230,8 @@ Driver<dim, Number>::setup()
     }
 
     // setup solvers in case of BDF time integration or steady problems
-    typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
-    VectorType const *                                         velocity_ptr = nullptr;
-    VectorType                                                 velocity;
+    VectorType const * velocity_ptr = nullptr;
+    VectorType         velocity;
 
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
     {
@@ -309,42 +304,42 @@ Driver<dim, Number>::do_adaptive_refinement(unsigned int const time_step_number)
   // AMR is only implemented for implicit timestepping.
   if(application->get_parameters().temporal_discretization != TemporalDiscretization::BDF)
   {
-	  AssertThrow(false, dealii::ExcNotImplemented());
+    AssertThrow(false, dealii::ExcNotImplemented());
   }
   else
   {
-	  std::shared_ptr<TimeIntBDF<dim,Number>> bdf_time_integrator = std::dynamic_pointer_cast<TimeIntBDF<dim,Number>>(time_integrator);
+    std::shared_ptr<TimeIntBDF<dim, Number>> bdf_time_integrator =
+      std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
 
-	  const auto mark_cells_for_refinement = [&](Triangulation<dim> & tria) {
-		return helpers_amr->set_refine_flags(tria, bdf_time_integrator->get_solution());
-	  };
+    const auto mark_cells_for_refinement = [&](Triangulation<dim> & tria) {
+      return helpers_amr->set_refine_flags(tria, bdf_time_integrator->get_solution());
+    };
 
     const auto attach_vectors =
       [&](std::vector<std::pair<const DoFHandler<dim> *,
-                              std::function<void(std::vector<VectorType *> &)>>> & data) {
+                                std::function<void(std::vector<VectorType *> &)>>> & data) {
+        const auto attach_vectors = [&](std::vector<VectorType *> & vectors) {
+          bdf_time_integrator->attach_vectors(vectors);
+        };
 
-      const auto attach_vectors = [&](std::vector<VectorType *> & vectors) {
-    	bdf_time_integrator->attach_vectors(vectors);
+        data.emplace_back(&pde_operator->get_dof_handler(), attach_vectors);
       };
 
-      data.emplace_back(&pde_operator->get_dof_handler(), attach_vectors);
+
+    const auto post = [&]() {};
+
+    const auto setup_dof_system = [&]() {
+      helpers_amr->setup();
+      bdf_time_integrator->allocate_vectors();
     };
 
-
-	  const auto post = [&]() {};
-
-	  const auto setup_dof_system = [&]() {
-		helpers_amr->setup();
-		bdf_time_integrator->allocate_vectors();
-	  };
-
-  refine_grid<dim, VectorType>(mark_cells_for_refinement,
-                               attach_vectors,
-                               post,
-                               setup_dof_system,
-                               this->amr_data,
-                               *helpers_amr->get_grid(),
-                               time_step_number);
+    refine_grid<dim, VectorType>(mark_cells_for_refinement,
+                                 attach_vectors,
+                                 post,
+                                 setup_dof_system,
+                                 this->amr_data,
+                                 *helpers_amr->get_grid(),
+                                 time_step_number);
   }
 }
 
@@ -354,42 +349,42 @@ Driver<dim, Number>::solve()
 {
   if(application->get_parameters().problem_type == ProblemType::Unsteady)
   {
-	if(application->get_parameters().enable_adaptivity)
-	{
-	  do
-	  {
-		time_integrator->advance_one_timestep_pre_solve(true);
+    if(application->get_parameters().enable_adaptivity)
+    {
+      do
+      {
+        time_integrator->advance_one_timestep_pre_solve(true);
 
-		if(time_integrator->get_number_of_time_steps() > 0)
-		{
-		  do_adaptive_refinement(time_integrator->get_number_of_time_steps() + 1);
-		}
+        if(time_integrator->get_number_of_time_steps() > 0)
+        {
+          do_adaptive_refinement(time_integrator->get_number_of_time_steps() + 1);
+        }
 
-		time_integrator->advance_one_timestep_solve();
+        time_integrator->advance_one_timestep_solve();
 
-		time_integrator->advance_one_timestep_post_solve();
-	  } while(not(time_integrator->finished()));
-	}
-	else
-	{
-		if(application->get_parameters().ale_formulation == true)
-		{
-		  do
-		  {
-			time_integrator->advance_one_timestep_pre_solve(true);
+        time_integrator->advance_one_timestep_post_solve();
+      } while(not(time_integrator->finished()));
+    }
+    else
+    {
+      if(application->get_parameters().ale_formulation == true)
+      {
+        do
+        {
+          time_integrator->advance_one_timestep_pre_solve(true);
 
-			ale_update();
+          ale_update();
 
-			time_integrator->advance_one_timestep_solve();
+          time_integrator->advance_one_timestep_solve();
 
-			time_integrator->advance_one_timestep_post_solve();
-		  } while(not(time_integrator->finished()));
-		}
-		else
-		{
-		  time_integrator->timeloop();
-		}
-	}
+          time_integrator->advance_one_timestep_post_solve();
+        } while(not(time_integrator->finished()));
+      }
+      else
+      {
+        time_integrator->timeloop();
+      }
+    }
   }
   else if(application->get_parameters().problem_type == ProblemType::Steady)
   {

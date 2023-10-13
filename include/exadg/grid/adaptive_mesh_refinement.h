@@ -41,8 +41,8 @@ struct AdaptiveMeshRefinementData
   double       upper_perc_to_refine         = 0.0;
   double       lower_perc_to_coarsen        = 0.0;
   int          every_n_step                 = 1;
-  unsigned int refine_space_max    = 10;
-  int          refine_space_min    = 0;
+  unsigned int refine_space_max             = 10;
+  int          refine_space_min             = 0;
 };
 
 inline bool
@@ -57,24 +57,25 @@ refine_grid(const std::function<bool(Triangulation<dim> &)> & mark_cells_for_ref
             const std::function<void(
               std::vector<std::pair<const DoFHandler<dim> *,
                                     std::function<void(std::vector<VectorType *> &)>>> & data)> &
-                                          attach_vectors,
-            const std::function<void()> & post,
-            const std::function<void()> & setup_dof_system,
-            const AdaptiveMeshRefinementData &   amr_data,
-            Triangulation<dim> &          tria,
-            const int                     time_step_number)
+                                               attach_vectors,
+            const std::function<void()> &      post,
+            const std::function<void()> &      setup_dof_system,
+            const AdaptiveMeshRefinementData & amr_data,
+            Triangulation<dim> &               tria,
+            const int                          time_step_number)
 {
-  AssertThrow(amr_data.do_amr, dealii::ExcMessage("No adaptive grid refinement requested. Check control flow."));
+  AssertThrow(amr_data.do_amr,
+              dealii::ExcMessage("No adaptive grid refinement requested. Check control flow."));
 
   if(!perform_update_now(amr_data, time_step_number))
   {
-	// Current time step does not trigger adaptive refinement.
+    // Current time step does not trigger adaptive refinement.
     return;
   }
 
   if(mark_cells_for_refinement(tria) == false)
   {
-	// No flags were selected for refinement.
+    // No flags were selected for refinement.
     return;
   }
 
@@ -85,7 +86,8 @@ refine_grid(const std::function<bool(Triangulation<dim> &)> & mark_cells_for_ref
 
   const unsigned int n = data.size();
 
-  Assert(n > 0, dealii::ExcMessage("Vector data filled via attach_vectors() returned empty container."));
+  Assert(n > 0,
+         dealii::ExcMessage("Vector data filled via attach_vectors() returned empty container."));
 
   /*
    *  Limit the maximum and minimum refinement levels of cells of the grid.

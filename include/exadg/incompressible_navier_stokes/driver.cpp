@@ -150,12 +150,8 @@ Driver<dim, Number>::setup()
     // depends on quantities such as the time_step_size or gamma0!)
     if(application->get_parameters().solver_type == SolverType::Unsteady)
     {
-      time_integrator = create_time_integrator<dim, Number>(pde_operator,
-                                                            helpers_ale,
-                                                            postprocessor,
-                                                            application->get_parameters(),
-                                                            mpi_comm,
-                                                            is_test);
+      time_integrator = create_time_integrator<dim, Number>(
+        pde_operator, helpers_ale, postprocessor, application->get_parameters(), mpi_comm, is_test);
     }
     else if(application->get_parameters().solver_type == SolverType::Steady)
     {

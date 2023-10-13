@@ -68,7 +68,7 @@ Parameters::Parameters()
     grid(GridData()),
     mapping_degree(1),
     degree(1),
-	enable_adaptivity(false),
+    enable_adaptivity(false),
     numerical_flux_convective_operator(NumericalFluxConvectiveOperator::Undefined),
     IP_factor(1.0),
 
@@ -259,13 +259,13 @@ Parameters::check() const
 
   if(enable_adaptivity)
   {
-	AssertThrow(not ale_formulation,
-			dealii::ExcMessage("Combination of adaptive mesh refinement "
-			"and ALE formulation not implemented."));
+    AssertThrow(not ale_formulation,
+                dealii::ExcMessage("Combination of adaptive mesh refinement "
+                                   "and ALE formulation not implemented."));
 
-	AssertThrow(temporal_discretization == TemporalDiscretization::BDF,
-			dealii::ExcMessage("Combination of adaptive mesh refinement "
-				"and explicit time integration not implemented."));
+    AssertThrow(temporal_discretization == TemporalDiscretization::BDF,
+                dealii::ExcMessage("Combination of adaptive mesh refinement "
+                                   "and explicit time integration not implemented."));
   }
 
   AssertThrow(degree > 0, dealii::ExcMessage("Polynomial degree must be larger than zero."));

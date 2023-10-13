@@ -158,12 +158,8 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
     pde_operator->update_after_grid_motion(true /* update_matrix_free */);
   };
 
-  time_integrator = IncNS::create_time_integrator<dim, Number>(pde_operator,
-                                                               helpers_ale,
-                                                               postprocessor,
-                                                               application->get_parameters(),
-                                                               mpi_comm,
-                                                               is_test);
+  time_integrator = IncNS::create_time_integrator<dim, Number>(
+    pde_operator, helpers_ale, postprocessor, application->get_parameters(), mpi_comm, is_test);
 
   time_integrator->setup(application->get_parameters().restarted_simulation);
 

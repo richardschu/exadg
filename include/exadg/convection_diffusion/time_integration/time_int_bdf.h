@@ -67,7 +67,7 @@ public:
   void
   extrapolate_solution(VectorType & vector);
 
-  VectorType&
+  VectorType &
   get_solution();
 
   void

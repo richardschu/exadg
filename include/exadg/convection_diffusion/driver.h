@@ -119,7 +119,7 @@ private:
 
   // AMR helper functions required by adaptive mesh refinement
   std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr;
-  AdaptiveMeshRefinementData amr_data;
+  AdaptiveMeshRefinementData               amr_data;
 
   std::shared_ptr<Operator<dim, Number>> pde_operator;
 

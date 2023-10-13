@@ -105,30 +105,30 @@ template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::attach_vectors(std::vector<VectorType *> & vectors)
 {
-	for(unsigned int i = 0; i < this->order; i++)
-	{
-	  vectors.emplace_back(&solution[i]);
-	}
+  for(unsigned int i = 0; i < this->order; i++)
+  {
+    vectors.emplace_back(&solution[i]);
+  }
 
-	if(param.convective_problem() and
-	   param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
-	{
-	  if(this->param.ale_formulation == false)
-	  {
-		for(unsigned int i = 0; i < this->order; i++)
-		{
-		  vectors.emplace_back(&vec_convective_term[i]);
-		}
-	  }
-	}
+  if(param.convective_problem() and
+     param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  {
+    if(this->param.ale_formulation == false)
+    {
+      for(unsigned int i = 0; i < this->order; i++)
+      {
+        vectors.emplace_back(&vec_convective_term[i]);
+      }
+    }
+  }
 
-	if(this->param.ale_formulation)
-	{
-	  for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
-	  {
-		vectors.emplace_back(&vec_grid_coordinates[i]);
-	  }
-	}
+  if(this->param.ale_formulation)
+  {
+    for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
+    {
+      vectors.emplace_back(&vec_grid_coordinates[i]);
+    }
+  }
 }
 
 template<int dim, typename Number>
@@ -622,7 +622,7 @@ TimeIntBDF<dim, Number>::set_velocities_and_times(
 }
 
 template<int dim, typename Number>
-dealii::LinearAlgebra::distributed::Vector<Number>&
+dealii::LinearAlgebra::distributed::Vector<Number> &
 TimeIntBDF<dim, Number>::get_solution()
 {
   return (this->solution[0]);
