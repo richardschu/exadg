@@ -26,7 +26,6 @@
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
-#include <exadg/time_integration/lambda_functions_amr.h>
 
 namespace ExaDG
 {

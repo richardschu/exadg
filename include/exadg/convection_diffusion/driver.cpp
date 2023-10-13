@@ -107,22 +107,15 @@ Driver<dim, Number>::setup()
   if(application->get_parameters().enable_adaptivity)
   {
     // Initialize AMR data structure
-    this->amr_data.do_amr                       = true;
     this->amr_data.every_n_step                 = 20;
-    this->amr_data.upper_perc_to_refine         = 0.1;
+    this->amr_data.upper_perc_to_refine         = 0.05;
     this->amr_data.lower_perc_to_coarsen        = 0.3;
     this->amr_data.refine_space_max             = 0;
-    this->amr_data.refine_space_min             = 10;
+    this->amr_data.refine_space_min             = 4;
     this->amr_data.do_not_modify_boundary_cells = false;
 
     // Setup helper functions for AMR
     helpers_amr = std::make_shared<HelpersAMR<dim, Number>>();
-
-    helpers_amr->get_dof_handler = [&]() { return &pde_operator->get_dof_handler(); };
-
-    helpers_amr->get_grid = [&]() {
-      return application->get_grid_non_const()->triangulation.get();
-    };
 
     helpers_amr->setup = [&]() {
       pde_operator->initialize_dof_handler_and_constraints();
@@ -184,7 +177,7 @@ Driver<dim, Number>::setup()
       constraints.distribute(locally_relevant_solution);
       locally_relevant_solution.update_ghost_values();
 
-      dealii::QGauss<dim - 1> face_quadrature(5);
+      dealii::QGauss<dim - 1> face_quadrature(application->get_parameters().degree+1);
 
       dealii::KellyErrorEstimator<dim>::estimate(*pde_operator->get_mapping(),
                                                  pde_operator->get_dof_handler(),
@@ -295,12 +288,6 @@ template<int dim, typename Number>
 void
 Driver<dim, Number>::do_adaptive_refinement(unsigned int const time_step_number)
 {
-  // Skip, if AMR is not requested.
-  if(not this->amr_data.do_amr)
-  {
-    return;
-  }
-
   // AMR is only implemented for implicit timestepping.
   if(application->get_parameters().temporal_discretization != TemporalDiscretization::BDF)
   {
@@ -338,7 +325,7 @@ Driver<dim, Number>::do_adaptive_refinement(unsigned int const time_step_number)
                                  post,
                                  setup_dof_system,
                                  this->amr_data,
-                                 *helpers_amr->get_grid(),
+                                 *application->get_grid_non_const()->triangulation,
                                  time_step_number);
   }
 }

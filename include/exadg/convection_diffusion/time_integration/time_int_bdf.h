@@ -26,9 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
-#include <exadg/grid/adaptive_mesh_refinement.h>
 #include <exadg/time_integration/lambda_functions_ale.h>
-#include <exadg/time_integration/lambda_functions_amr.h>
 #include <exadg/time_integration/time_int_multistep_base.h>
 
 namespace ExaDG

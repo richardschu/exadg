@@ -29,6 +29,7 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/manifold_lib.h>
+#include <exadg/grid/adaptive_mesh_refinement.h>
 
 // ExaDG
 #include <exadg/convection_diffusion/postprocessor/postprocessor_base.h>
@@ -43,9 +44,9 @@
 #include <exadg/convection_diffusion/user_interface/field_functions.h>
 #include <exadg/convection_diffusion/user_interface/parameters.h>
 #include <exadg/functions_and_boundary_conditions/verify_boundary_conditions.h>
+#include <exadg/grid/lambda_functions_amr.h>
 #include <exadg/grid/mapping_deformation_function.h>
 #include <exadg/matrix_free/matrix_free_data.h>
-#include <exadg/time_integration/lambda_functions_amr.h>
 #include <exadg/utilities/print_functions.h>
 #include <exadg/utilities/print_general_infos.h>
 
@@ -117,7 +118,7 @@ private:
   // ALE helper functions required by time integrator
   std::shared_ptr<HelpersALE<Number>> helpers_ale;
 
-  // AMR helper functions required by adaptive mesh refinement
+  // Helpers and data for adaptive mesh refinement
   std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr;
   AdaptiveMeshRefinementData               amr_data;
 

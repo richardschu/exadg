@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef INCLUDE_EXADG_TIME_INTEGRATION_LAMBDA_FUNCTIONS_AMR_H_
-#define INCLUDE_EXADG_TIME_INTEGRATION_LAMBDA_FUNCTIONS_AMR_H_
+#ifndef INCLUDE_EXADG_GRID_LAMBDA_FUNCTIONS_AMR_H_
+#define INCLUDE_EXADG_GRID_LAMBDA_FUNCTIONS_AMR_H_
 
 // deal.II
 #include <deal.II/base/exceptions.h>
@@ -28,7 +28,7 @@
 namespace ExaDG
 {
 /**
- * TODO
+ * Helper functions for adaptive mesh refinement to be overwritten in respective driver.
  */
 template<int dim, typename Number>
 class HelpersAMR
@@ -37,33 +37,15 @@ public:
   using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
 
   /**
-   * TODO
-   */
-  std::function<dealii::DoFHandler<dim> const *()> get_dof_handler = []() {
-    AssertThrow(false,
-                dealii::ExcMessage("The function get_dof_handler() has not been implemented."));
-
-    return nullptr;
-  };
-
-  /**
-   * TODO
-   */
-  std::function<dealii::Triangulation<dim> *()> get_grid = []() {
-    AssertThrow(false, dealii::ExcMessage("The function get_grid() has not been implemented."));
-
-    return nullptr;
-  };
-
-  /**
-   * TODO
+   * Setup relevant parts of driver setup.
    */
   std::function<void()> setup = []() {
     AssertThrow(false, dealii::ExcMessage("The function setup() has not been implemented."));
   };
 
   /**
-   * TODO
+   * Flag cells of the triangulation for refinement based on a solution vector
+   * and return flag indicating any refinement/coarsening done.
    */
   std::function<bool(dealii::Triangulation<dim> &, VectorType const &)> set_refine_flags =
     [](dealii::Triangulation<dim> &, VectorType const &) {
