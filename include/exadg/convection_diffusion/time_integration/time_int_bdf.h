@@ -66,7 +66,7 @@ public:
   extrapolate_solution(VectorType & vector);
 
   VectorType &
-  get_solution();
+  get_solution_np();
 
   void
   ale_update();
@@ -75,7 +75,7 @@ public:
   print_iterations() const;
 
   void
-  attach_vectors(std::vector<VectorType *> & vectors);
+  get_vectors(std::vector<VectorType *> & vectors);
 
   void
   allocate_vectors() final;

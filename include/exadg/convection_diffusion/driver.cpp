@@ -299,19 +299,18 @@ Driver<dim, Number>::do_adaptive_refinement(unsigned int const time_step_number)
       std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
 
     const auto mark_cells_for_refinement = [&](Triangulation<dim> & tria) {
-      return helpers_amr->set_refine_flags(tria, bdf_time_integrator->get_solution());
+      return helpers_amr->set_refine_flags(tria, bdf_time_integrator->get_solution_np());
     };
 
     const auto attach_vectors =
       [&](std::vector<std::pair<const DoFHandler<dim> *,
                                 std::function<void(std::vector<VectorType *> &)>>> & data) {
         const auto attach_vectors = [&](std::vector<VectorType *> & vectors) {
-          bdf_time_integrator->attach_vectors(vectors);
+          bdf_time_integrator->get_vectors(vectors);
         };
 
         data.emplace_back(&pde_operator->get_dof_handler(), attach_vectors);
       };
-
 
     const auto post = [&]() {};
 

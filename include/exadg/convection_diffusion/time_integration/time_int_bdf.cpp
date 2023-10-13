@@ -103,7 +103,7 @@ TimeIntBDF<dim, Number>::setup_derived()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::attach_vectors(std::vector<VectorType *> & vectors)
+TimeIntBDF<dim, Number>::get_vectors(std::vector<VectorType *> & vectors)
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
@@ -623,7 +623,7 @@ TimeIntBDF<dim, Number>::set_velocities_and_times(
 
 template<int dim, typename Number>
 dealii::LinearAlgebra::distributed::Vector<Number> &
-TimeIntBDF<dim, Number>::get_solution()
+TimeIntBDF<dim, Number>::get_solution_np()
 {
   return (this->solution[0]);
 }
