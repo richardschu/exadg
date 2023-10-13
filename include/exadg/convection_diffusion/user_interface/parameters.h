@@ -233,6 +233,9 @@ public:
   // polynomial degree of shape functions
   unsigned int degree;
 
+  // enable adaptive mesh refinement
+  bool enable_adaptivity;
+
   // description: see enum declaration
   NumericalFluxConvectiveOperator numerical_flux_convective_operator;
 

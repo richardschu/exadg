@@ -158,11 +158,8 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
     pde_operator->update_after_grid_motion(true /* update_matrix_free */);
   };
 
-  std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr =
-    std::make_shared<HelpersAMR<dim, Number>>();
   time_integrator = IncNS::create_time_integrator<dim, Number>(pde_operator,
                                                                helpers_ale,
-                                                               helpers_amr,
                                                                postprocessor,
                                                                application->get_parameters(),
                                                                mpi_comm,

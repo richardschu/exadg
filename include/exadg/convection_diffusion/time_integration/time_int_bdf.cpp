@@ -35,7 +35,6 @@ template<int dim, typename Number>
 TimeIntBDF<dim, Number>::TimeIntBDF(
   std::shared_ptr<Operator<dim, Number>>          operator_in,
   std::shared_ptr<HelpersALE<Number> const>       helpers_ale_in,
-  std::shared_ptr<HelpersAMR<dim, Number> const>  helpers_amr_in,
   std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
   Parameters const &                              param_in,
   MPI_Comm const &                                mpi_comm_in,
@@ -58,7 +57,6 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     iterations({0, 0}),
     postprocessor(postprocessor_in),
     helpers_ale(helpers_ale_in),
-    helpers_amr(helpers_amr_in),
     vec_grid_coordinates(param_in.order_time_integrator)
 {
 }
@@ -101,6 +99,36 @@ TimeIntBDF<dim, Number>::setup_derived()
       initialize_vec_convective_term();
     }
   }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::attach_vectors(std::vector<VectorType *> & vectors)
+{
+	for(unsigned int i = 0; i < this->order; i++)
+	{
+	  vectors.emplace_back(&solution[i]);
+	}
+
+	if(param.convective_problem() and
+	   param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+	{
+	  if(this->param.ale_formulation == false)
+	  {
+		for(unsigned int i = 0; i < this->order; i++)
+		{
+		  vectors.emplace_back(&vec_convective_term[i]);
+		}
+	  }
+	}
+
+	if(this->param.ale_formulation)
+	{
+	  for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
+	  {
+		vectors.emplace_back(&vec_grid_coordinates[i]);
+	  }
+	}
 }
 
 template<int dim, typename Number>
@@ -585,89 +613,19 @@ TimeIntBDF<dim, Number>::print_iterations() const
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::do_adaptive_refinement(unsigned int const time_step_number)
-{
-  AdaptiveMeshingData data;
-  data.do_amr       = true;
-  data.every_n_step = 20;
-  //	  {
-  //	    bool         do_amr                       = false;
-  //	    bool         do_not_modify_boundary_cells = false;
-  //	    double       upper_perc_to_refine         = 0.0;
-  //	    double       lower_perc_to_coarsen        = 0.0;
-  //	    int          n_initial_refinement_cycles  = 0;
-  //	    int          every_n_step                 = 1;
-  //	    unsigned int max_grid_refinement_level    = 12;
-  //	    int          min_grid_refinement_level    = 1;
-  //	  };
-
-  if(!data.do_amr)
-    return;
-
-  const auto mark_cells_for_refinement = [&](Triangulation<dim> & tria) {
-    return helpers_amr->set_refine_flags(tria, solution[0]);
-  };
-
-  const auto attach_vectors =
-    [&](std::vector<std::pair<const DoFHandler<dim> *,
-                              std::function<void(std::vector<VectorType *> &)>>> & data) {
-      const auto attach_vectors = [&](std::vector<VectorType *> & vectors) {
-        for(unsigned int i = 0; i < this->order; i++)
-        {
-          vectors.emplace_back(&solution[i]);
-        }
-
-        if(param.convective_problem() and
-           param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
-        {
-          if(this->param.ale_formulation == false)
-          {
-            for(unsigned int i = 0; i < this->order; i++)
-            {
-              vectors.emplace_back(&vec_convective_term[i]);
-            }
-          }
-        }
-
-        if(this->param.ale_formulation)
-        {
-          for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
-          {
-            vectors.emplace_back(&vec_grid_coordinates[i]);
-          }
-        }
-      };
-
-
-      data.emplace_back(helpers_amr->get_dof_handler(), attach_vectors);
-    };
-
-
-  const auto post = [&]() {};
-
-  const auto setup_dof_system = [&]() {
-    helpers_amr->setup();
-    allocate_vectors();
-  };
-
-  refine_grid<dim, VectorType>(mark_cells_for_refinement,
-                               attach_vectors,
-                               post,
-                               setup_dof_system,
-                               data,
-                               *helpers_amr->get_grid(),
-                               time_step_number);
-}
-
-
-template<int dim, typename Number>
-void
 TimeIntBDF<dim, Number>::set_velocities_and_times(
   std::vector<VectorType const *> const & velocities_in,
   std::vector<double> const &             times_in)
 {
   velocities = velocities_in;
   times      = times_in;
+}
+
+template<int dim, typename Number>
+dealii::LinearAlgebra::distributed::Vector<Number>&
+TimeIntBDF<dim, Number>::get_solution()
+{
+  return (this->solution[0]);
 }
 
 template<int dim, typename Number>

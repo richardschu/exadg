@@ -55,7 +55,6 @@ public:
 
   TimeIntBDF(std::shared_ptr<Operator<dim, Number>>          operator_in,
              std::shared_ptr<HelpersALE<Number> const>       helpers_ale_in,
-             std::shared_ptr<HelpersAMR<dim, Number> const>  helpers_amr_in,
              std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
              Parameters const &                              param_in,
              MPI_Comm const &                                mpi_comm_in,
@@ -68,6 +67,9 @@ public:
   void
   extrapolate_solution(VectorType & vector);
 
+  VectorType&
+  get_solution();
+
   void
   ale_update();
 
@@ -75,12 +77,12 @@ public:
   print_iterations() const;
 
   void
-  do_adaptive_refinement(unsigned int const time_step_number) final;
+  attach_vectors(std::vector<VectorType *> & vectors);
 
-private:
   void
   allocate_vectors() final;
 
+private:
   void
   initialize_current_solution() final;
 
@@ -145,9 +147,6 @@ private:
 
   // This object allows to access utility functions needed for ALE
   std::shared_ptr<HelpersALE<Number> const> helpers_ale;
-
-  // This object allows to access utility functions needed for ALE
-  std::shared_ptr<HelpersAMR<dim, Number> const> helpers_amr;
 
   // ALE
   VectorType              grid_velocity;

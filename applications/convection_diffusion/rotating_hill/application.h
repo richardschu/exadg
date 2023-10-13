@@ -121,6 +121,7 @@ private:
     // SPATIAL DISCRETIZATION
     this->param.grid.triangulation_type = TriangulationType::Distributed;
     this->param.mapping_degree          = 1;
+    this->param.enable_adaptivity       = true;
 
     // convective term
     this->param.numerical_flux_convective_operator =

@@ -212,12 +212,9 @@ Driver<dim, Number>::setup()
   // depends on quantities such as the time_step_size or gamma0!)
   if(application->fluid->get_parameters().solver_type == IncNS::SolverType::Unsteady)
   {
-    std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr =
-      std::make_shared<HelpersAMR<dim, Number>>();
     fluid_time_integrator =
       IncNS::create_time_integrator<dim, Number>(fluid_operator,
                                                  helpers_ale,
-                                                 helpers_amr,
                                                  fluid_postprocessor,
                                                  application->fluid->get_parameters(),
                                                  mpi_comm,
@@ -281,12 +278,9 @@ Driver<dim, Number>::setup()
   for(unsigned int i = 0; i < n_scalars; ++i)
   {
     // initialize time integrator
-    std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr =
-      std::make_shared<HelpersAMR<dim, Number>>();
     scalar_time_integrator[i] =
       ConvDiff::create_time_integrator<dim, Number>(scalar_operator[i],
                                                     helpers_ale,
-                                                    helpers_amr,
                                                     scalar_postprocessor[i],
                                                     application->scalars[i]->get_parameters(),
                                                     mpi_comm,

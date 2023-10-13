@@ -34,22 +34,21 @@ namespace ExaDG
 {
 using namespace dealii;
 
-struct AdaptiveMeshingData
+struct AdaptiveMeshRefinementData
 {
   bool         do_amr                       = false;
   bool         do_not_modify_boundary_cells = false;
   double       upper_perc_to_refine         = 0.0;
   double       lower_perc_to_coarsen        = 0.0;
-  int          n_initial_refinement_cycles  = 0;
   int          every_n_step                 = 1;
-  unsigned int max_grid_refinement_level    = 12;
-  int          min_grid_refinement_level    = 1;
+  unsigned int refine_space_max    = 10;
+  int          refine_space_min    = 0;
 };
 
 inline bool
-now(const AdaptiveMeshingData & amr, const int n_time_step)
+perform_update_now(const AdaptiveMeshRefinementData & amr_data, const int time_step_number)
 {
-  return ((n_time_step == 0) or !(n_time_step % amr.every_n_step));
+  return ((time_step_number == 0) or !(time_step_number % amr_data.every_n_step));
 }
 
 template<int dim, typename VectorType>
@@ -61,18 +60,23 @@ refine_grid(const std::function<bool(Triangulation<dim> &)> & mark_cells_for_ref
                                           attach_vectors,
             const std::function<void()> & post,
             const std::function<void()> & setup_dof_system,
-            const AdaptiveMeshingData &   amr,
+            const AdaptiveMeshRefinementData &   amr_data,
             Triangulation<dim> &          tria,
-            const int                     n_time_step)
+            const int                     time_step_number)
 {
-  if(!amr.do_amr)
-    return;
+  AssertThrow(amr_data.do_amr, dealii::ExcMessage("No adaptive grid refinement requested. Check control flow."));
 
-  if(!now(amr, n_time_step))
+  if(!perform_update_now(amr_data, time_step_number))
+  {
+	// Current time step does not trigger adaptive refinement.
     return;
+  }
 
   if(mark_cells_for_refinement(tria) == false)
+  {
+	// No flags were selected for refinement.
     return;
+  }
 
   std::vector<std::pair<const DoFHandler<dim> *, std::function<void(std::vector<VectorType *> &)>>>
     data;
@@ -81,34 +85,47 @@ refine_grid(const std::function<bool(Triangulation<dim> &)> & mark_cells_for_ref
 
   const unsigned int n = data.size();
 
-  Assert(n > 0, ExcNotImplemented());
+  Assert(n > 0, dealii::ExcMessage("Vector data filled via attach_vectors() returned empty container."));
 
   /*
    *  Limit the maximum and minimum refinement levels of cells of the grid.
    */
-  if(tria.n_levels() > amr.max_grid_refinement_level)
-    for(auto & cell : tria.active_cell_iterators_on_level(amr.max_grid_refinement_level))
+  if(tria.n_levels() > amr_data.refine_space_max)
+  {
+    for(auto & cell : tria.active_cell_iterators_on_level(amr_data.refine_space_max))
+    {
       cell->clear_refine_flag();
+    }
+  }
 
   for(auto & cell : tria.active_cell_iterators())
   {
     if(cell->is_locally_owned())
     {
-      if(cell->level() <= amr.min_grid_refinement_level)
+      if(cell->level() <= amr_data.refine_space_min)
+      {
         cell->clear_coarsen_flag();
+      }
+
       /*
-       *  do not coarsen/refine cells along boundary
+       *  do not coarsen/refine cells along boundary if requested
        */
-      if(amr.do_not_modify_boundary_cells)
+      if(amr_data.do_not_modify_boundary_cells)
       {
         for(auto & face : cell->face_iterators())
+        {
           if(face->at_boundary())
           {
             if(cell->refine_flag_set())
+            {
               cell->clear_refine_flag();
+            }
             else
+            {
               cell->clear_coarsen_flag();
+            }
           }
+        }
       }
     }
   }
@@ -230,7 +247,9 @@ refine_grid(const std::function<bool(Triangulation<dim> &)> & mark_cells_for_ref
       solution_transfer[j]->interpolate(old_grid_solutions_full[j], new_grid_solutions_full[j]);
 
       for(unsigned int i = 0; i < new_grid_solutions_full[j].size(); ++i)
+      {
         new_grid_solutions[j][i]->copy_locally_owned_data_from(new_grid_solutions_full[j][i]);
+      }
     }
     post();
   }

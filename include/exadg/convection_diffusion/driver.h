@@ -65,6 +65,8 @@ template<int dim, typename Number = double>
 class Driver
 {
 public:
+  using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
+
   Driver(MPI_Comm const &                              mpi_comm,
          std::shared_ptr<ApplicationBase<dim, Number>> application,
          bool const                                    is_test,
@@ -91,6 +93,9 @@ private:
   void
   ale_update() const;
 
+  void
+  do_adaptive_refinement(unsigned int const time_step_number);
+
   // MPI communicator
   MPI_Comm const mpi_comm;
 
@@ -114,6 +119,7 @@ private:
 
   // AMR helper functions required by adaptive mesh refinement
   std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr;
+  AdaptiveMeshRefinementData amr_data;
 
   std::shared_ptr<Operator<dim, Number>> pde_operator;
 

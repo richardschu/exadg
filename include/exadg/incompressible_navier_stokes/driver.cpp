@@ -150,11 +150,8 @@ Driver<dim, Number>::setup()
     // depends on quantities such as the time_step_size or gamma0!)
     if(application->get_parameters().solver_type == SolverType::Unsteady)
     {
-      std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr =
-        std::make_shared<HelpersAMR<dim, Number>>();
       time_integrator = create_time_integrator<dim, Number>(pde_operator,
                                                             helpers_ale,
-                                                            helpers_amr,
                                                             postprocessor,
                                                             application->get_parameters(),
                                                             mpi_comm,

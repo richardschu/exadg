@@ -54,7 +54,6 @@ public:
   {
     // ALE is not used for this solver
     std::shared_ptr<HelpersALE<Number>>      helpers_ale_dummy;
-    std::shared_ptr<HelpersAMR<dim, Number>> helpers_amr_dummy;
 
     // initialize pde_operator
     pde_operator = create_operator<dim, Number>(domain->get_grid(),
@@ -89,7 +88,6 @@ public:
     // Setup time integrator
     time_integrator = create_time_integrator<dim, Number>(pde_operator,
                                                           helpers_ale_dummy,
-                                                          helpers_amr_dummy,
                                                           postprocessor,
                                                           domain->get_parameters(),
                                                           mpi_comm,
