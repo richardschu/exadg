@@ -37,7 +37,7 @@ public:
   using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
 
   /**
-   * Setup relevant parts of driver setup.
+   * Setup relevant parts similar to driver setup function.
    */
   std::function<void()> setup = []() {
     AssertThrow(false, dealii::ExcMessage("The function setup() has not been implemented."));
