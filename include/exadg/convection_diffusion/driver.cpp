@@ -246,7 +246,8 @@ Driver<dim, Number>::setup_after_coarsening_and_refinement()
   }
   else
   {
-    AssertThrow(false, dealii::ExcMessage("Not implemented"));
+    AssertThrow(
+      false, dealii::ExcMessage("Adaptive mesh refinement available only for unsteady problem."));
   }
 }
 
@@ -257,35 +258,35 @@ Driver<dim, Number>::do_adaptive_refinement(unsigned int const time_step_number)
 {
   dealii::Triangulation<dim> & tria = *application->get_grid_non_const()->triangulation;
 
-  // AMR is only implemented for implicit timestepping.
-  if(application->get_parameters().temporal_discretization != TemporalDiscretization::BDF)
+  if(trigger_coarsening_and_refinement_now(application->get_parameters().amr_data,
+                                           time_step_number))
   {
-    AssertThrow(false, dealii::ExcNotImplemented());
-  }
-  else
-  {
-    std::shared_ptr<TimeIntBDF<dim, Number>> bdf_time_integrator =
-      std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
-
-    if(trigger_coarsening_and_refinement_now(application->get_parameters().amr_data,
-                                             time_step_number))
+    if(application->get_parameters().temporal_discretization == TemporalDiscretization::ExplRK)
     {
+      std::shared_ptr<TimeIntExplRK<Number>> rk_time_integrator =
+        std::dynamic_pointer_cast<TimeIntExplRK<Number>>(time_integrator);
+      mark_cells_coarsening_and_refinement(tria, rk_time_integrator->get_solution_np());
+    }
+    else
+    {
+      std::shared_ptr<TimeIntBDF<dim, Number>> bdf_time_integrator =
+        std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
       mark_cells_coarsening_and_refinement(tria, bdf_time_integrator->get_solution_np());
+    }
 
-      limit_coarsening_and_refinement(tria, application->get_parameters().amr_data);
+    limit_coarsening_and_refinement(tria, application->get_parameters().amr_data);
 
-      if(any_cells_flagged_for_coarsening_or_refinement(tria))
-      {
-        tria.prepare_coarsening_and_refinement();
+    if(any_cells_flagged_for_coarsening_or_refinement(tria))
+    {
+      tria.prepare_coarsening_and_refinement();
 
-        time_integrator->prepare_coarsening_and_refinement();
+      time_integrator->prepare_coarsening_and_refinement();
 
-        tria.execute_coarsening_and_refinement();
+      tria.execute_coarsening_and_refinement();
 
-        setup_after_coarsening_and_refinement();
+      setup_after_coarsening_and_refinement();
 
-        time_integrator->interpolate_after_coarsening_and_refinement();
-      }
+      time_integrator->interpolate_after_coarsening_and_refinement();
     }
   }
 }

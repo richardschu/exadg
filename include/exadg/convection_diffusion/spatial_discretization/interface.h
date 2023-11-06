@@ -106,6 +106,15 @@ public:
   // needed for ALE-type problems
   virtual void
   fill_grid_coordinates_vector(VectorType & vector) const = 0;
+
+  /*
+   * Prepare and interpolation in adaptive mesh refinement.
+   */
+  virtual void
+  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors) = 0;
+
+  virtual void
+  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors) = 0;
 };
 } // namespace Interface
 

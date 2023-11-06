@@ -93,6 +93,10 @@ public:
                         enable_adaptivity,
                         "Enable adaptive mesh refinement.",
                         dealii::Patterns::Bool());
+      prm.add_parameter("UseExplicitTimeIntegration",
+                        use_explicit_time_integration,
+                        "Use explicit or implicit time integration scheme.",
+                        dealii::Patterns::Bool());
     }
     prm.leave_subsection();
   }
@@ -113,14 +117,19 @@ private:
     this->param.diffusivity = 0.0;
 
     // TEMPORAL DISCRETIZATION
-    this->param.temporal_discretization      = TemporalDiscretization::BDF;
-    this->param.order_time_integrator        = 2; // instabilities for BDF 3 and 4
-    this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;
-    this->param.start_with_low_order         = false;
+    if(use_explicit_time_integration)
+    {
+      this->param.temporal_discretization = TemporalDiscretization::ExplRK;
+      this->param.time_integrator_rk      = TimeIntegratorRK::ExplRK3Stage7Reg2;
+    }
+    else
+    {
+      this->param.temporal_discretization      = TemporalDiscretization::BDF;
+      this->param.order_time_integrator        = 2; // instabilities for BDF 3 and 4
+      this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;
+    }
 
-    //    this->param.temporal_discretization      = TemporalDiscretization::ExplRK;
-    //    this->param.time_integrator_rk           = TimeIntegratorRK::ExplRK3Stage7Reg2;
-
+    this->param.start_with_low_order          = false;
     this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping        = false;
     this->param.time_step_size                = 1.e-2;
@@ -180,7 +189,7 @@ private:
     this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::GMRES;
 
     // output of solver information
-    this->param.solver_info_data.interval_time = (end_time - start_time) / 20;
+    this->param.solver_info_data.interval_time = (end_time - start_time) / 2000000;
 
     // NUMERICAL PARAMETERS
     this->param.use_cell_based_face_loops               = false;
@@ -260,7 +269,8 @@ private:
   double const left  = -1.0;
   double const right = +1.0;
 
-  bool enable_adaptivity = false;
+  bool enable_adaptivity             = false;
+  bool use_explicit_time_integration = false;
 };
 
 } // namespace ConvDiff

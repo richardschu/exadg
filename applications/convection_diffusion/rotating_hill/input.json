@@ -15,11 +15,12 @@
         "RefineTimeMax": "0"
     },
     "Application": {
-        "EnableAdaptivity": "true"
+        "EnableAdaptivity": "true",
+        "UseExplicitTimeIntegration": "true"
     },
     "Output": {
         "OutputDirectory": "output/rotating_hill/",
         "OutputName": "test",
-        "WriteOutput": "false"
+        "WriteOutput": "true"
     }
 }

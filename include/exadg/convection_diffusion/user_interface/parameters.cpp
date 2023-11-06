@@ -263,10 +263,6 @@ Parameters::check() const
                 dealii::ExcMessage("Combination of adaptive mesh refinement "
                                    "and ALE formulation not implemented."));
 
-    AssertThrow(temporal_discretization == TemporalDiscretization::BDF,
-                dealii::ExcMessage("Combination of adaptive mesh refinement "
-                                   "and explicit time integration not implemented."));
-
     AssertThrow(preconditioner != Preconditioner::BlockJacobi,
                 dealii::ExcMessage("Preconditioner::BlockJacobi not supported "
                                    "for adaptively refined meshes."));
