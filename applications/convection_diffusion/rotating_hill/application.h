@@ -189,7 +189,7 @@ private:
     this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::GMRES;
 
     // output of solver information
-    this->param.solver_info_data.interval_time = (end_time - start_time) / 2000000;
+    this->param.solver_info_data.interval_time = (end_time - start_time) / 20;
 
     // NUMERICAL PARAMETERS
     this->param.use_cell_based_face_loops               = false;
