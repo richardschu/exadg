@@ -181,7 +181,8 @@ Driver<dim, Number>::setup_after_coarsening_and_refinement()
 
   if(application->get_parameters().ale_formulation)
   {
-
+    std::cout << "I do not think we need to do anything here. Maybe perform Driver<dim, Number>::ale_update(). Move to other branch.";
+    ##+ the SolutionTransfer should be generalized to multiple DofHandlers.
   }
 
   pde_operator->setup_after_coarsening_and_refinement();
