@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/grid/deformed_cube_manifold.h>
+#include <exadg/grid/mesh_movement_functions.h>
 
 namespace ExaDG
 {
@@ -96,6 +97,10 @@ public:
                         enable_adaptivity,
                         "Enable adaptive mesh refinement.",
                         dealii::Patterns::Bool());
+      prm.add_parameter("ALEFormulation",
+						ale_formulation,
+						"Enable ALE formulation and move mesh.",
+						dealii::Patterns::Bool());
     }
     prm.leave_subsection();
   }
@@ -109,6 +114,9 @@ private:
     this->param.equation_type             = EquationType::Convection;
     this->param.analytical_velocity_field = true;
     this->param.right_hand_side           = false;
+
+    this->param.ale_formulation             = ale_formulation;
+    this->param.formulation_convective_term = ale_formulation ? FormulationConvectiveTerm::ConvectiveFormulation : FormulationConvectiveTerm::DivergenceFormulation;
 
     // PHYSICAL QUANTITIES
     this->param.start_time  = start_time;
@@ -191,7 +199,7 @@ private:
 
     // NUMERICAL PARAMETERS
     this->param.use_cell_based_face_loops               = false;
-    this->param.store_analytical_velocity_in_dof_vector = false;
+    this->param.store_analytical_velocity_in_dof_vector = true;
   }
 
   void
@@ -215,7 +223,7 @@ private:
         dealii::GridGenerator::hyper_cube(tria, left, right);
 
         // For AMR, we want to consider a mapping as well.
-        if(this->param.enable_adaptivity)
+        if(this->param.enable_adaptivity and not this->param.ale_formulation)
         {
           unsigned int const frequency   = 1;
           double const       deformation = (right - left) * 0.1;
@@ -239,6 +247,26 @@ private:
                                                  this->param.mapping_degree,
                                                  this->param.mapping_degree_coarse_grids,
                                                  this->param.involves_h_multigrid());
+  }
+
+  std::shared_ptr<dealii::Function<dim>>
+  create_mesh_movement_function() final
+  {
+    std::shared_ptr<dealii::Function<dim>> mesh_motion;
+
+    MeshMovementData<dim> data;
+    data.temporal                       = MeshMovementAdvanceInTime::Sin;
+    data.shape                          = MeshMovementShape::SineZeroAtBoundary; // SineAligned;
+    data.dimensions[0]                  = std::abs(right - left);
+    data.dimensions[1]                  = std::abs(right - left);
+    data.amplitude                      = 0.08 * (right - left); // A_max = (right-left)/(2*pi)
+    data.period                         = end_time;
+    data.t_start                        = 0.0;
+    data.t_end                          = end_time;
+    data.spatial_number_of_oscillations = 1.0;
+    mesh_motion.reset(new CubeMeshMovementFunctions<dim>(data));
+
+    return mesh_motion;
   }
 
   void
@@ -289,6 +317,7 @@ private:
   double const right = +1.0;
 
   bool enable_adaptivity = false;
+  bool ale_formulation   = false;
 };
 
 } // namespace ConvDiff

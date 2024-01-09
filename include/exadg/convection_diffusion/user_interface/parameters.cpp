@@ -260,10 +260,6 @@ Parameters::check() const
 
   if(enable_adaptivity)
   {
-    AssertThrow(not ale_formulation,
-                dealii::ExcMessage("Combination of adaptive mesh refinement "
-                                   "and ALE formulation not implemented."));
-
     AssertThrow(temporal_discretization == TemporalDiscretization::BDF,
                 dealii::ExcMessage("Adaptive mesh refinement only implemented"
                                    "for implicit time integration."));

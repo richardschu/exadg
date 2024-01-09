@@ -170,17 +170,19 @@ template<int dim, typename Number>
 void
 Driver<dim, Number>::setup_after_coarsening_and_refinement()
 {
-  // Update mapping
-  AssertThrow(ale_mapping.get() == 0,
-              dealii::ExcMessage(
-                "Combination of adaptive mesh refinement and ALE not implemented."));
-
+  // Update the mapping of the undeformed configuration.
   std::shared_ptr<dealii::MappingQCache<dim>> mapping_q_cache =
-    std::dynamic_pointer_cast<dealii::MappingQCache<dim>>(mapping);
+	std::dynamic_pointer_cast<dealii::MappingQCache<dim>>(mapping);
   AssertThrow(
-    mapping_q_cache.get() == 0,
-    dealii::ExcMessage(
-      "Combination of adaptive mesh refinement and dealii::MappingQCache not implemented."));
+	mapping_q_cache.get() == 0,
+	dealii::ExcMessage(
+	  "Combination of adaptive mesh refinement and undeformed mapping of type "
+	  "dealii::MappingQCache not implemented."));
+
+  if(application->get_parameters().ale_formulation)
+  {
+
+  }
 
   pde_operator->setup_after_coarsening_and_refinement();
 
@@ -244,6 +246,11 @@ Driver<dim, Number>::solve()
       {
         time_integrator->advance_one_timestep_pre_solve(true);
 
+        if(application->get_parameters().ale_formulation)
+        {
+          ale_update();
+        }
+
         time_integrator->advance_one_timestep_solve();
 
         // Adapt the mesh before post_solve(), in order to recalculate the
@@ -271,7 +278,7 @@ Driver<dim, Number>::solve()
     }
     else
     {
-      if(application->get_parameters().ale_formulation == true)
+      if(application->get_parameters().ale_formulation)
       {
         do
         {
