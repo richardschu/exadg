@@ -217,7 +217,7 @@ Operator<dim, Number>::setup_operators()
 
   if(param.diffusive_problem())
   {
-    diffusive_kernel_data.IP_factor   = param.IP_factor;
+	diffusive_kernel_data.IP_factor   = param.IP_factor;
     diffusive_kernel_data.diffusivity = param.diffusivity;
 
     diffusive_kernel = std::make_shared<Operators::DiffusiveKernel<dim, Number>>();
@@ -302,11 +302,15 @@ Operator<dim, Number>::setup_operators()
         get_quad_index_overintegration() :
         get_quad_index();
 
+    std::cout << "##+ combined_operator.initialize\n";
+
     combined_operator.initialize(*matrix_free,
                                  affine_constraints,
                                  combined_operator_data,
                                  convective_kernel,
                                  diffusive_kernel);
+
+    std::cout << "end ##+ \n";
   }
 }
 
@@ -361,12 +365,15 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number> con
 
   dof_index_velocity_external = dof_index_velocity_external_in;
 
+  std::cout << "pre setup operators ##+ \n";
   setup_operators();
 
   if(param.linear_system_has_to_be_solved())
   {
+	std::cout << "pre setup preconditioner ##+ \n";
     setup_preconditioner();
 
+	std::cout << "pre setup solver ##+ \n";
     setup_solver();
   }
 }
@@ -381,7 +388,9 @@ Operator<dim, Number>::setup_after_coarsening_and_refinement()
                   "number of dofs (total) after adaptive mesh refinement",
                   dof_handler.n_dofs());
 
+  std::cout << "pre setup ##+ \n";
   do_setup();
+  std::cout << "post setup ##+ \n";
 }
 
 template<int dim, typename Number>
@@ -813,19 +822,56 @@ Operator<dim, Number>::update_after_grid_motion(bool const update_matrix_free)
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors)
+Operator<dim, Number>::prepare_coarsening_and_refinement(
+  std::vector<VectorType *> & vectors_scalar,
+  std::vector<VectorType *> & vectors_velocity)
 {
-  solution_transfer = std::make_shared<ExaDG::SolutionTransfer<dim, VectorType>>(dof_handler);
+  solution_transfer_scalar =
+    std::make_shared<ExaDG::SolutionTransfer<dim, VectorType>>(dof_handler);
+  solution_transfer_scalar->prepare_coarsening_and_refinement(vectors_scalar);
 
-  solution_transfer->prepare_coarsening_and_refinement(vectors);
+  // Note that the sequence of calls to
+  // 'ExaDG::SolutionTransfer::prepare_coarsening_and_refinement()' here *needs to match* the
+  // sequence of calls to 'ExaDG::SolutionTransfer::interpolate_after_coarsening_and_refinement()'
+  // in 'ExaDG::ConvDiff::Operator::interpolate_after_coarsening_and_refinement()'.
+
+  // -----> ask Peter to check this here. I think this is why they had the
+  // std::vector<std::vector<<VectorType*>> vectors
+  // and
+  // std::vector<dealii::SolutionTransfer> in MeltPoolDG.
+  // But we wanted to have the ExaDG::SolutionTransfer a bit easier, shifting this problem outside
+  // to the ExaDG::ConvDiff::Operator.
+  if(needs_own_dof_handler_velocity())
+  {
+    solution_transfer_velocity =
+      std::make_shared<ExaDG::SolutionTransfer<dim, VectorType>>(*dof_handler_velocity);
+    solution_transfer_velocity->prepare_coarsening_and_refinement(vectors_velocity);
+  }
 }
 
 template<int dim, typename Number>
 void
 Operator<dim, Number>::interpolate_after_coarsening_and_refinement(
-  std::vector<VectorType *> & vectors)
+  std::vector<VectorType *> & vectors_scalar,
+  std::vector<VectorType *> & vectors_velocity)
 {
-  solution_transfer->interpolate_after_coarsening_and_refinement(vectors);
+  // Note that the sequence of calls to
+  // 'ExaDG::SolutionTransfer::interpolate_after_coarsening_and_refinement()' here *needs to match*
+  // the sequence of calls to 'ExaDG::SolutionTransfer::prepare_coarsening_and_refinement()' in
+  // 'ExaDG::ConvDiff::Operator::prepare_coarsening_and_refinement()'.
+
+  // -----> ask Peter to check this here. I think this is why they had the
+  // std::vector<std::vector<<VectorType*>> vectors
+  // and
+  // std::vector<dealii::SolutionTransfer> in MeltPoolDG.
+  // But we wanted to have the ExaDG::SolutionTransfer a bit easier, shifting this problem outside
+  // to the ExaDG::ConvDiff::Operator.
+  solution_transfer_scalar->interpolate_after_coarsening_and_refinement(vectors_scalar);
+
+  if(needs_own_dof_handler_velocity())
+  {
+    solution_transfer_scalar->interpolate_after_coarsening_and_refinement(vectors_velocity);
+  }
 }
 
 template<int dim, typename Number>

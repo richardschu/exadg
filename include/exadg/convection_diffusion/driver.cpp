@@ -184,7 +184,11 @@ Driver<dim, Number>::setup_after_coarsening_and_refinement()
 
   pde_operator->setup_after_coarsening_and_refinement();
 
+  std::cout << "pre postproc setup ##+ \n";
+
   postprocessor->setup_after_coarsening_and_refinement();
+
+  std::cout << "post postproc setup ##+ \n";
 }
 
 template<int dim, typename Number>

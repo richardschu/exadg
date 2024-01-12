@@ -214,10 +214,12 @@ public:
    * Prepare and interpolation in adaptive mesh refinement.
    */
   void
-  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors);
+  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors_scalar,
+                                    std::vector<VectorType *> & vectors_velocity);
 
   void
-  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors);
+  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors_scalar,
+                                              std::vector<VectorType *> & vectors_velocity);
 
   /*
    * This function solves the linear system of equations in case of implicit time integration or
@@ -360,7 +362,8 @@ private:
   /*
    * SolutionTransfer for adaptive mesh refinement.
    */
-  std::shared_ptr<ExaDG::SolutionTransfer<dim, VectorType>> solution_transfer;
+  std::shared_ptr<ExaDG::SolutionTransfer<dim, VectorType>> solution_transfer_scalar;
+  std::shared_ptr<ExaDG::SolutionTransfer<dim, VectorType>> solution_transfer_velocity;
 
   /*
    * Grid motion for ALE formulations

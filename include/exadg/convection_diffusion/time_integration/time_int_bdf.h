@@ -84,8 +84,13 @@ private:
   void
   allocate_vectors() final;
 
+  // Return vectors corresponding to scalar fields.
   std::shared_ptr<std::vector<VectorType *>>
-  get_vectors();
+  get_vectors_scalar();
+
+  // Return vectors corresponding to velocity fields.
+  std::shared_ptr<std::vector<VectorType *>>
+  get_vectors_velocity();
 
   void
   initialize_current_solution() final;

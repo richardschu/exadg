@@ -139,7 +139,7 @@ TimeIntBDF<dim, Number>::allocate_vectors()
 
 template<int dim, typename Number>
 std::shared_ptr<std::vector<dealii::LinearAlgebra::distributed::Vector<Number> *>>
-TimeIntBDF<dim, Number>::get_vectors()
+TimeIntBDF<dim, Number>::get_vectors_scalar()
 {
   std::shared_ptr<std::vector<VectorType *>> vectors =
     std::make_shared<std::vector<VectorType *>>();
@@ -167,6 +167,16 @@ TimeIntBDF<dim, Number>::get_vectors()
     }
   }
 
+  return vectors;
+}
+
+template<int dim, typename Number>
+std::shared_ptr<std::vector<dealii::LinearAlgebra::distributed::Vector<Number> *>>
+TimeIntBDF<dim, Number>::get_vectors_velocity()
+{
+  std::shared_ptr<std::vector<VectorType *>> vectors =
+    std::make_shared<std::vector<VectorType *>>();
+
   if(this->param.ale_formulation)
   {
     vectors->emplace_back(&grid_velocity);
@@ -186,8 +196,9 @@ template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::prepare_coarsening_and_refinement()
 {
-  std::shared_ptr<std::vector<VectorType *>> vectors = get_vectors();
-  pde_operator->prepare_coarsening_and_refinement(*vectors);
+  std::shared_ptr<std::vector<VectorType *>> vectors_scalar   = get_vectors_scalar();
+  std::shared_ptr<std::vector<VectorType *>> vectors_velocity = get_vectors_velocity();
+  pde_operator->prepare_coarsening_and_refinement(*vectors_scalar, *vectors_velocity);
 }
 
 template<int dim, typename Number>
@@ -196,8 +207,9 @@ TimeIntBDF<dim, Number>::interpolate_after_coarsening_and_refinement()
 {
   this->allocate_vectors();
 
-  std::shared_ptr<std::vector<VectorType *>> vectors = get_vectors();
-  pde_operator->interpolate_after_coarsening_and_refinement(*vectors);
+  std::shared_ptr<std::vector<VectorType *>> vectors_scalar   = get_vectors_scalar();
+  std::shared_ptr<std::vector<VectorType *>> vectors_velocity = get_vectors_velocity();
+  pde_operator->interpolate_after_coarsening_and_refinement(*vectors_scalar, *vectors_velocity);
 }
 
 template<int dim, typename Number>

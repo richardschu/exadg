@@ -86,14 +86,22 @@ CombinedOperator<dim, Number>::initialize(
 
   Base::reinit(matrix_free, affine_constraints, data);
 
+  std::cout << "pre mas_kernel init ##+ \n";
+
   if(operator_data.unsteady_problem)
     mass_kernel = std::make_shared<MassKernel<dim, Number>>();
+
+  std::cout << "pre assign ##+ \n";
 
   if(operator_data.convective_problem)
     convective_kernel = convective_kernel_in;
 
+  std::cout << "pre assign 2 ##+ \n";
+
   if(operator_data.diffusive_problem)
     diffusive_kernel = diffusive_kernel_in;
+
+  std::cout << "pre copy flags ##+ \n";
 
   // integrator flags
   if(operator_data.unsteady_problem)

@@ -162,8 +162,8 @@ private:
     // SOLVER
     this->param.solver      = Solver::GMRES;
     this->param.solver_data = SolverData(1e3, 1.e-20, 1.e-8, 100);
-    this->param.preconditioner =
-      Preconditioner::Multigrid; // None; //InverseMassMatrix; //PointJacobi; // BlockJacobi;
+    this->param.preconditioner = // ##+ MULTIGRID!
+      Preconditioner::None; // None; //InverseMassMatrix; //PointJacobi; // BlockJacobi;
                                  // //Multigrid;
     this->param.update_preconditioner = true;
 
@@ -191,7 +191,7 @@ private:
 
     // NUMERICAL PARAMETERS
     this->param.use_cell_based_face_loops               = false;
-    this->param.store_analytical_velocity_in_dof_vector = false;
+    this->param.store_analytical_velocity_in_dof_vector = true;
   }
 
   void
