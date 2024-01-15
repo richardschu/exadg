@@ -187,7 +187,14 @@ Operator<dim, Number>::setup_operators()
   {
     convective_kernel_data.formulation                = param.formulation_convective_term;
     convective_kernel_data.velocity_type              = param.get_type_velocity_field();
+
+    std::cout << "param.get_type_velocity_field() == TypeVelocityField::DoFVector: "
+    		  << (param.get_type_velocity_field() == TypeVelocityField::DoFVector) << "##+ \n";
+
     convective_kernel_data.dof_index_velocity         = get_dof_index_velocity();
+
+    std::cout << "get_dof_index_velocity() = " << get_dof_index_velocity() << "##+ \n";
+
     convective_kernel_data.numerical_flux_formulation = param.numerical_flux_convective_operator;
     convective_kernel_data.velocity                   = field_functions->velocity;
 

@@ -91,7 +91,8 @@ CombinedOperator<dim, Number>::initialize(
   if(operator_data.unsteady_problem)
     mass_kernel = std::make_shared<MassKernel<dim, Number>>();
 
-  std::cout << "pre assign ##+ \n";
+  std::cout << "pre assign ##+ \n"
+		    << "  convective_kernel_in.get() = " << convective_kernel_in.get() << "\n";
 
   if(operator_data.convective_problem)
     convective_kernel = convective_kernel_in;
