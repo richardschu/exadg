@@ -347,6 +347,8 @@ Operator<dim, Number>::do_setup()
   if(param.use_cell_based_face_loops)
     Categorization::do_cell_based_loops(*grid->triangulation, mf_data->data);
 
+  mf->clear(); // maybe get rid of this ##+
+
   mf->reinit(*get_mapping(),
              mf_data->get_dof_handler_vector(),
              mf_data->get_constraint_vector(),
@@ -848,7 +850,7 @@ Operator<dim, Number>::prepare_coarsening_and_refinement(
   // std::vector<dealii::SolutionTransfer> in MeltPoolDG.
   // But we wanted to have the ExaDG::SolutionTransfer a bit easier, shifting this problem outside
   // to the ExaDG::ConvDiff::Operator.
-  if(needs_own_dof_handler_velocity())
+  if(needs_own_dof_handler_velocity() and vectors_velocity.size() > 0)
   {
     solution_transfer_velocity =
       std::make_shared<ExaDG::SolutionTransfer<dim, VectorType>>(*dof_handler_velocity);
@@ -875,7 +877,7 @@ Operator<dim, Number>::interpolate_after_coarsening_and_refinement(
   // to the ExaDG::ConvDiff::Operator.
   solution_transfer_scalar->interpolate_after_coarsening_and_refinement(vectors_scalar);
 
-  if(needs_own_dof_handler_velocity())
+  if(needs_own_dof_handler_velocity() and vectors_velocity.size() > 0)
   {
     solution_transfer_scalar->interpolate_after_coarsening_and_refinement(vectors_velocity);
   }

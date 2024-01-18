@@ -86,13 +86,17 @@ CombinedOperator<dim, Number>::initialize(
 
   Base::reinit(matrix_free, affine_constraints, data);
 
-  std::cout << "pre mas_kernel init ##+ \n";
+  std::cout << "pre mass_kernel init ##+ \n";
 
   if(operator_data.unsteady_problem)
     mass_kernel = std::make_shared<MassKernel<dim, Number>>();
 
   std::cout << "pre assign ##+ \n"
 		    << "  convective_kernel_in.get() = " << convective_kernel_in.get() << "\n";
+
+  // this segfaults in;
+//  MatrixFree<dim, Number, VectorizedArrayType>::release_scratch_data(
+//    const AlignedVector<VectorizedArrayType> *scratch) const
 
   if(operator_data.convective_problem)
     convective_kernel = convective_kernel_in;
