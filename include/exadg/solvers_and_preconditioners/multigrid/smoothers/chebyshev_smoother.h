@@ -38,8 +38,7 @@ template<typename Operator, typename VectorType>
 class ChebyshevSmoother : public SmootherBase<VectorType>
 {
 public:
-  typedef dealii::PreconditionChebyshev<Operator, VectorType, JacobiPreconditioner<Operator>>
-    ChebyshevPointJacobi;
+  typedef dealii::PreconditionChebyshev<Operator, VectorType> ChebyshevPointJacobi;
   typedef dealii::PreconditionChebyshev<Operator, VectorType, BlockJacobiPreconditioner<Operator>>
     ChebyshevBlockJacobi;
   typedef dealii::
@@ -126,7 +125,7 @@ public:
 
     if(data.preconditioner == PreconditionerSmoother::PointJacobi)
     {
-      preconditioner_point_jacobi->update();
+      underlying_operator->calculate_inverse_diagonal(preconditioner_point_jacobi->get_vector());
       chebyshev_point_jacobi->initialize(*underlying_operator, additional_data_point);
     }
     else if(data.preconditioner == PreconditionerSmoother::BlockJacobi)
@@ -156,9 +155,10 @@ public:
 
     if(data.preconditioner == PreconditionerSmoother::PointJacobi)
     {
-      preconditioner_point_jacobi =
-        std::make_shared<JacobiPreconditioner<Operator>>(*underlying_operator,
-                                                         initialize_preconditioner);
+      preconditioner_point_jacobi = std::make_shared<dealii::DiagonalMatrix<VectorType>>();
+      underlying_operator->initialize_dof_vector(preconditioner_point_jacobi->get_vector());
+      if(initialize_preconditioner)
+        underlying_operator->calculate_inverse_diagonal(preconditioner_point_jacobi->get_vector());
 
       additional_data_point.preconditioner      = preconditioner_point_jacobi;
       additional_data_point.smoothing_range     = data.smoothing_range;
@@ -217,7 +217,7 @@ private:
   std::shared_ptr<ChebyshevBlockJacobi>     chebyshev_block_jacobi;
   std::shared_ptr<ChebyshevAdditiveSchwarz> chebyshev_additive_schwarz;
 
-  std::shared_ptr<JacobiPreconditioner<Operator>>          preconditioner_point_jacobi;
+  std::shared_ptr<dealii::DiagonalMatrix<VectorType>>      preconditioner_point_jacobi;
   std::shared_ptr<BlockJacobiPreconditioner<Operator>>     preconditioner_block_jacobi;
   std::shared_ptr<AdditiveSchwarzPreconditioner<Operator>> preconditioner_additive_schwarz;
 

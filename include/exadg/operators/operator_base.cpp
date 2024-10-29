@@ -156,6 +156,51 @@ OperatorBase<dim, Number, n_components>::vmult(VectorType & dst, VectorType cons
 
 template<int dim, typename Number, int n_components>
 void
+OperatorBase<dim, Number, n_components>::vmult(
+  VectorType &                                                        dst,
+  VectorType const &                                                  src,
+  std::function<void(const unsigned int, const unsigned int)> const & before,
+  std::function<void(const unsigned int, const unsigned int)> const & after) const
+{
+  if(is_dg)
+  {
+    if(evaluate_face_integrals())
+    {
+      matrix_free->loop(&This::cell_loop,
+                        &This::face_loop,
+                        &This::boundary_face_loop_hom_operator,
+                        this,
+                        dst,
+                        src,
+                        before,
+                        after);
+    }
+    else
+    {
+      matrix_free->cell_loop(&This::cell_loop, this, dst, src, before, after);
+    }
+  }
+  else
+  {
+    // Compute matrix-vector product. Constrained degrees of freedom in the src-vector will not be
+    // used. The function read_dof_values() (or gather_evaluate()) uses the homogeneous boundary
+    // data passed to MatrixFree via AffineConstraints with the standard "dof_index".
+    matrix_free->cell_loop(&This::cell_loop, this, dst, src, before, after);
+
+    // Constrained degree of freedom are not removed from the system of equations.
+    // Instead, we set the diagonal entries of the matrix to 1 for these constrained
+    // degrees of freedom. This means that we simply copy the constrained values to the
+    // dst vector.
+    for(unsigned int const constrained_index :
+        matrix_free->get_constrained_dofs(this->data.dof_index))
+    {
+      dst.local_element(constrained_index) = src.local_element(constrained_index);
+    }
+  }
+}
+
+template<int dim, typename Number, int n_components>
+void
 OperatorBase<dim, Number, n_components>::vmult_add(VectorType & dst, VectorType const & src) const
 {
   if(this->data.use_matrix_based_vmult)
