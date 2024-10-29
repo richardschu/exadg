@@ -854,8 +854,11 @@ Operator<dim, Number>::evaluate_nonlinear_residual(VectorType &       dst,
 
   // update linearization vector for interpolation and update mapping
   // if we integrate in the spatial configuration
-  bool const update_mapping = (not param.force_material_residual);
-  elasticity_operator_nonlinear.set_solution_linearization(src, update_mapping);
+  elasticity_operator_nonlinear.set_solution_linearization(src,
+                                                           false /* update_cell_data */,
+                                                           true /* update_mapping */,
+                                                           false /* update_matrix_if_necessary */);
+  //  std::cout << "evaluating nonlinear residual\n";
 
   elasticity_operator_nonlinear.evaluate_nonlinear(dst, src);
 
@@ -885,7 +888,11 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::set_solution_linearization(VectorType const & vector) const
 {
-  elasticity_operator_nonlinear.set_solution_linearization(vector, true);
+  //  std::cout << "setting linearization vector\n";
+  elasticity_operator_nonlinear.set_solution_linearization(vector,
+                                                           true /* update_cell_data */,
+                                                           true /* update_mapping */,
+                                                           true /* update_matrix_if_necessary */);
 }
 
 template<int dim, typename Number>
@@ -906,6 +913,14 @@ Operator<dim, Number>::evaluate_elasticity_operator(VectorType &       dst,
 
   if(param.large_deformation)
   {
+    // update linearization vector for interpolation and update mapping
+    // if we integrate in the spatial configuration
+    elasticity_operator_nonlinear.set_solution_linearization(
+      src,
+      false /* update_cell_data */,
+      true /* update_mapping */,
+      false /* update_matrix_if_necessary */);
+
     elasticity_operator_nonlinear.evaluate_nonlinear(dst, src);
   }
   else
