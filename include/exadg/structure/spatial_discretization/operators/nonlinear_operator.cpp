@@ -187,6 +187,39 @@ NonLinearOperator<dim, Number>::apply(VectorType & dst, VectorType const & src) 
 
 template<int dim, typename Number>
 void
+NonLinearOperator<dim, Number>::apply_before_after(
+  VectorType &                                                        dst,
+  VectorType const &                                                  src,
+  std::function<void(const unsigned int, const unsigned int)> const & before,
+  std::function<void(const unsigned int, const unsigned int)> const & after) const
+{
+  AssertThrow(not this->is_dg, dealii::ExcMessage("NonLinearOperator::apply supports CG only"));
+
+  if(this->operator_data.spatial_integration)
+  {
+    // Compute matrix-vector product. Constrained degrees of freedom in the src-vector will not be
+    // used. The function read_dof_values() (or gather_evaluate()) uses the homogeneous boundary
+    // data passed to MatrixFree via AffineConstraints with the standard "dof_index".
+    this->matrix_free_spatial.cell_loop(&This::cell_loop, this, dst, src, before, after);
+
+    // Constrained degree of freedom are not removed from the system of equations.
+    // Instead, we set the diagonal entries of the matrix to 1 for these constrained
+    // degrees of freedom. This means that we simply copy the constrained values to the
+    // dst vector.
+    for(unsigned int const constrained_index :
+        this->matrix_free_spatial.get_constrained_dofs(this->operator_data.dof_index))
+    {
+      dst.local_element(constrained_index) = src.local_element(constrained_index);
+    }
+  }
+  else
+  {
+    OperatorBase<dim, Number, dim /* n_components */>::apply_before_after(dst, src, before, after);
+  }
+}
+
+template<int dim, typename Number>
+void
 NonLinearOperator<dim, Number>::apply_add(VectorType & dst, VectorType const & src) const
 {
   (void)dst;

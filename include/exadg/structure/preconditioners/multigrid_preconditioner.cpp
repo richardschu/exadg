@@ -101,7 +101,9 @@ MultigridPreconditioner<dim, Number>::update()
     else
     {
       if(this->dof_renumbering.empty())
+      {
         vector_multigrid_type_copy = vector_linearization;
+      }
       else
       {
         this->get_operator_nonlinear(this->get_number_of_levels() - 1)
@@ -114,11 +116,14 @@ MultigridPreconditioner<dim, Number>::update()
       vector_multigrid_type_ptr = &vector_multigrid_type_copy;
     }
 
+    // TODO the mappings of the coarser grids levels are not updated.
+    bool constexpr update_mapping = false;
+
     // Copy displacement vector to finest level
     // Note: This function also re-assembles the sparse matrix in case a matrix-based implementation
     // is used
     this->get_operator_nonlinear(this->get_number_of_levels() - 1)
-      ->set_solution_linearization(*vector_multigrid_type_ptr, true);
+      ->set_solution_linearization(*vector_multigrid_type_ptr, update_mapping);
 
     // interpolate displacement vector from fine to coarse level
     this->transfer_from_fine_to_coarse_levels(
@@ -131,7 +136,7 @@ MultigridPreconditioner<dim, Number>::update()
         // Note: This function also re-assembles the sparse matrix in case a matrix-based
         // implementation is used
         this->get_operator_nonlinear(coarse_level)
-          ->set_solution_linearization(vector_coarse_level, false);
+          ->set_solution_linearization(vector_coarse_level, update_mapping);
       });
   }
   else // linear problems
