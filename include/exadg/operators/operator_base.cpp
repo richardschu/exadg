@@ -164,7 +164,23 @@ OperatorBase<dim, Number, n_components>::vmult(
 {
   if(this->data.use_matrix_based_vmult)
   {
+    // Execute the `before` and `after` operations on the locally owned indices manually.
+    dealii::DoFHandler<dim> const & dof_handler =
+      this->matrix_free->get_dof_handler(this->data.dof_index);
+    dealii::IndexSet const & owned_dofs =
+      is_mg ? dof_handler.locally_owned_mg_dofs(this->level) : dof_handler.locally_owned_dofs();
+    unsigned int n_elements = owned_dofs.n_elements();
+    if(n_elements > 0)
+    {
+      before(0, n_elements);
+    }
+
     this->apply_matrix_based(dst, src);
+
+    if(n_elements > 0)
+    {
+      after(0, n_elements);
+    }
   }
   else
   {
