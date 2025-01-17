@@ -5,8 +5,8 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "3",
-        "DegreeMax": "3",
+        "DegreeMin": "5",
+        "DegreeMax": "5",
         "RefineSpaceMin": "2",
         "RefineSpaceMax": "2"
     },
@@ -16,19 +16,19 @@
     },
     "Application": {
         "Inviscid": "false",
-        "ReynoldsNumber": "5600.0",
+        "ReynoldsNumber": "560.0",
         "EndTime": "1",
         "GridStretchFactor": "1.6",
         "CalculateStatistics": "true",
         "SampleStartTime": "0",
         "SampleEveryTimeSteps": "1",
         "PointsPerLine": "16",
-        "WriteRestart": "false",
-        "ReadRestart": "false"
+        "WriteRestart": "true",
+        "ReadRestart": "true"
     },
     "Output": {
         "OutputDirectory": "output/periodic_hill/",
         "OutputName": "16_l2_k3",
-        "WriteOutput": "false"
+        "WriteOutput": "true"
     }
 }

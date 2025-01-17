@@ -272,6 +272,8 @@ TimeIntMultistepBase::read_restart_preamble(boost::archive::binary_iarchive & ia
   // 2. time
   ia & time;
 
+  std::cout << "##+ READ time: " << time << std::endl;
+
   // Note that start_time has to be set to the new start_time (since param.start_time might still be
   // the original start time).
   this->start_time = time;
@@ -303,6 +305,8 @@ void
 TimeIntMultistepBase::write_restart_preamble(boost::archive::binary_oarchive & oa) const
 {
   unsigned int n_ranks = dealii::Utilities::MPI::n_mpi_processes(mpi_comm);
+
+  std::cout << "##+ WRITE time: " << time << std::endl;
 
   // 1. ranks
   oa & n_ranks;

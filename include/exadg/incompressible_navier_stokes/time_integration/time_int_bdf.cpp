@@ -257,15 +257,23 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
-    VectorType tmp = get_velocity(i);
-    ia >> tmp;
-    set_velocity(tmp, i);
+    VectorType velocity = get_velocity(i);
+    ia &velocity;
+    set_velocity(velocity, i);
+    std::cout << "##+ READ: velocity[" << i << "].l2_norm() = " << velocity.l2_norm() << std::endl;
   }
+
+  double sum_of_l2_norms;
+  ia >> sum_of_l2_norms;
+  std::cout << "##+ READ sum_of_l2_norms = " << sum_of_l2_norms << std::endl;
+
+
   for(unsigned int i = 0; i < this->order; i++)
   {
-    VectorType tmp = get_pressure(i);
-    ia >> tmp;
-    set_pressure(tmp, i);
+    VectorType pressure = get_pressure(i);
+    ia &pressure;
+    set_pressure(pressure, i);
+    std::cout << "##+ READ: pressure[" << i << "].l2_norm() = " << pressure.l2_norm() << std::endl;
   }
 
   if(needs_vector_convective_term)
@@ -274,7 +282,9 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        ia >> vec_convective_term[i];
+        ia &vec_convective_term[i];
+        std::cout << "##+ READ: vec_convective_term[" << i << "].l2_norm() = "
+                  << vec_convective_term[i].l2_norm() << std::endl;
       }
     }
   }
@@ -292,13 +302,24 @@ template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive & oa) const
 {
+  double sum_of_l2_norms = 0.0;
+
   for(unsigned int i = 0; i < this->order; i++)
   {
-    oa << get_velocity(i);
+    VectorType const tmp = get_velocity(i);
+    oa &tmp;
+    std::cout << "##+ WRITE: velocity[" << i << "].l2_norm() = " << tmp.l2_norm() << std::endl;
+
+    sum_of_l2_norms += tmp.l2_norm();
   }
+  oa << sum_of_l2_norms;
+  std::cout << "##+ WRITE sum_of_l2_norms = " << sum_of_l2_norms << std::endl;
+
   for(unsigned int i = 0; i < this->order; i++)
   {
-    oa << get_pressure(i);
+    VectorType const & tmp = get_pressure(i);
+    oa & tmp;
+    std::cout << "##+ WRITE: pressure[" << i << "].l2_norm() = " << tmp.l2_norm() << std::endl;
   }
 
   if(needs_vector_convective_term)
@@ -307,7 +328,9 @@ TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive &
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        oa << vec_convective_term[i];
+        oa & vec_convective_term[i];
+        std::cout << "##+ WRITE: vec_convective_term[" << i << "].l2_norm() = "
+          << vec_convective_term[i].l2_norm() << std::endl;
       }
     }
   }

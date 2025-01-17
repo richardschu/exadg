@@ -94,7 +94,8 @@ TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(boost::archive::binar
 
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
-    ia >> velocity_dbc[i];
+    ia & velocity_dbc[i];
+    std::cout << "##+ READ: velocity_dbc[" << i <<"].l2_norm() = " << velocity_dbc[i].l2_norm() << "(2)" << std::endl;
   }
 }
 
@@ -107,7 +108,8 @@ TimeIntBDFDualSplitting<dim, Number>::write_restart_vectors(
 
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
-    oa << velocity_dbc[i];
+    std::cout << "##+ WRITE: velocity_dbc[" << i <<"].l2_norm() = " << velocity_dbc[i].l2_norm() << std::endl;
+    oa & velocity_dbc[i];
   }
 }
 
