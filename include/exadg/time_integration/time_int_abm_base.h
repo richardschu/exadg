@@ -218,14 +218,14 @@ private:
   }
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) final
+  read_restart_vectors(boost::archive::text_iarchive & ia) final
   {
     ia >> solution;
     ia >> prediction;
   }
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const final
+  write_restart_vectors(boost::archive::text_oarchive & oa) const final
   {
     oa << solution;
     oa << prediction;

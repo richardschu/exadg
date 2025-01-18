@@ -89,10 +89,10 @@ private:
   initialize_former_multistep_dof_vectors() final;
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) final;
+  read_restart_vectors(boost::archive::text_iarchive & ia) final;
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const final;
+  write_restart_vectors(boost::archive::text_oarchive & oa) const final;
 
   void
   initialize_pressure_on_boundary();

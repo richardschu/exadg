@@ -108,10 +108,10 @@ protected:
   setup_derived() override;
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) override;
+  read_restart_vectors(boost::archive::text_iarchive & ia) override;
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const override;
+  write_restart_vectors(boost::archive::text_oarchive & oa) const override;
 
   void
   prepare_vectors_for_next_timestep() override;

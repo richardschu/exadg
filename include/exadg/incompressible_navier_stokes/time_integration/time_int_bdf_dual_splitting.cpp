@@ -88,7 +88,7 @@ TimeIntBDFDualSplitting<dim, Number>::setup_derived()
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & ia)
+TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(boost::archive::text_iarchive & ia)
 {
   Base::read_restart_vectors(ia);
 
@@ -102,7 +102,7 @@ TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(boost::archive::binar
 template<int dim, typename Number>
 void
 TimeIntBDFDualSplitting<dim, Number>::write_restart_vectors(
-  boost::archive::binary_oarchive & oa) const
+  boost::archive::text_oarchive & oa) const
 {
   Base::write_restart_vectors(oa);
 

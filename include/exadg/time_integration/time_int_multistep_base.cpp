@@ -242,7 +242,7 @@ TimeIntMultistepBase::do_timestep_post_solve()
 void
 TimeIntMultistepBase::do_read_restart(std::ifstream & in)
 {
-  boost::archive::binary_iarchive ia(in);
+  boost::archive::text_iarchive ia(in);
   read_restart_preamble(ia);
   read_restart_vectors(ia);
 
@@ -254,7 +254,7 @@ TimeIntMultistepBase::do_read_restart(std::ifstream & in)
 }
 
 void
-TimeIntMultistepBase::read_restart_preamble(boost::archive::binary_iarchive & ia)
+TimeIntMultistepBase::read_restart_preamble(boost::archive::text_iarchive & ia)
 {
   // Note that the operations done here must be in sync with the output.
 
@@ -294,7 +294,7 @@ TimeIntMultistepBase::do_write_restart(std::string const & filename) const
 {
   std::ostringstream oss;
 
-  boost::archive::binary_oarchive oa(oss);
+  boost::archive::text_oarchive oa(oss);
 
   write_restart_preamble(oa);
   write_restart_vectors(oa);
@@ -302,7 +302,7 @@ TimeIntMultistepBase::do_write_restart(std::string const & filename) const
 }
 
 void
-TimeIntMultistepBase::write_restart_preamble(boost::archive::binary_oarchive & oa) const
+TimeIntMultistepBase::write_restart_preamble(boost::archive::text_oarchive & oa) const
 {
   unsigned int n_ranks = dealii::Utilities::MPI::n_mpi_processes(mpi_comm);
 

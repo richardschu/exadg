@@ -253,8 +253,12 @@ TimeIntBDF<dim, Number>::initialize_vec_convective_term()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & ia)
+TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::text_iarchive & ia)
 {
+  double dummy;
+  ia & dummy;
+  std::cout << "dummy = " << dummy << std::endl;
+
   for(unsigned int i = 0; i < this->order; i++)
   {
     VectorType velocity = get_velocity(i);
@@ -266,7 +270,6 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
   double sum_of_l2_norms;
   ia >> sum_of_l2_norms;
   std::cout << "##+ READ sum_of_l2_norms = " << sum_of_l2_norms << std::endl;
-
 
   for(unsigned int i = 0; i < this->order; i++)
   {
@@ -300,13 +303,15 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive & oa) const
+TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::text_oarchive & oa) const
 {
-  double sum_of_l2_norms = 0.0;
+  double dummy = 1.123456789;
+  oa & dummy;
 
+  double sum_of_l2_norms = 0.0;
   for(unsigned int i = 0; i < this->order; i++)
   {
-    VectorType const tmp = get_velocity(i);
+    dealii::LinearAlgebra::distributed::Vector<Number> tmp = VectorType(get_velocity(i));
     oa &tmp;
     std::cout << "##+ WRITE: velocity[" << i << "].l2_norm() = " << tmp.l2_norm() << std::endl;
 

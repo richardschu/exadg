@@ -80,10 +80,10 @@ private:
   setup_derived() final;
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) final;
+  read_restart_vectors(boost::archive::text_iarchive & ia) final;
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const final;
+  write_restart_vectors(boost::archive::text_oarchive & oa) const final;
 
   void
   do_timestep_solve() final;
