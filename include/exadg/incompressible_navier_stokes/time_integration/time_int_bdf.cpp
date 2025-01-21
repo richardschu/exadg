@@ -25,6 +25,7 @@
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/utilities/boost_archive.h>
 
 namespace ExaDG
 {
@@ -253,12 +254,12 @@ TimeIntBDF<dim, Number>::initialize_vec_convective_term()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & ia)
+TimeIntBDF<dim, Number>::read_restart_vectors(BoostInputArchiveType & ia)
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
     VectorType velocity = get_velocity(i);
-    ia &velocity;
+    read_distributed_vector<Number, BoostInputArchiveType>(velocity, ia);
     set_velocity(velocity, i);
     std::cout << "##+ READ: velocity[" << i << "].l2_norm() = " << velocity.l2_norm() << std::endl;
   }
@@ -271,7 +272,7 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
   for(unsigned int i = 0; i < this->order; i++)
   {
     VectorType pressure = get_pressure(i);
-    ia &pressure;
+    read_distributed_vector<Number, BoostInputArchiveType>(pressure, ia);
     set_pressure(pressure, i);
     std::cout << "##+ READ: pressure[" << i << "].l2_norm() = " << pressure.l2_norm() << std::endl;
   }
@@ -282,9 +283,9 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        ia &vec_convective_term[i];
-        std::cout << "##+ READ: vec_convective_term[" << i << "].l2_norm() = "
-                  << vec_convective_term[i].l2_norm() << std::endl;
+        read_distributed_vector<Number, BoostInputArchiveType>(vec_convective_term[i], ia);
+        std::cout << "##+ READ: vec_convective_term[" << i
+                  << "].l2_norm() = " << vec_convective_term[i].l2_norm() << std::endl;
       }
     }
   }
@@ -293,23 +294,23 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
   {
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
     {
-      ia >> vec_grid_coordinates[i];
+      read_distributed_vector<Number, BoostInputArchiveType>(vec_grid_coordinates[i], ia);
     }
   }
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive & oa) const
+TimeIntBDF<dim, Number>::write_restart_vectors(BoostOutputArchiveType & oa) const
 {
   double sum_of_l2_norms = 0.0;
 
   for(unsigned int i = 0; i < this->order; i++)
   {
-    VectorType const tmp = get_velocity(i);
-    oa &tmp;
-    std::cout << "##+ WRITE: velocity[" << i << "].l2_norm() = " << tmp.l2_norm() << std::endl;
+    write_distributed_vector<Number, BoostOutputArchiveType>(get_velocity(i), oa);
 
+    VectorType tmp = get_velocity(i);
+    std::cout << "##+ WRITE: velocity[" << i << "].l2_norm() = " << tmp.l2_norm() << std::endl;
     sum_of_l2_norms += tmp.l2_norm();
   }
   oa << sum_of_l2_norms;
@@ -317,8 +318,9 @@ TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive &
 
   for(unsigned int i = 0; i < this->order; i++)
   {
-    VectorType const & tmp = get_pressure(i);
-    oa & tmp;
+    write_distributed_vector<Number, BoostOutputArchiveType>(get_pressure(i), oa);
+
+    VectorType tmp = get_pressure(i);
     std::cout << "##+ WRITE: pressure[" << i << "].l2_norm() = " << tmp.l2_norm() << std::endl;
   }
 
@@ -328,9 +330,9 @@ TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive &
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        oa & vec_convective_term[i];
-        std::cout << "##+ WRITE: vec_convective_term[" << i << "].l2_norm() = "
-          << vec_convective_term[i].l2_norm() << std::endl;
+        write_distributed_vector<Number, BoostOutputArchiveType>(vec_convective_term[i], oa);
+        std::cout << "##+ WRITE: vec_convective_term[" << i
+                  << "].l2_norm() = " << vec_convective_term[i].l2_norm() << std::endl;
       }
     }
   }
@@ -339,7 +341,7 @@ TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive &
   {
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
     {
-      oa << vec_grid_coordinates[i];
+      write_distributed_vector<Number, BoostOutputArchiveType>(vec_grid_coordinates[i], oa);
     }
   }
 }

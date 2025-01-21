@@ -149,7 +149,7 @@ private:
 
     // depend on values defined in input file
     end_time          = end_time; // double(end_time_multiples) * flow_through_time;
-    sample_start_time = 0.0; // double(sample_start_time_multiples) * flow_through_time;
+    sample_start_time = 0.0;      // double(sample_start_time_multiples) * flow_through_time;
 
     // sample end time is equal to end time, which is read from the input file
     sample_end_time = end_time;
@@ -174,10 +174,11 @@ private:
     this->param.viscosity  = viscosity;
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                     = SolverType::Unsteady;
-    this->param.temporal_discretization         = TemporalDiscretization::BDFDualSplittingScheme;
-    this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
-    this->param.calculation_of_time_step_size   = TimeStepCalculation::UserSpecified; //TimeStepCalculation::CFL;
+    this->param.solver_type                  = SolverType::Unsteady;
+    this->param.temporal_discretization      = TemporalDiscretization::BDFDualSplittingScheme;
+    this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
+    this->param.calculation_of_time_step_size =
+      TimeStepCalculation::UserSpecified; // TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping          = false;
     this->param.max_velocity                    = bulk_velocity;
     this->param.cfl                             = 0.32; // 0.375;
@@ -435,9 +436,10 @@ private:
     PostProcessorData<dim> pp_data;
 
     // write output for visualization of results
-    pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
-    pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = 1e-10; // (end_time - start_time) / 50.0;
+    pp_data.output_data.time_control_data.is_active  = this->output_parameters.write;
+    pp_data.output_data.time_control_data.start_time = start_time;
+    pp_data.output_data.time_control_data.trigger_interval =
+      1e-10; // (end_time - start_time) / 50.0;
     pp_data.output_data.directory                 = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename                  = this->output_parameters.filename;
     pp_data.output_data.write_velocity_magnitude  = false;
