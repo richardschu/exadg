@@ -26,6 +26,7 @@
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/utilities/boost_archive.h>
 #include <exadg/utilities/print_solver_results.h>
 
 namespace ExaDG
@@ -97,27 +98,25 @@ TimeIntBDFPressureCorrection<dim, Number>::setup_derived()
 
 template<int dim, typename Number>
 void
-TimeIntBDFPressureCorrection<dim, Number>::read_restart_vectors(
-  boost::archive::binary_iarchive & ia)
+TimeIntBDFPressureCorrection<dim, Number>::read_restart_vectors(BoostInputArchiveType & ia)
 {
   Base::read_restart_vectors(ia);
 
   for(unsigned int i = 0; i < pressure_dbc.size(); i++)
   {
-    ia >> pressure_dbc[i];
+    read_distributed_vector<Number, BoostInputArchiveType>(pressure_dbc[i], ia);
   }
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDFPressureCorrection<dim, Number>::write_restart_vectors(
-  boost::archive::binary_oarchive & oa) const
+TimeIntBDFPressureCorrection<dim, Number>::write_restart_vectors(BoostOutputArchiveType & oa) const
 {
   Base::write_restart_vectors(oa);
 
   for(unsigned int i = 0; i < pressure_dbc.size(); i++)
   {
-    oa << pressure_dbc[i];
+    write_distributed_vector<Number, BoostOutputArchiveType>(pressure_dbc[i], oa);
   }
 }
 
