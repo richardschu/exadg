@@ -148,8 +148,8 @@ private:
     viscosity = inviscid ? 0.0 : bulk_velocity * H / Re;
 
     // depend on values defined in input file
-    end_time          = end_time; // double(end_time_multiples) * flow_through_time;
-    sample_start_time = 0.0;      // double(sample_start_time_multiples) * flow_through_time;
+    end_time          = double(end_time_multiples) * flow_through_time;
+    sample_start_time = double(sample_start_time_multiples) * flow_through_time;
 
     // sample end time is equal to end time, which is read from the input file
     sample_end_time = end_time;
@@ -174,16 +174,15 @@ private:
     this->param.viscosity  = viscosity;
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                  = SolverType::Unsteady;
-    this->param.temporal_discretization      = TemporalDiscretization::BDFDualSplittingScheme;
-    this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
-    this->param.calculation_of_time_step_size =
-      TimeStepCalculation::UserSpecified; // TimeStepCalculation::CFL;
-    this->param.adaptive_time_stepping          = false;
+    this->param.solver_type                     = SolverType::Unsteady;
+    this->param.temporal_discretization         = TemporalDiscretization::BDFDualSplittingScheme;
+    this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
+    this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
+    this->param.adaptive_time_stepping          = true;
     this->param.max_velocity                    = bulk_velocity;
     this->param.cfl                             = 0.32; // 0.375;
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
-    this->param.time_step_size                  = end_time * 0.01;
+    this->param.time_step_size                  = 1e-1;
     this->param.order_time_integrator           = 2;
     this->param.start_with_low_order            = read_restart ? false : true;
 
@@ -197,10 +196,10 @@ private:
       this->output_parameters.directory + this->output_parameters.filename + "_restart";
 
     // output of solver information
-    this->param.solver_info_data.interval_time = 1e-10;
+    this->param.solver_info_data.interval_time = flow_through_time / 10.0;
 
     // SPATIAL DISCRETIZATION
-    this->param.spatial_discretization      = SpatialDiscretization::L2;
+    this->param.spatial_discretization      = SpatialDiscretization::HDIV;
     this->param.grid.triangulation_type     = TriangulationType::Distributed;
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
@@ -218,9 +217,9 @@ private:
     this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Strong;
 
     // div-div and continuity penalty
-    this->param.use_divergence_penalty                     = true;
-    this->param.divergence_penalty_factor                  = 1.0e0;
-    this->param.use_continuity_penalty                     = true;
+    this->param.use_divergence_penalty                     = false;
+    this->param.divergence_penalty_factor                  = 1.0e1;
+    this->param.use_continuity_penalty                     = false;
     this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
     this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
@@ -436,10 +435,9 @@ private:
     PostProcessorData<dim> pp_data;
 
     // write output for visualization of results
-    pp_data.output_data.time_control_data.is_active  = this->output_parameters.write;
-    pp_data.output_data.time_control_data.start_time = start_time;
-    pp_data.output_data.time_control_data.trigger_interval =
-      1e-10; // (end_time - start_time) / 50.0;
+    pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
+    pp_data.output_data.time_control_data.start_time       = start_time;
+    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 50.0;
     pp_data.output_data.directory                 = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename                  = this->output_parameters.filename;
     pp_data.output_data.write_velocity_magnitude  = false;
@@ -449,8 +447,8 @@ private:
     pp_data.output_data.write_q_criterion         = true;
     pp_data.output_data.degree                    = this->param.degree_u;
     pp_data.output_data.write_higher_order        = true;
-    pp_data.output_data.write_aspect_ratio        = true;
-    pp_data.output_data.write_processor_id        = true;
+    pp_data.output_data.write_aspect_ratio        = false;
+    pp_data.output_data.write_processor_id        = false;
 
     MyPostProcessorData<dim> my_pp_data;
     my_pp_data.pp_data = pp_data;
@@ -584,17 +582,14 @@ private:
       .trigger_every_time_steps = sample_every_timesteps;
     my_pp_data.line_plot_data.time_control_data_statistics
       .write_preliminary_results_every_nth_time_step = sample_every_timesteps * 1000;
-    //    my_pp_data.line_plot_data.time_control_data_statistics.clear_file = not read_restart; //
-    //    maybe needed
 
     // calculation of flow rate (use volume-based computation)
     my_pp_data.mean_velocity_data.calculate = true;
     my_pp_data.mean_velocity_data.directory = this->output_parameters.directory;
     my_pp_data.mean_velocity_data.filename  = this->output_parameters.filename + "_flow_rate";
     dealii::Tensor<1, dim, double> direction;
-    direction[0]                            = 1.0;
-    my_pp_data.mean_velocity_data.direction = direction;
-    //    my_pp_data.mean_velocity_data.clear_file    = not read_restart; // maybe needed
+    direction[0]                                = 1.0;
+    my_pp_data.mean_velocity_data.direction     = direction;
     my_pp_data.mean_velocity_data.write_to_file = true;
 
     std::shared_ptr<PostProcessorBase<dim, Number>> pp;
@@ -627,7 +622,7 @@ private:
   // start and end time
   double const start_time         = 0.0;
   unsigned int end_time_multiples = 10;
-  double       end_time           = 1e-2; // double(end_time_multiples) * flow_through_time;
+  double       end_time           = double(end_time_multiples) * flow_through_time;
 
   // grid
   double grid_stretch_factor = 1.6;

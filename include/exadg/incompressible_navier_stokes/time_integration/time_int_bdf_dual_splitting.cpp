@@ -96,8 +96,6 @@ TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(BoostInputArchiveType
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
     read_distributed_vector<Number, BoostInputArchiveType>(velocity_dbc[i], ia);
-    std::cout << "##+ READ: velocity_dbc[" << i << "].l2_norm() = " << velocity_dbc[i].l2_norm()
-              << "(2)" << std::endl;
   }
 }
 
@@ -109,8 +107,6 @@ TimeIntBDFDualSplitting<dim, Number>::write_restart_vectors(BoostOutputArchiveTy
 
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
-    std::cout << "##+ WRITE: velocity_dbc[" << i << "].l2_norm() = " << velocity_dbc[i].l2_norm()
-              << std::endl;
     write_distributed_vector<Number, BoostOutputArchiveType>(velocity_dbc[i], oa);
   }
 }
