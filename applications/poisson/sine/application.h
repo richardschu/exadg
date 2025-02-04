@@ -30,7 +30,7 @@ namespace ExaDG
 namespace Poisson
 {
 double const FREQUENCY             = 3.0 * dealii::numbers::PI;
-bool const   USE_NEUMANN_BOUNDARY  = true;
+bool const   USE_NEUMANN_BOUNDARY  = false;
 bool const   USE_PERIODIC_BOUNDARY = false;
 
 template<int dim>
@@ -138,12 +138,12 @@ private:
     this->param.right_hand_side = true;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.element_type = ElementType::Hypercube; // Simplex;
+    this->param.grid.element_type = ElementType::Simplex;
     if(this->param.grid.element_type == ElementType::Simplex)
     {
       this->param.grid.triangulation_type     = TriangulationType::FullyDistributed;
-      this->param.mapping_degree              = 2;
-      this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+      this->param.mapping_degree              = 1;
+      this->param.mapping_degree_coarse_grids = 1;
 
       this->param.grid.create_coarse_triangulations = true;
     }
@@ -167,7 +167,7 @@ private:
     this->param.solver_data.max_iter        = 1e4;
     this->param.compute_performance_metrics = true;
     this->param.preconditioner              = Preconditioner::Multigrid;
-    this->param.multigrid_data.type         = MultigridType::cphMG;
+    this->param.multigrid_data.type         = MultigridType::cpMG;
     this->param.multigrid_data.p_sequence   = PSequenceType::Bisect;
     // MG smoother
     this->param.multigrid_data.smoother_data.smoother        = MultigridSmoother::Chebyshev;
@@ -176,7 +176,7 @@ private:
     // MG coarse grid solver
     this->param.multigrid_data.coarse_problem.solver         = MultigridCoarseGridSolver::CG;
     this->param.multigrid_data.coarse_problem.preconditioner = multigrid_coarse_grid_preconditioner;
-    this->param.multigrid_data.coarse_problem.solver_data.rel_tol = 1.e-3;
+    this->param.multigrid_data.coarse_problem.solver_data.rel_tol = 1.e-2;
   }
 
   void
@@ -200,6 +200,10 @@ private:
       if(read_external_grid)
       {
         GridUtilities::read_external_triangulation<dim>(tria, this->param.grid);
+	for (auto  cell: tria)
+	 for (auto const & f: cell.face_indices())
+	    if (cell.face(f)->at_boundary())
+		    cell.face(f)->set_boundary_id(0);
       }
       else
       {
@@ -307,12 +311,12 @@ private:
       {
         AssertThrow(false, dealii::ExcMessage("not implemented."));
       }
-
+if(!read_external_grid){
       if(vector_local_refinements.size() > 0)
         refine_local(tria, vector_local_refinements);
 
       if(global_refinements > 0)
-        tria.refine_global(global_refinements);
+        tria.refine_global(global_refinements); }
     };
 
     GridUtilities::create_triangulation_with_multigrid<dim>(grid,
@@ -382,11 +386,11 @@ private:
   double const length = 1.0;
   double const left = -length, right = length;
 
-  bool const read_external_grid = false;
+  bool const read_external_grid = true;
 
   MeshType                          mesh_type = MeshType::Cartesian;
   MultigridCoarseGridPreconditioner multigrid_coarse_grid_preconditioner =
-    MultigridCoarseGridPreconditioner::PointJacobi;
+    MultigridCoarseGridPreconditioner::AMG; //PointJacobi;
 };
 
 } // namespace Poisson

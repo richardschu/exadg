@@ -6,15 +6,15 @@
     },
     "SpatialResolution": {
         "DegreeMin": "1",
-        "DegreeMax": "15",
-        "RefineSpaceMin": "2",
-        "RefineSpaceMax": "2"
+        "DegreeMax": "3",
+        "RefineSpaceMin": "0",
+        "RefineSpaceMax": "0"
     },
     "Application": {
         "MeshType": "Cartesian"
     },
     "Grid": {
-        "FileName": "applications/poisson/sine/external_grids/hypercube.e"
+        "FileName": "/home/still/ExaDG/lung_reordered_with_boundary_ids_scaled.vtk"
     },
     "Output": {
         "OutputDirectory": "output/poisson/sine/",

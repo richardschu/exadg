@@ -35,6 +35,1603 @@
 
 namespace ExaDG
 {
+template <bool transpose_matrix, typename Number, typename Number2>
+void
+apply_matrix_vector_product(const Number2 *matrix,
+                            const Number  *in0,
+                            Number        *out0,
+                            const int      n_rows,
+                            const int      n_columns)
+{
+  const int mm = transpose_matrix ? n_rows : n_columns,
+            nn = transpose_matrix ? n_columns : n_rows;
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+                          std::to_string(n_rows) + ", " +
+                          std::to_string(n_columns) + " was passed!"));
+
+  const Number *in1 = in0 + mm, *in2 = in1 + mm, *in3 = in2 + mm;
+  Number       *out1 = out0 + nn, *out2 = out1 + nn, *out3 = out2 + nn;
+
+  int nn_regular = (nn / 4) * 4;
+  for (int col = 0; col < nn_regular; col += 4)
+    {
+      dealii::ndarray<Number, 4, 4> res;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + col;
+          const Number   a = in0[0], b = in1[0], c = in2[0], d = in3[0];
+          for (unsigned int k = 0; k < 4; ++k)
+            {
+              const Number m = matrix_ptr[k];
+              res[0][k]      = m * a;
+              res[1][k]      = m * b;
+              res[2][k]      = m * c;
+              res[3][k]      = m * d;
+            }
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              const Number a = in0[i], b = in1[i], c = in2[i], d = in3[i];
+              for (unsigned int k = 0; k < 4; ++k)
+                {
+                  const Number m = matrix_ptr[k];
+                  res[0][k] += m * a;
+                  res[1][k] += m * b;
+                  res[2][k] += m * c;
+                  res[3][k] += m * d;
+                }
+            }
+        }
+      else
+        {
+          const Number2 *matrix_0 = matrix + col * n_columns;
+          const Number2 *matrix_1 = matrix + (col + 1) * n_columns;
+          const Number2 *matrix_2 = matrix + (col + 2) * n_columns;
+          const Number2 *matrix_3 = matrix + (col + 3) * n_columns;
+
+          const Number a = in0[0], b = in1[0], c = in2[0], d = in3[0];
+          Number       m = matrix_0[0];
+          res[0][0]      = m * a;
+          res[1][0]      = m * b;
+          res[2][0]      = m * c;
+          res[3][0]      = m * d;
+          m              = matrix_1[0];
+          res[0][1]      = m * a;
+          res[1][1]      = m * b;
+          res[2][1]      = m * c;
+          res[3][1]      = m * d;
+          m              = matrix_2[0];
+          res[0][2]      = m * a;
+          res[1][2]      = m * b;
+          res[2][2]      = m * c;
+          res[3][2]      = m * d;
+          m              = matrix_3[0];
+          res[0][3]      = m * a;
+          res[1][3]      = m * b;
+          res[2][3]      = m * c;
+          res[3][3]      = m * d;
+          for (int i = 1; i < mm; ++i)
+            {
+              const Number a = in0[i], b = in1[i], c = in2[i], d = in3[i];
+              m = matrix_0[i];
+              res[0][0] += m * a;
+              res[1][0] += m * b;
+              res[2][0] += m * c;
+              res[3][0] += m * d;
+              m = matrix_1[i];
+              res[0][1] += m * a;
+              res[1][1] += m * b;
+              res[2][1] += m * c;
+              res[3][1] += m * d;
+              m = matrix_2[i];
+              res[0][2] += m * a;
+              res[1][2] += m * b;
+              res[2][2] += m * c;
+              res[3][2] += m * d;
+              m = matrix_3[i];
+              res[0][3] += m * a;
+              res[1][3] += m * b;
+              res[2][3] += m * c;
+              res[3][3] += m * d;
+            }
+        }
+      for (unsigned int i = 0; i < 4; ++i)
+        {
+          out0[i] = res[0][i];
+          out1[i] = res[1][i];
+          out2[i] = res[2][i];
+          out3[i] = res[3][i];
+        }
+      out0 += 4;
+      out1 += 4;
+      out2 += 4;
+      out3 += 4;
+    }
+  if (nn - nn_regular == 3)
+    {
+      Number res0, res1, res2, res3, res4, res5, res6, res7, res8, res9, res10,
+        res11;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[1] * in0[0];
+          res2                      = matrix_ptr[2] * in0[0];
+          res3                      = matrix_ptr[0] * in1[0];
+          res4                      = matrix_ptr[1] * in1[0];
+          res5                      = matrix_ptr[2] * in1[0];
+          res6                      = matrix_ptr[0] * in2[0];
+          res7                      = matrix_ptr[1] * in2[0];
+          res8                      = matrix_ptr[2] * in2[0];
+          res9                      = matrix_ptr[0] * in3[0];
+          res10                     = matrix_ptr[1] * in3[0];
+          res11                     = matrix_ptr[2] * in3[0];
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              res0 += matrix_ptr[0] * in0[i];
+              res1 += matrix_ptr[1] * in0[i];
+              res2 += matrix_ptr[2] * in0[i];
+              res3 += matrix_ptr[0] * in1[i];
+              res4 += matrix_ptr[1] * in1[i];
+              res5 += matrix_ptr[2] * in1[i];
+              res6 += matrix_ptr[0] * in2[i];
+              res7 += matrix_ptr[1] * in2[i];
+              res8 += matrix_ptr[2] * in2[i];
+              res9 += matrix_ptr[0] * in3[i];
+              res10 += matrix_ptr[1] * in3[i];
+              res11 += matrix_ptr[2] * in3[i];
+            }
+        }
+      else
+        {
+          const Number2 *matrix_0 = matrix + nn_regular * n_columns;
+          const Number2 *matrix_1 = matrix + (nn_regular + 1) * n_columns;
+          const Number2 *matrix_2 = matrix + (nn_regular + 2) * n_columns;
+
+          res0  = matrix_0[0] * in0[0];
+          res1  = matrix_1[0] * in0[0];
+          res2  = matrix_2[0] * in0[0];
+          res3  = matrix_0[0] * in1[0];
+          res4  = matrix_1[0] * in1[0];
+          res5  = matrix_2[0] * in1[0];
+          res6  = matrix_0[0] * in2[0];
+          res7  = matrix_1[0] * in2[0];
+          res8  = matrix_2[0] * in2[0];
+          res9  = matrix_0[0] * in3[0];
+          res10 = matrix_1[0] * in3[0];
+          res11 = matrix_2[0] * in3[0];
+          for (int i = 1; i < mm; ++i)
+            {
+              res0 += matrix_0[i] * in0[i];
+              res1 += matrix_1[i] * in0[i];
+              res2 += matrix_2[i] * in0[i];
+              res3 += matrix_0[i] * in1[i];
+              res4 += matrix_1[i] * in1[i];
+              res5 += matrix_2[i] * in1[i];
+              res6 += matrix_0[i] * in2[i];
+              res7 += matrix_1[i] * in2[i];
+              res8 += matrix_2[i] * in2[i];
+              res9 += matrix_0[i] * in3[i];
+              res10 += matrix_1[i] * in3[i];
+              res11 += matrix_2[i] * in3[i];
+            }
+        }
+      out0[0] = res0;
+      out0[1] = res1;
+      out0[2] = res2;
+      out1[0] = res3;
+      out1[1] = res4;
+      out1[2] = res5;
+      out2[0] = res6;
+      out2[1] = res7;
+      out2[2] = res8;
+      out3[0] = res9;
+      out3[1] = res10;
+      out3[2] = res11;
+    }
+  else if (nn - nn_regular == 2)
+    {
+      Number res0, res1, res2, res3, res4, res5, res6, res7;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[1] * in0[0];
+          res2                      = matrix_ptr[0] * in1[0];
+          res3                      = matrix_ptr[1] * in1[0];
+          res4                      = matrix_ptr[0] * in2[0];
+          res5                      = matrix_ptr[1] * in2[0];
+          res6                      = matrix_ptr[0] * in3[0];
+          res7                      = matrix_ptr[1] * in3[0];
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              res0 += matrix_ptr[0] * in0[i];
+              res1 += matrix_ptr[1] * in0[i];
+              res2 += matrix_ptr[0] * in1[i];
+              res3 += matrix_ptr[1] * in1[i];
+              res4 += matrix_ptr[0] * in2[i];
+              res5 += matrix_ptr[1] * in2[i];
+              res6 += matrix_ptr[0] * in3[i];
+              res7 += matrix_ptr[1] * in3[i];
+            }
+        }
+      else
+        {
+          const Number2 *matrix_0 = matrix + nn_regular * n_columns;
+          const Number2 *matrix_1 = matrix + (nn_regular + 1) * n_columns;
+
+          res0 = matrix_0[0] * in0[0];
+          res1 = matrix_1[0] * in0[0];
+          res2 = matrix_0[0] * in1[0];
+          res3 = matrix_1[0] * in1[0];
+          res4 = matrix_0[0] * in2[0];
+          res5 = matrix_1[0] * in2[0];
+          res6 = matrix_0[0] * in3[0];
+          res7 = matrix_1[0] * in3[0];
+          for (int i = 1; i < mm; ++i)
+            {
+              res0 += matrix_0[i] * in0[i];
+              res1 += matrix_1[i] * in0[i];
+              res2 += matrix_0[i] * in1[i];
+              res3 += matrix_1[i] * in1[i];
+              res4 += matrix_0[i] * in2[i];
+              res5 += matrix_1[i] * in2[i];
+              res6 += matrix_0[i] * in3[i];
+              res7 += matrix_1[i] * in3[i];
+            }
+        }
+      out0[0] = res0;
+      out0[1] = res1;
+      out1[0] = res2;
+      out1[1] = res3;
+      out2[0] = res4;
+      out2[1] = res5;
+      out3[0] = res6;
+      out3[1] = res7;
+    }
+  else if (nn - nn_regular == 1)
+    {
+      Number res0, res1, res2, res3;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[0] * in1[0];
+          res2                      = matrix_ptr[0] * in2[0];
+          res3                      = matrix_ptr[0] * in3[0];
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              res0 += matrix_ptr[0] * in0[i];
+              res1 += matrix_ptr[0] * in1[i];
+              res2 += matrix_ptr[0] * in2[i];
+              res3 += matrix_ptr[0] * in3[i];
+            }
+        }
+      else
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular * n_columns;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[0] * in1[0];
+          res2                      = matrix_ptr[0] * in2[0];
+          res3                      = matrix_ptr[0] * in3[0];
+          for (int i = 1; i < mm; ++i)
+            {
+              res0 += matrix_ptr[i] * in0[i];
+              res1 += matrix_ptr[i] * in1[i];
+              res2 += matrix_ptr[i] * in2[i];
+              res3 += matrix_ptr[i] * in3[i];
+            }
+        }
+      out0[0] = res0;
+      out1[0] = res1;
+      out2[0] = res2;
+      out3[0] = res3;
+    }
+}
+
+template <bool transpose_matrix, typename Number, typename Number2>
+void
+apply_matrix_vector_product(const Number2 *matrix,
+                            const Number  *in0,
+                            const Number  *in1,
+                            Number        *out0,
+                            Number        *out1,
+                            const int      n_rows,
+                            const int      n_columns)
+{
+  const int mm = transpose_matrix ? n_rows : n_columns,
+            nn = transpose_matrix ? n_columns : n_rows;
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+                          std::to_string(n_rows) + ", " +
+                          std::to_string(n_columns) + " was passed!"));
+
+  int nn_regular = (nn / 4) * 4;
+  for (int col = 0; col < nn_regular; col += 4)
+    {
+      Number res[8];
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + col;
+          const Number   a = in0[0], b = in1[0];
+          Number         m = matrix_ptr[0];
+          res[0]           = m * a;
+          res[4]           = m * b;
+          m                = matrix_ptr[1];
+          res[1]           = m * a;
+          res[5]           = m * b;
+          m                = matrix_ptr[2];
+          res[2]           = m * a;
+          res[6]           = m * b;
+          m                = matrix_ptr[3];
+          res[3]           = m * a;
+          res[7]           = m * b;
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              const Number a = in0[i], b = in1[i];
+              m = matrix_ptr[0];
+              res[0] += m * a;
+              res[4] += m * b;
+              m = matrix_ptr[1];
+              res[1] += m * a;
+              res[5] += m * b;
+              m = matrix_ptr[2];
+              res[2] += m * a;
+              res[6] += m * b;
+              m = matrix_ptr[3];
+              res[3] += m * a;
+              res[7] += m * b;
+            }
+        }
+      else
+        {
+          const Number2 *matrix_0 = matrix + col * n_columns;
+          const Number2 *matrix_1 = matrix + (col + 1) * n_columns;
+          const Number2 *matrix_2 = matrix + (col + 2) * n_columns;
+          const Number2 *matrix_3 = matrix + (col + 3) * n_columns;
+
+          const Number a = in0[0], b = in1[0];
+          Number       m = matrix_0[0];
+          res[0]         = m * a;
+          res[4]         = m * b;
+          m              = matrix_1[0];
+          res[1]         = m * a;
+          res[5]         = m * b;
+          m              = matrix_2[0];
+          res[2]         = m * a;
+          res[6]         = m * b;
+          m              = matrix_3[0];
+          res[3]         = m * a;
+          res[7]         = m * b;
+          for (int i = 1; i < mm; ++i)
+            {
+              const Number a = in0[i], b = in1[i];
+              m = matrix_0[i];
+              res[0] += m * a;
+              res[4] += m * b;
+              m = matrix_1[i];
+              res[1] += m * a;
+              res[5] += m * b;
+              m = matrix_2[i];
+              res[2] += m * a;
+              res[6] += m * b;
+              m = matrix_3[i];
+              res[3] += m * a;
+              res[7] += m * b;
+            }
+        }
+      for (unsigned int i = 0; i < 4; ++i)
+        {
+          out0[i] = res[i];
+          out1[i] = res[4 + i];
+        }
+      out0 += 4;
+      out1 += 4;
+    }
+  if (nn - nn_regular == 3)
+    {
+      Number res0, res1, res2, res3, res4, res5;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[1] * in0[0];
+          res2                      = matrix_ptr[2] * in0[0];
+          res3                      = matrix_ptr[0] * in1[0];
+          res4                      = matrix_ptr[1] * in1[0];
+          res5                      = matrix_ptr[2] * in1[0];
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              res0 += matrix_ptr[0] * in0[i];
+              res1 += matrix_ptr[1] * in0[i];
+              res2 += matrix_ptr[2] * in0[i];
+              res3 += matrix_ptr[0] * in1[i];
+              res4 += matrix_ptr[1] * in1[i];
+              res5 += matrix_ptr[2] * in1[i];
+            }
+        }
+      else
+        {
+          const Number2 *matrix_0 = matrix + nn_regular * n_columns;
+          const Number2 *matrix_1 = matrix + (nn_regular + 1) * n_columns;
+          const Number2 *matrix_2 = matrix + (nn_regular + 2) * n_columns;
+
+          res0 = matrix_0[0] * in0[0];
+          res1 = matrix_1[0] * in0[0];
+          res2 = matrix_2[0] * in0[0];
+          res3 = matrix_0[0] * in1[0];
+          res4 = matrix_1[0] * in1[0];
+          res5 = matrix_2[0] * in1[0];
+          for (int i = 1; i < mm; ++i)
+            {
+              res0 += matrix_0[i] * in0[i];
+              res1 += matrix_1[i] * in0[i];
+              res2 += matrix_2[i] * in0[i];
+              res3 += matrix_0[i] * in1[i];
+              res4 += matrix_1[i] * in1[i];
+              res5 += matrix_2[i] * in1[i];
+            }
+        }
+      out0[0] = res0;
+      out0[1] = res1;
+      out0[2] = res2;
+      out1[0] = res3;
+      out1[1] = res4;
+      out1[2] = res5;
+    }
+  else if (nn - nn_regular == 2)
+    {
+      Number res0, res1, res2, res3;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[1] * in0[0];
+          res2                      = matrix_ptr[0] * in1[0];
+          res3                      = matrix_ptr[1] * in1[0];
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              res0 += matrix_ptr[0] * in0[i];
+              res1 += matrix_ptr[1] * in0[i];
+              res2 += matrix_ptr[0] * in1[i];
+              res3 += matrix_ptr[1] * in1[i];
+            }
+        }
+      else
+        {
+          const Number2 *matrix_0 = matrix + nn_regular * n_columns;
+          const Number2 *matrix_1 = matrix + (nn_regular + 1) * n_columns;
+
+          res0 = matrix_0[0] * in0[0];
+          res1 = matrix_1[0] * in0[0];
+          res2 = matrix_0[0] * in1[0];
+          res3 = matrix_1[0] * in1[0];
+          for (int i = 1; i < mm; ++i)
+            {
+              res0 += matrix_0[i] * in0[i];
+              res1 += matrix_1[i] * in0[i];
+              res2 += matrix_0[i] * in1[i];
+              res3 += matrix_1[i] * in1[i];
+            }
+        }
+      out0[0] = res0;
+      out0[1] = res1;
+      out1[0] = res2;
+      out1[1] = res3;
+    }
+  else if (nn - nn_regular == 1)
+    {
+      Number res0, res1;
+      if (transpose_matrix == true)
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[0] * in1[0];
+          matrix_ptr += n_columns;
+          for (int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+            {
+              res0 += matrix_ptr[0] * in0[i];
+              res1 += matrix_ptr[0] * in1[i];
+            }
+        }
+      else
+        {
+          const Number2 *matrix_ptr = matrix + nn_regular * n_columns;
+          res0                      = matrix_ptr[0] * in0[0];
+          res1                      = matrix_ptr[0] * in1[0];
+          for (int i = 1; i < mm; ++i)
+            {
+              res0 += matrix_ptr[i] * in0[i];
+              res1 += matrix_ptr[i] * in1[i];
+            }
+        }
+      out0[0] = res0;
+      out1[0] = res1;
+    }
+}
+
+template<bool transpose_matrix, bool add, typename Number, typename Number2>
+void
+apply_matrix_vector_product_2(const Number2 * matrix,
+                              const Number *  in0,
+                              Number *        out0,
+                              const int       n_rows,
+                              const int       n_columns)
+{
+  const int mm = transpose_matrix ? n_rows : n_columns, nn = transpose_matrix ? n_columns : n_rows;
+  Assert(n_rows > 0 && n_columns > 0, ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+                          std::to_string(n_rows) + ", " + std::to_string(n_columns) +
+                          " was passed!"));
+
+
+  const Number * in1  = in0 + mm;
+  Number *       out1 = out0 + nn;
+
+  int nn_regular = (nn / 5) * 5;
+  for(int col = 0; col < nn_regular; col += 5)
+  {
+    Number res[10];
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + col;
+      const Number    a = in0[0], b = in1[0];
+      Number          m = matrix_ptr[0];
+      res[0]            = m * a;
+      res[5]            = m * b;
+      m                 = matrix_ptr[1];
+      res[1]            = m * a;
+      res[6]            = m * b;
+      m                 = matrix_ptr[2];
+      res[2]            = m * a;
+      res[7]            = m * b;
+      m                 = matrix_ptr[3];
+      res[3]            = m * a;
+      res[8]            = m * b;
+      m                 = matrix_ptr[4];
+      res[4]            = m * a;
+      res[9]            = m * b;
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        const Number a = in0[i], b = in1[i];
+        m = matrix_ptr[0];
+        res[0] += m * a;
+        res[5] += m * b;
+        m = matrix_ptr[1];
+        res[1] += m * a;
+        res[6] += m * b;
+        m = matrix_ptr[2];
+        res[2] += m * a;
+        res[7] += m * b;
+        m = matrix_ptr[3];
+        res[3] += m * a;
+        res[8] += m * b;
+        m = matrix_ptr[4];
+        res[4] += m * a;
+        res[9] += m * b;
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + col * n_columns;
+      const Number2 * matrix_1 = matrix + (col + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (col + 2) * n_columns;
+      const Number2 * matrix_3 = matrix + (col + 3) * n_columns;
+      const Number2 * matrix_4 = matrix + (col + 4) * n_columns;
+
+      const Number a = in0[0], b = in1[0];
+      Number       m = matrix_0[0];
+      res[0]         = m * a;
+      res[5]         = m * b;
+      m              = matrix_1[0];
+      res[1]         = m * a;
+      res[6]         = m * b;
+      m              = matrix_2[0];
+      res[2]         = m * a;
+      res[7]         = m * b;
+      m              = matrix_3[0];
+      res[3]         = m * a;
+      res[8]         = m * b;
+      m              = matrix_4[0];
+      res[4]         = m * a;
+      res[9]         = m * b;
+      for(int i = 1; i < mm; ++i)
+      {
+        const Number a = in0[i], b = in1[i];
+        m = matrix_0[i];
+        res[0] += m * a;
+        res[5] += m * b;
+        m = matrix_1[i];
+        res[1] += m * a;
+        res[6] += m * b;
+        m = matrix_2[i];
+        res[2] += m * a;
+        res[7] += m * b;
+        m = matrix_3[i];
+        res[3] += m * a;
+        res[8] += m * b;
+        m = matrix_4[i];
+        res[4] += m * a;
+        res[9] += m * b;
+      }
+    }
+    if(add)
+    {
+      out0[0] += res[0];
+      out0[1] += res[1];
+      out0[2] += res[2];
+      out0[3] += res[3];
+      out0[4] += res[4];
+      out1[0] += res[5];
+      out1[1] += res[6];
+      out1[2] += res[7];
+      out1[3] += res[8];
+      out1[4] += res[9];
+    }
+    else
+    {
+      out0[0] = res[0];
+      out0[1] = res[1];
+      out0[2] = res[2];
+      out0[3] = res[3];
+      out0[4] = res[4];
+      out1[0] = res[5];
+      out1[1] = res[6];
+      out1[2] = res[7];
+      out1[3] = res[8];
+      out1[4] = res[9];
+    }
+    out0 += 5;
+    out1 += 5;
+  }
+  if(nn - nn_regular == 4)
+  {
+    Number res[8];
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      const Number    a = in0[0], b = in1[0];
+      Number          m = matrix_ptr[0];
+      res[0]            = m * a;
+      res[4]            = m * b;
+      m                 = matrix_ptr[1];
+      res[1]            = m * a;
+      res[5]            = m * b;
+      m                 = matrix_ptr[2];
+      res[2]            = m * a;
+      res[6]            = m * b;
+      m                 = matrix_ptr[3];
+      res[3]            = m * a;
+      res[7]            = m * b;
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        const Number a = in0[i], b = in1[i];
+        m = matrix_ptr[0];
+        res[0] += m * a;
+        res[4] += m * b;
+        m = matrix_ptr[1];
+        res[1] += m * a;
+        res[5] += m * b;
+        m = matrix_ptr[2];
+        res[2] += m * a;
+        res[6] += m * b;
+        m = matrix_ptr[3];
+        res[3] += m * a;
+        res[7] += m * b;
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (nn_regular + 2) * n_columns;
+      const Number2 * matrix_3 = matrix + (nn_regular + 3) * n_columns;
+
+      const Number a = in0[0], b = in1[0];
+      Number       m = matrix_0[0];
+      res[0]         = m * a;
+      res[4]         = m * b;
+      m              = matrix_1[0];
+      res[1]         = m * a;
+      res[5]         = m * b;
+      m              = matrix_2[0];
+      res[2]         = m * a;
+      res[6]         = m * b;
+      m              = matrix_3[0];
+      res[3]         = m * a;
+      res[7]         = m * b;
+      for(int i = 1; i < mm; ++i)
+      {
+        const Number a = in0[i], b = in1[i];
+        m = matrix_0[i];
+        res[0] += m * a;
+        res[4] += m * b;
+        m = matrix_1[i];
+        res[1] += m * a;
+        res[5] += m * b;
+        m = matrix_2[i];
+        res[2] += m * a;
+        res[6] += m * b;
+        m = matrix_3[i];
+        res[3] += m * a;
+        res[7] += m * b;
+      }
+    }
+    if(add)
+    {
+      out0[0] += res[0];
+      out0[1] += res[1];
+      out0[2] += res[2];
+      out0[3] += res[3];
+      out1[0] += res[4];
+      out1[1] += res[5];
+      out1[2] += res[6];
+      out1[3] += res[7];
+    }
+    else
+    {
+      out0[0] = res[0];
+      out0[1] = res[1];
+      out0[2] = res[2];
+      out0[3] = res[3];
+      out1[0] = res[4];
+      out1[1] = res[5];
+      out1[2] = res[6];
+      out1[3] = res[7];
+    }
+  }
+  if(nn - nn_regular == 3)
+  {
+    Number res0, res1, res2, res3, res4, res5;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[1] * in0[0];
+      res2                       = matrix_ptr[2] * in0[0];
+      res3                       = matrix_ptr[0] * in1[0];
+      res4                       = matrix_ptr[1] * in1[0];
+      res5                       = matrix_ptr[2] * in1[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[1] * in0[i];
+        res2 += matrix_ptr[2] * in0[i];
+        res3 += matrix_ptr[0] * in1[i];
+        res4 += matrix_ptr[1] * in1[i];
+        res5 += matrix_ptr[2] * in1[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (nn_regular + 2) * n_columns;
+
+      res0 = matrix_0[0] * in0[0];
+      res1 = matrix_1[0] * in0[0];
+      res2 = matrix_2[0] * in0[0];
+      res3 = matrix_0[0] * in1[0];
+      res4 = matrix_1[0] * in1[0];
+      res5 = matrix_2[0] * in1[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_0[i] * in0[i];
+        res1 += matrix_1[i] * in0[i];
+        res2 += matrix_2[i] * in0[i];
+        res3 += matrix_0[i] * in1[i];
+        res4 += matrix_1[i] * in1[i];
+        res5 += matrix_2[i] * in1[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out0[1] += res1;
+      out0[2] += res2;
+      out1[0] += res3;
+      out1[1] += res4;
+      out1[2] += res5;
+    }
+    else
+    {
+      out0[0] = res0;
+      out0[1] = res1;
+      out0[2] = res2;
+      out1[0] = res3;
+      out1[1] = res4;
+      out1[2] = res5;
+    }
+  }
+  else if(nn - nn_regular == 2)
+  {
+    Number res0, res1, res2, res3;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[1] * in0[0];
+      res2                       = matrix_ptr[0] * in1[0];
+      res3                       = matrix_ptr[1] * in1[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[1] * in0[i];
+        res2 += matrix_ptr[0] * in1[i];
+        res3 += matrix_ptr[1] * in1[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+
+      res0 = matrix_0[0] * in0[0];
+      res1 = matrix_1[0] * in0[0];
+      res2 = matrix_0[0] * in1[0];
+      res3 = matrix_1[0] * in1[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_0[i] * in0[i];
+        res1 += matrix_1[i] * in0[i];
+        res2 += matrix_0[i] * in1[i];
+        res3 += matrix_1[i] * in1[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out0[1] += res1;
+      out1[0] += res2;
+      out1[1] += res3;
+    }
+    else
+    {
+      out0[0] = res0;
+      out0[1] = res1;
+      out1[0] = res2;
+      out1[1] = res3;
+    }
+  }
+  else if(nn - nn_regular == 1)
+  {
+    Number res0, res1;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[0] * in1[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[0] * in1[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular * n_columns;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[0] * in1[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_ptr[i] * in0[i];
+        res1 += matrix_ptr[i] * in1[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out1[0] += res1;
+    }
+    else
+    {
+      out0[0] = res0;
+      out1[0] = res1;
+    }
+  }
+}
+
+template<bool transpose_matrix, bool add, typename Number, typename Number2>
+void
+apply_matrix_vector_product_3(const Number2 * matrix,
+                              const Number *  in0,
+                              Number *        out0,
+                              const int       n_rows,
+                              const int       n_columns)
+{
+  const int mm = transpose_matrix ? n_rows : n_columns, nn = transpose_matrix ? n_columns : n_rows;
+  Assert(n_rows > 0 && n_columns > 0, ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+                          std::to_string(n_rows) + ", " + std::to_string(n_columns) +
+                          " was passed!"));
+
+  const Number *in1 = in0 + mm, *in2 = in1 + mm;
+  Number *      out1 = out0 + nn, *out2 = out1 + nn;
+
+
+  int nn_regular = (nn / 4) * 4;
+  for(int col = 0; col < nn_regular; col += 4)
+  {
+    Number res[12];
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + col;
+      const Number    a = in0[0], b = in1[0], c = in2[0];
+      Number          m = matrix_ptr[0];
+      res[0]            = m * a;
+      res[4]            = m * b;
+      res[8]            = m * c;
+      m                 = matrix_ptr[1];
+      res[1]            = m * a;
+      res[5]            = m * b;
+      res[9]            = m * c;
+      m                 = matrix_ptr[2];
+      res[2]            = m * a;
+      res[6]            = m * b;
+      res[10]           = m * c;
+      m                 = matrix_ptr[3];
+      res[3]            = m * a;
+      res[7]            = m * b;
+      res[11]           = m * c;
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        const Number a = in0[i], b = in1[i], c = in2[i];
+        m = matrix_ptr[0];
+        res[0] += m * a;
+        res[4] += m * b;
+        res[8] += m * c;
+        m = matrix_ptr[1];
+        res[1] += m * a;
+        res[5] += m * b;
+        res[9] += m * c;
+        m = matrix_ptr[2];
+        res[2] += m * a;
+        res[6] += m * b;
+        res[10] += m * c;
+        m = matrix_ptr[3];
+        res[3] += m * a;
+        res[7] += m * b;
+        res[11] += m * c;
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + col * n_columns;
+      const Number2 * matrix_1 = matrix + (col + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (col + 2) * n_columns;
+      const Number2 * matrix_3 = matrix + (col + 3) * n_columns;
+
+      const Number a = in0[0], b = in1[0], c = in2[0];
+      Number       m = matrix_0[0];
+      res[0]         = m * a;
+      res[4]         = m * b;
+      res[8]         = m * c;
+      m              = matrix_1[0];
+      res[1]         = m * a;
+      res[5]         = m * b;
+      res[9]         = m * c;
+      m              = matrix_2[0];
+      res[2]         = m * a;
+      res[6]         = m * b;
+      res[10]        = m * c;
+      m              = matrix_3[0];
+      res[3]         = m * a;
+      res[7]         = m * b;
+      res[11]        = m * c;
+      for(int i = 1; i < mm; ++i)
+      {
+        const Number a = in0[i], b = in1[i], c = in2[i];
+        m = matrix_0[i];
+        res[0] += m * a;
+        res[4] += m * b;
+        res[8] += m * c;
+        m = matrix_1[i];
+        res[1] += m * a;
+        res[5] += m * b;
+        res[9] += m * c;
+        m = matrix_2[i];
+        res[2] += m * a;
+        res[6] += m * b;
+        res[10] += m * c;
+        m = matrix_3[i];
+        res[3] += m * a;
+        res[7] += m * b;
+        res[11] += m * c;
+      }
+    }
+    if(add)
+    {
+      out0[0] += res[0];
+      out0[1] += res[1];
+      out0[2] += res[2];
+      out0[3] += res[3];
+      out1[0] += res[4];
+      out1[1] += res[5];
+      out1[2] += res[6];
+      out1[3] += res[7];
+      out2[0] += res[8];
+      out2[1] += res[9];
+      out2[2] += res[10];
+      out2[3] += res[11];
+    }
+    else
+    {
+      out0[0] = res[0];
+      out0[1] = res[1];
+      out0[2] = res[2];
+      out0[3] = res[3];
+      out1[0] = res[4];
+      out1[1] = res[5];
+      out1[2] = res[6];
+      out1[3] = res[7];
+      out2[0] = res[8];
+      out2[1] = res[9];
+      out2[2] = res[10];
+      out2[3] = res[11];
+    }
+    out0 += 4;
+    out1 += 4;
+    out2 += 4;
+  }
+  if(nn - nn_regular == 3)
+  {
+    Number res0, res1, res2, res3, res4, res5, res6, res7, res8;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[1] * in0[0];
+      res2                       = matrix_ptr[2] * in0[0];
+      res3                       = matrix_ptr[0] * in1[0];
+      res4                       = matrix_ptr[1] * in1[0];
+      res5                       = matrix_ptr[2] * in1[0];
+      res6                       = matrix_ptr[0] * in2[0];
+      res7                       = matrix_ptr[1] * in2[0];
+      res8                       = matrix_ptr[2] * in2[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[1] * in0[i];
+        res2 += matrix_ptr[2] * in0[i];
+        res3 += matrix_ptr[0] * in1[i];
+        res4 += matrix_ptr[1] * in1[i];
+        res5 += matrix_ptr[2] * in1[i];
+        res6 += matrix_ptr[0] * in2[i];
+        res7 += matrix_ptr[1] * in2[i];
+        res8 += matrix_ptr[2] * in2[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (nn_regular + 2) * n_columns;
+
+      res0 = matrix_0[0] * in0[0];
+      res1 = matrix_1[0] * in0[0];
+      res2 = matrix_2[0] * in0[0];
+      res3 = matrix_0[0] * in1[0];
+      res4 = matrix_1[0] * in1[0];
+      res5 = matrix_2[0] * in1[0];
+      res6 = matrix_0[0] * in2[0];
+      res7 = matrix_1[0] * in2[0];
+      res8 = matrix_2[0] * in2[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_0[i] * in0[i];
+        res1 += matrix_1[i] * in0[i];
+        res2 += matrix_2[i] * in0[i];
+        res3 += matrix_0[i] * in1[i];
+        res4 += matrix_1[i] * in1[i];
+        res5 += matrix_2[i] * in1[i];
+        res6 += matrix_0[i] * in2[i];
+        res7 += matrix_1[i] * in2[i];
+        res8 += matrix_2[i] * in2[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out0[1] += res1;
+      out0[2] += res2;
+      out1[0] += res3;
+      out1[1] += res4;
+      out1[2] += res5;
+      out2[0] += res6;
+      out2[1] += res7;
+      out2[2] += res8;
+    }
+    else
+    {
+      out0[0] = res0;
+      out0[1] = res1;
+      out0[2] = res2;
+      out1[0] = res3;
+      out1[1] = res4;
+      out1[2] = res5;
+      out2[0] = res6;
+      out2[1] = res7;
+      out2[2] = res8;
+    }
+  }
+  else if(nn - nn_regular == 2)
+  {
+    Number res0, res1, res2, res3, res4, res5;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[1] * in0[0];
+      res2                       = matrix_ptr[0] * in1[0];
+      res3                       = matrix_ptr[1] * in1[0];
+      res4                       = matrix_ptr[0] * in2[0];
+      res5                       = matrix_ptr[1] * in2[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[1] * in0[i];
+        res2 += matrix_ptr[0] * in1[i];
+        res3 += matrix_ptr[1] * in1[i];
+        res4 += matrix_ptr[0] * in2[i];
+        res5 += matrix_ptr[1] * in2[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+
+      res0 = matrix_0[0] * in0[0];
+      res1 = matrix_1[0] * in0[0];
+      res2 = matrix_0[0] * in1[0];
+      res3 = matrix_1[0] * in1[0];
+      res4 = matrix_0[0] * in2[0];
+      res5 = matrix_1[0] * in2[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_0[i] * in0[i];
+        res1 += matrix_1[i] * in0[i];
+        res2 += matrix_0[i] * in1[i];
+        res3 += matrix_1[i] * in1[i];
+        res4 += matrix_0[i] * in2[i];
+        res5 += matrix_1[i] * in2[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out0[1] += res1;
+      out1[0] += res2;
+      out1[1] += res3;
+      out2[0] += res4;
+      out2[1] += res5;
+    }
+    else
+    {
+      out0[0] = res0;
+      out0[1] = res1;
+      out1[0] = res2;
+      out1[1] = res3;
+      out2[0] = res4;
+      out2[1] = res5;
+    }
+  }
+  else if(nn - nn_regular == 1)
+  {
+    Number res0, res1, res2;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[0] * in1[0];
+      res2                       = matrix_ptr[0] * in2[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[0] * in1[i];
+        res2 += matrix_ptr[0] * in2[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular * n_columns;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[0] * in1[0];
+      res2                       = matrix_ptr[0] * in2[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_ptr[i] * in0[i];
+        res1 += matrix_ptr[i] * in1[i];
+        res2 += matrix_ptr[i] * in2[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out1[0] += res1;
+      out2[0] += res2;
+    }
+    else
+    {
+      out0[0] = res0;
+      out1[0] = res1;
+      out2[0] = res2;
+    }
+  }
+}
+
+template<bool transpose_matrix, bool add, typename Number, typename Number2>
+void
+apply_matrix_vector_product_4(const Number2 * matrix,
+                              const Number *  in0,
+                              Number *        out0,
+                              const int       n_rows,
+                              const int       n_columns)
+{
+  const int mm = transpose_matrix ? n_rows : n_columns, nn = transpose_matrix ? n_columns : n_rows;
+  Assert(n_rows > 0 && n_columns > 0, ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0,
+         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+                          std::to_string(n_rows) + ", " + std::to_string(n_columns) +
+                          " was passed!"));
+
+  const Number *in1 = in0 + mm, *in2 = in1 + mm, *in3 = in2 + mm;
+  Number *      out1 = out0 + nn, *out2 = out1 + nn, *out3 = out2 + nn;
+
+  int nn_regular = (nn / 4) * 4;
+  for(int col = 0; col < nn_regular; col += 4)
+  {
+    dealii::ndarray<Number, 4, 4> res;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + col;
+      const Number    a = in0[0], b = in1[0], c = in2[0], d = in3[0];
+      for(unsigned int k = 0; k < 4; ++k)
+      {
+        const Number m = matrix_ptr[k];
+        res[0][k]      = m * a;
+        res[1][k]      = m * b;
+        res[2][k]      = m * c;
+        res[3][k]      = m * d;
+      }
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        const Number a = in0[i], b = in1[i], c = in2[i], d = in3[i];
+        for(unsigned int k = 0; k < 4; ++k)
+        {
+          const Number m = matrix_ptr[k];
+          res[0][k] += m * a;
+          res[1][k] += m * b;
+          res[2][k] += m * c;
+          res[3][k] += m * d;
+        }
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + col * n_columns;
+      const Number2 * matrix_1 = matrix + (col + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (col + 2) * n_columns;
+      const Number2 * matrix_3 = matrix + (col + 3) * n_columns;
+
+      const Number a = in0[0], b = in1[0], c = in2[0], d = in3[0];
+      Number       m = matrix_0[0];
+      res[0][0]      = m * a;
+      res[1][0]      = m * b;
+      res[2][0]      = m * c;
+      res[3][0]      = m * d;
+      m              = matrix_1[0];
+      res[0][1]      = m * a;
+      res[1][1]      = m * b;
+      res[2][1]      = m * c;
+      res[3][1]      = m * d;
+      m              = matrix_2[0];
+      res[0][2]      = m * a;
+      res[1][2]      = m * b;
+      res[2][2]      = m * c;
+      res[3][2]      = m * d;
+      m              = matrix_3[0];
+      res[0][3]      = m * a;
+      res[1][3]      = m * b;
+      res[2][3]      = m * c;
+      res[3][3]      = m * d;
+      for(int i = 1; i < mm; ++i)
+      {
+        const Number a = in0[i], b = in1[i], c = in2[i], d = in3[i];
+        m = matrix_0[i];
+        res[0][0] += m * a;
+        res[1][0] += m * b;
+        res[2][0] += m * c;
+        res[3][0] += m * d;
+        m = matrix_1[i];
+        res[0][1] += m * a;
+        res[1][1] += m * b;
+        res[2][1] += m * c;
+        res[3][1] += m * d;
+        m = matrix_2[i];
+        res[0][2] += m * a;
+        res[1][2] += m * b;
+        res[2][2] += m * c;
+        res[3][2] += m * d;
+        m = matrix_3[i];
+        res[0][3] += m * a;
+        res[1][3] += m * b;
+        res[2][3] += m * c;
+        res[3][3] += m * d;
+      }
+    }
+    for(unsigned int i = 0; i < 4; ++i)
+    {
+      if(add)
+      {
+        out0[i] += res[0][i];
+        out1[i] += res[1][i];
+        out2[i] += res[2][i];
+        out3[i] += res[3][i];
+      }
+      else
+      {
+        out0[i] = res[0][i];
+        out1[i] = res[1][i];
+        out2[i] = res[2][i];
+        out3[i] = res[3][i];
+      }
+    }
+    out0 += 4;
+    out1 += 4;
+    out2 += 4;
+    out3 += 4;
+  }
+  if(nn - nn_regular == 3)
+  {
+    Number res0, res1, res2, res3, res4, res5, res6, res7, res8, res9, res10, res11;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[1] * in0[0];
+      res2                       = matrix_ptr[2] * in0[0];
+      res3                       = matrix_ptr[0] * in1[0];
+      res4                       = matrix_ptr[1] * in1[0];
+      res5                       = matrix_ptr[2] * in1[0];
+      res6                       = matrix_ptr[0] * in2[0];
+      res7                       = matrix_ptr[1] * in2[0];
+      res8                       = matrix_ptr[2] * in2[0];
+      res9                       = matrix_ptr[0] * in3[0];
+      res10                      = matrix_ptr[1] * in3[0];
+      res11                      = matrix_ptr[2] * in3[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[1] * in0[i];
+        res2 += matrix_ptr[2] * in0[i];
+        res3 += matrix_ptr[0] * in1[i];
+        res4 += matrix_ptr[1] * in1[i];
+        res5 += matrix_ptr[2] * in1[i];
+        res6 += matrix_ptr[0] * in2[i];
+        res7 += matrix_ptr[1] * in2[i];
+        res8 += matrix_ptr[2] * in2[i];
+        res9 += matrix_ptr[0] * in3[i];
+        res10 += matrix_ptr[1] * in3[i];
+        res11 += matrix_ptr[2] * in3[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+      const Number2 * matrix_2 = matrix + (nn_regular + 2) * n_columns;
+
+      res0  = matrix_0[0] * in0[0];
+      res1  = matrix_1[0] * in0[0];
+      res2  = matrix_2[0] * in0[0];
+      res3  = matrix_0[0] * in1[0];
+      res4  = matrix_1[0] * in1[0];
+      res5  = matrix_2[0] * in1[0];
+      res6  = matrix_0[0] * in2[0];
+      res7  = matrix_1[0] * in2[0];
+      res8  = matrix_2[0] * in2[0];
+      res9  = matrix_0[0] * in3[0];
+      res10 = matrix_1[0] * in3[0];
+      res11 = matrix_2[0] * in3[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_0[i] * in0[i];
+        res1 += matrix_1[i] * in0[i];
+        res2 += matrix_2[i] * in0[i];
+        res3 += matrix_0[i] * in1[i];
+        res4 += matrix_1[i] * in1[i];
+        res5 += matrix_2[i] * in1[i];
+        res6 += matrix_0[i] * in2[i];
+        res7 += matrix_1[i] * in2[i];
+        res8 += matrix_2[i] * in2[i];
+        res9 += matrix_0[i] * in3[i];
+        res10 += matrix_1[i] * in3[i];
+        res11 += matrix_2[i] * in3[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out0[1] += res1;
+      out0[2] += res2;
+      out1[0] += res3;
+      out1[1] += res4;
+      out1[2] += res5;
+      out2[0] += res6;
+      out2[1] += res7;
+      out2[2] += res8;
+      out3[0] += res9;
+      out3[1] += res10;
+      out3[2] += res11;
+    }
+    else
+    {
+      out0[0] = res0;
+      out0[1] = res1;
+      out0[2] = res2;
+      out1[0] = res3;
+      out1[1] = res4;
+      out1[2] = res5;
+      out2[0] = res6;
+      out2[1] = res7;
+      out2[2] = res8;
+      out3[0] = res9;
+      out3[1] = res10;
+      out3[2] = res11;
+    }
+  }
+  else if(nn - nn_regular == 2)
+  {
+    Number res0, res1, res2, res3, res4, res5, res6, res7;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[1] * in0[0];
+      res2                       = matrix_ptr[0] * in1[0];
+      res3                       = matrix_ptr[1] * in1[0];
+      res4                       = matrix_ptr[0] * in2[0];
+      res5                       = matrix_ptr[1] * in2[0];
+      res6                       = matrix_ptr[0] * in3[0];
+      res7                       = matrix_ptr[1] * in3[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[1] * in0[i];
+        res2 += matrix_ptr[0] * in1[i];
+        res3 += matrix_ptr[1] * in1[i];
+        res4 += matrix_ptr[0] * in2[i];
+        res5 += matrix_ptr[1] * in2[i];
+        res6 += matrix_ptr[0] * in3[i];
+        res7 += matrix_ptr[1] * in3[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_0 = matrix + nn_regular * n_columns;
+      const Number2 * matrix_1 = matrix + (nn_regular + 1) * n_columns;
+
+      res0 = matrix_0[0] * in0[0];
+      res1 = matrix_1[0] * in0[0];
+      res2 = matrix_0[0] * in1[0];
+      res3 = matrix_1[0] * in1[0];
+      res4 = matrix_0[0] * in2[0];
+      res5 = matrix_1[0] * in2[0];
+      res6 = matrix_0[0] * in3[0];
+      res7 = matrix_1[0] * in3[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_0[i] * in0[i];
+        res1 += matrix_1[i] * in0[i];
+        res2 += matrix_0[i] * in1[i];
+        res3 += matrix_1[i] * in1[i];
+        res4 += matrix_0[i] * in2[i];
+        res5 += matrix_1[i] * in2[i];
+        res6 += matrix_0[i] * in3[i];
+        res7 += matrix_1[i] * in3[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out0[1] += res1;
+      out1[0] += res2;
+      out1[1] += res3;
+      out2[0] += res4;
+      out2[1] += res5;
+      out3[0] += res6;
+      out3[1] += res7;
+    }
+    else
+    {
+      out0[0] = res0;
+      out0[1] = res1;
+      out1[0] = res2;
+      out1[1] = res3;
+      out2[0] = res4;
+      out2[1] = res5;
+      out3[0] = res6;
+      out3[1] = res7;
+    }
+  }
+  else if(nn - nn_regular == 1)
+  {
+    Number res0, res1, res2, res3;
+    if(transpose_matrix == true)
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[0] * in1[0];
+      res2                       = matrix_ptr[0] * in2[0];
+      res3                       = matrix_ptr[0] * in3[0];
+      matrix_ptr += n_columns;
+      for(int i = 1; i < mm; ++i, matrix_ptr += n_columns)
+      {
+        res0 += matrix_ptr[0] * in0[i];
+        res1 += matrix_ptr[0] * in1[i];
+        res2 += matrix_ptr[0] * in2[i];
+        res3 += matrix_ptr[0] * in3[i];
+      }
+    }
+    else
+    {
+      const Number2 * matrix_ptr = matrix + nn_regular * n_columns;
+      res0                       = matrix_ptr[0] * in0[0];
+      res1                       = matrix_ptr[0] * in1[0];
+      res2                       = matrix_ptr[0] * in2[0];
+      res3                       = matrix_ptr[0] * in3[0];
+      for(int i = 1; i < mm; ++i)
+      {
+        res0 += matrix_ptr[i] * in0[i];
+        res1 += matrix_ptr[i] * in1[i];
+        res2 += matrix_ptr[i] * in2[i];
+        res3 += matrix_ptr[i] * in3[i];
+      }
+    }
+    if(add)
+    {
+      out0[0] += res0;
+      out1[0] += res1;
+      out2[0] += res2;
+      out3[0] += res3;
+    }
+    else
+    {
+      out0[0] = res0;
+      out1[0] = res1;
+      out2[0] = res2;
+      out3[0] = res3;
+    }
+  }
+}
+
+
 template<int dim, typename Number, int n_components>
 OperatorBase<dim, Number, n_components>::OperatorBase()
   : dealii::Subscriptor(),
@@ -71,6 +1668,97 @@ OperatorBase<dim, Number, n_components>::reinit(
   // vertex but has all of them in the last item, i.e., quads in 2D and hexes
   // in 3D, and thus necessarily has dofs_per_vertex=0
   is_dg = (this->matrix_free->get_dof_handler(this->data.dof_index).get_fe().dofs_per_vertex == 0);
+
+  penalty_factor = (matrix_free.get_dof_handler().get_fe().degree + 1) *
+           (matrix_free.get_dof_handler().get_fe().degree + dim)/dim;
+
+  if (is_dg)
+  {
+    unsigned int n_cells = matrix_free.n_cell_batches() + matrix_free.n_ghost_cell_batches();
+    array_penalty_parameter.resize(n_cells);
+
+    dealii::Mapping<dim> const &       mapping = *matrix_free.get_mapping_info().mapping;
+    dealii::FiniteElement<dim> const & fe      = matrix_free.get_dof_handler(this->data.dof_index).get_fe();
+    unsigned int const                 degree  = fe.degree;
+
+    auto const reference_cells =
+      matrix_free.get_dof_handler(this->data.dof_index).get_triangulation().get_reference_cells();
+    AssertThrow(reference_cells.size() == 1, dealii::ExcMessage("No mixed meshes allowed."));
+
+    auto const quadrature = reference_cells[0].template get_gauss_type_quadrature<dim>(degree + 1);
+    dealii::FEValues<dim> fe_values(mapping, fe, quadrature, dealii::update_JxW_values);
+
+    auto const face_quadrature =
+      reference_cells[0].face_reference_cell(0).template get_gauss_type_quadrature<dim - 1>(degree +
+                                                                                            1);
+    dealii::FEFaceValues<dim> fe_face_values(mapping, fe, face_quadrature, dealii::update_JxW_values);
+
+    for(unsigned int i = 0; i < n_cells; ++i)
+    {
+      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(i); ++v)
+      {
+        typename dealii::DoFHandler<dim>::cell_iterator cell =
+          matrix_free.get_cell_iterator(i, v, this->data.dof_index);
+        fe_values.reinit(cell);
+
+        // calculate cell volume
+        Number volume = 0;
+        for(unsigned int q = 0; q < quadrature.size(); ++q)
+        {
+          volume += fe_values.JxW(q);
+        }
+
+        // calculate surface area
+        Number surface_area = 0;
+        for(unsigned int const f : cell->face_indices())
+        {
+          fe_face_values.reinit(cell, f);
+          Number const factor =
+            (cell->at_boundary(f) and not(cell->has_periodic_neighbor(f))) ? 1. : 0.5;
+          for(unsigned int q = 0; q < face_quadrature.size(); ++q)
+          {
+            surface_area += fe_face_values.JxW(q) * factor;
+          }
+        }
+
+        array_penalty_parameter[i][v] = surface_area / volume;
+      }
+    }
+  }
+  if (true)
+  {
+    constexpr unsigned int n_lanes = dealii::VectorizedArray<Number>::size();
+    manual_dof_indices.reinit(
+      matrix_free.n_cell_batches(),
+      matrix_free.get_dof_handler().get_fe().dofs_per_cell * n_lanes,
+      true);
+    manual_dof_indices.fill(dealii::numbers::invalid_unsigned_int);
+    std::vector<dealii::types::global_dof_index> dof_indices(
+      matrix_free.get_dof_handler().get_fe().dofs_per_cell);
+
+    dof_indices_have_constraints.clear();
+    dof_indices_have_constraints.resize(matrix_free.n_cell_batches());
+
+    for (unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
+      {
+        bool has_constraints =
+          matrix_free.n_active_entries_per_cell_batch(c) < n_lanes;
+        for (unsigned int v = 0;
+             v < matrix_free.n_active_entries_per_cell_batch(c);
+             ++v)
+          {
+            matrix_free.get_cell_iterator(c, v)->get_dof_indices(dof_indices);
+            for (unsigned int i = 0; i < dof_indices.size(); ++i)
+              if (!constraints.is_constrained(dof_indices[i]))
+                manual_dof_indices(c, i * n_lanes + v) =
+                  matrix_free.get_dof_info()
+                    .vector_partitioner->global_to_local(dof_indices[i]);
+              else
+                has_constraints = true;
+          }
+        dof_indices_have_constraints[c] = has_constraints;
+      }
+  }
 
   // set multigrid level
   this->level = this->matrix_free->get_mg_level();
@@ -1278,18 +2966,357 @@ OperatorBase<dim, Number, n_components>::cell_loop(
   VectorType const &                      src,
   Range const &                           range) const
 {
-  IntegratorCell integrator =
-    IntegratorCell(matrix_free, this->data.dof_index, this->data.quad_index);
-
-  for(auto cell = range.first; cell < range.second; ++cell)
+if(is_dg)
   {
-    this->reinit_cell(integrator, cell);
+    const dealii::internal::MatrixFreeFunctions::DoFInfo & dof_info = matrix_free.get_dof_info(this->data.dof_index);
+    dealii::AlignedVector<dealii::VectorizedArray<Number>> * scratch_data   = matrix_free.acquire_scratch_data();
+    const dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> & shape_info =
+      matrix_free.get_shape_info(this->data.dof_index, this->data.quad_index);
+    const unsigned int     dofs_per_cell = shape_info.dofs_per_component_on_cell;
+    constexpr unsigned int batch_size    = 4;
+    const unsigned int     n_q_points    = shape_info.n_q_points;
+    constexpr unsigned int n_lanes       = dealii::VectorizedArray<Number>::size();
 
-    integrator.gather_evaluate(src, integrator_flags.cell_evaluate);
+    const auto &   mapping_data       = matrix_free.get_mapping_info().cell_data[this->data.quad_index];
+    const Number * quadrature_weights = mapping_data.descriptor[0].quadrature_weights.data();
 
-    this->do_cell_integral(integrator);
+    scratch_data->resize_fast(batch_size * (dim * n_q_points + dofs_per_cell));
+    dealii::VectorizedArray<Number> * values_dofs    = scratch_data->begin();
+    dealii::VectorizedArray<Number> * gradients_quad = scratch_data->begin() + batch_size * dofs_per_cell;
 
-    integrator.integrate_scatter(integrator_flags.cell_integrate, dst);
+    const dealii::internal::MatrixFreeFunctions::DoFInfo::DoFAccessIndex ind =
+      dealii::internal::MatrixFreeFunctions::DoFInfo::dof_access_cell;
+
+    const std::vector<unsigned int> & dof_indices_cont = dof_info.dof_indices_contiguous[ind];
+
+    dealii::internal::VectorReader<Number, dealii::VectorizedArray<Number>>                   reader;
+    dealii::internal::VectorDistributorLocalToGlobal<Number, dealii::VectorizedArray<Number>> writer;
+    std::bool_constant<dealii::internal::is_vectorizable<VectorType, Number>::value>  vector_selector;
+
+    for(unsigned int cell = range.first; cell < range.second; cell += batch_size)
+    {
+      // read dof values
+      const unsigned int my_batch_size =
+        cell + batch_size <= range.second ? batch_size : range.second - cell;
+      for(unsigned int batch = 0; batch < my_batch_size; ++batch)
+      {
+        const unsigned int n_active_lanes =
+          matrix_free.n_active_entries_per_cell_batch(cell + batch);
+        const bool use_vectorized_path = n_active_lanes == n_lanes;
+
+        if(use_vectorized_path)
+        {
+          reader.process_dofs_vectorized_transpose(dofs_per_cell,
+                                                   dof_indices_cont.data() +
+                                                     (cell + batch) * n_lanes,
+                                                   src,
+                                                   &values_dofs[batch * dofs_per_cell],
+                                                   vector_selector);
+        }
+        else
+        {
+          for(unsigned int i = 0; i < dofs_per_cell; ++i)
+            values_dofs[batch * dofs_per_cell + i] = {};
+
+          for(unsigned int i = 0; i < dofs_per_cell; ++i)
+            for(unsigned int v = 0; v < n_active_lanes; ++v)
+              reader.process_dof(dof_indices_cont[(cell + batch) * n_lanes + v] + i,
+                                 src,
+                                 values_dofs[batch * dofs_per_cell + i][v]);
+        }
+      }
+
+      // interpolate
+      if(my_batch_size == 4)
+        apply_matrix_vector_product_4<true, false>(shape_info.data[0].shape_gradients.data(),
+                                                   values_dofs,
+                                                   gradients_quad,
+                                                   dofs_per_cell,
+                                                   n_q_points * dim);
+      else if(my_batch_size == 3)
+        apply_matrix_vector_product_3<true, false>(shape_info.data[0].shape_gradients.data(),
+                                                   values_dofs,
+                                                   gradients_quad,
+                                                   dofs_per_cell,
+                                                   n_q_points * dim);
+      else if(my_batch_size == 2)
+        apply_matrix_vector_product_2<true, false>(shape_info.data[0].shape_gradients.data(),
+                                                   values_dofs,
+                                                   gradients_quad,
+                                                   dofs_per_cell,
+                                                   n_q_points * dim);
+      else
+        dealii::internal::apply_matrix_vector_product<
+          dealii::internal::EvaluatorVariant::evaluate_general,
+          dealii::internal::EvaluatorQuantity::value,
+          /*transpose_matrix*/ true,
+          /*add*/ false,
+          /*consider_strides*/ false>(shape_info.data[0].shape_gradients.data(),
+                                      values_dofs,
+                                      gradients_quad,
+                                      dofs_per_cell,
+                                      n_q_points * dim,
+                                      1,
+                                      1);
+
+      // quadrature point operation
+      for(unsigned int batch = 0; batch < my_batch_size; ++batch)
+      {
+        const unsigned int offsets = mapping_data.data_index_offsets[cell + batch];
+        const dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> * jac =
+          mapping_data.jacobians[0].data() + offsets;
+        const dealii::VectorizedArray<Number> * j_value = &mapping_data.JxW_values[offsets];
+        if(matrix_free.get_mapping_info().cell_type[cell + batch] <=
+           dealii::internal::MatrixFreeFunctions::affine)
+        {
+          dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> my_metric;
+          for(unsigned int d = 0; d < dim; ++d)
+            for(unsigned int f = d; f < dim; ++f)
+            {
+              dealii::VectorizedArray<Number> sum = jac[0][0][d] * jac[0][0][f];
+              for(unsigned int e = 1; e < dim; ++e)
+                sum += jac[0][e][d] * jac[0][e][f];
+              my_metric[d][f] = sum * j_value[0];
+            }
+          for(unsigned int q = 0; q < n_q_points; ++q)
+          {
+            dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> grad;
+            for(unsigned int d = 0; d < dim; ++d)
+              grad[d] = gradients_quad[(batch * n_q_points + q) * dim + d];
+            dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> result = my_metric * grad;
+            const Number                            weight = quadrature_weights[q];
+            for(unsigned int d = 0; d < dim; ++d)
+              gradients_quad[(batch * n_q_points + q) * dim + d] = weight * result[d];
+          }
+        }
+        else
+        {
+          for(unsigned int q = 0; q < n_q_points; ++q)
+          {
+            dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> grad;
+            for(unsigned int d = 0; d < dim; ++d)
+              grad[d] = gradients_quad[(batch * n_q_points + q) * dim + d];
+            dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> result =
+              (j_value[q]) * transpose(jac[q]) * (jac[q] * grad);
+            for(unsigned int d = 0; d < dim; ++d)
+              gradients_quad[(batch * n_q_points + q) * dim + d] = result[d];
+          }
+        }
+      }
+
+
+      // integrate
+      if(my_batch_size == 4)
+        apply_matrix_vector_product_4<false, false>(shape_info.data[0].shape_gradients.data(),
+                                                    gradients_quad,
+                                                    values_dofs,
+                                                    dofs_per_cell,
+                                                    n_q_points * dim);
+      else if(my_batch_size == 3)
+        apply_matrix_vector_product_3<false, false>(shape_info.data[0].shape_gradients.data(),
+                                                    gradients_quad,
+                                                    values_dofs,
+                                                    dofs_per_cell,
+                                                    n_q_points * dim);
+      else if(my_batch_size == 2)
+        apply_matrix_vector_product_2<false, false>(shape_info.data[0].shape_gradients.data(),
+                                                    gradients_quad,
+                                                    values_dofs,
+                                                    dofs_per_cell,
+                                                    n_q_points * dim);
+      else
+        dealii::internal::apply_matrix_vector_product<
+          dealii::internal::EvaluatorVariant::evaluate_general,
+          dealii::internal::EvaluatorQuantity::value,
+          /*transpose_matrix*/ false,
+          /*add*/ false,
+          /*consider_strides*/ false>(shape_info.data[0].shape_gradients.data(),
+                                      gradients_quad,
+                                      values_dofs,
+                                      dofs_per_cell,
+                                      n_q_points * dim,
+                                      1,
+                                      1);
+
+      // distribute local to global
+      for(unsigned int batch = 0; batch < my_batch_size; ++batch)
+      {
+        const unsigned int n_active_lanes =
+          matrix_free.n_active_entries_per_cell_batch(cell + batch);
+        const bool use_vectorized_path = n_active_lanes == n_lanes;
+
+        if(use_vectorized_path)
+        {
+          writer.process_dofs_vectorized_transpose(dofs_per_cell,
+                                                   dof_indices_cont.data() +
+                                                     (cell + batch) * n_lanes,
+                                                   dst,
+                                                   &values_dofs[batch * dofs_per_cell],
+                                                   vector_selector);
+        }
+        else
+        {
+          for(unsigned int i = 0; i < dofs_per_cell; ++i)
+            for(unsigned int v = 0; v < n_active_lanes; ++v)
+              writer.process_dof(dof_indices_cont[(cell + batch) * n_lanes + v] + i,
+                                 dst,
+                                 values_dofs[batch * dofs_per_cell + i][v]);
+        }
+      }
+    }
+
+    matrix_free.release_scratch_data(scratch_data);
+  }
+else
+{
+    dealii::AlignedVector<dealii::VectorizedArray<Number>> *scratch_data =
+      matrix_free.acquire_scratch_data();
+    const dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> &shape_info =
+      matrix_free.get_shape_info(this->data.dof_index, this->data.quad_index);
+    const unsigned int dofs_per_cell  = shape_info.dofs_per_component_on_cell;
+    constexpr unsigned int batch_size = 4;
+    const unsigned int     n_q_points = shape_info.n_q_points;
+    constexpr unsigned int n_lanes    = dealii::VectorizedArray<Number>::size();
+
+    const auto   &mapping_data = matrix_free.get_mapping_info().cell_data[0];
+    const Number *quadrature_weights =
+      mapping_data.descriptor[0].quadrature_weights.data();
+
+    scratch_data->resize_fast(batch_size * (dim * n_q_points + dofs_per_cell));
+    dealii::VectorizedArray<Number> *values_dofs = scratch_data->begin();
+    dealii::VectorizedArray<Number> *gradients_quad =
+      scratch_data->begin() + batch_size * dofs_per_cell;
+
+    for (unsigned int cell = range.first; cell < range.second;
+         cell += batch_size)
+      {
+        // read dof values
+        const unsigned int my_batch_size =
+          cell + batch_size <= range.second ? batch_size : range.second - cell;
+        const unsigned int *dof_indices = &manual_dof_indices(cell, 0);
+        for (unsigned int batch = 0; batch < my_batch_size; ++batch)
+          {
+            const Number *src_ptr = src.begin();
+            if (dof_indices_have_constraints[cell + batch])
+              {
+                for (unsigned int i = 0; i < dofs_per_cell;
+                     ++i, dof_indices += n_lanes)
+                  {
+                    values_dofs[batch * dofs_per_cell + i] = {};
+                    for (unsigned int v = 0; v < n_lanes; ++v)
+                      if (dof_indices[v] != dealii::numbers::invalid_unsigned_int)
+                        values_dofs[batch * dofs_per_cell + i][v] =
+                          src_ptr[dof_indices[v]];
+                  }
+              }
+            else
+              for (unsigned int i = 0; i < dofs_per_cell;
+                   ++i, dof_indices += n_lanes)
+                {
+                  values_dofs[batch * dofs_per_cell + i] = {};
+                  for (unsigned int v = 0; v < n_lanes; ++v)
+                    values_dofs[batch * dofs_per_cell + i][v] =
+                      src_ptr[dof_indices[v]];
+                }
+          }
+
+        // interpolate
+        apply_matrix_vector_product<true>(
+          shape_info.data[0].shape_gradients.data(),
+          values_dofs,
+          gradients_quad,
+          dofs_per_cell,
+          n_q_points * dim);
+
+        // quadrature point operation
+        for (unsigned int batch = 0; batch < my_batch_size; ++batch)
+          {
+            const unsigned int offsets =
+              mapping_data.data_index_offsets[cell + batch];
+            const dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> *jac =
+              mapping_data.jacobians[0].data() + offsets;
+            const dealii::VectorizedArray<Number> * j_value =
+              &mapping_data.JxW_values[offsets];
+            dealii::VectorizedArray<Number> *grad_ptr =
+              gradients_quad + batch * n_q_points * dim;
+            if (matrix_free.get_mapping_info().cell_type[cell + batch] <=
+                dealii::internal::MatrixFreeFunctions::affine)
+              {
+                // const SymmetricTensor<2, dim, VectorizedArray<Number>>
+                //  my_metric = j_value[0] * symmetrize(transpose(jac[0]) *
+                //  jac[0]);
+                dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> my_metric;
+                for (unsigned int d = 0; d < dim; ++d)
+                  for (unsigned int f = d; f < dim; ++f)
+                    {
+                      dealii::VectorizedArray<Number> sum = jac[0][0][d] * jac[0][0][f];
+                      for (unsigned int e = 1; e < dim; ++e)
+                        sum += jac[0][e][d] * jac[0][e][f];
+                      my_metric[d][f] = sum * j_value[0];
+                    }
+
+                for (unsigned int q = 0; q < n_q_points; ++q, grad_ptr += dim)
+                  {
+                    dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> grad;
+                    for (unsigned int d = 0; d < dim; ++d)
+                      grad[d] = grad_ptr[d];
+                    dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> result =
+                      my_metric * grad;
+                    const Number weight = quadrature_weights[q];
+                    for (unsigned int d = 0; d < dim; ++d)
+                      grad_ptr[d] = weight * result[d];
+                  }
+              }
+            else
+              {
+                for (unsigned int q = 0; q < n_q_points; ++q, grad_ptr += dim)
+                  {
+                    dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> grad;
+                    for (unsigned int d = 0; d < dim; ++d)
+                      grad[d] = grad_ptr[d];
+                    dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> result =
+                      j_value[q] * (transpose(jac[q]) * (jac[q] * grad));
+                    for (unsigned int d = 0; d < dim; ++d)
+                      grad_ptr[d] = result[d];
+                  }
+              }
+          }
+
+        // integrate
+        apply_matrix_vector_product<false>(
+          shape_info.data[0].shape_gradients.data(),
+          gradients_quad,
+          values_dofs,
+          dofs_per_cell,
+          n_q_points * dim);
+
+        // distribute local to global
+        dof_indices = &manual_dof_indices(cell, 0);
+        for (unsigned int batch = 0; batch < my_batch_size; ++batch)
+          {
+            if (dof_indices_have_constraints[cell + batch])
+              {
+                for (unsigned int i = 0; i < dofs_per_cell;
+                     ++i, dof_indices += n_lanes)
+                  {
+                    for (unsigned int v = 0; v < n_lanes; ++v)
+                      if (dof_indices[v] != dealii::numbers::invalid_unsigned_int)
+                        dst.local_element(dof_indices[v]) +=
+                          values_dofs[batch * dofs_per_cell + i][v];
+                  }
+              }
+            else
+              for (unsigned int i = 0; i < dofs_per_cell;
+                   ++i, dof_indices += n_lanes)
+                {
+                  for (unsigned int v = 0; v < n_lanes; ++v)
+                    dst.local_element(dof_indices[v]) +=
+                      values_dofs[batch * dofs_per_cell + i][v];
+                }
+          }
+      }
+
+    matrix_free.release_scratch_data(scratch_data);
   }
 }
 
@@ -1300,6 +3327,542 @@ OperatorBase<dim, Number, n_components>::face_loop(
   VectorType &                            dst,
   VectorType const &                      src,
   Range const &                           range) const
+{
+if (is_dg)
+  {
+    constexpr int                          NUM_FACES        = 4;
+    constexpr int                          NUM_ORIENTATIONS = 6;
+    std::vector<std::vector<unsigned int>> face_batches(NUM_FACES * NUM_FACES * NUM_ORIENTATIONS *
+                                                        NUM_ORIENTATIONS);
+
+    for(unsigned int face = range.first; face < range.second; ++face)
+    {
+      const auto          face_info       = matrix_free.get_face_info(face);
+      const unsigned char face_number_int = face_info.interior_face_no;
+      const unsigned char face_number_ext = face_info.exterior_face_no;
+      const unsigned char face_orientation_int =
+        (true == (face_info.face_orientation >= 8)) ? (face_info.face_orientation % 8) : 0;
+      const unsigned char face_orientation_ext =
+        (false == (face_info.face_orientation >= 8)) ? (face_info.face_orientation % 8) : 0;
+
+      face_batches[face_number_int * NUM_FACES * NUM_ORIENTATIONS * NUM_ORIENTATIONS +
+                  face_number_ext * NUM_ORIENTATIONS * NUM_ORIENTATIONS +
+                  face_orientation_int * NUM_ORIENTATIONS + face_orientation_ext]
+        .push_back(face);
+    }
+
+    const dealii::internal::MatrixFreeFunctions::DoFInfo & dof_info     = matrix_free.get_dof_info(this->data.dof_index);
+    dealii::AlignedVector<dealii::VectorizedArray<Number>> *       scratch_data = matrix_free.acquire_scratch_data();
+    const dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> & shape_info =
+      matrix_free.get_shape_info(this->data.dof_index, this->data.quad_index);
+    const unsigned int     dofs_per_cell = shape_info.dofs_per_component_on_cell;
+    constexpr unsigned int batch_size    = 4;
+
+    constexpr unsigned int n_lanes = dealii::VectorizedArray<Number>::size();
+
+    const auto &   mapping_data       = matrix_free.get_mapping_info().face_data[this->data.quad_index];   
+
+    const Number * quadrature_weights = mapping_data.descriptor[matrix_free.get_face_info(range.first).face_type].quadrature_weights.data();
+
+    const dealii::internal::MatrixFreeFunctions::DoFInfo::DoFAccessIndex ind_int =
+      dealii::internal::MatrixFreeFunctions::DoFInfo::dof_access_face_interior;
+    const dealii::internal::MatrixFreeFunctions::DoFInfo::DoFAccessIndex ind_ext =
+      dealii::internal::MatrixFreeFunctions::DoFInfo::dof_access_face_exterior;
+
+    const std::vector<unsigned int> & dof_indices_cont_int = dof_info.dof_indices_contiguous[ind_int];
+    const std::vector<unsigned int> & dof_indices_cont_ext = dof_info.dof_indices_contiguous[ind_ext];
+    dealii::internal::VectorReader<Number, dealii::VectorizedArray<Number>>                   reader;
+    dealii::internal::VectorDistributorLocalToGlobal<Number, dealii::VectorizedArray<Number>> writer;
+    std::bool_constant<dealii::internal::is_vectorizable<VectorType, Number>::value>  vector_selector;
+
+    for(auto & face_indices : face_batches)
+      if(!face_indices.empty())
+      {
+        const auto          face_info       = matrix_free.get_face_info(face_indices[0]);
+        const unsigned char face_number_int = face_info.interior_face_no;
+        const unsigned char face_number_ext = face_info.exterior_face_no;
+        const unsigned char face_orientation_int =
+          (true == (face_info.face_orientation >= 8)) ? (face_info.face_orientation % 8) : 0;
+        const unsigned char face_orientation_ext =
+          (false == (face_info.face_orientation >= 8)) ? (face_info.face_orientation % 8) : 0;
+
+        const unsigned int n_q_points = shape_info.n_q_points_faces[face_number_int];
+
+        scratch_data->resize_fast(2 * batch_size * (dim * n_q_points + n_q_points + dofs_per_cell));
+        dealii::VectorizedArray<Number> * values_dofs_int = scratch_data->begin();
+        dealii::VectorizedArray<Number> * values_dofs_ext =
+          scratch_data->begin() + batch_size * dofs_per_cell;
+
+        dealii::VectorizedArray<Number> * values_quad_int =
+          scratch_data->begin() + 2 * batch_size * dofs_per_cell;
+        dealii::VectorizedArray<Number> * values_quad_ext =
+          scratch_data->begin() + 2 * batch_size * dofs_per_cell + batch_size * n_q_points;
+
+        dealii::VectorizedArray<Number> * gradients_quad_int =
+          scratch_data->begin() + 2 * batch_size * dofs_per_cell + 2 * batch_size * n_q_points;
+        dealii::VectorizedArray<Number> * gradients_quad_ext =
+          scratch_data->begin() + 2 * batch_size * dofs_per_cell + 2 * batch_size * n_q_points +
+          batch_size * n_q_points * dim;
+
+        const unsigned int n_faces = face_indices.size();
+
+        const auto &       shape_data = shape_info.data.front();
+        const auto * const shape_values_inner =
+          &shape_data.shape_values_face(face_number_int, face_orientation_int, 0);
+        const auto * const shape_values_outer =
+          &shape_data.shape_values_face(face_number_ext, face_orientation_ext, 0);
+        const auto * const shape_gradients_inner =
+          &shape_data.shape_gradients_face(face_number_int, face_orientation_int, 0);
+        const auto * const shape_gradients_outer =
+          &shape_data.shape_gradients_face(face_number_ext, face_orientation_ext, 0);
+
+        for(unsigned int face = 0; face < n_faces; face += batch_size)
+        {
+          // read dof values
+          const unsigned int my_batch_size =
+            face + batch_size <= n_faces ? batch_size : n_faces - face;
+          for(unsigned int batch = 0; batch < my_batch_size; ++batch)
+          {
+            const unsigned int n_active_lanes =
+              matrix_free.n_active_entries_per_face_batch(face_indices[face + batch]);
+
+            const bool use_vectorized_path = n_active_lanes == n_lanes;
+
+            if(use_vectorized_path)
+            {
+              reader.process_dofs_vectorized_transpose(dofs_per_cell,
+                                                      dof_indices_cont_int.data() +
+                                                        face_indices[face + batch] * n_lanes,
+                                                      src,
+                                                      &values_dofs_int[batch * dofs_per_cell],
+                                                      vector_selector);
+              reader.process_dofs_vectorized_transpose(dofs_per_cell,
+                                                      dof_indices_cont_ext.data() +
+                                                        face_indices[face + batch] * n_lanes,
+                                                      src,
+                                                      &values_dofs_ext[batch * dofs_per_cell],
+                                                      vector_selector);
+            }
+            else
+            {
+              for(unsigned int i = 0; i < dofs_per_cell; ++i)
+              {
+                values_dofs_int[batch * dofs_per_cell + i] = {};
+                values_dofs_ext[batch * dofs_per_cell + i] = {};
+              }
+
+              for(unsigned int i = 0; i < dofs_per_cell; ++i)
+                for(unsigned int v = 0; v < n_active_lanes; ++v)
+                  reader.process_dof(dof_indices_cont_int[face_indices[face + batch] * n_lanes + v] +
+                                      i,
+                                    src,
+                                    values_dofs_int[batch * dofs_per_cell + i][v]);
+
+              for(unsigned int i = 0; i < dofs_per_cell; ++i)
+                for(unsigned int v = 0; v < n_active_lanes; ++v)
+                  reader.process_dof(dof_indices_cont_ext[face_indices[face + batch] * n_lanes + v] +
+                                      i,
+                                    src,
+                                    values_dofs_ext[batch * dofs_per_cell + i][v]);
+            }
+          }
+
+          if(my_batch_size == 4)
+          {
+            // interpolate
+            apply_matrix_vector_product_4<true, false>(
+              shape_values_inner, values_dofs_int, values_quad_int, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_4<true, false>(shape_gradients_inner,
+                                                      values_dofs_int,
+                                                      gradients_quad_int,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+
+            apply_matrix_vector_product_4<true, false>(
+              shape_values_outer, values_dofs_ext, values_quad_ext, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_4<true, false>(shape_gradients_outer,
+                                                      values_dofs_ext,
+                                                      gradients_quad_ext,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+          }
+          else if(my_batch_size == 3)
+          {
+            // interpolate
+            apply_matrix_vector_product_3<true, false>(
+              shape_values_inner, values_dofs_int, values_quad_int, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_3<true, false>(shape_gradients_inner,
+                                                      values_dofs_int,
+                                                      gradients_quad_int,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+
+            apply_matrix_vector_product_3<true, false>(
+              shape_values_outer, values_dofs_ext, values_quad_ext, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_3<true, false>(shape_gradients_outer,
+                                                      values_dofs_ext,
+                                                      gradients_quad_ext,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+          }
+          else if(my_batch_size == 2)
+          {
+            // interpolate
+            apply_matrix_vector_product_2<true, false>(
+              shape_values_inner, values_dofs_int, values_quad_int, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_2<true, false>(shape_gradients_inner,
+                                                      values_dofs_int,
+                                                      gradients_quad_int,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+
+            apply_matrix_vector_product_2<true, false>(
+              shape_values_outer, values_dofs_ext, values_quad_ext, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_2<true, false>(shape_gradients_outer,
+                                                      values_dofs_ext,
+                                                      gradients_quad_ext,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+          }
+          else
+          {
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ true,
+              /*add*/ false,
+              /*consider_strides*/ false>(
+              shape_values_inner, values_dofs_int, values_quad_int, dofs_per_cell, n_q_points, 1, 1);
+
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ true,
+              /*add*/ false,
+              /*consider_strides*/ false>(shape_gradients_inner,
+                                          values_dofs_int,
+                                          gradients_quad_int,
+                                          dofs_per_cell,
+                                          n_q_points * dim,
+                                          1,
+                                          1);
+
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ true,
+              /*add*/ false,
+              /*consider_strides*/ false>(
+              shape_values_outer, values_dofs_ext, values_quad_ext, dofs_per_cell, n_q_points, 1, 1);
+
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ true,
+              /*add*/ false,
+              /*consider_strides*/ false>(shape_gradients_outer,
+                                          values_dofs_ext,
+                                          gradients_quad_ext,
+                                          dofs_per_cell,
+                                          n_q_points * dim,
+                                          1,
+                                          1);
+          }
+
+          // quadrature point operation
+          for(unsigned int batch = 0; batch < my_batch_size; ++batch)
+          {
+            const unsigned int offsets = mapping_data.data_index_offsets[face_indices[face + batch]];
+
+            const dealii::VectorizedArray<Number> * j_value = &mapping_data.JxW_values[offsets];
+
+            const dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> * normal_x_jacobian_int =
+              &mapping_data.normals_times_jacobians[0][offsets];
+            const dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> * normal_x_jacobian_ext =
+              &mapping_data.normals_times_jacobians[1][offsets];
+
+            dealii::VectorizedArray<Number> tau_int;
+            dealii::VectorizedArray<Number> tau_ext;
+            const auto face_cell = matrix_free.get_face_info(face_indices[face + batch]);
+            const std::array<unsigned int, n_lanes> cell_ids_interior = face_cell.cells_interior;
+            const std::array<unsigned int, n_lanes> cell_ids_exterior = face_cell.cells_exterior;
+            /* {
+              int index = 0;
+              for (; index < n_lanes; ++index)
+                if (cell_ids_interior[index] != dealii::numbers::invalid_unsigned_int)
+                  break;
+              for (unsigned int i = 0; i < n_lanes; ++i)
+                tau_int[i] = array_penalty_parameter[cell_ids_interior[index] / n_lanes][cell_ids_interior[index] % n_lanes];
+            }
+            {
+              int index = 0;
+              for (; index < n_lanes; ++index)
+                if (cell_ids_exterior[index] != dealii::numbers::invalid_unsigned_int)
+                  break;
+              for (unsigned int i = 0; i < n_lanes; ++i)
+                tau_ext[i] = array_penalty_parameter[cell_ids_exterior[index] / n_lanes][cell_ids_exterior[index] % n_lanes];
+            } */
+            {
+              for (unsigned int i = 0; i < n_lanes; ++i)
+                if (cell_ids_interior[i] != dealii::numbers::invalid_unsigned_int)
+                  {
+                    tau_int[i] = array_penalty_parameter[cell_ids_interior[i] / n_lanes][cell_ids_interior[i] % n_lanes];
+                  }
+            }
+            {
+              for (unsigned int i = 0; i < n_lanes; ++i)
+                if (cell_ids_exterior[i] != dealii::numbers::invalid_unsigned_int)
+                  {
+                    tau_ext[i] = array_penalty_parameter[cell_ids_exterior[i] / n_lanes][cell_ids_exterior[i] % n_lanes];
+                  }
+            }
+
+              const dealii::VectorizedArray<Number> sigma =
+               penalty_factor  * std::max(tau_int,
+                   tau_ext);
+
+            if(matrix_free.get_mapping_info().face_type[face_indices[face + batch]] <=
+              dealii::internal::MatrixFreeFunctions::affine)
+            {
+              for(unsigned int q = 0; q < n_q_points; ++q)
+              {
+                const dealii::VectorizedArray<Number> solution_jump =
+                  values_quad_int[batch * n_q_points + q] - values_quad_ext[batch * n_q_points + q];
+
+                dealii::VectorizedArray<Number> grad_int =
+                  gradients_quad_int[batch * n_q_points * dim + q * dim] *
+                  normal_x_jacobian_int[0][0];
+                dealii::VectorizedArray<Number> grad_ext =
+                  gradients_quad_ext[batch * n_q_points * dim + q * dim] *
+                  normal_x_jacobian_ext[0][0];
+                for(unsigned int d = 1; d < dim; ++d)
+                {
+                  grad_int += gradients_quad_int[batch * n_q_points * dim + q * dim + d] *
+                              normal_x_jacobian_int[0][d];
+                  grad_ext += gradients_quad_ext[batch * n_q_points * dim + q * dim + d] *
+                              normal_x_jacobian_ext[0][d];
+                }
+                const dealii::VectorizedArray<Number> averaged_normal_derivative =
+                  Number(0.5) * (grad_int + grad_ext);
+
+                const dealii::VectorizedArray<Number> test_by_value =
+                  solution_jump * sigma - averaged_normal_derivative;
+
+                values_quad_int[batch * n_q_points + q] =
+                  test_by_value * j_value[0] * quadrature_weights[q];
+                values_quad_ext[batch * n_q_points + q] =
+                  -test_by_value * j_value[0] * quadrature_weights[q];
+
+                for(unsigned int d = 0; d < dim; ++d)
+                {
+                  gradients_quad_int[batch * n_q_points * dim + q * dim + d] =
+                    (-solution_jump * Number(0.5) * j_value[0] * quadrature_weights[q]) *
+                    normal_x_jacobian_int[0][d];
+                  gradients_quad_ext[batch * n_q_points * dim + q * dim + d] =
+                    (-solution_jump * Number(0.5) * j_value[0] * quadrature_weights[q]) *
+                    normal_x_jacobian_ext[0][d];
+                }
+              }
+            }
+            else
+            {
+              for(unsigned int q = 0; q < n_q_points; ++q)
+              {
+                const dealii::VectorizedArray<Number> solution_jump =
+                  values_quad_int[batch * n_q_points + q] - values_quad_ext[batch * n_q_points + q];
+
+                dealii::VectorizedArray<Number> grad_int =
+                  gradients_quad_int[batch * n_q_points * dim + q * dim] *
+                  normal_x_jacobian_int[q][0];
+                dealii::VectorizedArray<Number> grad_ext =
+                  gradients_quad_ext[batch * n_q_points * dim + q * dim] *
+                  normal_x_jacobian_ext[q][0];
+                for(unsigned int d = 1; d < dim; ++d)
+                {
+                  grad_int += gradients_quad_int[batch * n_q_points * dim + q * dim + d] *
+                              normal_x_jacobian_int[q][d];
+                  grad_ext += gradients_quad_ext[batch * n_q_points * dim + q * dim + d] *
+                              normal_x_jacobian_ext[q][d];
+                }
+                const dealii::VectorizedArray<Number> averaged_normal_derivative =
+                  Number(0.5) * (grad_int + grad_ext);
+
+                const dealii::VectorizedArray<Number> test_by_value =
+                  solution_jump * sigma - averaged_normal_derivative;
+
+                values_quad_int[batch * n_q_points + q] = test_by_value * j_value[q];
+                values_quad_ext[batch * n_q_points + q] = -test_by_value * j_value[q];
+
+                for(unsigned int d = 0; d < dim; ++d)
+                {
+                  gradients_quad_int[batch * n_q_points * dim + q * dim + d] =
+                    (-solution_jump * Number(0.5) * j_value[q]) * normal_x_jacobian_int[q][d];
+                  gradients_quad_ext[batch * n_q_points * dim + q * dim + d] =
+                    (-solution_jump * Number(0.5) * j_value[q]) * normal_x_jacobian_ext[q][d];
+                }
+              }
+            }
+          }
+
+          if(my_batch_size == 4)
+          {
+            // integrate
+            apply_matrix_vector_product_4<false, false>(
+              shape_values_inner, values_quad_int, values_dofs_int, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_4<false, true>(shape_gradients_inner,
+                                                      gradients_quad_int,
+                                                      values_dofs_int,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+
+            apply_matrix_vector_product_4<false, false>(
+              shape_values_outer, values_quad_ext, values_dofs_ext, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_4<false, true>(shape_gradients_outer,
+                                                      gradients_quad_ext,
+                                                      values_dofs_ext,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+          }
+          else if(my_batch_size == 3)
+          {
+            // integrate
+            apply_matrix_vector_product_3<false, false>(
+              shape_values_inner, values_quad_int, values_dofs_int, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_3<false, true>(shape_gradients_inner,
+                                                      gradients_quad_int,
+                                                      values_dofs_int,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+
+            apply_matrix_vector_product_3<false, false>(
+              shape_values_outer, values_quad_ext, values_dofs_ext, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_3<false, true>(shape_gradients_outer,
+                                                      gradients_quad_ext,
+                                                      values_dofs_ext,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+          }
+          else if(my_batch_size == 2)
+          {
+            apply_matrix_vector_product_2<false, false>(
+              shape_values_inner, values_quad_int, values_dofs_int, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_2<false, true>(shape_gradients_inner,
+                                                      gradients_quad_int,
+                                                      values_dofs_int,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+
+            apply_matrix_vector_product_2<false, false>(
+              shape_values_outer, values_quad_ext, values_dofs_ext, dofs_per_cell, n_q_points);
+
+            apply_matrix_vector_product_2<false, true>(shape_gradients_outer,
+                                                      gradients_quad_ext,
+                                                      values_dofs_ext,
+                                                      dofs_per_cell,
+                                                      n_q_points * dim);
+          }
+          else
+          {
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ false,
+              /*add*/ false,
+              /*consider_strides*/ false>(
+              shape_values_inner, values_quad_int, values_dofs_int, dofs_per_cell, n_q_points, 1, 1);
+
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ false,
+              /*add*/ true,
+              /*consider_strides*/ false>(shape_gradients_inner,
+                                          gradients_quad_int,
+                                          values_dofs_int,
+                                          dofs_per_cell,
+                                          n_q_points * dim,
+                                          1,
+                                          1);
+
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ false,
+              /*add*/ false,
+              /*consider_strides*/ false>(
+              shape_values_outer, values_quad_ext, values_dofs_ext, dofs_per_cell, n_q_points, 1, 1);
+
+            dealii::internal::apply_matrix_vector_product<
+              dealii::internal::EvaluatorVariant::evaluate_general,
+              dealii::internal::EvaluatorQuantity::value,
+              /*transpose_matrix*/ false,
+              /*add*/ true,
+              /*consider_strides*/ false>(shape_gradients_outer,
+                                          gradients_quad_ext,
+                                          values_dofs_ext,
+                                          dofs_per_cell,
+                                          n_q_points * dim,
+                                          1,
+                                          1);
+          }
+
+
+          // distribute local to global
+          for(unsigned int batch = 0; batch < my_batch_size; ++batch)
+          {
+            const unsigned int n_active_lanes =
+              matrix_free.n_active_entries_per_face_batch(face_indices[face + batch]);
+            const bool use_vectorized_path = n_active_lanes == n_lanes;
+
+            if(use_vectorized_path)
+            {
+              writer.process_dofs_vectorized_transpose(dofs_per_cell,
+                                                      dof_indices_cont_int.data() +
+                                                        face_indices[face + batch] * n_lanes,
+                                                      dst,
+                                                      &values_dofs_int[batch * dofs_per_cell],
+                                                      vector_selector);
+              writer.process_dofs_vectorized_transpose(dofs_per_cell,
+                                                      dof_indices_cont_ext.data() +
+                                                        face_indices[face + batch] * n_lanes,
+                                                      dst,
+                                                      &values_dofs_ext[batch * dofs_per_cell],
+                                                      vector_selector);
+            }
+            else
+            {
+              for(unsigned int i = 0; i < dofs_per_cell; ++i)
+                for(unsigned int v = 0; v < n_active_lanes; ++v)
+                  writer.process_dof(dof_indices_cont_int[face_indices[face + batch] * n_lanes + v] +
+                                      i,
+                                    dst,
+                                    values_dofs_int[batch * dofs_per_cell + i][v]);
+
+              for(unsigned int i = 0; i < dofs_per_cell; ++i)
+                for(unsigned int v = 0; v < n_active_lanes; ++v)
+                  writer.process_dof(dof_indices_cont_ext[face_indices[face + batch] * n_lanes + v] +
+                                      i,
+                                    dst,
+                                    values_dofs_ext[batch * dofs_per_cell + i][v]);
+            }
+          }
+        }
+
+        matrix_free.release_scratch_data(scratch_data);
+      }
+  }
+  else
 {
   IntegratorFace integrator_m =
     IntegratorFace(matrix_free, true, this->data.dof_index, this->data.quad_index);
@@ -1317,7 +3880,7 @@ OperatorBase<dim, Number, n_components>::face_loop(
 
     integrator_m.integrate_scatter(integrator_flags.face_integrate, dst);
     integrator_p.integrate_scatter(integrator_flags.face_integrate, dst);
-  }
+  } }
 }
 
 template<int dim, typename Number, int n_components>

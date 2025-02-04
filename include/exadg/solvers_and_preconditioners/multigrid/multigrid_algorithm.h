@@ -38,10 +38,10 @@
 /*
  * Activate timings if desired.
  */
-#define ENABLE_TIMING false
+#define ENABLE_TIMING true
 
 #ifndef ENABLE_TIMING
-#  define ENABLE_TIMING false
+#  define ENABLE_TIMING true
 #endif
 
 namespace ExaDG

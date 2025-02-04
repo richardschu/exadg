@@ -107,10 +107,13 @@ Driver<dim, Number>::solve()
   timer_tree.insert({"Poisson", "Right-hand side"}, timer.wall_time());
 
   // solve linear system of equations
+  for (unsigned int jj = 0; jj < 10; ++jj){
+	  sol = 0;
   timer.restart();
   iterations = pde_operator->solve(sol, rhs, 0.0 /* time */);
-  solve_time += timer.wall_time();
-
+  solve_time += timer.wall_time();}
+  solve_time /= 10.0;
+ 
   // postprocessing of results
   timer.restart();
   postprocessor->do_postprocessing(sol);

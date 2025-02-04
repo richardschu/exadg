@@ -787,6 +787,15 @@ private:
 
   unsigned int n_mpi_processes;
 
+  Number penalty_factor;
+
+  dealii::AlignedVector<dealii::VectorizedArray<Number>> array_penalty_parameter;
+
+  dealii::Table<2, unsigned int> manual_dof_indices;
+
+  std::vector<unsigned char> dof_indices_have_constraints;
+
+
   // sparse matrices for matrix-based vmult
   mutable bool system_matrix_based_been_initialized;
 
