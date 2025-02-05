@@ -46,9 +46,9 @@ apply_matrix_vector_product(const Number2 *matrix,
   const int mm = transpose_matrix ? n_rows : n_columns,
             nn = transpose_matrix ? n_columns : n_rows;
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("Empty evaluation task!"));
+         dealii::ExcInternalError("Empty evaluation task!"));
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+         dealii::ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
                           std::to_string(n_rows) + ", " +
                           std::to_string(n_columns) + " was passed!"));
 
@@ -348,9 +348,9 @@ apply_matrix_vector_product(const Number2 *matrix,
   const int mm = transpose_matrix ? n_rows : n_columns,
             nn = transpose_matrix ? n_columns : n_rows;
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("Empty evaluation task!"));
+         dealii::ExcInternalError("Empty evaluation task!"));
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+         dealii::ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
                           std::to_string(n_rows) + ", " +
                           std::to_string(n_columns) + " was passed!"));
 
@@ -570,9 +570,9 @@ apply_matrix_vector_product_2(const Number2 * matrix,
                               const int       n_columns)
 {
   const int mm = transpose_matrix ? n_rows : n_columns, nn = transpose_matrix ? n_columns : n_rows;
-  Assert(n_rows > 0 && n_columns > 0, ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0, dealii::ExcInternalError("Empty evaluation task!"));
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+         dealii::ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
                           std::to_string(n_rows) + ", " + std::to_string(n_columns) +
                           " was passed!"));
 
@@ -957,9 +957,9 @@ apply_matrix_vector_product_3(const Number2 * matrix,
                               const int       n_columns)
 {
   const int mm = transpose_matrix ? n_rows : n_columns, nn = transpose_matrix ? n_columns : n_rows;
-  Assert(n_rows > 0 && n_columns > 0, ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0, dealii::ExcInternalError("Empty evaluation task!"));
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+         dealii::ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
                           std::to_string(n_rows) + ", " + std::to_string(n_columns) +
                           " was passed!"));
 
@@ -1291,9 +1291,9 @@ apply_matrix_vector_product_4(const Number2 * matrix,
                               const int       n_columns)
 {
   const int mm = transpose_matrix ? n_rows : n_columns, nn = transpose_matrix ? n_columns : n_rows;
-  Assert(n_rows > 0 && n_columns > 0, ExcInternalError("Empty evaluation task!"));
+  Assert(n_rows > 0 && n_columns > 0, dealii::ExcInternalError("Empty evaluation task!"));
   Assert(n_rows > 0 && n_columns > 0,
-         ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
+         dealii::ExcInternalError("The evaluation needs n_rows, n_columns > 0, but " +
                           std::to_string(n_rows) + ", " + std::to_string(n_columns) +
                           " was passed!"));
 
