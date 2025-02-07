@@ -435,9 +435,10 @@ private:
     PostProcessorData<dim> pp_data;
 
     // write output for visualization of results
-    pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
-    pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 50.0;
+    pp_data.output_data.time_control_data.is_active  = this->output_parameters.write;
+    pp_data.output_data.time_control_data.start_time = start_time;
+    pp_data.output_data.time_control_data.trigger_interval =
+      (end_time - start_time) / (50.0 * 100000.0);
     pp_data.output_data.directory                 = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename                  = this->output_parameters.filename;
     pp_data.output_data.write_velocity_magnitude  = false;
@@ -611,7 +612,7 @@ private:
 
   double const bulk_velocity     = 5.6218;
   double const target_flow_rate  = bulk_velocity * width * height;
-  double const flow_through_time = length / bulk_velocity;
+  double const flow_through_time = 1e-2; // length / bulk_velocity; ##+ REMOVE THIS
 
   // RE_H = u_b * H / nu
   double viscosity = bulk_velocity * H / Re;

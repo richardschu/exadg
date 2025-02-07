@@ -16,7 +16,7 @@
     },
     "Application": {
         "Inviscid": "false",
-        "ReynoldsNumber": "5600.0",
+        "ReynoldsNumber": "560.0",
         "EndTime": "1",
         "GridStretchFactor": "1.6",
         "CalculateStatistics": "true",
@@ -24,11 +24,11 @@
         "SampleEveryTimeSteps": "1",
         "PointsPerLine": "16",
         "WriteRestart": "true",
-        "ReadRestart": "true"
+        "ReadRestart": "false"
     },
     "Output": {
         "OutputDirectory": "output/periodic_hill/",
         "OutputName": "16_l2_k3",
-        "WriteOutput": "false"
+        "WriteOutput": "true"
     }
 }
