@@ -29,6 +29,7 @@
 #include <deal.II/base/conditional_ostream.h>
 
 // ExaDG
+#include <exadg/grid/grid_data.h>
 #include <exadg/utilities/numbers.h>
 #include <exadg/utilities/print_functions.h>
 
@@ -42,7 +43,11 @@ struct RestartData
       interval_wall_time(std::numeric_limits<double>::max()),
       interval_time_steps(std::numeric_limits<unsigned int>::max()),
       filename("restart"),
-      counter(1)
+      counter(1),
+      degree_u(dealii::numbers::invalid_unsigned_int),
+      degree_p(dealii::numbers::invalid_unsigned_int),
+      triangulation_type(TriangulationType::Serial),
+      discretization_identical(false)
   {
   }
 
@@ -99,6 +104,20 @@ struct RestartData
 
   // counter needed do decide when to write restart
   mutable unsigned int counter;
+
+  // Finite element degree used when restart data was written (relevant for restart run only).
+  unsigned int degree_u;
+  unsigned int degree_p;
+
+  // TriangulationType used when restart data was written (relevant for restart run only).
+  TriangulationType triangulation_type;
+
+  // The discretization used when writing the restart data was identical to the current one
+  // (after calling `ApplicationBase::create_grid()`). Note that this includes the finite
+  // element, uniform and adaptive refinement, and the TriangulationType, *but* one might
+  // consider a different number of MPI ranks for `dealii::parallel::distributed::Triangulation``
+  // without the need for the otherwise necessary global projection.
+  bool discretization_identical;
 };
 
 } // namespace ExaDG

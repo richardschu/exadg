@@ -28,6 +28,7 @@
 #include <exadg/operators/finite_element.h>
 #include <exadg/operators/grid_related_time_step_restrictions.h>
 #include <exadg/operators/quadrature.h>
+#include <exadg/time_integration/restart.h>
 #include <exadg/utilities/exceptions.h>
 
 namespace ExaDG
@@ -43,7 +44,7 @@ SpatialOperator<dim, Number>::SpatialOperator(
   Parameters const &                             parameters_in,
   std::string const &                            field_in,
   MPI_Comm const &                               mpi_comm_in)
-  : Interface::SpatialOperator<Number>(),
+  : Interface::SpatialOperator<dim, Number>(),
     grid(grid_in),
     mapping(mapping_in),
     boundary_descriptor(boundary_descriptor_in),
@@ -240,6 +241,75 @@ dealii::DoFHandler<dim> const &
 SpatialOperator<dim, Number>::get_dof_handler_u() const
 {
   return dof_handler_u;
+}
+
+template<int dim, typename Number>
+void
+SpatialOperator<dim, Number>::serialize_vectors(
+  std::vector<BlockVectorType const *> block_vectors) const
+{
+  std::vector<dealii::DoFHandler<dim> const *> dof_handlers;
+  dof_handlers.push_back(&this->get_dof_handler_u());
+  dof_handlers.push_back(&this->get_dof_handler_p());
+
+  std::vector<std::vector<VectorType const *>> vectors_per_dof_handler =
+    get_vectors_per_block<VectorType const, BlockVectorType const>(block_vectors);
+
+  store_vectors_in_triangulation_and_serialize(param.restart_data.filename,
+                                               vectors_per_dof_handler,
+                                               dof_handlers);
+}
+
+template<int dim, typename Number>
+void
+SpatialOperator<dim, Number>::deserialize_vectors(
+  std::vector<BlockVectorType *> block_vectors) const
+{
+  // Load potentially unfitting checkpoint triangulation of identical TriangulationType.
+  // We assume the coarse grid was stored to disk during the call to
+  // `ApplicationBase::create_grid()`.
+  std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =
+    deserialize_triangulation<dim>(param.restart_data.filename,
+                                   param.restart_data.triangulation_type,
+                                   mpi_comm);
+
+  // Setup DoFHandlers *as checkpointed*, sequence matches `this->serialize_vectors()`.
+  dealii::DoFHandler<dim> checkpoint_dof_handler_u(*checkpoint_triangulation);
+  dealii::DoFHandler<dim> checkpoint_dof_handler_p(*checkpoint_triangulation);
+  ElementType             checkpoint_element_type = get_element_type(*checkpoint_triangulation);
+  std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_u =
+    create_finite_element<dim>(checkpoint_element_type, true, dim, param.restart_data.degree_u);
+  std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_p =
+    create_finite_element<dim>(checkpoint_element_type, true, 1, param.restart_data.degree_p);
+  checkpoint_dof_handler_u.distribute_dofs(*checkpoint_fe_u);
+  checkpoint_dof_handler_p.distribute_dofs(*checkpoint_fe_p);
+  std::vector<dealii::DoFHandler<dim> const *> checkpoint_dof_handlers{&checkpoint_dof_handler_u,
+                                                                       &checkpoint_dof_handler_p};
+
+  // Deserialize vectors stored in triangulation, sequence matches `this->serialize_vectors()`.
+  std::vector<BlockVectorType> checkpoint_block_vectors =
+    get_block_vectors_from_dof_handlers<dim, BlockVectorType>(2 /*n_vectors*/,
+                                                              checkpoint_dof_handlers);
+
+  std::vector<std::vector<VectorType *>> checkpoint_vectors =
+    get_vectors_per_block<VectorType, BlockVectorType>(checkpoint_block_vectors);
+
+  load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
+
+  if(param.restart_data.discretization_identical)
+  {
+    // DoFHandlers need to be setup with `checkpoint_triangulation`, otherwise
+    // they are identical. We can simply copy the vector contents.
+    for(unsigned int i = 0; i < block_vectors.size(); ++i)
+    {
+      block_vectors[i]->copy_locally_owned_data_from(checkpoint_block_vectors[i]);
+      block_vectors[i]->update_ghost_values(); // is this needed? ##+
+    }
+  }
+  else
+  {
+    // Perform global projection in case of a non-matching discretization. ##+
+  }
 }
 
 template<int dim, typename Number>

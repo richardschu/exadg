@@ -25,8 +25,8 @@
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
-#include <exadg/time_integration/time_step_calculation.h>
 #include <exadg/time_integration/restart.h>
+#include <exadg/time_integration/time_step_calculation.h>
 #include <exadg/utilities/print_solver_results.h>
 
 namespace ExaDG
