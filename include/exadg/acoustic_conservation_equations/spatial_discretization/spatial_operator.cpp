@@ -24,8 +24,8 @@
 
 // ExaDG
 #include <exadg/acoustic_conservation_equations/spatial_discretization/spatial_operator.h>
-#include <exadg/grid/mapping_dof_vector.h>
 #include <exadg/grid/grid_utilities.h>
+#include <exadg/grid/mapping_dof_vector.h>
 #include <exadg/operators/finite_element.h>
 #include <exadg/operators/grid_related_time_step_restrictions.h>
 #include <exadg/operators/quadrature.h>
@@ -283,8 +283,8 @@ SpatialOperator<dim, Number>::deserialize_vectors(
   // `ApplicationBase::create_grid()`.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =
     deserialize_triangulation<dim>(param.restart_data.filename,
-                                    param.restart_data.triangulation_type,
-                                    mpi_comm);
+                                   param.restart_data.triangulation_type,
+                                   mpi_comm);
 
   // Setup DoFHandlers *as checkpointed*, sequence matches `this->serialize_vectors()`.
   dealii::DoFHandler<dim> checkpoint_dof_handler_u(*checkpoint_triangulation);
@@ -318,7 +318,9 @@ SpatialOperator<dim, Number>::deserialize_vectors(
   {
     load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
     unsigned int const mapping_degree = checkpoint_dof_handler_u.get_fe().degree;
-    GridUtilities::create_mapping(checkpoint_mapping, get_element_type(*checkpoint_triangulation), mapping_degree);
+    GridUtilities::create_mapping(checkpoint_mapping,
+                                  get_element_type(*checkpoint_triangulation),
+                                  mapping_degree);
   }
 
   if(param.restart_data.discretization_identical)
@@ -342,11 +344,11 @@ SpatialOperator<dim, Number>::deserialize_vectors(
       get_vectors_per_block<VectorType, BlockVectorType>(block_vectors);
 
     grid_to_grid_projection(checkpoint_vectors,
-                                            checkpoint_dof_handlers,
-                                            checkpoint_mapping,
-                                            vectors_per_dof_handler,
-                                            dof_handlers,
-                                            this->get_mapping());
+                            checkpoint_dof_handlers,
+                            checkpoint_mapping,
+                            vectors_per_dof_handler,
+                            dof_handlers,
+                            this->get_mapping());
   }
 }
 

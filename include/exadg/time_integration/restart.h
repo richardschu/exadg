@@ -34,10 +34,18 @@
 #include <deal.II/grid/tria.h>
 #include <deal.II/lac/la_parallel_block_vector.h>
 #include <deal.II/lac/la_parallel_vector.h>
+#include <deal.II/lac/solver_cg.h>
+#include <deal.II/matrix_free/fe_point_evaluation.h>
+#include <deal.II/numerics/vector_tools.h>
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
 #include <exadg/grid/mapping_dof_vector.h>
+#include <exadg/matrix_free/matrix_free_data.h>
+#include <exadg/operators/mapping_flags.h>
+#include <exadg/operators/mass_operator.h>
+#include <exadg/operators/quadrature.h>
+#include <exadg/solvers_and_preconditioners/preconditioners/jacobi_preconditioner.h>
 
 namespace ExaDG
 {
@@ -262,7 +270,7 @@ get_block_vectors_from_dof_handlers(
  * Note also that the sequence of vectors and DoFHandlers here and in
  * deserialize_triangulation_and_load_vectors() *must* be identical.
  * This function does not consider a mapping to be stored, if it is
- * not provided within the `dof_handlers` (and hence treated like all other vectors). 
+ * not provided within the `dof_handlers` (and hence treated like all other vectors).
  */
 template<int dim, typename VectorType>
 inline void
@@ -345,7 +353,8 @@ store_vectors_in_triangulation_and_serialize(
     if(dof_handlers[i] == dof_handler_mapping and not vector_initialized)
     {
       // Cheaper setup if we already have a vector given in the input arguments.
-      vector_grid_coordinates.reinit(*vectors_per_dof_handler[i][0], true /* omit_zeroing_entries */);
+      vector_grid_coordinates.reinit(*vectors_per_dof_handler[i][0],
+                                     true /* omit_zeroing_entries */);
       vector_initialized = true;
       break;
     }
@@ -496,7 +505,7 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
 
   // Standard utility function, sequence as in `store_vectors_in_triangulation_and_serialize()`.
   std::vector<std::vector<VectorType *>> vectors_per_dof_handler_extended = vectors_per_dof_handler;
-  std::vector<VectorType *> tmp = {&vector_grid_coordinates};
+  std::vector<VectorType *>              tmp = {&vector_grid_coordinates};
   vectors_per_dof_handler_extended.push_back(tmp);
   std::vector<dealii::DoFHandler<dim, dim> const *> dof_handlers_extended = dof_handlers;
   dof_handlers_extended.push_back(dof_handler_mapping);
@@ -515,6 +524,193 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
 }
 
 /**
+ * Utility function to collect integration points via `dealii::FEEvaluation`.
+ */
+template<int dim, int n_components, typename Number>
+inline std::vector<dealii::Point<dim>>
+collect_integration_points(
+  dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & matrix_free,
+  unsigned int const                                                       dof_index,
+  unsigned int                                                             quad_index)
+{
+  CellIntegrator<dim, n_components, Number> fe_eval(matrix_free, dof_index, quad_index);
+
+  // Conservative estimate for the number of points.
+  std::vector<dealii::Point<dim>> integration_points;
+  integration_points.reserve(
+    matrix_free.get_dof_handler(dof_index).get_triangulation().n_active_cells() *
+    fe_eval.n_q_points);
+
+  for(unsigned int cell_batch_idx = 0; cell_batch_idx < matrix_free.n_cell_batches();
+      ++cell_batch_idx)
+  {
+    fe_eval.reinit(cell_batch_idx);
+    for(const unsigned int q : fe_eval.quadrature_point_indices())
+    {
+      dealii::Point<dim, dealii::VectorizedArray<Number>> const cell_batch_points =
+        fe_eval.quadrature_point(q);
+      for(unsigned int i = 0; i < dealii::VectorizedArray<Number>::size(); ++i)
+      {
+        dealii::Point<dim> p;
+        for(unsigned int d = 0; d < dim; ++d)
+        {
+          p[d] = cell_batch_points[d][i];
+        }
+        integration_points.push_back(p);
+      }
+    }
+  }
+
+  return integration_points;
+}
+
+/**
+ * Utility function to compute the right hand side of a projection with values given in integration
+ * points obtained via `collect_integration_points()`.
+ */
+template<int dim, int n_components, typename Number, typename VectorType>
+inline VectorType
+assemble_projection_rhs(
+  dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & matrix_free,
+  CellIntegrator<dim, n_components, Number> &                              fe_eval,
+  std::vector<
+    typename dealii::FEPointEvaluation<n_components, dim, dim, Number>::value_type> const &
+                     values_source_in_q_points_target,
+  unsigned int const dof_index)
+{
+  VectorType system_rhs;
+  matrix_free.initialize_dof_vector(system_rhs, dof_index);
+
+  unsigned int idx_q_point = 0;
+
+  for(unsigned int cell_batch_idx = 0; cell_batch_idx < matrix_free.n_cell_batches();
+      ++cell_batch_idx)
+  {
+    fe_eval.reinit(cell_batch_idx);
+    for(unsigned int const q : fe_eval.quadrature_point_indices())
+    {
+      dealii::Tensor<1, n_components, dealii::VectorizedArray<Number>> tmp;
+
+      for(unsigned int i = 0; i < dealii::VectorizedArray<Number>::size(); ++i)
+      {
+        typename dealii::FEPointEvaluation<n_components, dim, dim, Number>::value_type const
+          values = values_source_in_q_points_target[idx_q_point];
+
+        // Increment index into `values_source_in_q_points_target` which is dictated
+        // by `integration_points_target`, i.e., `collect_integration_points()`.
+        ++idx_q_point;
+
+        if constexpr(n_components == 1)
+        {
+          tmp[0][i] = values;
+        }
+        else if constexpr(n_components == dim)
+        {
+          for(unsigned int d = 0; d < n_components; ++d)
+          {
+            tmp[d][i] = values[d];
+          }
+        }
+      }
+
+      fe_eval.submit_value(tmp, q);
+    }
+    fe_eval.integrate(dealii::EvaluationFlags::values);
+    fe_eval.distribute_local_to_global(system_rhs);
+  }
+  system_rhs.compress(dealii::VectorOperation::add);
+
+  return system_rhs;
+}
+
+/**
+ * Utilitiy function to project vectors from a source to a target triangulation
+ * via `dealii::RemotePointEvaluation`, matrix-free mass operator evaluation
+ * and a Jacobi-preconditioned CG solver.
+ */
+template<int dim, typename Number, int n_components, typename VectorType>
+inline void
+project_vectors(
+  std::vector<VectorType *> const &                                        source_vectors,
+  dealii::DoFHandler<dim> const &                                          source_dof_handler,
+  std::shared_ptr<dealii::Mapping<dim>> const &                            source_mapping,
+  std::vector<VectorType *> &                                              target_vectors,
+  dealii::DoFHandler<dim> const &                                          target_dof_handler,
+  dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & target_matrix_free,
+  dealii::AffineConstraints<Number> const &                                constraints,
+  unsigned int const                                                       dof_index,
+  unsigned int const                                                       quad_index)
+{
+  // Setup operator and preconditioner outside of the loop since the operator remains unchanged.
+  MassOperatorData<dim> mass_operator_data;
+  mass_operator_data.dof_index  = dof_index;
+  mass_operator_data.quad_index = quad_index;
+
+  MassOperator<dim, n_components, Number> mass_operator;
+  mass_operator.initialize(target_matrix_free, constraints, mass_operator_data);
+
+  JacobiPreconditioner<MassOperator<dim, n_components, Number>> jacobi_preconditioner(
+    mass_operator, true /* initialize_preconditioner */);
+
+  // Setup RemotePointEvaluation since the `source_vectors` all live on the same triangulation.
+  typename dealii::Utilities::MPI::RemotePointEvaluation<dim>::AdditionalData rpe_data(
+    1e-12 /* tolerance in reference cell */,
+    true /* enforce_unique_mapping */,
+    0 /* rtree_level */,
+    {} /* marked_vertices */);
+
+  dealii::Utilities::MPI::RemotePointEvaluation<dim> rpe_source(rpe_data);
+
+  // The sequence of integration points follows from the sequence of points as encountered during
+  // cell batch loop.
+  std::vector<dealii::Point<dim>> integration_points_target =
+    collect_integration_points<dim, n_components, Number>(target_matrix_free,
+                                                          dof_index,
+                                                          quad_index);
+
+  rpe_source.reinit(integration_points_target,
+                    source_dof_handler.get_triangulation(),
+                    *source_mapping);
+  AssertThrow(rpe_source.all_points_found(),
+              dealii::ExcMessage("Could not interpolate source grid vector in target grid."));
+
+  CellIntegrator<dim, n_components, Number> fe_eval(target_matrix_free, dof_index, quad_index);
+
+  // Loop over vectors and project.
+  for(unsigned int i = 0; i < target_vectors.size(); ++i)
+  {
+    // Evaluate the source vector at the target integration points.
+    VectorType const & source_vector = *source_vectors.at(i);
+    source_vector.update_ghost_values();
+
+    std::vector<
+      typename dealii::FEPointEvaluation<n_components, dim, dim, Number>::value_type> const
+      values_source_in_q_points_target = dealii::VectorTools::point_values<n_components>(
+        rpe_source, source_dof_handler, source_vector, dealii::VectorTools::EvaluationFlags::avg);
+    source_vector.zero_out_ghost_values(); // ##+ is this needed?
+
+    // Assemble right hand side vector for the projection.
+    VectorType system_rhs = assemble_projection_rhs<dim, n_components, Number, VectorType>(
+      target_matrix_free, fe_eval, values_source_in_q_points_target, dof_index);
+
+    // CG solver for global projection.
+    unsigned int constexpr max_iter      = 10000;
+    double const                 abs_tol = 1e-16 * system_rhs.l2_norm();
+    double const                 rel_tol = 1e-12;
+    dealii::ReductionControl     reduction_control(max_iter, abs_tol, rel_tol);
+    dealii::SolverCG<VectorType> solver_cg(reduction_control);
+
+    solver_cg.solve(mass_operator, *target_vectors[i], system_rhs, jacobi_preconditioner);
+
+    if(dealii::Utilities::MPI::this_mpi_process(target_dof_handler.get_communicator()) == 0)
+    {
+      std::cout << "  Global projection required " << reduction_control.last_step()
+                << " CG iterations.\n";
+    }
+  }
+}
+
+/**
  * Utility function to perform grid-to-grid projection using `dealii::RemotePointEvaluation`.
  * We assume we only have a single `dealii::FiniteElement` per `dealii::DoFHandler`.
  * The VectorType template argument is assumed no to be of `BlockVector` type.
@@ -522,12 +718,13 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
  */
 template<int dim, typename VectorType>
 inline void
-grid_to_grid_projection(std::vector<std::vector<VectorType *>> const &       source_vectors_per_dof_handler,
-                        std::vector<dealii::DoFHandler<dim> const *> const & source_dof_handlers,
-                        std::shared_ptr<dealii::Mapping<dim>> const &        source_mapping,
-                        std::vector<std::vector<VectorType *>> &             target_vectors_per_dof_handler,
-                        std::vector<dealii::DoFHandler<dim> const *> const & target_dof_handlers,
-                        std::shared_ptr<dealii::Mapping<dim> const> const &  target_mapping)
+grid_to_grid_projection(
+  std::vector<std::vector<VectorType *>> const &       source_vectors_per_dof_handler,
+  std::vector<dealii::DoFHandler<dim> const *> const & source_dof_handlers,
+  std::shared_ptr<dealii::Mapping<dim>> const &        source_mapping,
+  std::vector<std::vector<VectorType *>> &             target_vectors_per_dof_handler,
+  std::vector<dealii::DoFHandler<dim> const *> const & target_dof_handlers,
+  std::shared_ptr<dealii::Mapping<dim> const> const &  target_mapping)
 {
   // Check input dimensions.
   AssertThrow(source_vectors_per_dof_handler.size() == source_dof_handlers.size(),
@@ -547,16 +744,74 @@ grid_to_grid_projection(std::vector<std::vector<VectorType *>> const &       sou
                 dealii::ExcMessage("Vectors of source and target vectors need to have same size."));
   }
 
-  // Collect integration points ##+
+  // Setup `dealii::MatrixFree` object with multiple `dealii::DoFHandler`.
+  using Number = typename VectorType::value_type;
+  MatrixFreeData<dim, Number> matrix_free_data;
 
-  // Setup suitable `dealii::MatrixFree` and `dealii::FEEvaluation` objects per
-  // `dealii::DoFHandler`.
+  MappingFlags mapping_flags;
+  mapping_flags.cells =
+    dealii::update_quadrature_points | dealii::update_values | dealii::update_JxW_values;
+  matrix_free_data.append_mapping_flags(mapping_flags);
 
-  // inverse_mass_operator.h
-  // mass_operator.h
-  // jacobi_preconditioner.h
+  dealii::AffineConstraints<Number> empty_constraints;
+  empty_constraints.clear();
+  empty_constraints.close();
+  for(unsigned int i = 0; i < target_dof_handlers.size(); ++i)
+  {
+    matrix_free_data.insert_dof_handler(target_dof_handlers[i], std::to_string(i));
+    matrix_free_data.insert_constraint(&empty_constraints, std::to_string(i));
+
+    ElementType element_type = get_element_type(target_dof_handlers[i]->get_triangulation());
+
+    std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+      create_quadrature<dim>(element_type, target_dof_handlers[i]->get_fe().degree + 2);
+
+    matrix_free_data.insert_quadrature(*quadrature, std::to_string(i));
+  }
+
+  dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> matrix_free;
+  matrix_free.reinit(*target_mapping,
+                     matrix_free_data.get_dof_handler_vector(),
+                     matrix_free_data.get_constraint_vector(),
+                     matrix_free_data.get_quadrature_vector(),
+                     matrix_free_data.data);
+
+  // Project vectors per `dealii::DoFHandler`.
+  for(unsigned int i = 0; i < target_dof_handlers.size(); ++i)
+  {
+    unsigned int const n_components = target_dof_handlers[i]->get_fe().n_components();
+    if(n_components == 1)
+    {
+      project_vectors<dim, Number, 1 /* n_components */>(source_vectors_per_dof_handler.at(i),
+                                                         *source_dof_handlers.at(i),
+                                                         source_mapping,
+                                                         target_vectors_per_dof_handler.at(i),
+                                                         *target_dof_handlers.at(i),
+                                                         matrix_free,
+                                                         empty_constraints,
+                                                         i /* dof_index */,
+                                                         i /* quad_index */);
+    }
+    else if(n_components == dim)
+    {
+      project_vectors<dim, Number, dim /* n_components */>(source_vectors_per_dof_handler.at(i),
+                                                           *source_dof_handlers.at(i),
+                                                           source_mapping,
+                                                           target_vectors_per_dof_handler.at(i),
+                                                           *target_dof_handlers.at(i),
+                                                           matrix_free,
+                                                           empty_constraints,
+                                                           i /* dof_index */,
+                                                           i /* quad_index */);
+    }
+    else
+    {
+      AssertThrow(n_components == 1 or n_components == dim,
+                  dealii::ExcMessage("The current number of components is not"
+                                     "supported in `grid_to_grid_projection()`."));
+    }
+  }
 }
-
 
 } // namespace ExaDG
 
