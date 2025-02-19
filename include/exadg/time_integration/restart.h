@@ -37,6 +37,7 @@
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
+#include <exadg/grid/mapping_dof_vector.h>
 
 namespace ExaDG
 {
@@ -260,6 +261,8 @@ get_block_vectors_from_dof_handlers(
  * We assume that the Triangulation(s) linked to the DoFHandlers are all identical.
  * Note also that the sequence of vectors and DoFHandlers here and in
  * deserialize_triangulation_and_load_vectors() *must* be identical.
+ * This function does not consider a mapping to be stored, if it is
+ * not provided within the `dof_handlers` (and hence treated like all other vectors). 
  */
 template<int dim, typename VectorType>
 inline void
@@ -300,6 +303,85 @@ store_vectors_in_triangulation_and_serialize(
   std::string const filename = filename_base + ".triangulation";
   rename_restart_files(filename);
   triangulation.save(filename);
+}
+
+/**
+ * Same as the function above, but the mapping is stored for tensor-product elements
+ * as one of the vectors, while for any other element type, we ignore the mapping in
+ * the projection when deserializing.
+ */
+template<int dim, typename VectorType>
+inline void
+store_vectors_in_triangulation_and_serialize(
+  std::string const &                                       filename_base,
+  std::vector<std::vector<VectorType const *>> const &      vectors_per_dof_handler,
+  std::vector<dealii::DoFHandler<dim, dim> const *> const & dof_handlers,
+  dealii::Mapping<dim> const &                              mapping,
+  dealii::DoFHandler<dim> const *                           dof_handler_mapping)
+{
+  AssertThrow(vectors_per_dof_handler.size() > 0,
+              dealii::ExcMessage("No vectors to store in triangulation."));
+  AssertThrow(vectors_per_dof_handler.size() == dof_handlers.size(),
+              dealii::ExcMessage("Number of vectors of vectors and DoFHandlers do not match."));
+
+  auto const & triangulation = dof_handlers.at(0)->get_triangulation();
+
+  // Check if all the Triangulation(s) associated with the DoFHandlers point to the same object.
+  for(unsigned int i = 1; i < dof_handlers.size(); ++i)
+  {
+    AssertThrow(&dof_handlers[i]->get_triangulation() == &triangulation,
+                dealii::ExcMessage("Triangulations of DoFHandlers are not identical."));
+  }
+
+  AssertThrow(triangulation.all_reference_cells_are_hyper_cube(),
+              dealii::ExcMessage("Serialization including mapping not "
+                                 "supported for non-hypercube cell types."));
+
+  // Initialize vector to hold grid coordinates.
+  bool       vector_initialized = false;
+  VectorType vector_grid_coordinates;
+  for(unsigned int i = 0; i < dof_handlers.size(); ++i)
+  {
+    if(dof_handlers[i] == dof_handler_mapping and not vector_initialized)
+    {
+      // Cheaper setup if we already have a vector given in the input arguments.
+      vector_grid_coordinates.reinit(*vectors_per_dof_handler[i][0], true /* omit_zeroing_entries */);
+      vector_initialized = true;
+      break;
+    }
+  }
+
+  if(not vector_initialized)
+  {
+    // More expensive setup extracting the `dealii::IndexSet`.
+    dealii::IndexSet const & locally_owned_dofs = dof_handler_mapping->locally_owned_dofs();
+    dealii::IndexSet const   locally_relevant_dofs =
+      dealii::DoFTools::extract_locally_relevant_dofs(*dof_handler_mapping);
+    vector_grid_coordinates.reinit(locally_owned_dofs,
+                                   locally_relevant_dofs,
+                                   dof_handler_mapping->get_communicator());
+  }
+
+  // Fill vector with mapping.
+  unsigned int const mapping_degree = dof_handler_mapping->get_fe().degree;
+  MappingDoFVector<dim, typename VectorType::value_type> mapping_dof_vector(mapping_degree);
+  mapping_dof_vector.fill_grid_coordinates_vector(mapping,
+                                                  vector_grid_coordinates,
+                                                  *dof_handler_mapping);
+
+  // Attach vector holding mapping and corresponding `dof_handler_mapping`.
+  std::vector<std::vector<VectorType const *>> vectors_per_dof_handler_extended =
+    vectors_per_dof_handler;
+  std::vector<VectorType const *> tmp = {&vector_grid_coordinates};
+  vectors_per_dof_handler_extended.push_back(tmp);
+
+  std::vector<dealii::DoFHandler<dim, dim> const *> dof_handlers_extended = dof_handlers;
+  dof_handlers_extended.push_back(dof_handler_mapping);
+
+  // Use utility function that ignores the mapping.
+  store_vectors_in_triangulation_and_serialize(filename_base,
+                                               vectors_per_dof_handler_extended,
+                                               dof_handlers_extended);
 }
 
 template<int dim>
@@ -361,6 +443,11 @@ deserialize_triangulation(std::string const &     filename_base,
   return triangulation;
 }
 
+/**
+ * Utility function to load vectors via `dealii::SolutionTransfer`
+ * assuming the `Triangulation` the `DoFHandler` was initialized with
+ * actually stores the related data.
+ */
 template<int dim, typename VectorType>
 inline void
 load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_per_dof_handler,
@@ -387,6 +474,89 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
     }
   }
 }
+
+/**
+ * Same as the above function, but consider for a mapping added as an additional vector
+ * added during `store_vectors_in_triangulation_and_serialize()`.
+ */
+template<int dim, typename VectorType>
+inline std::shared_ptr<dealii::Mapping<dim>>
+load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_per_dof_handler,
+             std::vector<dealii::DoFHandler<dim, dim> const *> const & dof_handlers,
+             dealii::DoFHandler<dim> const *                           dof_handler_mapping)
+{
+  // We need a collective call to `SolutionTransfer::deserialize()` with all vectors in a
+  // single container. Hence, create a mapping vector and add a pointer to the input argument.
+  dealii::IndexSet const & locally_owned_dofs = dof_handler_mapping->locally_owned_dofs();
+  dealii::IndexSet const & locally_relevant_dofs =
+    dealii::DoFTools::extract_locally_relevant_dofs(*dof_handler_mapping);
+  VectorType vector_grid_coordinates(locally_owned_dofs,
+                                     locally_relevant_dofs,
+                                     dof_handler_mapping->get_communicator());
+
+  // Standard utility function, sequence as in `store_vectors_in_triangulation_and_serialize()`.
+  std::vector<std::vector<VectorType *>> vectors_per_dof_handler_extended = vectors_per_dof_handler;
+  std::vector<VectorType *> tmp = {&vector_grid_coordinates};
+  vectors_per_dof_handler_extended.push_back(tmp);
+  std::vector<dealii::DoFHandler<dim, dim> const *> dof_handlers_extended = dof_handlers;
+  dof_handlers_extended.push_back(dof_handler_mapping);
+
+  load_vectors(vectors_per_dof_handler_extended, dof_handlers_extended);
+
+  // Reconstruct the mapping given the deserialized grid coordinate vector.
+  std::shared_ptr<dealii::Mapping<dim>> mapping;
+  unsigned int const                    mapping_degree = dof_handler_mapping->get_fe().degree;
+  MappingDoFVector<dim, typename VectorType::value_type> mapping_dof_vector(mapping_degree);
+  mapping_dof_vector.fill_grid_coordinates_vector(*mapping,
+                                                  vector_grid_coordinates,
+                                                  *dof_handler_mapping);
+
+  return mapping;
+}
+
+/**
+ * Utility function to perform grid-to-grid projection using `dealii::RemotePointEvaluation`.
+ * We assume we only have a single `dealii::FiniteElement` per `dealii::DoFHandler`.
+ * The VectorType template argument is assumed no to be of `BlockVector` type.
+ * Note that this function initializes a complete `dealii::MatrixFree` object and hence
+ */
+template<int dim, typename VectorType>
+inline void
+grid_to_grid_projection(std::vector<std::vector<VectorType *>> const &       source_vectors_per_dof_handler,
+                        std::vector<dealii::DoFHandler<dim> const *> const & source_dof_handlers,
+                        std::shared_ptr<dealii::Mapping<dim>> const &        source_mapping,
+                        std::vector<std::vector<VectorType *>> &             target_vectors_per_dof_handler,
+                        std::vector<dealii::DoFHandler<dim> const *> const & target_dof_handlers,
+                        std::shared_ptr<dealii::Mapping<dim> const> const &  target_mapping)
+{
+  // Check input dimensions.
+  AssertThrow(source_vectors_per_dof_handler.size() == source_dof_handlers.size(),
+              dealii::ExcMessage("First dimension of source vector of vectors "
+                                 "has to match source DoFHandler count."));
+  AssertThrow(target_vectors_per_dof_handler.size() == target_dof_handlers.size(),
+              dealii::ExcMessage("First dimension of target vector of vectors "
+                                 "has to match target DoFHandler count."));
+  AssertThrow(source_dof_handlers.size() == target_dof_handlers.size(),
+              dealii::ExcMessage("Target and source DoFHandler counts have to match"));
+  AssertThrow(source_vectors_per_dof_handler.size() > 0,
+              dealii::ExcMessage("Vector of source vectors empty."));
+  for(unsigned int i = 0; i < source_vectors_per_dof_handler.size(); ++i)
+  {
+    AssertThrow(source_vectors_per_dof_handler[i].size() ==
+                  target_vectors_per_dof_handler.at(i).size(),
+                dealii::ExcMessage("Vectors of source and target vectors need to have same size."));
+  }
+
+  // Collect integration points ##+
+
+  // Setup suitable `dealii::MatrixFree` and `dealii::FEEvaluation` objects per
+  // `dealii::DoFHandler`.
+
+  // inverse_mass_operator.h
+  // mass_operator.h
+  // jacobi_preconditioner.h
+}
+
 
 } // namespace ExaDG
 

@@ -47,7 +47,8 @@ struct RestartData
       degree_u(dealii::numbers::invalid_unsigned_int),
       degree_p(dealii::numbers::invalid_unsigned_int),
       triangulation_type(TriangulationType::Serial),
-      discretization_identical(false)
+      discretization_identical(false),
+      consider_mapping(true)
   {
   }
 
@@ -118,6 +119,11 @@ struct RestartData
   // consider a different number of MPI ranks for `dealii::parallel::distributed::Triangulation``
   // without the need for the otherwise necessary global projection.
   bool discretization_identical;
+
+  // The mapping of the triangulation should be de-/serialized as well to consider for a mapped
+  // geometry at serialization and during deserialization. This is option toggles storing the
+  // mapping via a displacement vector.
+  bool consider_mapping;
 };
 
 } // namespace ExaDG
