@@ -124,9 +124,9 @@ read_distributed_vector(VectorType & vector, BoostInputArchiveType & input_archi
       dynamic_cast<dealii::LinearAlgebra::distributed::BlockVector<Number> *>(&vector);
     for(unsigned int i = 0; i < tmp->n_blocks(); ++i)
     {
-      for(unsigned int i = 0; i < tmp->block(i).locally_owned_size(); ++i)
+      for(unsigned int j = 0; j < tmp->block(i).locally_owned_size(); ++j)
       {
-        input_archive >> tmp->block(i).local_element(i);
+        input_archive >> tmp->block(i).local_element(j);
       }
     }
   }
@@ -164,9 +164,9 @@ write_distributed_vector(VectorType const & vector, BoostOutputArchiveType & out
       dynamic_cast<dealii::LinearAlgebra::distributed::BlockVector<Number> const *>(&vector);
     for(unsigned int i = 0; i < tmp->n_blocks(); ++i)
     {
-      for(unsigned int i = 0; i < tmp->block(i).locally_owned_size(); ++i)
+      for(unsigned int j = 0; j < tmp->block(i).locally_owned_size(); ++j)
       {
-        output_archive << tmp->block(i).local_element(i);
+        output_archive << tmp->block(i).local_element(j);
       }
     }
   }
@@ -297,8 +297,13 @@ store_vectors_in_triangulation_and_serialize(
     solution_transfers;
   for(unsigned int i = 0; i < dof_handlers.size(); ++i)
   {
+    std::cout << "dof_handlers[" << i << "]->n_dofs() = " << dof_handlers[i]->n_dofs() << "###+\n";
+
     for(unsigned int j = 0; j < vectors_per_dof_handler[i].size(); ++j)
     {
+      std::cout << "vectors_per_dof_handler[" << i << "][" << j
+                << "]->size() = " << vectors_per_dof_handler[i][j]->size() << "##+";
+
       print_vector_l2_norm(*vectors_per_dof_handler[i][j]);
     }
     solution_transfers.push_back(
@@ -309,7 +314,15 @@ store_vectors_in_triangulation_and_serialize(
 
   // Serialize the triangulation keeping a maximum of two snapshots.
   std::string const filename = filename_base + ".triangulation";
-  rename_restart_files(filename);
+  if(dealii::Utilities::MPI::this_mpi_process(dof_handlers[0]->get_communicator()) == 0)
+  {
+    // Serialization only creates a single file, move with one process only.
+    rename_restart_files(filename);
+    rename_restart_files(filename + ".info");
+    rename_restart_files(filename + "_fixed.data");
+  }
+
+  // Collective call for serialization.
   triangulation.save(filename);
 }
 
@@ -325,7 +338,8 @@ store_vectors_in_triangulation_and_serialize(
   std::vector<std::vector<VectorType const *>> const &      vectors_per_dof_handler,
   std::vector<dealii::DoFHandler<dim, dim> const *> const & dof_handlers,
   dealii::Mapping<dim> const &                              mapping,
-  dealii::DoFHandler<dim> const *                           dof_handler_mapping)
+  dealii::DoFHandler<dim> const *                           dof_handler_mapping,
+  unsigned int const                                        mapping_degree)
 {
   AssertThrow(vectors_per_dof_handler.size() > 0,
               dealii::ExcMessage("No vectors to store in triangulation."));
@@ -372,7 +386,6 @@ store_vectors_in_triangulation_and_serialize(
   }
 
   // Fill vector with mapping.
-  unsigned int const mapping_degree = dof_handler_mapping->get_fe().degree;
   MappingDoFVector<dim, typename VectorType::value_type> mapping_dof_vector(mapping_degree);
   mapping_dof_vector.fill_grid_coordinates_vector(mapping,
                                                   vector_grid_coordinates,

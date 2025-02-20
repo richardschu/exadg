@@ -153,6 +153,8 @@ public:
                         number_of_rotations,
                         "Number of pulse rotations during runtime.",
                         dealii::Patterns::Double(1.0e-12));
+      prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
+      prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
     }
     prm.leave_subsection();
   }
@@ -184,6 +186,22 @@ private:
     this->param.mapping_degree          = 2;
     this->param.degree_p                = this->param.degree_u;
     this->param.degree_u                = this->param.degree_p;
+
+    // restart
+    this->param.restarted_simulation       = read_restart;
+    this->param.restart_data.write_restart = write_restart;
+    this->param.restart_data.interval_time = (this->param.end_time - this->param.start_time) * 0.4;
+    this->param.restart_data.interval_wall_time  = 1.e6;
+    this->param.restart_data.interval_time_steps = 1e8;
+    this->param.restart_data.filename =
+      this->output_parameters.directory + this->output_parameters.filename + "_restart";
+
+    this->param.restart_data.degree_u                 = this->param.degree_u;
+    this->param.restart_data.degree_p                 = this->param.degree_p;
+    this->param.restart_data.triangulation_type       = TriangulationType::Distributed;
+    this->param.restart_data.discretization_identical = true;
+    this->param.restart_data.consider_mapping         = true;
+    this->param.restart_data.mapping_degree           = 2;
   }
 
   void
@@ -290,6 +308,9 @@ private:
   }
 
   double const start_time = 0.0;
+
+  bool read_restart  = false;
+  bool write_restart = false;
 };
 
 } // namespace Acoustics

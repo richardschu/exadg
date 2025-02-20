@@ -48,7 +48,8 @@ struct RestartData
       degree_p(dealii::numbers::invalid_unsigned_int),
       triangulation_type(TriangulationType::Serial),
       discretization_identical(false),
-      consider_mapping(true)
+      consider_mapping(false),
+      mapping_degree(dealii::numbers::invalid_unsigned_int)
   {
   }
 
@@ -124,6 +125,9 @@ struct RestartData
   // geometry at serialization and during deserialization. This is option toggles storing the
   // mapping via a displacement vector.
   bool consider_mapping;
+
+  // The `mapping_degree` considered when storing or reading the grid.
+  unsigned int mapping_degree;
 };
 
 } // namespace ExaDG

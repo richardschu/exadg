@@ -249,9 +249,9 @@ void
 SpatialOperator<dim, Number>::serialize_vectors(
   std::vector<BlockVectorType const *> block_vectors) const
 {
-  std::vector<dealii::DoFHandler<dim> const *> dof_handlers;
-  dof_handlers.push_back(&this->get_dof_handler_u());
-  dof_handlers.push_back(&this->get_dof_handler_p());
+  std::vector<dealii::DoFHandler<dim> const *> dof_handlers(2);
+  dof_handlers.at(block_index_velocity) = &this->get_dof_handler_u();
+  dof_handlers.at(block_index_pressure) = &this->get_dof_handler_p();
 
   std::vector<std::vector<VectorType const *>> vectors_per_dof_handler =
     get_vectors_per_block<VectorType const, BlockVectorType const>(block_vectors);
@@ -263,7 +263,8 @@ SpatialOperator<dim, Number>::serialize_vectors(
       vectors_per_dof_handler,
       dof_handlers,
       *this->get_mapping(),
-      &this->get_dof_handler_u() /* dof_handler_mapping */);
+      &this->get_dof_handler_u() /* dof_handler_mapping */,
+      param.mapping_degree);
   }
   else
   {
@@ -296,8 +297,9 @@ SpatialOperator<dim, Number>::deserialize_vectors(
     create_finite_element<dim>(checkpoint_element_type, true, 1, param.restart_data.degree_p);
   checkpoint_dof_handler_u.distribute_dofs(*checkpoint_fe_u);
   checkpoint_dof_handler_p.distribute_dofs(*checkpoint_fe_p);
-  std::vector<dealii::DoFHandler<dim> const *> checkpoint_dof_handlers{&checkpoint_dof_handler_u,
-                                                                       &checkpoint_dof_handler_p};
+  std::vector<dealii::DoFHandler<dim> const *> checkpoint_dof_handlers(2);
+  checkpoint_dof_handlers[block_index_velocity] = &checkpoint_dof_handler_u;
+  checkpoint_dof_handlers[block_index_pressure] = &checkpoint_dof_handler_p;
 
   // Deserialize vectors stored in triangulation, sequence matches `this->serialize_vectors()`.
   std::vector<BlockVectorType> checkpoint_block_vectors =
@@ -306,22 +308,6 @@ SpatialOperator<dim, Number>::deserialize_vectors(
 
   std::vector<std::vector<VectorType *>> checkpoint_vectors =
     get_vectors_per_block<VectorType, BlockVectorType>(checkpoint_block_vectors);
-
-  std::shared_ptr<dealii::Mapping<dim>> checkpoint_mapping;
-  if(param.restart_data.consider_mapping)
-  {
-    checkpoint_mapping = load_vectors(checkpoint_vectors,
-                                      checkpoint_dof_handlers,
-                                      &checkpoint_dof_handler_u /* dof_handler_mapping */);
-  }
-  else
-  {
-    load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
-    unsigned int const mapping_degree = checkpoint_dof_handler_u.get_fe().degree;
-    GridUtilities::create_mapping(checkpoint_mapping,
-                                  get_element_type(*checkpoint_triangulation),
-                                  mapping_degree);
-  }
 
   if(param.restart_data.discretization_identical)
   {
@@ -336,19 +322,44 @@ SpatialOperator<dim, Number>::deserialize_vectors(
   else
   {
     // Perform global projection in case of a non-matching discretization.
-    std::vector<dealii::DoFHandler<dim> const *> dof_handlers;
-    dof_handlers.push_back(&this->get_dof_handler_u());
-    dof_handlers.push_back(&this->get_dof_handler_p());
+    std::vector<dealii::DoFHandler<dim> const *> dof_handlers(2);
+    dof_handlers.at(block_index_velocity) = &this->get_dof_handler_u();
+    dof_handlers.at(block_index_pressure) = &this->get_dof_handler_p();
 
     std::vector<std::vector<VectorType *>> vectors_per_dof_handler =
       get_vectors_per_block<VectorType, BlockVectorType>(block_vectors);
+
+    // Deserialize mapping from vector or project on reference trianuglations.
+    std::shared_ptr<dealii::Mapping<dim> const> target_mapping;
+    std::shared_ptr<dealii::Mapping<dim>>       checkpoint_mapping;
+    if(param.restart_data.consider_mapping)
+    {
+      target_mapping     = this->get_mapping();
+      checkpoint_mapping = load_vectors(checkpoint_vectors,
+                                        checkpoint_dof_handlers,
+                                        &checkpoint_dof_handler_u /* dof_handler_mapping */);
+    }
+    else
+    {
+      load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
+
+      // Create dummy linear mapping since we have no mapping serialized to restore.
+      GridUtilities::create_mapping(checkpoint_mapping,
+                                    get_element_type(*checkpoint_triangulation),
+                                    1 /* mapping_degree */);
+      std::shared_ptr<dealii::Mapping<dim>> tmp;
+      GridUtilities::create_mapping(tmp,
+                                    get_element_type(dof_handlers.at(0)->get_triangulation()),
+                                    1 /* mapping_degree */);
+      target_mapping = std::const_pointer_cast<dealii::Mapping<dim> const>(tmp);
+    }
 
     grid_to_grid_projection(checkpoint_vectors,
                             checkpoint_dof_handlers,
                             checkpoint_mapping,
                             vectors_per_dof_handler,
                             dof_handlers,
-                            this->get_mapping());
+                            target_mapping);
   }
 }
 
