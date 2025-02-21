@@ -279,11 +279,10 @@ void
 SpatialOperator<dim, Number>::deserialize_vectors(
   std::vector<BlockVectorType *> block_vectors) const
 {
-  // Load potentially unfitting checkpoint triangulation of identical TriangulationType.
-  // We assume the coarse grid was stored to disk during the call to
-  // `ApplicationBase::create_grid()`.
+  // Load potentially unfitting checkpoint triangulation of TriangulationType.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =
-    deserialize_triangulation<dim>(param.restart_data.filename,
+    deserialize_triangulation<dim>(this->get_dof_handler_u().get_triangulation(),
+                                   param.restart_data.filename,
                                    param.restart_data.triangulation_type,
                                    mpi_comm);
 
@@ -313,10 +312,10 @@ SpatialOperator<dim, Number>::deserialize_vectors(
   {
     // DoFHandlers need to be setup with `checkpoint_triangulation`, otherwise
     // they are identical. We can simply copy the vector contents.
+    load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
     for(unsigned int i = 0; i < block_vectors.size(); ++i)
     {
-      block_vectors[i]->copy_locally_owned_data_from(checkpoint_block_vectors[i]);
-      block_vectors[i]->update_ghost_values();
+      *block_vectors[i] = checkpoint_block_vectors[i];
     }
   }
   else
@@ -337,13 +336,14 @@ SpatialOperator<dim, Number>::deserialize_vectors(
       target_mapping     = this->get_mapping();
       checkpoint_mapping = load_vectors(checkpoint_vectors,
                                         checkpoint_dof_handlers,
-                                        &checkpoint_dof_handler_u /* dof_handler_mapping */);
+                                        &checkpoint_dof_handler_u /* dof_handler_mapping */,
+                                        param.restart_data.mapping_degree);
     }
     else
     {
       load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
 
-      // Create dummy linear mapping since we have no mapping serialized to restore.
+      // Create dummy linear mappings since we have no mapping serialized to restore.
       GridUtilities::create_mapping(checkpoint_mapping,
                                     get_element_type(*checkpoint_triangulation),
                                     1 /* mapping_degree */);
@@ -359,7 +359,9 @@ SpatialOperator<dim, Number>::deserialize_vectors(
                             checkpoint_mapping,
                             vectors_per_dof_handler,
                             dof_handlers,
-                            target_mapping);
+                            target_mapping,
+                            param.restart_data.rpe_tolerance_unit_cell,
+                            param.restart_data.rpe_enforce_unique_mapping);
   }
 }
 

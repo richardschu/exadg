@@ -16,7 +16,7 @@
     },
     "Application": {
         "RuntimeInNumberOfPulseRotations": "1.0",
-        "ReadRestart": "true",
+        "ReadRestart": "false",
         "WriteRestart": "false"
     },
     "Output": {

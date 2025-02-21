@@ -175,8 +175,9 @@ private:
     // TEMPORAL DISCRETIZATION
     this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
     this->param.cfl                           = 0.59;
+    this->param.time_step_size                = compute_rotation_duration() / 1000.0;
     this->param.order_time_integrator         = 2;
-    this->param.start_with_low_order          = false;
+    this->param.start_with_low_order          = true;
 
     // output of solver information
     this->param.solver_info_data.interval_time = (this->param.end_time - this->param.start_time);
@@ -196,12 +197,14 @@ private:
     this->param.restart_data.filename =
       this->output_parameters.directory + this->output_parameters.filename + "_restart";
 
-    this->param.restart_data.degree_u                 = this->param.degree_u;
-    this->param.restart_data.degree_p                 = this->param.degree_p;
-    this->param.restart_data.triangulation_type       = TriangulationType::Distributed;
-    this->param.restart_data.discretization_identical = true;
-    this->param.restart_data.consider_mapping         = true;
-    this->param.restart_data.mapping_degree           = 2;
+    this->param.restart_data.degree_u                   = 5;
+    this->param.restart_data.degree_p                   = 5;
+    this->param.restart_data.triangulation_type         = TriangulationType::Distributed;
+    this->param.restart_data.discretization_identical   = true;
+    this->param.restart_data.consider_mapping           = true;
+    this->param.restart_data.mapping_degree             = 2;
+    this->param.restart_data.rpe_tolerance_unit_cell    = 1e-6;
+    this->param.restart_data.rpe_enforce_unique_mapping = false;
   }
 
   void
@@ -224,17 +227,8 @@ private:
         // Save the *coarse* triangulation for later deserialization.
         if(write_restart and this->param.grid.triangulation_type == TriangulationType::Serial)
         {
-          std::cout << "WRITING RESTART.##+\n";
           save_coarse_triangulation<dim, dealii::Triangulation<dim>>(
             this->param.restart_data.filename, tria);
-        }
-        else
-        {
-          std::cout << "NOT WRITING RESTART.##+\n";
-          std::cout << "write_restart = " << write_restart << "\n";
-          bool tmp = this->param.grid.triangulation_type == TriangulationType::Serial;
-          std::cout << "this->param.grid.triangulation_type == TriangulationType::Serial = " << tmp
-                    << "\n";
         }
 
         tria.refine_global(global_refinements);

@@ -49,7 +49,9 @@ struct RestartData
       triangulation_type(TriangulationType::Serial),
       discretization_identical(false),
       consider_mapping(false),
-      mapping_degree(dealii::numbers::invalid_unsigned_int)
+      mapping_degree(dealii::numbers::invalid_unsigned_int),
+      rpe_tolerance_unit_cell(1e-12),
+      rpe_enforce_unique_mapping(false)
   {
   }
 
@@ -123,11 +125,16 @@ struct RestartData
 
   // The mapping of the triangulation should be de-/serialized as well to consider for a mapped
   // geometry at serialization and during deserialization. This is option toggles storing the
-  // mapping via a displacement vector.
+  // mapping via a displacement vector *and* reading it back in. Hence, this parameter needs to
+  // match in serialization/deserialization runs.
   bool consider_mapping;
 
   // The `mapping_degree` considered when storing or reading the grid.
   unsigned int mapping_degree;
+
+  // Parameters for `dealii::RemotePointEvaluation` used for grid-to-grid projection.
+  double rpe_tolerance_unit_cell;
+  bool   rpe_enforce_unique_mapping;
 };
 
 } // namespace ExaDG

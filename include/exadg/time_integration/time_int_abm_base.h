@@ -226,10 +226,29 @@ private:
     pde_operator->deserialize_vectors(vectors);
 
     // Remains for comparison.
-    VectorType solution_compare(solution);
-    VectorType prediction_compare(prediction);
-    read_distributed_vector(solution_compare, ia);
-    read_distributed_vector(prediction_compare, ia);
+    try
+    {
+      VectorType solution_compare(solution);
+      VectorType prediction_compare(prediction);
+      read_distributed_vector(solution_compare, ia);
+      read_distributed_vector(prediction_compare, ia);
+
+      solution_compare -= solution;
+      prediction_compare -= prediction;
+      double diff_max = std::max(solution_compare.linfty_norm(), prediction_compare.linfty_norm());
+      if(dealii::Utilities::MPI::this_mpi_process(solution.get_mpi_communicator()) == 0)
+      {
+        std::cout << "|difference|_inf = " << diff_max << "\n"
+                  << "(only useful for identical discretization)";
+      }
+    }
+    catch(...)
+    {
+      std::cout << "Comparison to previous serialization not possible.\n"
+                << "This can only be done with identical processor "
+                << "counts and enough data in the archives."
+                << "\n";
+    }
   }
 
   void
