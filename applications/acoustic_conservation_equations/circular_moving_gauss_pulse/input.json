@@ -16,8 +16,8 @@
     },
     "Application": {
         "RuntimeInNumberOfPulseRotations": "1.0",
-        "ReadRestart": "false",
-        "WriteRestart": "true"
+        "ReadRestart": "true",
+        "WriteRestart": "false"
     },
     "Output": {
         "OutputDirectory": "output/circular_moving_gauss_pulse/",

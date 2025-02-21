@@ -265,6 +265,38 @@ get_block_vectors_from_dof_handlers(
 }
 
 /**
+ * Utility function to serialize a `dealii::Triangulation`. This is only implemented for the
+ * serial case since we only require the coarsest triangulation to be read from file when
+ * deserializing into a `dealii::parallel::distributed::Triangulation`.
+ */
+template<int dim, typename TriangulationType>
+inline void
+save_coarse_triangulation(std::string const &       filename_base,
+                          TriangulationType const & triangulation)
+{
+  if constexpr(std::is_same<std::remove_cv_t<TriangulationType>,
+                            dealii::parallel::distributed::Triangulation<dim, dim>>::value or
+               std::is_same<std::remove_cv_t<TriangulationType>,
+                            dealii::parallel::fullydistributed::Triangulation<dim, dim>>::value)
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Only TriangulationType::Serial, i.e., "
+                                   "dealii::Triangulation<dim> supported."));
+  }
+
+  std::string const filename = filename_base + ".coarse_triangulation";
+  if(dealii::Utilities::MPI::this_mpi_process(triangulation.get_communicator()) == 0)
+  {
+    // Serialization only creates a single file, move with one process only.
+    rename_restart_files(filename + ".info");
+    rename_restart_files(filename + "_triangulation.data");
+
+    // For `dealii::Triangulation` the triangulation is the same for all processes.
+    triangulation.save(filename);
+  }
+}
+
+/**
  * Utility function to store a std::vector<VectorType> in a triangulation and serialize.
  * We assume that the Triangulation(s) linked to the DoFHandlers are all identical.
  * Note also that the sequence of vectors and DoFHandlers here and in
@@ -320,6 +352,7 @@ store_vectors_in_triangulation_and_serialize(
     rename_restart_files(filename);
     rename_restart_files(filename + ".info");
     rename_restart_files(filename + "_fixed.data");
+    rename_restart_files(filename + "_triangulation.data");
   }
 
   // Collective call for serialization.
@@ -432,11 +465,11 @@ deserialize_triangulation(std::string const &     filename_base,
     catch(...)
     {
       AssertThrow(false,
-                  dealii::ExcMessage("Deserializing coarse triangulation expected in\n" +
-                                     filename_base +
-                                     ".coarse_triangulation\n"
-                                     "make sure to store the coarse grid during `create_grid`\n"
-                                     "in the respective application.h"));
+                  dealii::ExcMessage(
+                    "Deserializing coarse triangulation expected in\n" + filename_base +
+                    ".coarse_triangulation\n"
+                    "make sure to store the coarse grid during `create_grid`\n"
+                    "in the respective application.h using TriangulationType::Serial."));
     }
 
     std::shared_ptr<dealii::parallel::distributed::Triangulation<dim>> tmp =

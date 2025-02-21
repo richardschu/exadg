@@ -221,6 +221,22 @@ private:
           if(face->at_boundary())
             face->set_boundary_id(1);
 
+        // Save the *coarse* triangulation for later deserialization.
+        if(write_restart and this->param.grid.triangulation_type == TriangulationType::Serial)
+        {
+          std::cout << "WRITING RESTART.##+\n";
+          save_coarse_triangulation<dim, dealii::Triangulation<dim>>(
+            this->param.restart_data.filename, tria);
+        }
+        else
+        {
+          std::cout << "NOT WRITING RESTART.##+\n";
+          std::cout << "write_restart = " << write_restart << "\n";
+          bool tmp = this->param.grid.triangulation_type == TriangulationType::Serial;
+          std::cout << "this->param.grid.triangulation_type == TriangulationType::Serial = " << tmp
+                    << "\n";
+        }
+
         tria.refine_global(global_refinements);
       };
 
