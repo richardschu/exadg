@@ -265,6 +265,39 @@ get_block_vectors_from_dof_handlers(
   return block_vectors;
 }
 
+template<typename VectorType>
+std::vector<bool>
+get_ghost_state(std::vector<VectorType *> const & vectors)
+{
+  std::vector<bool> has_ghost_elements(vectors.size());
+  for(unsigned int i = 0; i < has_ghost_elements.size(); ++i)
+  {
+    has_ghost_elements[i] = vectors[i]->has_ghost_elements();
+  }
+  return has_ghost_elements;
+}
+
+template<typename VectorType>
+void
+set_ghost_state(std::vector<VectorType *> const & vectors,
+                std::vector<bool> const &         had_ghost_elements)
+{
+  AssertThrow(vectors.size() == had_ghost_elements.size(),
+              dealii::ExcMessage("Vector sizes do not match."));
+
+  for(unsigned int i = 0; i < had_ghost_elements.size(); ++i)
+  {
+    if(had_ghost_elements[i])
+    {
+      vectors[i]->update_ghost_values();
+    }
+    else
+    {
+      vectors[i]->zero_out_ghost_values();
+    }
+  }
+}
+
 /**
  * Utility function to serialize a `dealii::Triangulation`. This is only implemented for the
  * serial case since we only require the coarsest triangulation to be read from file when

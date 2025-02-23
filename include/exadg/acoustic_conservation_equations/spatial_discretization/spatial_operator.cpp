@@ -279,6 +279,9 @@ void
 SpatialOperator<dim, Number>::deserialize_vectors(
   std::vector<BlockVectorType *> block_vectors) const
 {
+  // Store ghost state to recover after deserialization.
+  std::vector<bool> const has_ghost_elements = get_ghost_state(block_vectors);
+
   // Load potentially unfitting checkpoint triangulation of TriangulationType.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =
     deserialize_triangulation<dim>(this->get_dof_handler_u().get_triangulation(),
@@ -302,7 +305,7 @@ SpatialOperator<dim, Number>::deserialize_vectors(
 
   // Deserialize vectors stored in triangulation, sequence matches `this->serialize_vectors()`.
   std::vector<BlockVectorType> checkpoint_block_vectors =
-    get_block_vectors_from_dof_handlers<dim, BlockVectorType>(2 /* n_vectors */,
+    get_block_vectors_from_dof_handlers<dim, BlockVectorType>(block_vectors.size(),
                                                               checkpoint_dof_handlers);
 
   std::vector<std::vector<VectorType *>> checkpoint_vectors =
@@ -363,6 +366,9 @@ SpatialOperator<dim, Number>::deserialize_vectors(
                             param.restart_data.rpe_tolerance_unit_cell,
                             param.restart_data.rpe_enforce_unique_mapping);
   }
+
+  // Recover ghost vector state.
+  set_ghost_state(block_vectors, has_ghost_elements);
 }
 
 template<int dim, typename Number>

@@ -177,7 +177,7 @@ private:
     this->param.cfl                           = 0.59;
     this->param.time_step_size                = compute_rotation_duration() / 1000.0;
     this->param.order_time_integrator         = 2;
-    this->param.start_with_low_order          = true;
+    this->param.start_with_low_order          = false;
 
     // output of solver information
     this->param.solver_info_data.interval_time = (this->param.end_time - this->param.start_time);
@@ -200,7 +200,7 @@ private:
     this->param.restart_data.degree_u                   = 5;
     this->param.restart_data.degree_p                   = 5;
     this->param.restart_data.triangulation_type         = TriangulationType::Distributed;
-    this->param.restart_data.discretization_identical   = true;
+    this->param.restart_data.discretization_identical   = false;
     this->param.restart_data.consider_mapping           = true;
     this->param.restart_data.mapping_degree             = 2;
     this->param.restart_data.rpe_tolerance_unit_cell    = 1e-6;

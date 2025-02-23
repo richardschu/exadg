@@ -223,6 +223,11 @@ private:
   read_restart_vectors(BoostInputArchiveType & ia) final
   {
     std::vector<VectorType *> vectors{&solution, &prediction};
+    for(unsigned int i = 0; i < vec_evaluated_operators.size(); ++i)
+    {
+      vectors.push_back(&vec_evaluated_operators[i]);
+    }
+
     pde_operator->deserialize_vectors(vectors);
 
     // Remains for comparison.
@@ -255,6 +260,11 @@ private:
   write_restart_vectors(BoostOutputArchiveType & oa) const final
   {
     std::vector<VectorType const *> vectors{&solution, &prediction};
+    for(unsigned int i = 0; i < vec_evaluated_operators.size(); ++i)
+    {
+      vectors.push_back(&vec_evaluated_operators[i]);
+    }
+
     pde_operator->serialize_vectors(vectors);
 
     // Remains for comparison.
