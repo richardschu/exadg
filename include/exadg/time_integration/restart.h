@@ -23,6 +23,11 @@
 #define INCLUDE_EXADG_TIME_INTEGRATION_RESTART_H_
 
 // C/C++
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -31,6 +36,7 @@
 #include <deal.II/distributed/fully_distributed_tria.h>
 #include <deal.II/distributed/solution_transfer.h>
 #include <deal.II/distributed/tria.h>
+#include <deal.II/grid/manifold.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/lac/la_parallel_block_vector.h>
 #include <deal.II/lac/la_parallel_vector.h>
@@ -93,41 +99,48 @@ print_vector_l2_norm(VectorType const & vector)
   double const     l2_norm  = vector.l2_norm();
   if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
-    std::cout << "    global vector l2 norm: " << std::scientific << std::setprecision(8)
+    std::cout << "    vector global l2 norm: " << std::scientific << std::setprecision(8)
               << std::setw(20) << l2_norm << "\n";
   }
 }
 
 /**
- * Utility functions to read and write the local entries of a
- * dealii::LinearAlgebra::distributed::Vector
+ * Utility function to read or write the local entries of a
+ * dealii::LinearAlgebra::distributed::(Block)Vector
  * from/to a boost archive per block and entry.
+ * Using the `&` operator, loading from or writing to the
+ * archive is determined from the type.
  */
-template<typename VectorType, typename BoostInputArchiveType>
+template<typename VectorType, typename BoostArchiveType>
 inline void
-read_distributed_vector(VectorType & vector, BoostInputArchiveType & input_archive)
+read_write_distributed_vector(VectorType & vector, BoostArchiveType & archive)
 {
+  // Print vector norm here only *before* writing.
+  if(std::is_same<BoostArchiveType, boost::archive::text_oarchive>::value or
+     std::is_same<BoostArchiveType, boost::archive::binary_oarchive>::value)
+  {
+    print_vector_l2_norm(vector);
+  }
+
   // Depending on VectorType, we have to loop over the blocks to
   // access the local entries via vector.local_element(i).
   using Number = typename VectorType::value_type;
-  if(std::is_same<VectorType, dealii::LinearAlgebra::distributed::Vector<Number>>::value)
+  if constexpr(std::is_same<std::remove_cv_t<VectorType>,
+                            dealii::LinearAlgebra::distributed::Vector<Number>>::value)
   {
-    dealii::LinearAlgebra::distributed::Vector<Number> * tmp =
-      dynamic_cast<dealii::LinearAlgebra::distributed::Vector<Number> *>(&vector);
-    for(unsigned int i = 0; i < tmp->locally_owned_size(); ++i)
+    for(unsigned int i = 0; i < vector.locally_owned_size(); ++i)
     {
-      input_archive >> tmp->local_element(i);
+      archive & vector.local_element(i);
     }
   }
-  else if(std::is_same<VectorType, dealii::LinearAlgebra::distributed::BlockVector<Number>>::value)
+  else if constexpr(std::is_same<std::remove_cv_t<VectorType>,
+                                 dealii::LinearAlgebra::distributed::BlockVector<Number>>::value)
   {
-    dealii::LinearAlgebra::distributed::BlockVector<Number> * tmp =
-      dynamic_cast<dealii::LinearAlgebra::distributed::BlockVector<Number> *>(&vector);
-    for(unsigned int i = 0; i < tmp->n_blocks(); ++i)
+    for(unsigned int i = 0; i < vector.n_blocks(); ++i)
     {
-      for(unsigned int j = 0; j < tmp->block(i).locally_owned_size(); ++j)
+      for(unsigned int j = 0; j < vector.block(i).locally_owned_size(); ++j)
       {
-        input_archive >> tmp->block(i).local_element(j);
+        archive & vector.block(i).local_element(j);
       }
     }
   }
@@ -136,44 +149,11 @@ read_distributed_vector(VectorType & vector, BoostInputArchiveType & input_archi
     AssertThrow(false, dealii::ExcMessage("Reading into this VectorType not supported."));
   }
 
-  // Print L2 norm to screen for comparison.
-  print_vector_l2_norm(vector);
-}
-
-template<typename VectorType, typename BoostOutputArchiveType>
-inline void
-write_distributed_vector(VectorType const & vector, BoostOutputArchiveType & output_archive)
-{
-  // Print L2 norm to screen for comparison.
-  print_vector_l2_norm(vector);
-
-  // Depending on VectorType, we have to loop over the blocks to
-  // access the local entries via vector.local_element(i).
-  using Number = typename VectorType::value_type;
-  if(std::is_same<VectorType, dealii::LinearAlgebra::distributed::Vector<Number>>::value)
+  // Print vector norm here only *after* reading.
+  if(std::is_same<BoostArchiveType, boost::archive::text_iarchive>::value or
+     std::is_same<BoostArchiveType, boost::archive::binary_iarchive>::value)
   {
-    dealii::LinearAlgebra::distributed::Vector<Number> const * tmp =
-      dynamic_cast<dealii::LinearAlgebra::distributed::Vector<Number> const *>(&vector);
-    for(unsigned int i = 0; i < tmp->locally_owned_size(); ++i)
-    {
-      output_archive << tmp->local_element(i);
-    }
-  }
-  else if(std::is_same<VectorType, dealii::LinearAlgebra::distributed::BlockVector<Number>>::value)
-  {
-    dealii::LinearAlgebra::distributed::BlockVector<Number> const * tmp =
-      dynamic_cast<dealii::LinearAlgebra::distributed::BlockVector<Number> const *>(&vector);
-    for(unsigned int i = 0; i < tmp->n_blocks(); ++i)
-    {
-      for(unsigned int j = 0; j < tmp->block(i).locally_owned_size(); ++j)
-      {
-        output_archive << tmp->block(i).local_element(j);
-      }
-    }
-  }
-  else
-  {
-    AssertThrow(false, dealii::ExcMessage("Writing into this VectorType not supported."));
+    print_vector_l2_norm(vector);
   }
 }
 
@@ -201,36 +181,6 @@ get_vectors_per_block(std::vector<BlockVectorType *> const & block_vectors)
     for(unsigned int j = 0; j < block_vectors.size(); ++j)
     {
       vectors.push_back(&block_vectors[j]->block(i));
-    }
-    vectors_per_block.push_back(vectors);
-  }
-
-  return vectors_per_block;
-}
-
-/**
- * Same as above but input argument is a vector of BlockVectors.
- * Return type is a vector of vector of pointers, i.e, unchanged.
- */
-template<typename VectorType, typename BlockVectorType>
-std::vector<std::vector<VectorType *>>
-get_vectors_per_block(std::vector<BlockVectorType> & block_vectors)
-{
-  unsigned int const n_blocks = block_vectors.at(0).n_blocks();
-  for(unsigned int i = 0; i < block_vectors.size(); ++i)
-  {
-    AssertThrow(block_vectors[i].n_blocks() == n_blocks,
-                dealii::ExcMessage("Provided number of blocks per "
-                                   "BlockVector must be equal."));
-  }
-
-  std::vector<std::vector<VectorType *>> vectors_per_block;
-  for(unsigned int i = 0; i < n_blocks; ++i)
-  {
-    std::vector<VectorType *> vectors;
-    for(unsigned int j = 0; j < block_vectors.size(); ++j)
-    {
-      vectors.push_back(&block_vectors[j].block(i));
     }
     vectors_per_block.push_back(vectors);
   }
@@ -471,12 +421,11 @@ store_vectors_in_triangulation_and_serialize(
 /**
  * Utility function to deserialize the stored triangulation.
  */
-template<int dim, typename TriangulationTypeDeserialize>
+template<int dim>
 inline std::shared_ptr<dealii::Triangulation<dim>>
-deserialize_triangulation(TriangulationTypeDeserialize const & triangulation_new,
-                          std::string const &                  filename_base,
-                          TriangulationType const              triangulation_type,
-                          MPI_Comm const &                     mpi_communicator)
+deserialize_triangulation(std::string const &     filename_base,
+                          TriangulationType const triangulation_type,
+                          MPI_Comm const &        mpi_communicator)
 {
   std::shared_ptr<dealii::Triangulation<dim>> triangulation_old;
 
@@ -485,16 +434,6 @@ deserialize_triangulation(TriangulationTypeDeserialize const & triangulation_new
   {
     triangulation_old = std::make_shared<dealii::Triangulation<dim>>();
     triangulation_old->load(filename_base + ".triangulation");
-
-    // In case the coarse triangulation has manifolds assigned, copy them.
-    // We assume here that the `dealii::Manifold`s to be copied are exactly the same.
-    for(dealii::types::manifold_id const manifold_id : triangulation_new.get_manifold_ids())
-    {
-      if(manifold_id != dealii::numbers::flat_manifold_id)
-      {
-        triangulation_old->set_manifold(manifold_id, triangulation_new.get_manifold(manifold_id));
-      }
-    }
   }
   else if(triangulation_type == TriangulationType::Distributed)
   {
@@ -521,15 +460,9 @@ deserialize_triangulation(TriangulationTypeDeserialize const & triangulation_new
     tmp->copy_triangulation(coarse_triangulation);
     coarse_triangulation.clear();
 
-    // In case the coarse triangulation has manifolds assigned, copy them.
-    // We assume here that the `dealii::Manifold`s to be copied are exactly the same.
-    for(dealii::types::manifold_id const manifold_id : triangulation_new.get_manifold_ids())
-    {
-      if(manifold_id != dealii::numbers::flat_manifold_id)
-      {
-        tmp->set_manifold(manifold_id, triangulation_new.get_manifold(manifold_id));
-      }
-    }
+    // We do not need manifolds when applying the refinements, since we recover the mapping
+    // separately.
+    tmp->reset_all_manifolds();
     tmp->load(filename_base + ".triangulation");
 
     triangulation_old = std::dynamic_pointer_cast<dealii::Triangulation<dim>>(tmp);
@@ -541,16 +474,6 @@ deserialize_triangulation(TriangulationTypeDeserialize const & triangulation_new
     std::shared_ptr<dealii::parallel::fullydistributed::Triangulation<dim>> tmp =
       std::make_shared<dealii::parallel::fullydistributed::Triangulation<dim>>(mpi_communicator);
     tmp->load(filename_base + ".triangulation");
-
-    // In case the coarse triangulation has manifolds assigned, copy them.
-    // We assume here that the `dealii::Manifold`s to be copied are exactly the same.
-    for(dealii::types::manifold_id const manifold_id : triangulation_new.get_manifold_ids())
-    {
-      if(manifold_id != dealii::numbers::flat_manifold_id)
-      {
-        tmp->set_manifold(manifold_id, triangulation_new.get_manifold(manifold_id));
-      }
-    }
 
     triangulation_old = std::dynamic_pointer_cast<dealii::Triangulation<dim>>(tmp);
   }
@@ -644,7 +567,7 @@ inline std::vector<dealii::Point<dim>>
 collect_integration_points(
   dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & matrix_free,
   unsigned int const                                                       dof_index,
-  unsigned int                                                             quad_index)
+  unsigned int const                                                       quad_index)
 {
   CellIntegrator<dim, n_components, Number> fe_eval(matrix_free, dof_index, quad_index);
 
@@ -717,11 +640,11 @@ assemble_projection_rhs(
         {
           tmp[0][i] = values;
         }
-        else if constexpr(n_components == dim)
+        else
         {
-          for(unsigned int d = 0; d < n_components; ++d)
+          for(unsigned int c = 0; c < n_components; ++c)
           {
-            tmp[d][i] = values[d];
+            tmp[c][i] = values[c];
           }
         }
       }
@@ -808,9 +731,10 @@ project_vectors(
       target_matrix_free, fe_eval, values_source_in_q_points_target, dof_index);
 
     // CG solver for global projection.
-    unsigned int constexpr max_iter      = 10000;
-    double const                 abs_tol = 1e-16 * system_rhs.l2_norm();
-    double const                 rel_tol = 1e-12;
+    unsigned int constexpr max_iter = 10000;
+    double const abs_tol            = 1e-16 * system_rhs.l2_norm();
+    double constexpr rel_tol        = 1e-12;
+
     dealii::ReductionControl     reduction_control(max_iter, abs_tol, rel_tol);
     dealii::SolverCG<VectorType> solver_cg(reduction_control);
 
@@ -830,10 +754,11 @@ project_vectors(
 }
 
 /**
- * Utility function to perform grid-to-grid projection using `dealii::RemotePointEvaluation`.
- * We assume we only have a single `dealii::FiniteElement` per `dealii::DoFHandler`.
- * The VectorType template argument is assumed no to be of `BlockVector` type.
- * Note that this function initializes a complete `dealii::MatrixFree` object and hence
+ * Utility function to perform grid-to-grid projection using `dealii::RemotePointEvaluation`. We
+ * assume we only have a single `dealii::FiniteElement` per `dealii::DoFHandler`. The VectorType
+ * template argument is assumed not to be of `BlockVector` type. Note that this function initializes
+ * `dealii::MatrixFree` and `dealii::RemotePointEvaluation` object and hence should be used with
+ * caution.
  */
 template<int dim, typename VectorType>
 inline void
@@ -865,7 +790,7 @@ grid_to_grid_projection(
                 dealii::ExcMessage("Vectors of source and target vectors need to have same size."));
   }
 
-  // Setup `dealii::MatrixFree` object with multiple `dealii::DoFHandler`.
+  // Setup `dealii::MatrixFree` object with multiple `dealii::DoFHandler`s.
   using Number = typename VectorType::value_type;
   MatrixFreeData<dim, Number> matrix_free_data;
 
@@ -903,36 +828,53 @@ grid_to_grid_projection(
     unsigned int const n_components = target_dof_handlers[i]->get_fe().n_components();
     if(n_components == 1)
     {
-      project_vectors<dim, Number, 1 /* n_components */>(source_vectors_per_dof_handler.at(i),
-                                                         *source_dof_handlers.at(i),
-                                                         source_mapping,
-                                                         target_vectors_per_dof_handler.at(i),
-                                                         *target_dof_handlers.at(i),
-                                                         matrix_free,
-                                                         empty_constraints,
-                                                         i /* dof_index */,
-                                                         i /* quad_index */,
-                                                         rpe_tolerance_unit_cell,
-                                                         rpe_enforce_unique_mapping);
+      project_vectors<dim, Number, 1 /* n_components */, VectorType>(
+        source_vectors_per_dof_handler.at(i),
+        *source_dof_handlers.at(i),
+        source_mapping,
+        target_vectors_per_dof_handler.at(i),
+        *target_dof_handlers.at(i),
+        matrix_free,
+        empty_constraints,
+        i /* dof_index */,
+        i /* quad_index */,
+        rpe_tolerance_unit_cell,
+        rpe_enforce_unique_mapping);
     }
     else if(n_components == dim)
     {
-      project_vectors<dim, Number, dim /* n_components */>(source_vectors_per_dof_handler.at(i),
-                                                           *source_dof_handlers.at(i),
-                                                           source_mapping,
-                                                           target_vectors_per_dof_handler.at(i),
-                                                           *target_dof_handlers.at(i),
-                                                           matrix_free,
-                                                           empty_constraints,
-                                                           i /* dof_index */,
-                                                           i /* quad_index */,
-                                                           rpe_tolerance_unit_cell,
-                                                           rpe_enforce_unique_mapping);
+      project_vectors<dim, Number, dim /* n_components */, VectorType>(
+        source_vectors_per_dof_handler.at(i),
+        *source_dof_handlers.at(i),
+        source_mapping,
+        target_vectors_per_dof_handler.at(i),
+        *target_dof_handlers.at(i),
+        matrix_free,
+        empty_constraints,
+        i /* dof_index */,
+        i /* quad_index */,
+        rpe_tolerance_unit_cell,
+        rpe_enforce_unique_mapping);
+    }
+    else if(n_components == dim + 2)
+    {
+      project_vectors<dim, Number, dim + 2 /* n_components */, VectorType>(
+        source_vectors_per_dof_handler.at(i),
+        *source_dof_handlers.at(i),
+        source_mapping,
+        target_vectors_per_dof_handler.at(i),
+        *target_dof_handlers.at(i),
+        matrix_free,
+        empty_constraints,
+        i /* dof_index */,
+        i /* quad_index */,
+        rpe_tolerance_unit_cell,
+        rpe_enforce_unique_mapping);
     }
     else
     {
       AssertThrow(n_components == 1 or n_components == dim,
-                  dealii::ExcMessage("The current number of components is not"
+                  dealii::ExcMessage("The requested number of components is not"
                                      "supported in `grid_to_grid_projection()`."));
     }
   }
