@@ -209,11 +209,11 @@ TimeIntBase::write_restart() const
           << std::endl
           << " Writing restart file at time t = " << this->get_time() << ":" << std::endl;
 
-    std::string const filename = restart_filename(restart_data.filename, mpi_comm);
+    std::string const filename = restart_filename(restart_data.filename);
 
-    rename_restart_files(filename);
+    rename_restart_files(filename, mpi_comm);
 
-    do_write_restart(restart_filename(restart_data.filename, mpi_comm));
+    do_write_restart(restart_filename(restart_data.filename));
 
     pcout << std::endl << " ... done!" << std::endl << print_horizontal_line() << std::endl;
   }
@@ -227,7 +227,7 @@ TimeIntBase::read_restart()
         << std::endl
         << " Reading restart file:" << std::endl;
 
-  std::string   filename = restart_filename(restart_data.filename, mpi_comm);
+  std::string   filename = restart_filename(restart_data.filename);
   std::ifstream in(filename);
   AssertThrow(in, dealii::ExcMessage("File " + filename + " does not exist."));
 

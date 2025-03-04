@@ -220,10 +220,8 @@ private:
   }
 
   void
-  read_restart_vectors(BoostInputArchiveType & ia) final
+  read_restart_vectors() final
   {
-    (void)ia;
-
     std::vector<VectorType *> vectors{&solution, &prediction};
     for(unsigned int i = 0; i < vec_evaluated_operators.size(); ++i)
     {
@@ -234,10 +232,8 @@ private:
   }
 
   void
-  write_restart_vectors(BoostOutputArchiveType & oa) const final
+  write_restart_vectors() const final
   {
-    (void)oa;
-
     std::vector<VectorType const *> vectors{&solution, &prediction};
     for(unsigned int i = 0; i < vec_evaluated_operators.size(); ++i)
     {

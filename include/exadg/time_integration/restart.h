@@ -57,25 +57,23 @@
 namespace ExaDG
 {
 inline std::string
-restart_filename(std::string const & name, MPI_Comm const & mpi_comm)
+restart_filename(std::string const & name)
 {
-  std::string const rank =
-    dealii::Utilities::int_to_string(dealii::Utilities::MPI::this_mpi_process(mpi_comm));
-
-  std::string const filename = name + "." + rank + ".restart";
+  std::string const filename = name + ".restart";
 
   return filename;
 }
 
 inline void
-rename_restart_files(std::string const & filename)
+rename_restart_files(std::string const & filename, MPI_Comm const & mpi_comm)
 {
   // backup: rename current restart file into restart.old in case something fails while writing
   std::string const from = filename;
   std::string const to   = filename + ".old";
 
+  // rename only if file already exists and only with a single process.
   std::ifstream ifile(from.c_str());
-  if((bool)ifile) // rename only if file already exists
+  if((bool)ifile and dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
     int const error = rename(from.c_str(), to.c_str());
 
@@ -84,11 +82,17 @@ rename_restart_files(std::string const & filename)
 }
 
 inline void
-write_restart_file(std::ostringstream & oss, std::string const & filename)
+write_restart_file(std::ostringstream & oss,
+                   std::string const &  filename,
+                   MPI_Comm const &     mpi_comm)
 {
-  std::ofstream stream(filename.c_str());
+  // Only write the restart file with a single process.
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+  {
+    std::ofstream stream(filename.c_str());
 
-  stream << oss.str() << std::endl;
+    stream << oss.str() << std::endl;
+  }
 }
 
 template<typename VectorType>
@@ -269,11 +273,12 @@ save_coarse_triangulation(std::string const &       filename_base,
   }
 
   std::string const filename = filename_base + ".coarse_triangulation";
-  if(dealii::Utilities::MPI::this_mpi_process(triangulation.get_communicator()) == 0)
+  MPI_Comm const &  mpi_comm = triangulation.get_communicator();
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
     // Serialization only creates a single file, move with one process only.
-    rename_restart_files(filename + ".info");
-    rename_restart_files(filename + "_triangulation.data");
+    rename_restart_files(filename + ".info", mpi_comm);
+    rename_restart_files(filename + "_triangulation.data", mpi_comm);
 
     // For `dealii::Triangulation` the triangulation is the same for all processes.
     triangulation.save(filename);
@@ -325,13 +330,14 @@ store_vectors_in_triangulation_and_serialize(
 
   // Serialize the triangulation keeping a maximum of two snapshots.
   std::string const filename = filename_base + ".triangulation";
-  if(dealii::Utilities::MPI::this_mpi_process(dof_handlers[0]->get_communicator()) == 0)
+  MPI_Comm const &  mpi_comm = dof_handlers[0]->get_communicator();
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
     // Serialization only creates a single file, move with one process only.
-    rename_restart_files(filename);
-    rename_restart_files(filename + ".info");
-    rename_restart_files(filename + "_fixed.data");
-    rename_restart_files(filename + "_triangulation.data");
+    rename_restart_files(filename, mpi_comm);
+    rename_restart_files(filename + ".info", mpi_comm);
+    rename_restart_files(filename + "_fixed.data", mpi_comm);
+    rename_restart_files(filename + "_triangulation.data", mpi_comm);
   }
 
   // Collective call for serialization.
