@@ -36,6 +36,7 @@
 #include <deal.II/distributed/fully_distributed_tria.h>
 #include <deal.II/distributed/solution_transfer.h>
 #include <deal.II/distributed/tria.h>
+#include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/manifold.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/lac/la_parallel_block_vector.h>
@@ -43,6 +44,8 @@
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/matrix_free/fe_point_evaluation.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <deal.II/particles/data_out.h>
+#include <deal.II/particles/particle_handler.h>
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
@@ -315,7 +318,7 @@ store_vectors_in_triangulation_and_serialize(
 
   // Loop over the DoFHandlers and store the vectors in the triangulation.
   std::vector<std::shared_ptr<dealii::parallel::distributed::SolutionTransfer<dim, VectorType>>>
-    solution_transfers;
+                                 solution_transfers;
   std::vector<std::vector<bool>> has_ghost_elements_per_dof_handler;
   for(unsigned int i = 0; i < dof_handlers.size(); ++i)
   {
@@ -350,7 +353,7 @@ store_vectors_in_triangulation_and_serialize(
   triangulation.save(filename);
 
   // Recover ghost state.
-  for(unsigned int i=0; i < dof_handlers.size(); ++i)
+  for(unsigned int i = 0; i < dof_handlers.size(); ++i)
   {
     set_ghost_state(vectors_per_dof_handler[i], has_ghost_elements_per_dof_handler[i]);
   }
@@ -526,10 +529,10 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
   {
     dealii::parallel::distributed::SolutionTransfer<dim, VectorType> solution_transfer(
       *dof_handlers[i]);
-    
+
     // Reinit vectors that do not already have ghost entries.
     bool all_ghosted = false;
-    for (unsigned int j=0; j < vectors_per_dof_handler[i].size(); ++j)
+    for(unsigned int j = 0; j < vectors_per_dof_handler[i].size(); ++j)
     {
       if(not vectors_per_dof_handler[i][j]->has_ghost_elements())
       {
@@ -540,13 +543,15 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
     if(not all_ghosted)
     {
       dealii::IndexSet const & locally_owned_dofs = dof_handlers[i]->locally_owned_dofs();
-      dealii::IndexSet const locally_relevant_dofs =
+      dealii::IndexSet const   locally_relevant_dofs =
         dealii::DoFTools::extract_locally_relevant_dofs(*dof_handlers[i]);
-      for (unsigned int j=0; j < vectors_per_dof_handler[i].size(); ++j)
+      for(unsigned int j = 0; j < vectors_per_dof_handler[i].size(); ++j)
       {
         if(not vectors_per_dof_handler[i][j]->has_ghost_elements())
         {
-          vectors_per_dof_handler[i][j]->reinit(locally_owned_dofs, locally_relevant_dofs, dof_handlers[i]->get_communicator());
+          vectors_per_dof_handler[i][j]->reinit(locally_owned_dofs,
+                                                locally_relevant_dofs,
+                                                dof_handlers[i]->get_communicator());
         }
       }
     }
@@ -565,7 +570,7 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
  * added during `store_vectors_in_triangulation_and_serialize()`.
  */
 template<int dim, typename VectorType>
-inline std::shared_ptr<dealii::Mapping<dim>>
+inline std::shared_ptr<MappingDoFVector<dim, typename VectorType::value_type>>
 load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_per_dof_handler,
              std::vector<dealii::DoFHandler<dim, dim> const *> const & dof_handlers,
              dealii::DoFHandler<dim> const *                           dof_handler_mapping,
@@ -574,8 +579,7 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
   // We need a collective call to `SolutionTransfer::deserialize()` with all vectors in a
   // single container. Hence, create a mapping vector and add a pointer to the input argument.
   dealii::IndexSet const & locally_owned_dofs = dof_handler_mapping->locally_owned_dofs();
-  VectorType vector_grid_coordinates(locally_owned_dofs,
-                                     dof_handler_mapping->get_communicator());
+  VectorType vector_grid_coordinates(locally_owned_dofs, dof_handler_mapping->get_communicator());
 
   // Standard utility function, sequence as in `store_vectors_in_triangulation_and_serialize()`.
   std::vector<std::vector<VectorType *>> vectors_per_dof_handler_extended = vectors_per_dof_handler;
@@ -587,16 +591,13 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
   load_vectors(vectors_per_dof_handler_extended, dof_handlers_extended);
 
   // Reconstruct the mapping given the deserialized grid coordinate vector.
-  std::shared_ptr<dealii::Mapping<dim>> mapping;
-  GridUtilities::create_mapping(mapping,
-                                get_element_type(dof_handler_mapping->get_triangulation()),
-                                mapping_degree);
-  MappingDoFVector<dim, typename VectorType::value_type> mapping_dof_vector(mapping_degree);
-  mapping_dof_vector.fill_grid_coordinates_vector(*mapping,
-                                                  vector_grid_coordinates,
-                                                  *dof_handler_mapping);
-
-  return mapping;
+  std::shared_ptr<MappingDoFVector<dim, typename VectorType::value_type>> mapping_dof_vector =
+    std::make_shared<MappingDoFVector<dim, typename VectorType::value_type>>(mapping_degree);
+  mapping_dof_vector->initialize_mapping_from_dof_vector(nullptr,
+                                                         /* mapping */,
+                                                         vector_grid_coordinates,
+                                                         *dof_handler_mapping);
+  return mapping_dof_vector;
 }
 
 /**
@@ -699,6 +700,41 @@ assemble_projection_rhs(
   return system_rhs;
 }
 
+/*
+ * Function to export points to a file.
+ */
+template<int dim>
+void
+plot_points(std::vector<dealii::Point<dim>> const & points,
+            std::string const &                     file_name,
+            MPI_Comm const &                        mpi_comm)
+{
+  // Point output via particle handler.
+  dealii::Triangulation<dim> particle_dummy_tria;
+  double                     min_coord = points[0][0];
+  double                     max_coord = points[0][0];
+  for(auto const & p : points)
+  {
+    for(unsigned int d = 0; d < dim; ++d)
+    {
+      min_coord = std::min(p[d], min_coord);
+      max_coord = std::max(p[d], max_coord);
+    }
+  }
+  min_coord = dealii::Utilities::MPI::min(min_coord, mpi_comm);
+  max_coord = dealii::Utilities::MPI::max(max_coord, mpi_comm);
+  dealii::GridGenerator::hyper_cube(particle_dummy_tria, min_coord, max_coord);
+  dealii::MappingQGeneric<dim>                 particle_dummy_mapping(1 /* mapping_degree */);
+  dealii::Particles::ParticleHandler<dim, dim> particle_handler(particle_dummy_tria,
+                                                                particle_dummy_mapping);
+
+  particle_handler.insert_particles(points);
+
+  dealii::Particles::DataOut<dim, dim> particle_output;
+  particle_output.build_patches(particle_handler);
+  particle_output.write_vtu_with_pvtu_record("./", file_name, 0, mpi_comm);
+}
+
 /**
  * Utilitiy function to project vectors from a source to a target triangulation
  * via `dealii::RemotePointEvaluation`, matrix-free mass operator evaluation
@@ -709,7 +745,7 @@ inline void
 project_vectors(
   std::vector<VectorType *> const &                                        source_vectors,
   dealii::DoFHandler<dim> const &                                          source_dof_handler,
-  std::shared_ptr<dealii::Mapping<dim>> const &                            source_mapping,
+  std::shared_ptr<dealii::Mapping<dim> const> const &                      source_mapping,
   std::vector<VectorType *> const &                                        target_vectors,
   dealii::DoFHandler<dim> const &                                          target_dof_handler,
   dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & target_matrix_free,
@@ -749,8 +785,26 @@ project_vectors(
   rpe_source.reinit(integration_points_target,
                     source_dof_handler.get_triangulation(),
                     *source_mapping);
-  AssertThrow(rpe_source.all_points_found(),
-              dealii::ExcMessage("Could not interpolate source grid vector in target grid."));
+
+  if(not rpe_source.all_points_found())
+  {
+    plot_points(integration_points_target, "./all_points", source_dof_handler.get_communicator());
+
+    std::vector<dealii::Point<dim>> points_not_found;
+    points_not_found.reserve(integration_points_target.size());
+    for(unsigned int i = 0; i < integration_points_target.size(); ++i)
+    {
+      if(not rpe_source.point_found(i))
+      {
+        points_not_found.push_back(integration_points_target[i]);
+      }
+    }
+
+    plot_points(points_not_found, "./points_not_found", source_dof_handler.get_communicator());
+
+    AssertThrow(rpe_source.all_points_found(),
+                dealii::ExcMessage("Could not interpolate source grid vector in target grid."));
+  }
 
   CellIntegrator<dim, n_components, Number> fe_eval(target_matrix_free, dof_index, quad_index);
 
@@ -805,7 +859,7 @@ inline void
 grid_to_grid_projection(
   std::vector<std::vector<VectorType *>> const &       source_vectors_per_dof_handler,
   std::vector<dealii::DoFHandler<dim> const *> const & source_dof_handlers,
-  std::shared_ptr<dealii::Mapping<dim>> const &        source_mapping,
+  std::shared_ptr<dealii::Mapping<dim> const> const &  source_mapping,
   std::vector<std::vector<VectorType *>> &             target_vectors_per_dof_handler,
   std::vector<dealii::DoFHandler<dim> const *> const & target_dof_handlers,
   std::shared_ptr<dealii::Mapping<dim> const> const &  target_mapping,

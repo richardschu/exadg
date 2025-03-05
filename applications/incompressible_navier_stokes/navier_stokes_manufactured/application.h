@@ -353,7 +353,9 @@ public:
       prm.add_parameter("MoveGrid", move_grid, "Should the grid be deformed over time?");
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
-      prm.add_parameter("SpatialDiscretization", spatial_discretization, "Spatial discretization (element type) for Navier--Stokes");
+      prm.add_parameter("SpatialDiscretization",
+                        spatial_discretization,
+                        "Spatial discretization (element type) for Navier--Stokes");
       prm.add_parameter("IncludeConvectiveTerm",
                         include_convective_term,
                         "Include the nonlinear convective term.",
@@ -501,11 +503,11 @@ private:
       this->param.adjust_pressure_level = AdjustPressureLevel::ApplyAnalyticalMeanValue;
 
     // div-div and continuity penalty terms
-    this->param.divergence_penalty_factor                  = 1.0e1;
-    this->param.use_divergence_penalty                     = spatial_discretization == SpatialDiscretization::L2;
-    this->param.use_continuity_penalty                     = spatial_discretization == SpatialDiscretization::L2;
-    this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
-    this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
+    this->param.divergence_penalty_factor     = 1.0e1;
+    this->param.use_divergence_penalty        = spatial_discretization == SpatialDiscretization::L2;
+    this->param.use_continuity_penalty        = spatial_discretization == SpatialDiscretization::L2;
+    this->param.continuity_penalty_factor     = this->param.divergence_penalty_factor;
+    this->param.continuity_penalty_components = ContinuityPenaltyComponents::Normal;
     this->param.continuity_penalty_use_boundary_data       = true;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
 
@@ -560,9 +562,9 @@ private:
     this->param.solver_data_pressure_poisson    = SolverData(1000, 1.e-12, 1.e-8);
 
     // projection step
-    this->param.solver_projection         = SolverProjection::CG;
-    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-3);
-    this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+    this->param.solver_projection                = SolverProjection::CG;
+    this->param.solver_data_projection           = SolverData(1000, 1.e-12, 1.e-3);
+    this->param.preconditioner_projection        = PreconditionerProjection::InverseMassMatrix;
     this->param.update_preconditioner_projection = true;
 
     // HIGH-ORDER DUAL SPLITTING SCHEME
@@ -570,12 +572,14 @@ private:
     // formulations
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
-    this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ? MomentumPreconditioner::InverseMassMatrix : MomentumPreconditioner::PointJacobi;
-    
+    this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
+                                            MomentumPreconditioner::InverseMassMatrix :
+                                            MomentumPreconditioner::PointJacobi;
+
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
     {
-      this->param.solver_momentum         = SolverMomentum::CG;
-      this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8);
+      this->param.solver_momentum      = SolverMomentum::CG;
+      this->param.solver_data_momentum = SolverData(1000, 1.e-12, 1.e-8);
 
       this->param.inverse_mass_operator_hdiv.preconditioner = PreconditionerMass::PointJacobi;
       this->param.inverse_mass_operator_hdiv.solver_data    = SolverData(1000, 1e-12, 1e-4);
@@ -615,7 +619,9 @@ private:
     this->param.update_preconditioner_coupled = true;
 
     // preconditioner velocity/momentum block
-    this->param.preconditioner_velocity_block = spatial_discretization == SpatialDiscretization::L2 ? MomentumPreconditioner::Multigrid : MomentumPreconditioner::PointJacobi;
+    this->param.preconditioner_velocity_block =
+      spatial_discretization == SpatialDiscretization::L2 ? MomentumPreconditioner::Multigrid :
+                                                            MomentumPreconditioner::PointJacobi;
     if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit &&
        include_convective_term == true)
       this->param.multigrid_operator_type_velocity_block =
@@ -691,14 +697,14 @@ private:
     std::shared_ptr<dealii::Function<dim>> mesh_motion;
 
     MeshMovementData<dim> data;
-    data.temporal                       = MeshMovementAdvanceInTime::Sin;
-    data.shape                          = MeshMovementShape::Sin;
-    data.dimensions[0]                  = std::abs(interval_end - interval_start);
-    data.dimensions[1]                  = std::abs(interval_end - interval_start);
-    data.amplitude                      = move_grid ? std::abs(interval_end - interval_start) / 15.0 : 0.0;
-    data.period                         = std::abs(end_time - start_time);
-    data.t_start                        = start_time;
-    data.t_end                          = end_time;
+    data.temporal      = MeshMovementAdvanceInTime::Sin;
+    data.shape         = MeshMovementShape::Sin;
+    data.dimensions[0] = std::abs(interval_end - interval_start);
+    data.dimensions[1] = std::abs(interval_end - interval_start);
+    data.amplitude     = move_grid ? std::abs(interval_end - interval_start) / 15.0 : 0.0;
+    data.period        = std::abs(end_time - start_time);
+    data.t_start       = start_time;
+    data.t_end         = end_time;
     data.spatial_number_of_oscillations = 1.0;
     mesh_motion.reset(new CubeMeshMovementFunctions<dim>(data));
 

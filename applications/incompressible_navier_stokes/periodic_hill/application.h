@@ -186,14 +186,24 @@ private:
     this->param.order_time_integrator           = 2;
     this->param.start_with_low_order            = read_restart ? false : true;
 
-    // restart
+    // RESTART
     this->param.restarted_simulation             = read_restart;
     this->param.restart_data.write_restart       = write_restart;
-    this->param.restart_data.interval_time       = end_time * 0.4;
+    this->param.restart_data.interval_time       = (end_time - start_time) * 0.4;
     this->param.restart_data.interval_wall_time  = 1.e6;
     this->param.restart_data.interval_time_steps = 1e8;
     this->param.restart_data.filename =
       this->output_parameters.directory + this->output_parameters.filename + "_restart";
+
+    this->param.restart_data.degree_u                   = 3;
+    this->param.restart_data.degree_p                   = 2;
+    this->param.restart_data.triangulation_type         = TriangulationType::Distributed;
+    this->param.restart_data.spatial_discretization     = SpatialDiscretization::HDIV;
+    this->param.restart_data.discretization_identical   = false;
+    this->param.restart_data.consider_mapping           = true;
+    this->param.restart_data.mapping_degree             = 3;
+    this->param.restart_data.rpe_tolerance_unit_cell    = 1e-2;
+    this->param.restart_data.rpe_enforce_unique_mapping = false;
 
     // output of solver information
     this->param.solver_info_data.interval_time = flow_through_time / 10.0;
@@ -336,6 +346,13 @@ private:
         dealii::ExcMessage(
           "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
           "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+
+      // Save the *coarse* triangulation for later deserialization.
+      if(write_restart and this->param.grid.triangulation_type == TriangulationType::Serial)
+      {
+        save_coarse_triangulation<dim, dealii::Triangulation<dim>>(
+          this->param.restart_data.filename, tria);
+      }
 
       tria.refine_global(global_refinements);
     };
