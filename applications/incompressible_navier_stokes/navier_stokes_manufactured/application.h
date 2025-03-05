@@ -353,6 +353,7 @@ public:
       prm.add_parameter("MoveGrid", move_grid, "Should the grid be deformed over time?");
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
+      prm.add_parameter("SpatialDiscretization", spatial_discretization, "Spatial discretization (element type) for Navier--Stokes");
       prm.add_parameter("IncludeConvectiveTerm",
                         include_convective_term,
                         "Include the nonlinear convective term.",
@@ -469,7 +470,7 @@ private:
 
 
     // SPATIAL DISCRETIZATION
-    this->param.spatial_discretization      = SpatialDiscretization::L2;
+    this->param.spatial_discretization      = spatial_discretization;
     this->param.grid.triangulation_type     = TriangulationType::Distributed;
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
@@ -493,15 +494,18 @@ private:
     // divergence term
     this->param.divu_integrated_by_parts = true;
     this->param.divu_use_boundary_data   = true;
-    this->param.divu_formulation         = FormulationVelocityDivergenceTerm::Weak;
+    this->param.divu_formulation         = FormulationVelocityDivergenceTerm::Strong;
 
     // pressure level is undefined
     if(pure_dirichlet_problem)
       this->param.adjust_pressure_level = AdjustPressureLevel::ApplyAnalyticalMeanValue;
 
     // div-div and continuity penalty terms
-    this->param.use_divergence_penalty                     = true;
-    this->param.use_continuity_penalty                     = true;
+    this->param.divergence_penalty_factor                  = 1.0e1;
+    this->param.use_divergence_penalty                     = spatial_discretization == SpatialDiscretization::L2;
+    this->param.use_continuity_penalty                     = spatial_discretization == SpatialDiscretization::L2;
+    this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
+    this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
     this->param.continuity_penalty_use_boundary_data       = true;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
 
@@ -541,7 +545,7 @@ private:
     this->param.restart_data.degree_u                   = 3;
     this->param.restart_data.degree_p                   = 2;
     this->param.restart_data.triangulation_type         = TriangulationType::Distributed;
-    this->param.restart_data.spatial_discretization     = SpatialDiscretization::L2;
+    this->param.restart_data.spatial_discretization     = SpatialDiscretization::HDIV;
     this->param.restart_data.discretization_identical   = false;
     this->param.restart_data.consider_mapping           = true;
     this->param.restart_data.mapping_degree             = 3;
@@ -557,20 +561,24 @@ private:
 
     // projection step
     this->param.solver_projection         = SolverProjection::CG;
-    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-8);
+    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-3);
     this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+    this->param.update_preconditioner_projection = true;
 
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
     // formulations
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
-
+    this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ? MomentumPreconditioner::InverseMassMatrix : MomentumPreconditioner::PointJacobi;
+    
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8);
-      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+
+      this->param.inverse_mass_operator_hdiv.preconditioner = PreconditionerMass::PointJacobi;
+      this->param.inverse_mass_operator_hdiv.solver_data    = SolverData(1000, 1e-12, 1e-4);
     }
 
 
@@ -589,7 +597,6 @@ private:
       // linear solver
       this->param.solver_momentum                = SolverMomentum::GMRES;
       this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, 100);
-      this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
       this->param.update_preconditioner_momentum = true;
     }
 
@@ -608,8 +615,7 @@ private:
     this->param.update_preconditioner_coupled = true;
 
     // preconditioner velocity/momentum block
-    this->param.preconditioner_velocity_block = MomentumPreconditioner::Multigrid;
-
+    this->param.preconditioner_velocity_block = spatial_discretization == SpatialDiscretization::L2 ? MomentumPreconditioner::Multigrid : MomentumPreconditioner::PointJacobi;
     if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit &&
        include_convective_term == true)
       this->param.multigrid_operator_type_velocity_block =
@@ -689,7 +695,7 @@ private:
     data.shape                          = MeshMovementShape::Sin;
     data.dimensions[0]                  = std::abs(interval_end - interval_start);
     data.dimensions[1]                  = std::abs(interval_end - interval_start);
-    data.amplitude                      = std::abs(interval_end - interval_start) / 15.0;
+    data.amplitude                      = move_grid ? std::abs(interval_end - interval_start) / 15.0 : 0.0;
     data.period                         = std::abs(end_time - start_time);
     data.t_start                        = start_time;
     data.t_end                          = end_time;
@@ -802,6 +808,8 @@ private:
   bool read_restart  = false;
   bool write_restart = false;
   bool move_grid     = false;
+
+  SpatialDiscretization spatial_discretization = SpatialDiscretization::L2;
 
   bool                   include_convective_term                      = true;
   bool                   pure_dirichlet_problem                       = true;

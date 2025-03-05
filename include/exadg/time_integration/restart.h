@@ -316,12 +316,18 @@ store_vectors_in_triangulation_and_serialize(
   // Loop over the DoFHandlers and store the vectors in the triangulation.
   std::vector<std::shared_ptr<dealii::parallel::distributed::SolutionTransfer<dim, VectorType>>>
     solution_transfers;
+  std::vector<std::vector<bool>> has_ghost_elements_per_dof_handler;
   for(unsigned int i = 0; i < dof_handlers.size(); ++i)
   {
+    // Store ghost state.
+    std::vector<bool> has_ghost_elements = get_ghost_state(vectors_per_dof_handler[i]);
+    has_ghost_elements_per_dof_handler.push_back(has_ghost_elements);
     for(unsigned int j = 0; j < vectors_per_dof_handler[i].size(); ++j)
     {
+      vectors_per_dof_handler[i][j]->update_ghost_values();
       print_vector_l2_norm(*vectors_per_dof_handler[i][j]);
     }
+
     solution_transfers.push_back(
       std::make_shared<dealii::parallel::distributed::SolutionTransfer<dim, VectorType>>(
         *dof_handlers[i]));
@@ -340,8 +346,14 @@ store_vectors_in_triangulation_and_serialize(
     rename_restart_files(filename + "_triangulation.data", mpi_comm);
   }
 
-  // Collective call for serialization.
+  // Collective call for serialization, general case requires ghosted vectors.
   triangulation.save(filename);
+
+  // Recover ghost state.
+  for(unsigned int i=0; i < dof_handlers.size(); ++i)
+  {
+    set_ghost_state(vectors_per_dof_handler[i], has_ghost_elements_per_dof_handler[i]);
+  }
 }
 
 /**
@@ -514,6 +526,31 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
   {
     dealii::parallel::distributed::SolutionTransfer<dim, VectorType> solution_transfer(
       *dof_handlers[i]);
+    
+    // Reinit vectors that do not already have ghost entries.
+    bool all_ghosted = false;
+    for (unsigned int j=0; j < vectors_per_dof_handler[i].size(); ++j)
+    {
+      if(not vectors_per_dof_handler[i][j]->has_ghost_elements())
+      {
+        all_ghosted = false;
+        break;
+      }
+    }
+    if(not all_ghosted)
+    {
+      dealii::IndexSet const & locally_owned_dofs = dof_handlers[i]->locally_owned_dofs();
+      dealii::IndexSet const locally_relevant_dofs =
+        dealii::DoFTools::extract_locally_relevant_dofs(*dof_handlers[i]);
+      for (unsigned int j=0; j < vectors_per_dof_handler[i].size(); ++j)
+      {
+        if(not vectors_per_dof_handler[i][j]->has_ghost_elements())
+        {
+          vectors_per_dof_handler[i][j]->reinit(locally_owned_dofs, locally_relevant_dofs, dof_handlers[i]->get_communicator());
+        }
+      }
+    }
+
     solution_transfer.deserialize(vectors_per_dof_handler[i]);
 
     for(unsigned int j = 0; j < vectors_per_dof_handler[i].size(); ++j)
@@ -537,10 +574,7 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
   // We need a collective call to `SolutionTransfer::deserialize()` with all vectors in a
   // single container. Hence, create a mapping vector and add a pointer to the input argument.
   dealii::IndexSet const & locally_owned_dofs = dof_handler_mapping->locally_owned_dofs();
-  dealii::IndexSet const & locally_relevant_dofs =
-    dealii::DoFTools::extract_locally_relevant_dofs(*dof_handler_mapping);
   VectorType vector_grid_coordinates(locally_owned_dofs,
-                                     locally_relevant_dofs,
                                      dof_handler_mapping->get_communicator());
 
   // Standard utility function, sequence as in `store_vectors_in_triangulation_and_serialize()`.
