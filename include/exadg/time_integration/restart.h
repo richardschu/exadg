@@ -593,8 +593,7 @@ load_vectors(std::vector<std::vector<VectorType *>> &                  vectors_p
   // Reconstruct the mapping given the deserialized grid coordinate vector.
   std::shared_ptr<MappingDoFVector<dim, typename VectorType::value_type>> mapping_dof_vector =
     std::make_shared<MappingDoFVector<dim, typename VectorType::value_type>>(mapping_degree);
-  mapping_dof_vector->initialize_mapping_from_dof_vector(nullptr,
-                                                         /* mapping */,
+  mapping_dof_vector->initialize_mapping_from_dof_vector(nullptr /* mapping */,
                                                          vector_grid_coordinates,
                                                          *dof_handler_mapping);
   return mapping_dof_vector;
