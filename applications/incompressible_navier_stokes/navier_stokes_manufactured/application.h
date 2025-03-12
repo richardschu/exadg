@@ -383,21 +383,18 @@ public:
                         generalized_newtonian_model_data.is_active,
                         "Use generalized Newtonian model, else Newtonian one.",
                         dealii::Patterns::Bool());
-      prm.add_parameter("FormulationViscousTermLaplaceFormulation",
-                        formulation_viscous_term_laplace_formulation,
-                        "Use Laplace or Divergence formulation for viscous term.",
-                        dealii::Patterns::Bool());
+      prm.add_parameter("FormulationViscousTerm",
+                        formulation_viscous_term,
+                        "Use Laplace or Divergence formulation for viscous term.");
       prm.add_parameter("TemporalDiscretization",
                         temporal_discretization,
                         "Temporal discretization.");
-      prm.add_parameter("TreatmentOfConvectiveTermImplicit",
-                        treatment_of_convective_term_implicit,
-                        "Treat convective term implicit, else explicit",
-                        dealii::Patterns::Bool());
-      prm.add_parameter("TreatmentOfVariableViscosityImplicit",
-                        treatment_of_variable_viscosity_implicit,
-                        "Treat the variable viscosity implicit or extrapolate in time.",
-                        dealii::Patterns::Bool());
+      prm.add_parameter("TreatmentOfConvectiveTerm",
+                        treatment_of_convective_term,
+                        "Treat convective term implicit, else explicit");
+      prm.add_parameter("TreatmentOfVariableViscosity",
+                        treatment_of_variable_viscosity,
+                        "Treat the variable viscosity implicit or extrapolate in time.");
       prm.add_parameter("GeneralizedNewtonianViscosityMargin",
                         generalized_newtonian_model_data.viscosity_margin,
                         "Generalized Newtonian models: viscosity margin.",
@@ -435,9 +432,7 @@ private:
 
     this->param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    this->param.formulation_viscous_term = formulation_viscous_term_laplace_formulation ?
-                                             FormulationViscousTerm::LaplaceFormulation :
-                                             FormulationViscousTerm::DivergenceFormulation;
+    this->param.formulation_viscous_term = formulation_viscous_term;
     this->param.right_hand_side          = true;
 
 
@@ -468,9 +463,7 @@ private:
     this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
-    this->param.treatment_of_convective_term = treatment_of_convective_term_implicit ?
-                                                 TreatmentOfConvectiveTerm::Implicit :
-                                                 TreatmentOfConvectiveTerm::Explicit;
+    this->param.treatment_of_convective_term = treatment_of_convective_term;
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
       this->param.upwind_factor = 0.5;
 
@@ -506,9 +499,7 @@ private:
     // Sigma: 1.35
     this->param.turbulence_model_data.constant = 1.35;
 
-    this->param.treatment_of_variable_viscosity = treatment_of_variable_viscosity_implicit ?
-                                                    TreatmentOfVariableViscosity::Implicit :
-                                                    TreatmentOfVariableViscosity::Explicit;
+    this->param.treatment_of_variable_viscosity = treatment_of_variable_viscosity;
 
     // GENERALIZED NEWTONIAN MODEL
     generalized_newtonian_model_data.generalized_newtonian_model =
@@ -522,6 +513,9 @@ private:
     }
 
     // PROJECTION METHODS
+
+    // Newton solver
+    this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
 
     // pressure Poisson equation
     this->param.solver_pressure_poisson         = SolverPressurePoisson::CG;
@@ -556,9 +550,6 @@ private:
     // momentum step
     if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
     {
-      // Newton solver
-      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
-
       // linear solver
       this->param.solver_momentum                = SolverMomentum::GMRES;
       this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, 100);
@@ -696,7 +687,6 @@ private:
     this->field_functions->initial_solution_pressure.reset(new AnalyticalSolutionPressure<dim>());
     this->field_functions->analytical_solution_pressure.reset(
       new AnalyticalSolutionPressure<dim>());
-    this->field_functions->right_hand_side.reset(new dealii::Functions::ZeroFunction<dim>(dim));
     this->field_functions->right_hand_side.reset(
       new RightHandSide<dim>(include_convective_term,
                              normal_x,
@@ -745,18 +735,19 @@ private:
     return pp;
   }
 
-  bool                   include_convective_term                      = true;
-  bool                   pure_dirichlet_problem                       = true;
-  double                 start_time                                   = 0.0;
-  double                 end_time                                     = 0.1;
-  double                 density                                      = 1000.0;
-  double                 kinematic_viscosity                          = 5e-6;
-  bool                   use_turbulence_model                         = false;
-  bool                   formulation_viscous_term_laplace_formulation = true;
-  TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
+  bool   include_convective_term = true;
+  bool   pure_dirichlet_problem  = true;
+  double start_time              = 0.0;
+  double end_time                = 0.1;
+  double density                 = 1000.0;
+  double kinematic_viscosity     = 5e-6;
+  bool   use_turbulence_model    = false;
 
-  bool treatment_of_convective_term_implicit    = false;
-  bool treatment_of_variable_viscosity_implicit = false;
+  FormulationViscousTerm    formulation_viscous_term = FormulationViscousTerm::LaplaceFormulation;
+  TemporalDiscretization    temporal_discretization  = TemporalDiscretization::Undefined;
+  TreatmentOfConvectiveTerm treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;
+  TreatmentOfVariableViscosity treatment_of_variable_viscosity =
+    TreatmentOfVariableViscosity::Implicit;
 
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
   double                        interval_start = 0.0;
