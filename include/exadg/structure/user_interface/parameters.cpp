@@ -41,6 +41,10 @@ Parameters::Parameters()
     // PHYSICAL QUANTITIES
     density(1.0),
 
+    // WEAK LINEAR DAMPING
+    weak_damping_active(false),
+    weak_damping_coefficient(0.0),
+
     // TEMPORAL DISCRETIZATION
     start_time(0.0),
     end_time(1.0),
@@ -58,7 +62,11 @@ Parameters::Parameters()
 
     // SPATIAL DISCRETIZATION
     grid(GridData()),
+    mapping_degree(1),
+    mapping_degree_coarse_grids(1),
     degree(1),
+    use_matrix_based_implementation(false),
+    sparse_matrix_type(SparseMatrixType::Undefined),
 
     // SOLVER
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
@@ -93,10 +101,24 @@ Parameters::check() const
                 dealii::ExcMessage("Restart has not been implemented."));
   }
 
+  if(weak_damping_active)
+  {
+    AssertThrow(problem_type == ProblemType::Unsteady,
+                dealii::ExcMessage("Weak damping only well-defined for ProblemType::Unsteady."));
+    AssertThrow(weak_damping_coefficient > 0.0,
+                dealii::ExcMessage("Weak damping coefficient defined positive."));
+  }
+
   // SPATIAL DISCRETIZATION
   grid.check();
 
   AssertThrow(degree > 0, dealii::ExcMessage("Polynomial degree must be larger than zero."));
+
+  if(use_matrix_based_implementation)
+  {
+    AssertThrow(sparse_matrix_type != SparseMatrixType::Undefined,
+                dealii::ExcMessage("Parameter must be defined."));
+  }
 
   // SOLVER
   AssertThrow(solver != Solver::Undefined, dealii::ExcMessage("Parameter must be defined."));
@@ -137,7 +159,7 @@ Parameters::print_parameters_mathematical_model(dealii::ConditionalOStream const
 {
   pcout << std::endl << "Mathematical model:" << std::endl;
 
-  print_parameter(pcout, "Problem type", enum_to_string(problem_type));
+  print_parameter(pcout, "Problem type", problem_type);
 
   print_parameter(pcout, "Body force", body_force);
 
@@ -158,6 +180,11 @@ Parameters::print_parameters_physical_quantities(dealii::ConditionalOStream cons
   if(problem_type == ProblemType::Unsteady)
   {
     print_parameter(pcout, "Density", density);
+
+    if(weak_damping_active)
+    {
+      print_parameter(pcout, "Weak damping coefficient", weak_damping_coefficient);
+    }
   }
 }
 
@@ -177,7 +204,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
     print_parameter(pcout, "End time", end_time);
     print_parameter(pcout, "Max. number of time steps", max_number_of_time_steps);
     print_parameter(pcout, "Temporal refinements", n_refine_time);
-    print_parameter(pcout, "Time integration type", enum_to_string(gen_alpha_type));
+    print_parameter(pcout, "Time integration type", gen_alpha_type);
     print_parameter(pcout, "Spectral radius", spectral_radius);
     solver_info_data.print(pcout);
     if(restarted_simulation)
@@ -192,7 +219,19 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
 
   grid.print(pcout);
 
+  print_parameter(pcout, "Mapping degree", mapping_degree);
+
+  if(involves_h_multigrid())
+    print_parameter(pcout, "Mapping degree coarse grids", mapping_degree_coarse_grids);
+
   print_parameter(pcout, "Polynomial degree", degree);
+
+  print_parameter(pcout, "Use matrix-based implementation", use_matrix_based_implementation);
+
+  if(use_matrix_based_implementation)
+  {
+    print_parameter(pcout, "Sparse matrix type", sparse_matrix_type);
+  }
 }
 
 void
@@ -209,11 +248,11 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
 
   // linear solver
   pcout << std::endl << "Linear solver:" << std::endl;
-  print_parameter(pcout, "Solver", enum_to_string(solver));
+  print_parameter(pcout, "Solver", solver);
   solver_data.print(pcout);
 
   // preconditioner for linear system of equations
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner));
+  print_parameter(pcout, "Preconditioner", preconditioner);
 
   if(preconditioner == Preconditioner::Multigrid)
   {

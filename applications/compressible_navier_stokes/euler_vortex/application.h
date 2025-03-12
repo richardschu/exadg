@@ -89,7 +89,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double const t    = this->get_time();
     double const r_sq = get_r_square(p[0], p[1], t);
@@ -134,7 +134,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double const t    = this->get_time();
     double const r_sq = get_r_square(p[0], p[1], t);
@@ -161,7 +161,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     (void)component;
 
@@ -185,7 +185,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     (void)component;
 
@@ -240,7 +240,7 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree;
+    this->param.mapping_degree          = this->param.degree;
     this->param.n_q_points_convective   = QuadratureRule::Standard;
     this->param.n_q_points_viscous      = QuadratureRule::Standard;
 
@@ -252,16 +252,34 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> & grid, std::shared_ptr<dealii::Mapping<dim>> & mapping) final
   {
-    std::vector<unsigned int> repetitions({1, 1});
-    dealii::Point<dim> point1(X_0 - L / 2.0, Y_0 - H / 2.0), point2(X_0 + L / 2.0, Y_0 + H / 2.0);
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation,
-                                                      repetitions,
-                                                      point1,
-                                                      point2);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        std::vector<unsigned int> repetitions({1, 1});
+        dealii::Point<dim>        point1(X_0 - L / 2.0, Y_0 - H / 2.0),
+          point2(X_0 + L / 2.0, Y_0 + H / 2.0);
+        dealii::GridGenerator::subdivided_hyper_rectangle(tria, repetitions, point1, point2);
+
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation<dim>(grid,
+                                             this->mpi_comm,
+                                             this->param.grid,
+                                             lambda_create_triangulation,
+                                             {} /* no local refinements */);
+
+    GridUtilities::create_mapping(mapping,
+                                  this->param.grid.element_type,
+                                  this->param.mapping_degree);
   }
 
   void

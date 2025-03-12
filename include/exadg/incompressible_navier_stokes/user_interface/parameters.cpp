@@ -90,6 +90,9 @@ Parameters::Parameters()
 
     // grid
     grid(GridData()),
+    // mapping
+    mapping_degree(1),
+    mapping_degree_coarse_grids(1),
 
     // finite element
     spatial_discretization(SpatialDiscretization::L2),
@@ -130,10 +133,8 @@ Parameters::Parameters()
     continuity_penalty_use_boundary_data(false),
     type_penalty_parameter(TypePenaltyParameter::ConvectiveTerm),
 
-    // TURBULENCE
-    use_turbulence_model(false),
-    turbulence_model_constant(1.0),
-    turbulence_model(TurbulenceEddyViscosityModel::Undefined),
+    // VARIABLE VISCOSITY MODELS
+    treatment_of_variable_viscosity(TreatmentOfVariableViscosity::Undefined),
 
     // NUMERICAL PARAMETERS
     implement_block_diagonal_preconditioner_matrix_free(false),
@@ -162,24 +163,6 @@ Parameters::Parameters()
     preconditioner_block_diagonal_projection(Elementwise::Preconditioner::InverseMassMatrix),
     solver_data_block_diagonal_projection(SolverData(1000, 1.e-12, 1.e-2, 1000)),
 
-    // HIGH-ORDER DUAL SPLITTING SCHEME
-
-    // formulations
-    order_extrapolation_pressure_nbc((order_time_integrator <= 2) ? order_time_integrator : 2),
-    formulation_convective_term_bc(FormulationConvectiveTerm::ConvectiveFormulation),
-
-    // convective step
-
-    // viscous step
-    solver_viscous(SolverViscous::CG),
-    solver_data_viscous(SolverData(1e4, 1.e-12, 1.e-6, 100)),
-    preconditioner_viscous(PreconditionerViscous::InverseMassMatrix),
-    update_preconditioner_viscous(false),
-    update_preconditioner_viscous_every_time_steps(1),
-    multigrid_data_viscous(MultigridData()),
-
-    // PRESSURE-CORRECTION SCHEME
-
     // momentum step
     newton_solver_data_momentum(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
     solver_momentum(SolverMomentum::GMRES),
@@ -190,6 +173,14 @@ Parameters::Parameters()
     update_preconditioner_momentum_every_time_steps(1),
     multigrid_data_momentum(MultigridData()),
     multigrid_operator_type_momentum(MultigridOperatorType::Undefined),
+
+    // HIGH-ORDER DUAL SPLITTING SCHEME
+
+    // formulations
+    order_extrapolation_pressure_nbc((order_time_integrator <= 2) ? order_time_integrator : 2),
+    formulation_convective_term_bc(FormulationConvectiveTerm::ConvectiveFormulation),
+
+    // PRESSURE-CORRECTION SCHEME
 
     // formulations
     order_pressure_extrapolation(1),
@@ -226,11 +217,7 @@ Parameters::Parameters()
     preconditioner_pressure_block(SchurComplementPreconditioner::PressureConvectionDiffusion),
     multigrid_data_pressure_block(MultigridData()),
     exact_inversion_of_laplace_operator(false),
-    solver_data_pressure_block(SolverData(1e4, 1.e-12, 1.e-6, 100)),
-
-    // Only relevant for HDIV case.
-    solver_data_mass(SolverData(1e3, 1.e-12, 1.e-6, 100)),
-    preconditioner_mass(PreconditionerMass::PointJacobi)
+    solver_data_pressure_block(SolverData(1e4, 1.e-12, 1.e-6, 100))
 {
 }
 
@@ -268,7 +255,7 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
         "Convective formulation of convective operator has to be used for ALE formulation."));
 
     AssertThrow(
-      problem_type == ProblemType::Unsteady && solver_type == SolverType::Unsteady,
+      problem_type == ProblemType::Unsteady and solver_type == SolverType::Unsteady,
       dealii::ExcMessage(
         "Both problem type and solver type have to be Unsteady when using ALE formulation."));
 
@@ -277,6 +264,11 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
       dealii::ExcMessage(
         "ALE formulation only implemented for equations that include the convective operator, "
         "e.g., ALE is currently not available for the Stokes equations."));
+
+    AssertThrow(
+      treatment_of_convective_term != TreatmentOfConvectiveTerm::LinearlyImplicit,
+      dealii::ExcMessage(
+        "ALE formulation is currently not implemented for a linearly implicit convective term."));
   }
 
   // PHYSICAL QUANTITIES
@@ -321,6 +313,14 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   {
     AssertThrow(treatment_of_convective_term != TreatmentOfConvectiveTerm::Undefined,
                 dealii::ExcMessage("parameter must be defined"));
+
+    if(treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      AssertThrow(
+        nonlinear_viscous_problem() == false,
+        dealii::ExcMessage(
+          "The combination of a linearly implicit convective term and a nonlinear viscous term is currently not implemented. Choose e.g. an implicit formulation of the convective term."));
+    }
   }
 
   AssertThrow(calculation_of_time_step_size != TimeStepCalculation::Undefined,
@@ -392,7 +392,7 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     }
   }
 
-  if(use_divergence_penalty == true || use_continuity_penalty == true)
+  if(use_divergence_penalty == true or use_continuity_penalty == true)
   {
     AssertThrow(type_penalty_parameter != TypePenaltyParameter::Undefined,
                 dealii::ExcMessage("Parameter must be defined"));
@@ -400,7 +400,7 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
 
   if(solver_type == SolverType::Steady)
   {
-    if(use_divergence_penalty == true || use_continuity_penalty == true)
+    if(use_divergence_penalty == true or use_continuity_penalty == true)
     {
       AssertThrow(apply_penalty_terms_in_postprocessing_step == false,
                   dealii::ExcMessage(
@@ -418,19 +418,34 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     if(temporal_discretization == TemporalDiscretization::BDFCoupledSolution)
     {
       AssertThrow(
-        preconditioner_velocity_block == MomentumPreconditioner::None ||
+        preconditioner_velocity_block == MomentumPreconditioner::None or
           preconditioner_velocity_block == MomentumPreconditioner::PointJacobi,
         dealii::ExcMessage(
           "Use either PointJacobi or None as preconditioner for the momentum block in the case of HDIV - Raviart-Thomas."));
     }
   }
 
-  bool const variable_viscosity = use_turbulence_model;
-  if(variable_viscosity and nonlinear_problem_has_to_be_solved())
+  if(viscous_problem() and viscosity_is_variable())
+  {
     AssertThrow(quad_rule_linearization == QuadratureRuleLinearization::Standard,
                 dealii::ExcMessage(
                   "Only the standard integration rule is supported for variable viscosity. "
                   "Variable viscosity with multiple integration rules is not yet implemented."));
+  }
+
+  // PROJECTION METHODS
+  if(preconditioner_momentum == MomentumPreconditioner::Multigrid)
+  {
+    AssertThrow(multigrid_operator_type_momentum != MultigridOperatorType::Undefined,
+                dealii::ExcMessage("Parameter must be defined"));
+
+    if(treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+    {
+      AssertThrow(multigrid_operator_type_momentum !=
+                    MultigridOperatorType::ReactionConvectionDiffusion,
+                  dealii::ExcMessage("Invalid parameter. Convective term is treated explicitly."));
+    }
+  }
 
   // HIGH-ORDER DUAL SPLITTING SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
@@ -444,10 +459,10 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
         << "solution. Use the coupled scheme instead if this is desired." << std::endl;
 
       AssertThrow(
-        preconditioner_viscous == PreconditionerViscous::None ||
-          preconditioner_viscous == PreconditionerViscous::PointJacobi,
+        preconditioner_momentum == MomentumPreconditioner::None or
+          preconditioner_momentum == MomentumPreconditioner::PointJacobi,
         dealii::ExcMessage(
-          "Use either PointJacobi or None as preconditioner for the viscous step in the case of HDIV - Raviart-Thomas."));
+          "Use either PointJacobi or None as preconditioner for the momentum step in the case of HDIV - Raviart-Thomas."));
     }
 
     AssertThrow(order_extrapolation_pressure_nbc <= order_time_integrator,
@@ -464,14 +479,10 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     }
 
     AssertThrow(formulation_convective_term_bc ==
-                    FormulationConvectiveTerm::DivergenceFormulation ||
+                    FormulationConvectiveTerm::DivergenceFormulation or
                   formulation_convective_term_bc ==
                     FormulationConvectiveTerm::ConvectiveFormulation,
                 dealii::ExcMessage("Not implemented."));
-
-    AssertThrow(treatment_of_convective_term != TreatmentOfConvectiveTerm::Implicit,
-                dealii::ExcMessage("An implicit treatment of the convective term is not possible "
-                                   "in combination with the dual splitting scheme."));
   }
 
   // PRESSURE-CORRECTION SCHEME
@@ -482,19 +493,6 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
 
     AssertThrow(order_pressure_extrapolation <= order_time_integrator,
                 dealii::ExcMessage("Invalid parameter order_pressure_extrapolation!"));
-
-    if(preconditioner_momentum == MomentumPreconditioner::Multigrid)
-    {
-      AssertThrow(multigrid_operator_type_momentum != MultigridOperatorType::Undefined,
-                  dealii::ExcMessage("Parameter must be defined"));
-
-      if(treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
-      {
-        AssertThrow(
-          multigrid_operator_type_momentum != MultigridOperatorType::ReactionConvectionDiffusion,
-          dealii::ExcMessage("Invalid parameter. Convective term is treated explicitly."));
-      }
-    }
   }
 
   // COUPLED NAVIER-STOKES SOLVER
@@ -529,59 +527,110 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   // NUMERICAL PARAMETERS
   if(implement_block_diagonal_preconditioner_matrix_free)
   {
-    AssertThrow(
-      use_cell_based_face_loops == true,
-      dealii::ExcMessage(
-        "Cell based face loops have to be used for matrix-free implementation of block diagonal preconditioner."));
-
     AssertThrow(spatial_discretization == SpatialDiscretization::L2,
                 dealii::ExcMessage("Not implemented."));
   }
 
-
   // TURBULENCE
-  if(use_turbulence_model)
+  if(turbulence_model_data.is_active)
   {
-    AssertThrow(turbulence_model != TurbulenceEddyViscosityModel::Undefined,
-                dealii::ExcMessage("parameter must be defined"));
-    AssertThrow(turbulence_model_constant > 0,
-                dealii::ExcMessage("parameter must be greater than zero"));
+    AssertThrow(turbulence_model_data.turbulence_model != TurbulenceEddyViscosityModel::Undefined,
+                dealii::ExcMessage("Parameter must be defined."));
+    AssertThrow(treatment_of_variable_viscosity != TreatmentOfVariableViscosity::Undefined,
+                dealii::ExcMessage("Parameter must be defined."));
+  }
+
+  // GENERALIZED NEWTONIAN MODEL
+  if(generalized_newtonian_model_data.is_active)
+  {
+    AssertThrow(generalized_newtonian_model_data.generalized_newtonian_model !=
+                  GeneralizedNewtonianViscosityModel::Undefined,
+                dealii::ExcMessage("Parameter must be defined."));
+    AssertThrow(treatment_of_variable_viscosity != TreatmentOfVariableViscosity::Undefined,
+                dealii::ExcMessage("Parameter must be defined."));
+  }
+
+  // VARIABLE VISCOSITY MODELS
+  // TODO
+  if(viscosity_is_variable() and
+     temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  {
+    AssertThrow(treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit,
+                dealii::ExcMessage("An implicit treatment of the variable viscosity field "
+                                   "(rendering the viscous step of the dual splitting scheme "
+                                   "nonlinear regarding the unknown velocity field) is currently "
+                                   "not implemented for the dual splitting scheme."));
   }
 }
 
 bool
 Parameters::convective_problem() const
 {
-  return (equation_type == EquationType::NavierStokes || equation_type == EquationType::Euler);
+  return (equation_type == EquationType::NavierStokes or equation_type == EquationType::Euler);
 }
 
 bool
 Parameters::viscous_problem() const
 {
-  return (equation_type == EquationType::Stokes || equation_type == EquationType::NavierStokes ||
-          use_turbulence_model == true);
+  return (equation_type == EquationType::Stokes or equation_type == EquationType::NavierStokes or
+          turbulence_model_data.is_active);
+}
+
+bool
+Parameters::viscosity_is_variable() const
+{
+  return (turbulence_model_data.is_active or generalized_newtonian_model_data.is_active);
+}
+
+bool
+Parameters::non_explicit_convective_problem() const
+{
+  if(convective_problem())
+  {
+    if(solver_type == SolverType::Steady or
+       (solver_type == SolverType::Unsteady and
+        (treatment_of_convective_term != TreatmentOfConvectiveTerm::Explicit)))
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool
+Parameters::implicit_nonlinear_convective_problem() const
+{
+  if(convective_problem())
+  {
+    if(solver_type == SolverType::Steady or
+       (solver_type == SolverType::Unsteady and
+        (treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)))
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool
+Parameters::nonlinear_viscous_problem() const
+{
+  return (viscous_problem() and viscosity_is_variable() and
+          treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Implicit);
 }
 
 bool
 Parameters::nonlinear_problem_has_to_be_solved() const
 {
-  return convective_problem() &&
-         (solver_type == SolverType::Steady ||
-          (solver_type == SolverType::Unsteady &&
-           treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit));
-}
-
-bool
-Parameters::linear_problem_has_to_be_solved() const
-{
-  return equation_type == EquationType::Stokes ||
-         treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit;
+  return (implicit_nonlinear_convective_problem() or nonlinear_viscous_problem());
 }
 
 bool
 Parameters::involves_h_multigrid() const
 {
-  bool use_global_coarsening = false;
+  bool involves_h_mg = false;
 
   // Coupled solver
   if(solver_type == SolverType::Steady or
@@ -591,13 +640,13 @@ Parameters::involves_h_multigrid() const
     // block preconditioner: velocity block
     if(involves_h_multigrid_velocity_block())
     {
-      use_global_coarsening = true;
+      involves_h_mg = true;
     }
 
     // only those Schur complement preconditioners that involve multigrid
     if(involves_h_multigrid_pressure_block())
     {
-      use_global_coarsening = true;
+      involves_h_mg = true;
     }
 
     // if an additional penalty step has to be solved
@@ -606,17 +655,23 @@ Parameters::involves_h_multigrid() const
     {
       if(involves_h_multigrid_penalty_step())
       {
-        use_global_coarsening = true;
+        involves_h_mg = true;
       }
     }
   }
+  // TODO: we currently treat TemporalDiscretization::InterpolateAnalyticalSolution as a splitting
+  // scheme, since the implementation creates a spatial operator related to the pressure-correction
+  // scheme in case of InterpolateAnalyticalSolution. This is only a temporary solution and we need
+  // to write a separate class SpatialOperatorInterpolateAnalyticalSolution that does not create
+  // preconditioners (including multigrid)
   else if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme or
-          temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+          temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
+          temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
   {
     // pressure step is the same for both time discretization schemes
     if(involves_h_multigrid_pressure_step())
     {
-      use_global_coarsening = true;
+      involves_h_mg = true;
     }
 
     // penalty step is the same for both discretization schemes
@@ -624,32 +679,16 @@ Parameters::involves_h_multigrid() const
     {
       if(involves_h_multigrid_penalty_step())
       {
-        use_global_coarsening = true;
+        involves_h_mg = true;
       }
     }
 
-    // viscous step for dual splitting scheme
-    if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    // momentum step
+    if(viscous_problem() or non_explicit_convective_problem())
     {
-      if(viscous_problem())
+      if(involves_h_multigrid_momentum_step())
       {
-        if(involves_h_multigrid_viscous_step())
-        {
-          use_global_coarsening = true;
-        }
-      }
-    }
-
-    // momentum step for pressure correction scheme
-    if(temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
-    {
-      if(viscous_problem() or (convective_problem() and
-                               treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit))
-      {
-        if(involves_h_multigrid_momentum_step())
-        {
-          use_global_coarsening = true;
-        }
+        involves_h_mg = true;
       }
     }
   }
@@ -658,7 +697,7 @@ Parameters::involves_h_multigrid() const
     AssertThrow(false, dealii::ExcMessage("not implemented."));
   }
 
-  return use_global_coarsening;
+  return involves_h_mg;
 }
 
 
@@ -706,7 +745,10 @@ Parameters::print(dealii::ConditionalOStream const & pcout, std::string const & 
   print_parameters_spatial_discretization(pcout);
 
   // TURBULENCE
-  print_parameters_turbulence(pcout);
+  turbulence_model_data.print(pcout);
+
+  // GENERALIZED NEWTONIAN MODELS
+  generalized_newtonian_model_data.print(pcout);
 
   // NUMERICAL PARAMTERS
   print_parameters_numerical_parameters(pcout);
@@ -720,30 +762,36 @@ Parameters::print(dealii::ConditionalOStream const & pcout, std::string const & 
     print_parameters_pressure_correction(pcout);
 
   // COUPLED NAVIER-STOKES SOLVER
-  if(solver_type == SolverType::Steady ||
-     (solver_type == SolverType::Unsteady &&
+  if(solver_type == SolverType::Steady or
+     (solver_type == SolverType::Unsteady and
       temporal_discretization == TemporalDiscretization::BDFCoupledSolution))
+  {
     print_parameters_coupled_solver(pcout);
+  }
 }
 
 void
 Parameters::print_parameters_mathematical_model(dealii::ConditionalOStream const & pcout) const
 {
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
   pcout << std::endl << "Mathematical model:" << std::endl;
 
-  print_parameter(pcout, "Problem type", enum_to_string(problem_type));
-  print_parameter(pcout, "Equation type", enum_to_string(equation_type));
+  print_parameter(pcout, "Problem type", problem_type);
+  print_parameter(pcout, "Equation type", equation_type);
 
   if(this->viscous_problem())
   {
-    print_parameter(pcout, "Formulation of viscous term", enum_to_string(formulation_viscous_term));
+    print_parameter(pcout, "Formulation of viscous term", formulation_viscous_term);
   }
 
   if(this->convective_problem())
   {
-    print_parameter(pcout,
-                    "Formulation of convective term",
-                    enum_to_string(formulation_convective_term));
+    print_parameter(pcout, "Formulation of convective term", formulation_convective_term);
     print_parameter(pcout, "Outflow BC for convective term", use_outflow_bc_convective_term);
   }
 
@@ -754,7 +802,7 @@ Parameters::print_parameters_mathematical_model(dealii::ConditionalOStream const
   print_parameter(pcout, "Use ALE formulation", ale_formulation);
   if(ale_formulation)
   {
-    print_parameter(pcout, "Mesh movement type", enum_to_string(mesh_movement_type));
+    print_parameter(pcout, "Mesh movement type", mesh_movement_type);
     print_parameter(pcout, "NBC with variable normal vector", neumann_with_variable_normal_vector);
   }
 }
@@ -771,6 +819,12 @@ Parameters::print_parameters_physical_quantities(dealii::ConditionalOStream cons
     print_parameter(pcout, "Start time", start_time);
     print_parameter(pcout, "End time", end_time);
   }
+
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
 
   // viscosity
   print_parameter(pcout, "Viscosity", viscosity);
@@ -790,14 +844,9 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 {
   pcout << std::endl << "Temporal discretization:" << std::endl;
 
-  print_parameter(pcout, "Temporal discretization method", enum_to_string(temporal_discretization));
-  print_parameter(pcout,
-                  "Treatment of convective term",
-                  enum_to_string(treatment_of_convective_term));
+  print_parameter(pcout, "Temporal discretization method", temporal_discretization);
 
-  print_parameter(pcout,
-                  "Calculation of time step size",
-                  enum_to_string(calculation_of_time_step_size));
+  print_parameter(pcout, "Calculation of time step size", calculation_of_time_step_size);
 
   print_parameter(pcout, "Adaptive time stepping", adaptive_time_stepping);
 
@@ -809,9 +858,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 
     print_parameter(pcout, "Maximum allowable time step size", time_step_size_max);
 
-    print_parameter(pcout,
-                    "Type of CFL condition",
-                    enum_to_string(adaptive_time_stepping_cfl_type));
+    print_parameter(pcout, "Type of CFL condition", adaptive_time_stepping_cfl_type);
   }
 
 
@@ -821,14 +868,26 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 
   print_parameter(pcout, "Maximum number of time steps", max_number_of_time_steps);
   print_parameter(pcout, "Temporal refinements", n_refine_time);
+
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
   print_parameter(pcout, "Order of time integration scheme", order_time_integrator);
   print_parameter(pcout, "Start with low order method", start_with_low_order);
+
+  print_parameter(pcout, "Treatment of convective term", treatment_of_convective_term);
+
+  if(this->viscosity_is_variable())
+    print_parameter(pcout, "Treatment of nonlinear viscosity", treatment_of_variable_viscosity);
 
   if(problem_type == ProblemType::Steady)
   {
     print_parameter(pcout,
                     "Convergence criterion steady problems",
-                    enum_to_string(convergence_criterion_steady_problem));
+                    convergence_criterion_steady_problem);
 
     print_parameter(pcout, "Absolute tolerance", abs_tol_steady);
     print_parameter(pcout, "Relative tolerance", rel_tol_steady);
@@ -849,7 +908,12 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
 
   grid.print(pcout);
 
-  print_parameter(pcout, "Element type", enum_to_string(spatial_discretization));
+  print_parameter(pcout, "Mapping degree", mapping_degree);
+
+  if(involves_h_multigrid())
+    print_parameter(pcout, "Mapping degree coarse grids", mapping_degree_coarse_grids);
+
+  print_parameter(pcout, "FE space", spatial_discretization);
 
   if(spatial_discretization == SpatialDiscretization::L2)
   {
@@ -865,26 +929,30 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
     AssertThrow(false, dealii::ExcMessage("Not implemented."));
   }
 
-  print_parameter(pcout, "Polynomial degree pressure", enum_to_string(degree_p));
+  print_parameter(pcout, "Polynomial degree pressure", degree_p);
+
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
 
   if(this->convective_problem())
   {
     print_parameter(pcout, "Convective term - Upwind factor", upwind_factor);
     print_parameter(pcout,
                     "Convective term - Type of Dirichlet BC's",
-                    enum_to_string(type_dirichlet_bc_convective));
+                    type_dirichlet_bc_convective);
   }
 
   if(this->viscous_problem())
   {
-    print_parameter(pcout, "Viscous term - IP formulation", enum_to_string(IP_formulation_viscous));
+    print_parameter(pcout, "Viscous term - IP formulation", IP_formulation_viscous);
     print_parameter(pcout, "Viscous term - IP factor", IP_factor_viscous);
 
     if(formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation)
     {
-      print_parameter(pcout,
-                      "Penalty term formulation viscous term",
-                      enum_to_string(penalty_term_div_formulation));
+      print_parameter(pcout, "Penalty term formulation viscous term", penalty_term_div_formulation);
     }
   }
 
@@ -892,7 +960,7 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
   print_parameter(pcout, "Grad(p) - integration by parts", gradp_integrated_by_parts);
   if(gradp_integrated_by_parts)
   {
-    print_parameter(pcout, "Grad(p) - formulation", enum_to_string(gradp_formulation));
+    print_parameter(pcout, "Grad(p) - formulation", gradp_formulation);
     print_parameter(pcout, "Grad(p) - use boundary data", gradp_use_boundary_data);
   }
 
@@ -900,13 +968,11 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
   print_parameter(pcout, "Div(u) . integration by parts", divu_integrated_by_parts);
   if(divu_integrated_by_parts)
   {
-    print_parameter(pcout, "Div(u) - formulation", enum_to_string(divu_formulation));
+    print_parameter(pcout, "Div(u) - formulation", divu_formulation);
     print_parameter(pcout, "Div(u) - use boundary data", divu_use_boundary_data);
   }
 
-  print_parameter(pcout,
-                  "Adjust pressure level (if undefined)",
-                  enum_to_string(adjust_pressure_level));
+  print_parameter(pcout, "Adjust pressure level (if undefined)", adjust_pressure_level);
 
   print_parameter(pcout, "Use divergence penalty term", use_divergence_penalty);
 
@@ -917,10 +983,10 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
 
   print_parameter(pcout, "Use continuity penalty term", use_continuity_penalty);
 
-  if(temporal_discretization == TemporalDiscretization::BDFCoupledSolution ||
+  if(temporal_discretization == TemporalDiscretization::BDFCoupledSolution or
      temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
   {
-    if(use_divergence_penalty == true || use_continuity_penalty == true)
+    if(use_divergence_penalty == true or use_continuity_penalty == true)
     {
       print_parameter(pcout,
                       "Apply penalty terms in postprocessing step",
@@ -933,34 +999,24 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
     print_parameter(pcout, "Use boundary data", continuity_penalty_use_boundary_data);
     print_parameter(pcout, "Penalty factor continuity", continuity_penalty_factor);
 
-    print_parameter(pcout,
-                    "Continuity penalty term components",
-                    enum_to_string(continuity_penalty_components));
+    print_parameter(pcout, "Continuity penalty term components", continuity_penalty_components);
   }
 
-  if(use_divergence_penalty == true || use_continuity_penalty == true)
+  if(use_divergence_penalty == true or use_continuity_penalty == true)
   {
-    print_parameter(pcout, "Type of penalty parameter", enum_to_string(type_penalty_parameter));
-  }
-}
-
-void
-Parameters::print_parameters_turbulence(dealii::ConditionalOStream const & pcout) const
-{
-  pcout << std::endl << "Turbulence:" << std::endl;
-
-  print_parameter(pcout, "Use turbulence model", use_turbulence_model);
-
-  if(use_turbulence_model == true)
-  {
-    print_parameter(pcout, "Turbulence model", enum_to_string(turbulence_model));
-    print_parameter(pcout, "Turbulence model constant", turbulence_model_constant);
+    print_parameter(pcout, "Type of penalty parameter", type_penalty_parameter);
   }
 }
 
 void
 Parameters::print_parameters_numerical_parameters(dealii::ConditionalOStream const & pcout) const
 {
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
   pcout << std::endl << "Numerical parameters:" << std::endl;
 
   print_parameter(pcout,
@@ -974,7 +1030,7 @@ Parameters::print_parameters_numerical_parameters(dealii::ConditionalOStream con
     solver_data_block_diagonal.print(pcout);
   }
 
-  print_parameter(pcout, "Quadrature rule linearization", enum_to_string(quad_rule_linearization));
+  print_parameter(pcout, "Quadrature rule linearization", quad_rule_linearization);
 }
 
 void
@@ -985,11 +1041,11 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
 
   print_parameter(pcout, "interior penalty factor", IP_factor_pressure);
 
-  print_parameter(pcout, "Solver", enum_to_string(solver_pressure_poisson));
+  print_parameter(pcout, "Solver", solver_pressure_poisson);
 
   solver_data_pressure_poisson.print(pcout);
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner_pressure_poisson));
+  print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);
 
   print_parameter(pcout,
                   "Update preconditioner pressure step",
@@ -1013,15 +1069,13 @@ Parameters::print_parameters_projection_step(dealii::ConditionalOStream const & 
 {
   if(use_divergence_penalty == true)
   {
-    print_parameter(pcout, "Solver projection step", enum_to_string(solver_projection));
+    print_parameter(pcout, "Solver projection step", solver_projection);
 
     solver_data_projection.print(pcout);
 
-    if(use_divergence_penalty == true && use_continuity_penalty == true)
+    if(use_divergence_penalty == true and use_continuity_penalty == true)
     {
-      print_parameter(pcout,
-                      "Preconditioner projection step",
-                      enum_to_string(preconditioner_projection));
+      print_parameter(pcout, "Preconditioner projection step", preconditioner_projection);
 
       print_parameter(pcout,
                       "Update preconditioner projection step",
@@ -1034,12 +1088,12 @@ Parameters::print_parameters_projection_step(dealii::ConditionalOStream const & 
                         update_preconditioner_projection_every_time_steps);
       }
 
-      if(preconditioner_projection == PreconditionerProjection::BlockJacobi &&
+      if(preconditioner_projection == PreconditionerProjection::BlockJacobi and
          implement_block_diagonal_preconditioner_matrix_free)
       {
         print_parameter(pcout,
                         "Preconditioner block diagonal",
-                        enum_to_string(preconditioner_block_diagonal_projection));
+                        preconditioner_block_diagonal_projection);
 
         solver_data_block_diagonal_projection.print(pcout);
       }
@@ -1055,6 +1109,12 @@ Parameters::print_parameters_projection_step(dealii::ConditionalOStream const & 
 void
 Parameters::print_parameters_dual_splitting(dealii::ConditionalOStream const & pcout) const
 {
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
   pcout << std::endl << "High-order dual splitting scheme:" << std::endl;
 
   // formulations
@@ -1062,61 +1122,34 @@ Parameters::print_parameters_dual_splitting(dealii::ConditionalOStream const & p
 
   if(this->convective_problem())
   {
-    print_parameter(pcout,
-                    "Formulation convective term in BC",
-                    enum_to_string(formulation_convective_term_bc));
+    print_parameter(pcout, "Formulation convective term in BC", formulation_convective_term_bc);
   }
 
   // projection method
+
+  // pressure step
   print_parameters_pressure_poisson(pcout);
 
   // projection step
   pcout << std::endl << "  Projection step:" << std::endl;
   print_parameters_projection_step(pcout);
 
-  // Viscous step
-  if(this->viscous_problem())
+  // momentum step
+  if(viscous_problem() or non_explicit_convective_problem())
   {
-    pcout << std::endl << "  Viscous step:" << std::endl;
-
-    print_parameter(pcout, "Solver viscous step", enum_to_string(solver_viscous));
-
-    solver_data_viscous.print(pcout);
-
-    print_parameter(pcout, "Preconditioner viscous step", enum_to_string(preconditioner_viscous));
-
-    print_parameter(pcout, "Update preconditioner viscous", update_preconditioner_viscous);
-
-    if(update_preconditioner_viscous)
-    {
-      print_parameter(pcout,
-                      "Update preconditioner every time steps",
-                      update_preconditioner_viscous_every_time_steps);
-    }
-
-    if(preconditioner_viscous == PreconditionerViscous::Multigrid)
-    {
-      multigrid_data_viscous.print(pcout);
-    }
+    print_parameters_momentum_step(pcout);
   }
 }
 
 void
-Parameters::print_parameters_pressure_correction(dealii::ConditionalOStream const & pcout) const
+Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pcout) const
 {
-  pcout << std::endl << "Pressure-correction scheme:" << std::endl;
-
-  // formulations of pressure-correction scheme
-  pcout << std::endl << "  Formulation of pressure-correction scheme:" << std::endl;
-  print_parameter(pcout, "Order of pressure extrapolation", order_pressure_extrapolation);
-  print_parameter(pcout, "Rotational formulation", rotational_formulation);
-
   // Momentum step
   pcout << std::endl << "  Momentum step:" << std::endl;
 
   // Newton solver
-  if(equation_type == EquationType::NavierStokes &&
-     treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
+
+  if(nonlinear_problem_has_to_be_solved())
   {
     pcout << "  Newton solver:" << std::endl;
 
@@ -1128,19 +1161,17 @@ Parameters::print_parameters_pressure_correction(dealii::ConditionalOStream cons
   // Solver linear(ized) problem
   pcout << "  Linear solver:" << std::endl;
 
-  print_parameter(pcout, "Solver", enum_to_string(solver_momentum));
+  print_parameter(pcout, "Solver", solver_momentum);
 
   solver_data_momentum.print(pcout);
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner_momentum));
+  print_parameter(pcout, "Preconditioner", preconditioner_momentum);
 
   print_parameter(pcout, "Update of preconditioner", update_preconditioner_momentum);
 
   if(update_preconditioner_momentum == true)
   {
-    // if a nonlinear problem has to be solved
-    if(equation_type == EquationType::NavierStokes &&
-       treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
+    if(nonlinear_problem_has_to_be_solved())
     {
       print_parameter(pcout,
                       "Update every Newton iterations",
@@ -1154,14 +1185,34 @@ Parameters::print_parameters_pressure_correction(dealii::ConditionalOStream cons
 
   if(preconditioner_momentum == MomentumPreconditioner::Multigrid)
   {
-    print_parameter(pcout,
-                    "Multigrid operator type",
-                    enum_to_string(multigrid_operator_type_momentum));
+    print_parameter(pcout, "Multigrid operator type", multigrid_operator_type_momentum);
 
     multigrid_data_momentum.print(pcout);
   }
+}
+
+void
+Parameters::print_parameters_pressure_correction(dealii::ConditionalOStream const & pcout) const
+{
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
+  pcout << std::endl << "Pressure-correction scheme:" << std::endl;
+
+  // formulations of pressure-correction scheme
+  pcout << std::endl << "  Formulation of pressure-correction scheme:" << std::endl;
+  print_parameter(pcout, "Order of pressure extrapolation", order_pressure_extrapolation);
+  print_parameter(pcout, "Rotational formulation", rotational_formulation);
 
   // projection method
+
+  // momentum step
+  print_parameters_momentum_step(pcout);
+
+  // pressure step
   print_parameters_pressure_poisson(pcout);
 
   // projection step
@@ -1173,6 +1224,12 @@ Parameters::print_parameters_pressure_correction(dealii::ConditionalOStream cons
 void
 Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & pcout) const
 {
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
   pcout << std::endl << "Coupled Navier-Stokes solver:" << std::endl;
 
   print_parameter(pcout, "Use scaling of continuity equation", use_scaling_continuity);
@@ -1183,9 +1240,7 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
 
   // Newton solver
 
-  // if a nonlinear problem has to be solved
-  if(equation_type == EquationType::NavierStokes &&
-     treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
+  if(nonlinear_problem_has_to_be_solved())
   {
     pcout << "Newton solver:" << std::endl;
 
@@ -1197,19 +1252,17 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
   // Solver linearized problem
   pcout << "Linear solver:" << std::endl;
 
-  print_parameter(pcout, "Solver", enum_to_string(solver_coupled));
+  print_parameter(pcout, "Solver", solver_coupled);
 
   solver_data_coupled.print(pcout);
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner_coupled));
+  print_parameter(pcout, "Preconditioner", preconditioner_coupled);
 
   print_parameter(pcout, "Update preconditioner", update_preconditioner_coupled);
 
   if(update_preconditioner_coupled == true)
   {
-    // if a nonlinear problem has to be solved
-    if(equation_type == EquationType::NavierStokes &&
-       treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
+    if(nonlinear_problem_has_to_be_solved())
     {
       print_parameter(pcout,
                       "Update every Newton iterations",
@@ -1223,13 +1276,11 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
 
   pcout << std::endl << "  Velocity/momentum block:" << std::endl;
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner_velocity_block));
+  print_parameter(pcout, "Preconditioner", preconditioner_velocity_block);
 
   if(preconditioner_velocity_block == MomentumPreconditioner::Multigrid)
   {
-    print_parameter(pcout,
-                    "Multigrid operator type",
-                    enum_to_string(multigrid_operator_type_velocity_block));
+    print_parameter(pcout, "Multigrid operator type", multigrid_operator_type_velocity_block);
 
     multigrid_data_velocity_block.print(pcout);
 
@@ -1243,10 +1294,10 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
 
   pcout << std::endl << "  Pressure/Schur-complement block:" << std::endl;
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner_pressure_block));
+  print_parameter(pcout, "Preconditioner", preconditioner_pressure_block);
 
-  if(preconditioner_pressure_block == SchurComplementPreconditioner::LaplaceOperator ||
-     preconditioner_pressure_block == SchurComplementPreconditioner::CahouetChabard ||
+  if(preconditioner_pressure_block == SchurComplementPreconditioner::LaplaceOperator or
+     preconditioner_pressure_block == SchurComplementPreconditioner::CahouetChabard or
      preconditioner_pressure_block == SchurComplementPreconditioner::PressureConvectionDiffusion)
   {
     multigrid_data_pressure_block.print(pcout);
@@ -1262,7 +1313,7 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
   }
 
   // projection_step
-  if(use_divergence_penalty == true || use_continuity_penalty == true)
+  if(use_divergence_penalty == true or use_continuity_penalty == true)
   {
     if(apply_penalty_terms_in_postprocessing_step == true)
     {
@@ -1275,21 +1326,21 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
 bool
 Parameters::involves_h_multigrid_velocity_block() const
 {
-  bool use_global_coarsening = false;
+  bool involves_h_mg = false;
 
   if(preconditioner_velocity_block == MomentumPreconditioner::Multigrid and
      multigrid_data_velocity_block.involves_h_transfer())
   {
-    use_global_coarsening = true;
+    involves_h_mg = true;
   }
 
-  return use_global_coarsening;
+  return involves_h_mg;
 }
 
 bool
 Parameters::involves_h_multigrid_pressure_block() const
 {
-  bool use_global_coarsening = false;
+  bool involves_h_mg = false;
 
   if(preconditioner_pressure_block == SchurComplementPreconditioner::LaplaceOperator or
      preconditioner_pressure_block == SchurComplementPreconditioner::CahouetChabard or
@@ -1297,67 +1348,53 @@ Parameters::involves_h_multigrid_pressure_block() const
   {
     if(multigrid_data_pressure_block.involves_h_transfer())
     {
-      use_global_coarsening = true;
+      involves_h_mg = true;
     }
   }
 
-  return use_global_coarsening;
+  return involves_h_mg;
 }
 
 bool
 Parameters::involves_h_multigrid_penalty_step() const
 {
-  bool use_global_coarsening = false;
+  bool involves_h_mg = false;
 
   if(preconditioner_projection == PreconditionerProjection::Multigrid and
      multigrid_data_projection.involves_h_transfer())
   {
-    use_global_coarsening = true;
+    involves_h_mg = true;
   }
 
-  return use_global_coarsening;
+  return involves_h_mg;
 }
 
 bool
 Parameters::involves_h_multigrid_pressure_step() const
 {
-  bool use_global_coarsening = false;
+  bool involves_h_mg = false;
 
   if(preconditioner_pressure_poisson == PreconditionerPressurePoisson::Multigrid and
      multigrid_data_pressure_poisson.involves_h_transfer())
   {
-    use_global_coarsening = true;
+    involves_h_mg = true;
   }
 
-  return use_global_coarsening;
-}
-
-bool
-Parameters::involves_h_multigrid_viscous_step() const
-{
-  bool use_global_coarsening = false;
-
-  if(preconditioner_viscous == PreconditionerViscous::Multigrid and
-     multigrid_data_viscous.involves_h_transfer())
-  {
-    use_global_coarsening = true;
-  }
-
-  return use_global_coarsening;
+  return involves_h_mg;
 }
 
 bool
 Parameters::involves_h_multigrid_momentum_step() const
 {
-  bool use_global_coarsening = false;
+  bool involves_h_mg = false;
 
   if(preconditioner_momentum == MomentumPreconditioner::Multigrid and
      multigrid_data_momentum.involves_h_transfer())
   {
-    use_global_coarsening = true;
+    involves_h_mg = true;
   }
 
-  return use_global_coarsening;
+  return involves_h_mg;
 }
 
 } // namespace IncNS

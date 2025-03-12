@@ -35,11 +35,11 @@ namespace IncNS
 {
 template<int dim, typename Number>
 DriverSteadyProblems<dim, Number>::DriverSteadyProblems(
-  std::shared_ptr<Operator>                       operator_,
+  std::shared_ptr<OperatorCoupled<dim, Number>>   operator_,
+  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_,
   Parameters const &                              param_,
   MPI_Comm const &                                mpi_comm_,
-  bool const                                      is_test_,
-  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_)
+  bool const                                      is_test_)
   : pde_operator(operator_),
     param(param_),
     mpi_comm(mpi_comm_),
@@ -129,7 +129,7 @@ DriverSteadyProblems<dim, Number>::do_solve(double const time, bool unsteady_pro
   // Update divergence and continuity penalty operator in case
   // that these terms are added to the monolithic system of equations
   // instead of applying these terms in a postprocessing step.
-  if(this->param.use_divergence_penalty == true || this->param.use_continuity_penalty == true)
+  if(this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true)
   {
     AssertThrow(this->param.apply_penalty_terms_in_postprocessing_step == false,
                 dealii::ExcMessage(
@@ -141,23 +141,23 @@ DriverSteadyProblems<dim, Number>::do_solve(double const time, bool unsteady_pro
       pde_operator->update_continuity_penalty_operator(solution.block(0));
   }
 
-  // linear problem
-  if(this->param.linear_problem_has_to_be_solved())
+  // explicit viscosity update
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
+     this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
   {
-    // calculate rhs vector
-    pde_operator->rhs_stokes_problem(rhs_vector, time);
+    dealii::Timer timer_viscosity_update;
+    timer_viscosity_update.restart();
 
-    // solve coupled system of equations
-    unsigned int const n_iter = pde_operator->solve_linear_stokes_problem(
-      solution, rhs_vector, this->param.update_preconditioner_coupled, time);
+    pde_operator->update_viscosity(solution.block(0));
 
     if(print_solver_info(time, unsteady_problem) and not(this->is_test))
-      print_solver_info_linear(pcout, n_iter, timer.wall_time());
-
-    iterations.first += 1;
-    std::get<1>(iterations.second) += n_iter;
+    {
+      this->pcout << std::endl << "Update of variable viscosity:";
+      print_wall_time(this->pcout, timer_viscosity_update.wall_time());
+    }
   }
-  else // nonlinear problem
+
+  if(this->param.nonlinear_problem_has_to_be_solved())
   {
     VectorType rhs(solution.block(0));
     rhs = 0.0;
@@ -175,6 +175,25 @@ DriverSteadyProblems<dim, Number>::do_solve(double const time, bool unsteady_pro
     std::get<0>(iterations.second) += std::get<0>(iter);
     std::get<1>(iterations.second) += std::get<1>(iter);
   }
+  else // linear problem
+  {
+    // linearly implicit convective term does not make sense for steady problems, but we need to
+    // pass a vector to the functions rhs_linear_problem() and solve_linear_problem()
+    VectorType transport_velocity;
+
+    // calculate rhs vector
+    pde_operator->rhs_linear_problem(rhs_vector, transport_velocity, time);
+
+    // solve coupled system of equations
+    unsigned int const n_iter = pde_operator->solve_linear_problem(
+      solution, rhs_vector, transport_velocity, this->param.update_preconditioner_coupled, time);
+
+    if(print_solver_info(time, unsteady_problem) and not(this->is_test))
+      print_solver_info_linear(pcout, n_iter, timer.wall_time());
+
+    iterations.first += 1;
+    std::get<1>(iterations.second) += n_iter;
+  }
 
   pde_operator->adjust_pressure_level_if_undefined(solution.block(1), time);
 
@@ -185,9 +204,9 @@ template<int dim, typename Number>
 bool
 DriverSteadyProblems<dim, Number>::print_solver_info(double const time, bool unsteady_problem) const
 {
-  return !unsteady_problem || param.solver_info_data.write(this->global_timer.wall_time(),
-                                                           time - param.start_time,
-                                                           iterations.first + 1);
+  return not(unsteady_problem) or param.solver_info_data.write(this->global_timer.wall_time(),
+                                                               time - param.start_time,
+                                                               iterations.first + 1);
 }
 
 template<int dim, typename Number>
@@ -197,14 +216,7 @@ DriverSteadyProblems<dim, Number>::print_iterations() const
   std::vector<std::string> names;
   std::vector<double>      iterations_avg;
 
-  if(this->param.linear_problem_has_to_be_solved())
-  {
-    names = {"Coupled system"};
-    iterations_avg.resize(1);
-    iterations_avg[0] =
-      (double)std::get<1>(iterations.second) / std::max(1., (double)iterations.first);
-  }
-  else // nonlinear system of equations in momentum step
+  if(this->param.nonlinear_problem_has_to_be_solved())
   {
     names = {"Coupled system (nonlinear)",
              "Coupled system (linear accumulated)",
@@ -219,6 +231,13 @@ DriverSteadyProblems<dim, Number>::print_iterations() const
       iterations_avg[2] = iterations_avg[1] / iterations_avg[0];
     else
       iterations_avg[2] = iterations_avg[1];
+  }
+  else // linear problem
+  {
+    names = {"Coupled system"};
+    iterations_avg.resize(1);
+    iterations_avg[0] =
+      (double)std::get<1>(iterations.second) / std::max(1., (double)iterations.first);
   }
 
   print_list_of_iterations(this->pcout, names, iterations_avg);

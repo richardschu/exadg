@@ -36,7 +36,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const
+  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
     // The analytical solution is only known at t = start_time and t = end_time
 
@@ -58,7 +58,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & point, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & point, unsigned int const component = 0) const final
   {
     double value = 0.0;
     double t     = this->get_time();
@@ -119,8 +119,9 @@ private:
     this->param.exponent_fe_degree_convection = 1.5;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = 1;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
     // convective term
     this->param.numerical_flux_convective_operator =
@@ -142,11 +143,41 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    dealii::GridGenerator::hyper_cube(*this->grid->triangulation, left, right);
+    (void)mapping;
+    (void)multigrid_mappings;
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
+
+        // hypercube volume is [left,right]^dim
+        dealii::GridGenerator::hyper_cube(tria, left, right);
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void

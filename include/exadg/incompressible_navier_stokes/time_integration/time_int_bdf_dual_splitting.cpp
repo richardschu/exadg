@@ -19,10 +19,13 @@
  *  ______________________________________________________________________
  */
 
+#include <deal.II/numerics/vector_tools_mean_value.h>
+
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
+#include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
 #include <exadg/utilities/print_solver_results.h>
 
@@ -33,18 +36,19 @@ namespace IncNS
 template<int dim, typename Number>
 TimeIntBDFDualSplitting<dim, Number>::TimeIntBDFDualSplitting(
   std::shared_ptr<Operator>                       operator_in,
+  std::shared_ptr<HelpersALE<dim, Number> const>  helpers_ale_in,
+  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
   Parameters const &                              param_in,
   MPI_Comm const &                                mpi_comm_in,
-  bool const                                      is_test_in,
-  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in)
-  : Base(operator_in, param_in, mpi_comm_in, is_test_in, postprocessor_in),
+  bool const                                      is_test_in)
+  : Base(operator_in, helpers_ale_in, postprocessor_in, param_in, mpi_comm_in, is_test_in),
     pde_operator(operator_in),
     velocity(this->order),
     pressure(this->order),
     velocity_dbc(this->order),
     iterations_pressure({0, 0}),
     iterations_projection({0, 0}),
-    iterations_viscous({0, 0}),
+    iterations_viscous({0, {0, 0}}),
     iterations_penalty({0, 0}),
     iterations_mass({0, 0}),
     extra_pressure_nbc(this->param.order_extrapolation_pressure_nbc,
@@ -60,14 +64,9 @@ TimeIntBDFDualSplitting<dim, Number>::update_time_integrator_constants()
   Base::update_time_integrator_constants();
 
   // update time integrator constants for extrapolation scheme of pressure Neumann bc
-  if(this->adaptive_time_stepping == false)
-  {
-    extra_pressure_nbc.update(this->get_time_step_number());
-  }
-  else // adaptive time stepping
-  {
-    extra_pressure_nbc.update(this->get_time_step_number(), this->get_time_step_vector());
-  }
+  extra_pressure_nbc.update(this->get_time_step_number(),
+                            this->adaptive_time_stepping,
+                            this->get_time_step_vector());
 
   // use this function to check the correctness of the time integrator constants
   //    std::cout << "Coefficients extrapolation scheme pressure NBC:" << std::endl;
@@ -90,26 +89,25 @@ TimeIntBDFDualSplitting<dim, Number>::setup_derived()
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & ia)
+TimeIntBDFDualSplitting<dim, Number>::read_restart_vectors(BoostInputArchiveType & ia)
 {
   Base::read_restart_vectors(ia);
 
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
-    ia >> velocity_dbc[i];
+    read_write_distributed_vector(velocity_dbc[i], ia);
   }
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplitting<dim, Number>::write_restart_vectors(
-  boost::archive::binary_oarchive & oa) const
+TimeIntBDFDualSplitting<dim, Number>::write_restart_vectors(BoostOutputArchiveType & oa) const
 {
   Base::write_restart_vectors(oa);
 
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
-    oa << velocity_dbc[i];
+    read_write_distributed_vector(velocity_dbc[i], oa);
   }
 }
 
@@ -141,20 +139,20 @@ void
 TimeIntBDFDualSplitting<dim, Number>::initialize_current_solution()
 {
   if(this->param.ale_formulation)
-    pde_operator->move_grid(this->get_time());
+    this->helpers_ale->move_grid(this->get_time());
 
   pde_operator->prescribe_initial_conditions(velocity[0], pressure[0], this->get_time());
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplitting<dim, Number>::initialize_former_solutions()
+TimeIntBDFDualSplitting<dim, Number>::initialize_former_multistep_dof_vectors()
 {
   // note that the loop begins with i=1! (we could also start with i=0 but this is not necessary)
   for(unsigned int i = 1; i < velocity.size(); ++i)
   {
     if(this->param.ale_formulation)
-      pde_operator->move_grid(this->get_previous_time(i));
+      this->helpers_ale->move_grid(this->get_previous_time(i));
 
     pde_operator->prescribe_initial_conditions(velocity[i],
                                                pressure[i],
@@ -168,7 +166,10 @@ TimeIntBDFDualSplitting<dim, Number>::initialize_velocity_dbc()
 {
   // fill vector velocity_dbc: The first entry [0] is already needed if start_with_low_order == true
   if(this->param.ale_formulation)
-    pde_operator->move_grid_and_update_dependent_data_structures(this->get_time());
+  {
+    this->helpers_ale->move_grid(this->get_time());
+    this->helpers_ale->update_pde_operator_after_grid_motion();
+  }
   pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[0], this->get_time());
   // ... and previous times if start_with_low_order == false
   if(this->start_with_low_order == false)
@@ -177,7 +178,10 @@ TimeIntBDFDualSplitting<dim, Number>::initialize_velocity_dbc()
     {
       double const time = this->get_time() - double(i) * this->get_time_step_size();
       if(this->param.ale_formulation)
-        pde_operator->move_grid_and_update_dependent_data_structures(time);
+      {
+        this->helpers_ale->move_grid(time);
+        this->helpers_ale->update_pde_operator_after_grid_motion();
+      }
       pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[i], time);
     }
   }
@@ -252,7 +256,7 @@ TimeIntBDFDualSplitting<dim, Number>::postprocessing_stability_analysis()
               dealii::ExcMessage(
                 "Stability analysis can not be performed for nonlinear convective problems."));
 
-  AssertThrow(velocity[0].l2_norm() < 1.e-15 && pressure[0].l2_norm() < 1.e-15,
+  AssertThrow(velocity[0].l2_norm() < 1.e-15 and pressure[0].l2_norm() < 1.e-15,
               dealii::ExcMessage("Solution vector has to be zero for this stability analysis."));
 
   AssertThrow(dealii::Utilities::MPI::n_mpi_processes(this->mpi_comm) == 1,
@@ -338,8 +342,7 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   velocity_np = 0.0;
 
   // compute convective term and extrapolate convective term (if not Stokes equations)
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(this->param.convective_problem())
   {
     if(this->param.ale_formulation)
     {
@@ -405,8 +408,7 @@ TimeIntBDFDualSplitting<dim, Number>::evaluate_convective_term()
   dealii::Timer timer;
   timer.restart();
 
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(this->param.convective_problem())
   {
     if(this->param.ale_formulation == false) // Eulerian case
     {
@@ -446,7 +448,7 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
 
   // solve linear system of equations
   bool const update_preconditioner =
-    this->param.update_preconditioner_pressure_poisson &&
+    this->param.update_preconditioner_pressure_poisson and
     ((this->time_step_number - 1) %
        this->param.update_preconditioner_pressure_poisson_every_time_steps ==
      0);
@@ -486,7 +488,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   rhs *= -this->bdf.get_gamma0() / this->get_time_step_size();
 
   // inhomogeneous parts of boundary face integrals of velocity divergence operator
-  if(this->param.divu_integrated_by_parts == true && this->param.divu_use_boundary_data == true)
+  if(this->param.divu_integrated_by_parts == true and this->param.divu_use_boundary_data == true)
   {
     VectorType temp(rhs);
 
@@ -581,7 +583,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   // scheme and coupled solution approach due to the Dirichlet BC prescribed for the intermediate
   // velocity field and the pressure Neumann BC in case of the dual-splitting scheme.
   if(pde_operator->is_pressure_level_undefined())
-    set_zero_mean_value(rhs);
+    dealii::VectorTools::subtract_mean_value(rhs);
 }
 
 template<int dim, typename Number>
@@ -602,8 +604,8 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
   iterations_mass.second += n_iter_mass;
 
   // penalty terms
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false &&
-     (this->param.use_divergence_penalty == true || this->param.use_continuity_penalty == true))
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
+     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
   {
     // extrapolate velocity to time t_n+1 and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty term
@@ -623,7 +625,7 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
 
     // solve linear system of equations
     bool const update_preconditioner =
-      this->param.update_preconditioner_projection &&
+      this->param.update_preconditioner_projection and
       ((this->time_step_number - 1) %
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
@@ -692,37 +694,13 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
   dealii::Timer timer;
   timer.restart();
 
-  if(this->param.viscous_problem())
+  // in case we need to iteratively solve a linear or nonlinear system of equations
+  if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
-    // if a turbulence model is used:
-    // update turbulence model before calculating rhs_viscous
-    if(this->param.use_turbulence_model == true)
-    {
-      dealii::Timer timer_turbulence;
-      timer_turbulence.restart();
-
-      // extrapolate velocity to time t_n+1 and use this velocity field to
-      // update the turbulence model (to recalculate the turbulent viscosity)
-      VectorType velocity_extrapolated(velocity[0]);
-      velocity_extrapolated = 0;
-      for(unsigned int i = 0; i < velocity.size(); ++i)
-        velocity_extrapolated.add(this->extra.get_beta(i), velocity[i]);
-
-      pde_operator->update_turbulence_model(velocity_extrapolated);
-
-      if(this->print_solver_info() and not(this->is_test))
-      {
-        this->pcout << std::endl << "Update of turbulent viscosity:";
-        print_wall_time(this->pcout, timer_turbulence.wall_time());
-      }
-    }
-
-    VectorType rhs(velocity_np);
-    // compute right-hand-side vector
-    rhs_viscous(rhs);
+    // store the velocity vector that is needed to compute the rhs vector
+    VectorType velocity_rhs = velocity_np;
 
     // Extrapolate old solution to get a good initial estimate for the solver.
-    // Note that this has to be done after calling rhs_viscous()!
     if(this->use_extrapolation)
     {
       velocity_np = 0;
@@ -734,31 +712,103 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       velocity_np = velocity_viscous_last_iter;
     }
 
-    // solve linear system of equations
+    /*
+     *  update variable viscosity
+     */
+    if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
+       this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
+    {
+      dealii::Timer timer_viscosity_update;
+      timer_viscosity_update.restart();
+
+      pde_operator->update_viscosity(velocity_np);
+
+      if(this->print_solver_info() and not(this->is_test))
+      {
+        this->pcout << std::endl << "Update of variable viscosity:";
+        print_wall_time(this->pcout, timer_viscosity_update.wall_time());
+      }
+    }
+
     bool const update_preconditioner =
-      this->param.update_preconditioner_viscous &&
-      ((this->time_step_number - 1) % this->param.update_preconditioner_viscous_every_time_steps ==
+      this->param.update_preconditioner_momentum and
+      ((this->time_step_number - 1) % this->param.update_preconditioner_momentum_every_time_steps ==
        0);
 
-    unsigned int const n_iter = pde_operator->solve_viscous(
-      velocity_np, rhs, update_preconditioner, this->get_scaling_factor_time_derivative_term());
-    iterations_viscous.first += 1;
-    iterations_viscous.second += n_iter;
+    if(this->param.nonlinear_problem_has_to_be_solved())
+    {
+      /*
+       *  Calculate the vector that is constant when solving the nonlinear momentum equation
+       *  (where constant means that the vector does not change from one Newton iteration
+       *  to the next, i.e., it does not depend on the current solution of the nonlinear solver)
+       */
+      VectorType rhs(velocity_rhs);
+      VectorType transport_velocity_dummy;
+      rhs_viscous(rhs, velocity_rhs, transport_velocity_dummy);
+
+      // solve non-linear system of equations
+      auto const iter = pde_operator->solve_nonlinear_momentum_equation(
+        velocity_np,
+        rhs,
+        this->get_next_time(),
+        update_preconditioner,
+        this->get_scaling_factor_time_derivative_term());
+
+      iterations_viscous.first += 1;
+      std::get<0>(iterations_viscous.second) += std::get<0>(iter);
+      std::get<1>(iterations_viscous.second) += std::get<1>(iter);
+
+      if(this->print_solver_info() and not(this->is_test))
+      {
+        this->pcout << std::endl << "Solve momentum step:";
+        print_solver_info_nonlinear(this->pcout,
+                                    std::get<0>(iter),
+                                    std::get<1>(iter),
+                                    timer.wall_time());
+      }
+    }
+    else // linear problem
+    {
+      // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+      VectorType transport_velocity;
+      if(this->param.convective_problem() and
+         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+      {
+        transport_velocity = velocity_np;
+      }
+
+      /*
+       *  Calculate the right-hand side of the linear system of equations.
+       */
+      VectorType rhs(velocity_rhs);
+      rhs_viscous(rhs, velocity_rhs, transport_velocity);
+
+      // solve linear system of equations
+      unsigned int const n_iter = pde_operator->solve_linear_momentum_equation(
+        velocity_np,
+        rhs,
+        transport_velocity,
+        update_preconditioner,
+        this->get_scaling_factor_time_derivative_term());
+      iterations_viscous.first += 1;
+      std::get<1>(iterations_viscous.second) += n_iter;
+
+      if(this->print_solver_info() and not(this->is_test))
+      {
+        this->pcout << std::endl << "Solve viscous step:";
+        print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
+      }
+    }
 
     if(this->store_solution)
       velocity_viscous_last_iter = velocity_np;
-
-    // write output
-    if(this->print_solver_info() and not(this->is_test))
-    {
-      this->pcout << std::endl << "Solve viscous step:";
-      print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
-    }
   }
-  else // inviscid
+  else // no viscous term and no (linearly) implicit convective term, i.e. there is nothing to do in
+       // this step of the dual splitting scheme
   {
     // nothing to do
-    AssertThrow(this->param.equation_type == EquationType::Euler,
+    AssertThrow(this->param.equation_type == EquationType::Euler and
+                  this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit,
                 dealii::ExcMessage("Logical error."));
   }
 
@@ -767,25 +817,48 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType & rhs) const
+TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType &       rhs,
+                                                  VectorType const & velocity_mass_operator,
+                                                  VectorType const & transport_velocity) const
 {
   /*
-   *  I. apply mass operator
+   *  apply mass operator
    */
-  pde_operator->apply_mass_operator(rhs, velocity_np);
+  pde_operator->apply_mass_operator(rhs, velocity_mass_operator);
   rhs *= this->bdf.get_gamma0() / this->get_time_step_size();
 
-  /*
-   *  II. inhomogeneous parts of boundary face integrals of viscous operator
-   */
-  pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
+  // compensate for explicit convective term taken into account in the first sub-step of the
+  // dual-splitting scheme
+  if(this->param.non_explicit_convective_problem())
+  {
+    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+      rhs.add(this->extra.get_beta(i), this->vec_convective_term[i]);
+  }
+
+  if(this->param.nonlinear_problem_has_to_be_solved())
+  {
+    // for a nonlinear problem, inhomogeneous contributions are taken into account when evaluating
+    // the nonlinear residual
+  }
+  else // linear problem
+  {
+    // compute inhomogeneous contributions of linearly implicit convective term
+    if(this->param.convective_problem() and
+       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      pde_operator->rhs_add_convective_term(rhs, transport_velocity, this->get_next_time());
+    }
+
+    // inhomogeneous parts of boundary face integrals of viscous operator
+    pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
+  }
 }
 
 template<int dim, typename Number>
 void
 TimeIntBDFDualSplitting<dim, Number>::penalty_step()
 {
-  if(this->param.use_divergence_penalty == true || this->param.use_continuity_penalty == true)
+  if(this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true)
   {
     dealii::Timer timer;
     timer.restart();
@@ -805,12 +878,12 @@ TimeIntBDFDualSplitting<dim, Number>::penalty_step()
 
     // right-hand side term: add inhomogeneous contributions of continuity penalty operator to
     // rhs-vector if desired
-    if(this->param.use_continuity_penalty && this->param.continuity_penalty_use_boundary_data)
+    if(this->param.use_continuity_penalty and this->param.continuity_penalty_use_boundary_data)
       pde_operator->rhs_add_projection_operator(rhs, this->get_next_time());
 
     // solve linear system of equations
     bool const update_preconditioner =
-      this->param.update_preconditioner_projection &&
+      this->param.update_preconditioner_projection and
       ((this->time_step_number - 1) %
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
@@ -871,7 +944,7 @@ TimeIntBDFDualSplitting<dim, Number>::solve_steady_problem()
     VectorType velocity_tmp;
     VectorType pressure_tmp;
 
-    while(!converged && this->time < (this->end_time - this->eps) &&
+    while(not(converged) and this->time < (this->end_time - this->eps) and
           this->get_time_step_number() <= this->param.max_number_of_time_steps)
     {
       // save solution from previous time step
@@ -913,7 +986,7 @@ TimeIntBDFDualSplitting<dim, Number>::solve_steady_problem()
       }
 
       // check convergence
-      if(incr < this->param.abs_tol_steady || incr_rel < this->param.rel_tol_steady)
+      if(incr < this->param.abs_tol_steady or incr_rel < this->param.rel_tol_steady)
       {
         converged = true;
       }
@@ -949,20 +1022,47 @@ template<int dim, typename Number>
 void
 TimeIntBDFDualSplitting<dim, Number>::print_iterations() const
 {
-  std::vector<std::string> names = {"Convective step",
-                                    "Pressure step",
-                                    "Projection step",
-                                    "Viscous step"};
+  std::vector<std::string> names;
+  std::vector<double>      iterations_avg;
 
-  std::vector<double> iterations_avg;
-  iterations_avg.resize(4);
-  iterations_avg[0] = 0.0;
-  iterations_avg[1] =
-    (double)iterations_pressure.second / std::max(1., (double)iterations_pressure.first);
-  iterations_avg[2] =
-    (double)iterations_projection.second / std::max(1., (double)iterations_projection.first);
-  iterations_avg[3] =
-    (double)iterations_viscous.second / std::max(1., (double)iterations_viscous.first);
+  if(this->param.nonlinear_problem_has_to_be_solved())
+  {
+    names = {"Convective step",
+             "Pressure step",
+             "Projection step",
+             "Viscous step (nonlinear)",
+             "Viscous step (accumulated)",
+             "Viscous step (linear per nonlinear)"};
+
+    iterations_avg.resize(6);
+    iterations_avg[0] = 0.0; // explicit convective step
+    iterations_avg[1] =
+      (double)iterations_pressure.second / std::max(1., (double)iterations_pressure.first);
+    iterations_avg[2] =
+      (double)iterations_projection.second / std::max(1., (double)iterations_projection.first);
+    iterations_avg[3] = (double)std::get<0>(iterations_viscous.second) /
+                        std::max(1., (double)iterations_viscous.first);
+    iterations_avg[4] = (double)std::get<1>(iterations_viscous.second) /
+                        std::max(1., (double)iterations_viscous.first);
+
+    if(iterations_avg[3] > std::numeric_limits<double>::min())
+      iterations_avg[5] = iterations_avg[4] / iterations_avg[3];
+    else
+      iterations_avg[5] = iterations_avg[4];
+  }
+  else
+  {
+    names = {"Convective step", "Pressure step", "Projection step", "Viscous step"};
+
+    iterations_avg.resize(4);
+    iterations_avg[0] = 0.0; // explicit convective step
+    iterations_avg[1] =
+      (double)iterations_pressure.second / std::max(1., (double)iterations_pressure.first);
+    iterations_avg[2] =
+      (double)iterations_projection.second / std::max(1., (double)iterations_projection.first);
+    iterations_avg[3] = (double)std::get<1>(iterations_viscous.second) /
+                        std::max(1., (double)iterations_viscous.first);
+  }
 
   if(this->param.spatial_discretization == SpatialDiscretization::HDIV)
   {

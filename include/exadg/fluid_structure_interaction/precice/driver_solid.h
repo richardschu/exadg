@@ -22,22 +22,8 @@
 #ifndef INCLUDE_EXADG_FLUID_STRUCTURE_INTERACTION_PRECICE_DRIVER_SOLID_H_
 #define INCLUDE_EXADG_FLUID_STRUCTURE_INTERACTION_PRECICE_DRIVER_SOLID_H_
 
-// application
-#include <exadg/fluid_structure_interaction/user_interface/application_base.h>
-
-// utilities
-#include <exadg/functions_and_boundary_conditions/verify_boundary_conditions.h>
-#include <exadg/matrix_free/matrix_free_data.h>
-#include <exadg/utilities/print_general_infos.h>
-
-// grid
-#include <exadg/grid/grid_motion_elasticity.h>
-#include <exadg/grid/grid_motion_poisson.h>
-#include <exadg/poisson/spatial_discretization/operator.h>
-
-// Structure
-#include <exadg/structure/spatial_discretization/operator.h>
-#include <exadg/structure/time_integration/time_int_gen_alpha.h>
+// ExaDG
+#include <exadg/fluid_structure_interaction/single_field_solvers/structure.h>
 
 namespace ExaDG
 {
@@ -59,18 +45,6 @@ public:
     : Driver<dim, Number>(input_file, comm, app, is_test)
   {
     structure = std::make_shared<SolverStructure<dim, Number>>();
-  }
-
-
-  void
-  setup_application()
-  {
-    dealii::Timer timer_local;
-    timer_local.restart();
-
-    this->application->structure->setup();
-
-    this->timer_tree.insert({"FSI", "Setup", "Application"}, timer_local.wall_time());
   }
 
 
@@ -98,12 +72,12 @@ public:
     {
       // TODO generalize interface handling for multiple interface IDs
       this->precice->add_write_surface(
-        this->application->structure->get_boundary_descriptor()->neumann_cached_bc.begin()->first,
+        *this->application->structure->get_boundary_descriptor()->neumann_cached_bc.begin(),
         this->precice_parameters.write_mesh_name,
         {this->precice_parameters.displacement_data_name,
          this->precice_parameters.velocity_data_name},
         this->precice_parameters.write_data_type,
-        structure->matrix_free,
+        *structure->pde_operator->get_matrix_free(),
         structure->pde_operator->get_dof_index(),
         dealii::numbers::invalid_unsigned_int);
     }
@@ -111,7 +85,7 @@ public:
     // fluid to structure
     {
       this->precice->add_read_surface(
-        structure->matrix_free,
+        *structure->pde_operator->get_matrix_free(),
         structure->pde_operator->get_container_interface_data_neumann(),
         this->precice_parameters.read_mesh_name,
         {this->precice_parameters.stress_data_name});
@@ -132,8 +106,6 @@ public:
     timer.restart();
 
     this->pcout << std::endl << "Setting up fluid-structure interaction solver:" << std::endl;
-
-    setup_application();
 
     setup_structure();
 

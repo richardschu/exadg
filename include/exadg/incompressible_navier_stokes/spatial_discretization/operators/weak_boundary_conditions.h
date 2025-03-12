@@ -1,8 +1,22 @@
-/*
- * weak_boundary_conditions.h
+/*  ______________________________________________________________________
  *
- *  Created on: Jun 13, 2019
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
 
 #ifndef INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATORS_WEAK_BOUNDARY_CONDITIONS_H_
@@ -47,7 +61,7 @@ inline DEAL_II_ALWAYS_INLINE //
   // element e⁻
   dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> value_m;
 
-  if(operator_type == OperatorType::full || operator_type == OperatorType::homogeneous)
+  if(operator_type == OperatorType::full or operator_type == OperatorType::homogeneous)
   {
     value_m = integrator.get_value(q);
   }
@@ -78,9 +92,9 @@ inline DEAL_II_ALWAYS_INLINE //
   // element e⁺
   dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> value_p;
 
-  if(boundary_type == BoundaryTypeU::Dirichlet || boundary_type == BoundaryTypeU::DirichletCached)
+  if(boundary_type == BoundaryTypeU::Dirichlet or boundary_type == BoundaryTypeU::DirichletCached)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> g;
 
@@ -89,12 +103,12 @@ inline DEAL_II_ALWAYS_INLINE //
         auto bc       = boundary_descriptor->dirichlet_bc.find(boundary_id)->second;
         auto q_points = integrator.quadrature_point(q);
 
-        g = FunctionEvaluator<1, dim, Number>::value(bc, q_points, time);
+        g = FunctionEvaluator<1, dim, Number>::value(*bc, q_points, time);
       }
       else if(boundary_type == BoundaryTypeU::DirichletCached)
       {
-        auto bc = boundary_descriptor->dirichlet_cached_bc.find(boundary_id)->second;
-        g       = FunctionEvaluator<1, dim, Number>::value(bc,
+        auto bc = boundary_descriptor->get_dirichlet_cached_data();
+        g       = FunctionEvaluator<1, dim, Number>::value(*bc,
                                                      integrator.get_current_cell_index(),
                                                      q,
                                                      integrator.get_quadrature_index());
@@ -142,16 +156,23 @@ inline DEAL_II_ALWAYS_INLINE //
  *  Neumann boundary:   u⁺ = u⁻
  *  symmetry boundary:  u⁺ = u⁻ -(u⁻*n)n - (u⁻*n)n = u⁻ - 2 (u⁻*n)n
  *
- *  The name "nonlinear" indicates that this function is used when
- *  evaluating the nonlinear convective operator.
+ *  The name "convective" indicates that this function is used when
+ *  evaluating the convective operator.
+ *
+ *  OperatorType:
+ *  - To evaluate the nonlinear convective term (residual evaluation), use OperatorType::full.
+ *  - To evaluate the linearization of the nonlinear convective term, use OperatorType::homogeneous.
+ *  - To evaluate the linearly implicit convective term, use OperatorType::homogeneous for the
+ * "matrix-vector" product and OperatorType::inhomogeneous for the "rhs" contribution.
  */
 template<int dim, typename Number>
 inline DEAL_II_ALWAYS_INLINE //
   dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>
-  calculate_exterior_value_nonlinear(
+  calculate_exterior_value_convective(
     dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> const & u_m,
     unsigned int const                                              q,
     FaceIntegrator<dim, dim, Number> &                              integrator,
+    OperatorType const &                                            operator_type,
     BoundaryTypeU const &                                           boundary_type,
     TypeDirichletBCs const &                                        type_dirichlet_bc,
     dealii::types::boundary_id const                                boundary_id,
@@ -160,28 +181,31 @@ inline DEAL_II_ALWAYS_INLINE //
 {
   dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> u_p;
 
-  if(boundary_type == BoundaryTypeU::Dirichlet || boundary_type == BoundaryTypeU::DirichletCached)
+  if(boundary_type == BoundaryTypeU::Dirichlet or boundary_type == BoundaryTypeU::DirichletCached)
   {
     dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> g;
 
-    if(boundary_type == BoundaryTypeU::Dirichlet)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
-      auto bc       = boundary_descriptor->dirichlet_bc.find(boundary_id)->second;
-      auto q_points = integrator.quadrature_point(q);
+      if(boundary_type == BoundaryTypeU::Dirichlet)
+      {
+        auto bc       = boundary_descriptor->dirichlet_bc.find(boundary_id)->second;
+        auto q_points = integrator.quadrature_point(q);
 
-      g = FunctionEvaluator<1, dim, Number>::value(bc, q_points, time);
-    }
-    else if(boundary_type == BoundaryTypeU::DirichletCached)
-    {
-      auto bc = boundary_descriptor->dirichlet_cached_bc.find(boundary_id)->second;
-      g       = FunctionEvaluator<1, dim, Number>::value(bc,
-                                                   integrator.get_current_cell_index(),
-                                                   q,
-                                                   integrator.get_quadrature_index());
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("Not implemented."));
+        g = FunctionEvaluator<1, dim, Number>::value(*bc, q_points, time);
+      }
+      else if(boundary_type == BoundaryTypeU::DirichletCached)
+      {
+        auto bc = boundary_descriptor->get_dirichlet_cached_data();
+        g       = FunctionEvaluator<1, dim, Number>::value(*bc,
+                                                     integrator.get_current_cell_index(),
+                                                     q,
+                                                     integrator.get_quadrature_index());
+      }
+      else
+      {
+        AssertThrow(false, dealii::ExcMessage("Not implemented."));
+      }
     }
 
     if(type_dirichlet_bc == TypeDirichletBCs::Mirror)
@@ -229,9 +253,9 @@ inline DEAL_II_ALWAYS_INLINE //
   // element e⁺
   dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> value_p;
 
-  if(boundary_type == BoundaryTypeU::Dirichlet || boundary_type == BoundaryTypeU::DirichletCached)
+  if(boundary_type == BoundaryTypeU::Dirichlet or boundary_type == BoundaryTypeU::DirichletCached)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> g = integrator_bc.get_value(q);
 
@@ -292,7 +316,7 @@ inline DEAL_II_ALWAYS_INLINE //
   // element e⁻
   dealii::VectorizedArray<Number> value_m = dealii::make_vectorized_array<Number>(0.0);
 
-  if(operator_type == OperatorType::full || operator_type == OperatorType::homogeneous)
+  if(operator_type == OperatorType::full or operator_type == OperatorType::homogeneous)
   {
     value_m = integrator.get_value(q);
   }
@@ -326,13 +350,13 @@ inline DEAL_II_ALWAYS_INLINE //
 
   if(boundary_type == BoundaryTypeP::Dirichlet)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       auto bc       = boundary_descriptor->dirichlet_bc.find(boundary_id)->second;
       auto q_points = integrator.quadrature_point(q);
 
       dealii::VectorizedArray<Number> g =
-        FunctionEvaluator<0, dim, Number>::value(bc, q_points, time);
+        FunctionEvaluator<0, dim, Number>::value(*bc, q_points, time);
 
       value_p = -value_m + 2.0 * inverse_scaling_factor * g;
     }
@@ -371,7 +395,7 @@ inline DEAL_II_ALWAYS_INLINE //
 
   if(boundary_type == BoundaryTypeP::Dirichlet)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       dealii::VectorizedArray<Number> g = integrator_bc.get_value(q);
 
@@ -446,13 +470,13 @@ inline DEAL_II_ALWAYS_INLINE //
 {
   dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> normal_gradient_p;
 
-  if(boundary_type == BoundaryTypeU::Dirichlet || boundary_type == BoundaryTypeU::DirichletCached)
+  if(boundary_type == BoundaryTypeU::Dirichlet or boundary_type == BoundaryTypeU::DirichletCached)
   {
     normal_gradient_p = normal_gradient_m;
   }
   else if(boundary_type == BoundaryTypeU::Neumann)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       auto bc       = boundary_descriptor->neumann_bc.find(boundary_id)->second;
       auto q_points = integrator.quadrature_point(q);
@@ -460,12 +484,13 @@ inline DEAL_II_ALWAYS_INLINE //
       dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> h;
       if(variable_normal_vector == false)
       {
-        h = FunctionEvaluator<1, dim, Number>::value(bc, q_points, time);
+        h = FunctionEvaluator<1, dim, Number>::value(*bc, q_points, time);
       }
       else
       {
         auto normals_m = integrator.get_normal_vector(q);
-        h              = FunctionEvaluator<1, dim, Number>::value(bc, q_points, normals_m, time);
+        h              = FunctionEvaluator<1, dim, Number>::value(
+          *(std::dynamic_pointer_cast<FunctionWithNormal<dim>>(bc)), q_points, normals_m, time);
       }
 
       normal_gradient_p = -normal_gradient_m + 2.0 * h;

@@ -26,27 +26,27 @@
 
 namespace ExaDG
 {
-/*
- *  Class that provides a spherical manifold applied to one of the faces
- *  of a quadrilateral element.
- *  On the face subject to the spherical manifold intermediate points are
- *  inserted so that an equidistant distribution of points in terms of
- *  arclength is obtained.
- *  When refining the mesh, all child cells are subject to this "one-sided"
- *  spherical volume manifold.
- *  This manifold description is available for the two-dimensional case,
- *  and for the three-dimensional case with the restriction that the geometry
- *  has to be extruded in x3/z-direction.
+/**
+ * Class that provides a spherical manifold applied to one of the faces of a quadrilateral element.
+ * On the face subject to the spherical manifold intermediate points are inserted so that an
+ * equidistant distribution of points in terms of arclength is obtained. When refining the mesh, all
+ * child cells are subject to this "one-sided" spherical volume manifold. This manifold description
+ * is available for the two-dimensional case, and for the three-dimensional case with the
+ * restriction that the geometry has to be extruded in x3/z-direction.
  */
 template<int dim>
 class OneSidedCylindricalManifold : public dealii::ChartManifold<dim, dim, dim>
 {
 public:
-  OneSidedCylindricalManifold(typename dealii::Triangulation<dim>::cell_iterator const & cell_in,
+  OneSidedCylindricalManifold(dealii::Triangulation<dim> const &                         tria_in,
+                              typename dealii::Triangulation<dim>::cell_iterator const & cell_in,
                               unsigned int const                                         face_in,
                               dealii::Point<dim> const &                                 center_in)
-    : alpha(1.0), radius(1.0), cell(cell_in), face(face_in), center(center_in)
+    : alpha(1.0), radius(1.0), tria(tria_in), cell(cell_in), face(face_in), center(center_in)
   {
+    AssertThrow(tria.all_reference_cells_are_hyper_cube(),
+                dealii::ExcMessage("This class is only implemented for hypercube elements."));
+
     AssertThrow(face <= 3,
                 dealii::ExcMessage(
                   "One sided spherical manifold can only be applied to face f=0,1,2,3."));
@@ -200,9 +200,9 @@ public:
   {
     unsigned int index_1d = 0;
 
-    if(face == 0 || face == 2)
+    if(face == 0 or face == 2)
       index_1d = 0;
-    else if(face == 1 || face == 3)
+    else if(face == 1 or face == 3)
       index_1d = 1;
     else
       Assert(false, dealii::ExcMessage("Face ID is invalid."));
@@ -219,9 +219,9 @@ public:
   {
     unsigned int index_face = 0;
 
-    if(face == 0 || face == 1)
+    if(face == 0 or face == 1)
       index_face = 1;
-    else if(face == 2 || face == 3)
+    else if(face == 2 or face == 3)
       index_face = 0;
     else
       Assert(false, dealii::ExcMessage("Face ID is invalid."));
@@ -277,7 +277,7 @@ public:
     // Newton method to solve nonlinear pull_back operation
     unsigned int n_iter = 0, MAX_ITER = 100;
     double const TOL = 1.e-12;
-    while(residual.norm() > TOL && n_iter < MAX_ITER)
+    while(residual.norm() > TOL and n_iter < MAX_ITER)
     {
       // multiply by -1.0, i.e., shift residual to the rhs
       residual *= -1.0;
@@ -310,10 +310,10 @@ public:
            dealii::ExcMessage("Newton solver did not converge to given tolerance. "
                               "Maximum number of iterations exceeded."));
 
-    Assert(xi[0] >= 0.0 && xi[0] <= 1.0,
+    Assert(xi[0] >= 0.0 and xi[0] <= 1.0,
            dealii::ExcMessage("Pull back operation generated invalid xi[0] values."));
 
-    Assert(xi[1] >= 0.0 && xi[1] <= 1.0,
+    Assert(xi[1] >= 0.0 and xi[1] <= 1.0,
            dealii::ExcMessage("Pull back operation generated invalid xi[1] values."));
 
     return xi;
@@ -322,7 +322,7 @@ public:
   std::unique_ptr<dealii::Manifold<dim>>
   clone() const override
   {
-    return std::make_unique<OneSidedCylindricalManifold<dim>>(cell, face, center);
+    return std::make_unique<OneSidedCylindricalManifold<dim>>(tria, cell, face, center);
   }
 
 private:
@@ -333,33 +333,41 @@ private:
   double               alpha;
   double               radius;
 
+  dealii::Triangulation<dim> const &                 tria;
   typename dealii::Triangulation<dim>::cell_iterator cell;
   unsigned int                                       face;
   dealii::Point<dim>                                 center;
 };
 
-/*
- *  Class that provides a conical manifold applied to one of the faces
- *  of a hexahedral element.
- *  On the face subject to the conical manifold intermediate points are
- *  inserted so that an equidistant distribution of points in terms of
- *  arclength is obtained.
- *  When refining the mesh, all child cells are subject to this "one-sided"
- *  conical volume manifold.
- *  This manifold description is only available for the three-dimensional case
- *  where the axis of the cone has to be along the x3/z-direction.
+/**
+ * Class that provides a conical manifold applied to one of the faces of a hexahedral element. On
+ * the face subject to the conical manifold intermediate points are inserted so that an equidistant
+ * distribution of points in terms of arclength is obtained. When refining the mesh, all child cells
+ * are subject to this "one-sided" conical volume manifold. This manifold description is only
+ * available for the three-dimensional case where the axis of the cone has to be along the
+ * x3/z-direction.
  */
 template<int dim>
 class OneSidedConicalManifold : public dealii::ChartManifold<dim, dim, dim>
 {
 public:
-  OneSidedConicalManifold(typename dealii::Triangulation<dim>::cell_iterator const & cell_in,
+  OneSidedConicalManifold(dealii::Triangulation<dim> const &                         tria_in,
+                          typename dealii::Triangulation<dim>::cell_iterator const & cell_in,
                           unsigned int const                                         face_in,
                           dealii::Point<dim> const &                                 center_in,
                           double const                                               r_0_in,
                           double const                                               r_1_in)
-    : alpha(1.0), cell(cell_in), face(face_in), center(center_in), r_0(r_0_in), r_1(r_1_in)
+    : alpha(1.0),
+      tria(tria_in),
+      cell(cell_in),
+      face(face_in),
+      center(center_in),
+      r_0(r_0_in),
+      r_1(r_1_in)
   {
+    AssertThrow(tria.all_reference_cells_are_hyper_cube(),
+                dealii::ExcMessage("This class is only implemented for hypercube elements."));
+
     AssertThrow(dim == 3,
                 dealii::ExcMessage("OneSidedConicalManifold can only be used for 3D problems."));
 
@@ -520,9 +528,9 @@ public:
   {
     unsigned int index_1d = 0;
 
-    if(face == 0 || face == 2)
+    if(face == 0 or face == 2)
       index_1d = 0;
-    else if(face == 1 || face == 3)
+    else if(face == 1 or face == 3)
       index_1d = 1;
     else
       Assert(false, dealii::ExcMessage("Face ID is invalid."));
@@ -539,9 +547,9 @@ public:
   {
     unsigned int index_face = 0;
 
-    if(face == 0 || face == 1)
+    if(face == 0 or face == 1)
       index_face = 1;
-    else if(face == 2 || face == 3)
+    else if(face == 2 or face == 3)
       index_face = 0;
     else
       Assert(false, dealii::ExcMessage("Face ID is invalid."));
@@ -597,7 +605,7 @@ public:
     // Newton method to solve nonlinear pull_back operation
     unsigned int n_iter = 0, MAX_ITER = 100;
     double const TOL = 1.e-12;
-    while(residual.norm() > TOL && n_iter < MAX_ITER)
+    while(residual.norm() > TOL and n_iter < MAX_ITER)
     {
       // multiply by -1.0, i.e., shift residual to the rhs
       residual *= -1.0;
@@ -635,13 +643,13 @@ public:
            dealii::ExcMessage("Newton solver did not converge to given tolerance. "
                               "Maximum number of iterations exceeded."));
 
-    Assert(xi[0] >= 0.0 && xi[0] <= 1.0,
+    Assert(xi[0] >= 0.0 and xi[0] <= 1.0,
            dealii::ExcMessage("Pull back operation generated invalid xi[0] values."));
 
-    Assert(xi[1] >= 0.0 && xi[1] <= 1.0,
+    Assert(xi[1] >= 0.0 and xi[1] <= 1.0,
            dealii::ExcMessage("Pull back operation generated invalid xi[1] values."));
 
-    Assert(xi[2] >= 0.0 && xi[2] <= 1.0,
+    Assert(xi[2] >= 0.0 and xi[2] <= 1.0,
            dealii::ExcMessage("Pull back operation generated invalid xi[2] values."));
 
     return xi;
@@ -650,7 +658,7 @@ public:
   std::unique_ptr<dealii::Manifold<dim>>
   clone() const override
   {
-    return std::make_unique<OneSidedConicalManifold<dim>>(cell, face, center, r_0, r_1);
+    return std::make_unique<OneSidedConicalManifold<dim>>(tria, cell, face, center, r_0, r_1);
   }
 
 
@@ -661,6 +669,7 @@ private:
   dealii::Tensor<1, 2> normal;
   double               alpha;
 
+  dealii::Triangulation<dim> const &                 tria;
   typename dealii::Triangulation<dim>::cell_iterator cell;
   unsigned int                                       face;
 
@@ -671,10 +680,9 @@ private:
 };
 
 
-/*
- *  Own implementation of cylindrical manifold
- *  with an equidistant distribution of nodes along the
- *  cylinder surface.
+/**
+ * Own implementation of cylindrical manifold with an equidistant distribution of nodes along the
+ * cylinder surface.
  */
 template<int dim, int spacedim = dim>
 class MyCylindricalManifold : public dealii::ChartManifold<dim, spacedim, spacedim>
@@ -708,7 +716,7 @@ public:
     dealii::Point<spacedim> space_point;
     if(radius > 1e-10)
     {
-      AssertThrow(spacedim == 2 || spacedim == 3,
+      AssertThrow(spacedim == 2 or spacedim == 3,
                   dealii::ExcMessage("Only implemented for 2D and 3D case."));
 
       space_point[0] = radius * cos(theta);

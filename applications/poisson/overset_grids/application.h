@@ -25,8 +25,10 @@ namespace ExaDG
 {
 namespace Poisson
 {
+namespace OversetGrids
+{
 template<int dim, int n_components, typename Number>
-class Domain1 : public ApplicationBase<dim, n_components, Number>
+class Domain1 : public Domain<dim, n_components, Number>
 {
 private:
   static unsigned int const rank =
@@ -34,7 +36,7 @@ private:
 
 public:
   Domain1(std::string input_file, MPI_Comm const & comm)
-    : ApplicationBase<dim, n_components, Number>(input_file, comm)
+    : Domain<dim, n_components, Number>(input_file, comm)
   {
   }
 
@@ -47,13 +49,15 @@ public:
     p.right_hand_side = true;
 
     // SPATIAL DISCRETIZATION
-    p.grid.triangulation_type = TriangulationType::Distributed;
-    p.grid.mapping_degree     = 3;
-    p.spatial_discretization  = SpatialDiscretization::DG;
-    p.IP_factor               = 1.0e0;
+    p.grid.triangulation_type     = TriangulationType::Distributed;
+    p.mapping_degree              = 3;
+    p.mapping_degree_coarse_grids = p.mapping_degree;
+
+    p.spatial_discretization = SpatialDiscretization::DG;
+    p.IP_factor              = 1.0e0;
 
     // SOLVER
-    p.solver                      = Solver::CG;
+    p.solver                      = LinearSolver::CG;
     p.solver_data.abs_tol         = 1.e-20;
     p.solver_data.rel_tol         = 1.e-10;
     p.solver_data.max_iter        = 1e4;
@@ -72,17 +76,45 @@ public:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    double const       right = 1.0;
-    dealii::Point<dim> p1, p2;
-    p1[0] = 0.0;
-    p1[1] = 0.5;
-    p2[0] = right;
-    p2[1] = 1.5;
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation, {3, 3}, p1, p2);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        double const       right = 1.0;
+        dealii::Point<dim> p1, p2;
+        p1[0] = 0.0;
+        p1[1] = 0.5;
+        p2[0] = right;
+        p2[1] = 1.5;
+
+        dealii::GridGenerator::subdivided_hyper_rectangle(tria, {3, 3}, p1, p2);
+
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -91,16 +123,11 @@ public:
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
       pair;
 
-    typedef
-      typename std::pair<dealii::types::boundary_id, std::shared_ptr<FunctionCached<rank, dim>>>
-        pair_cached;
-
     this->boundary_descriptor->dirichlet_bc.insert(
       pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
 
     this->boundary_descriptor->dirichlet_cached_bc.insert(
-      pair_cached(std::numeric_limits<dealii::types::boundary_id>::max() - 1,
-                  new FunctionCached<rank, dim>()));
+      std::numeric_limits<dealii::types::boundary_id>::max() - 1);
   }
 
   void
@@ -114,7 +141,7 @@ public:
   }
 
   std::shared_ptr<PostProcessorBase<dim, n_components, Number>>
-  create_postprocessor() final
+  create_postprocessor() const final
   {
     PostProcessorData<dim> pp_data;
     pp_data.output_data.time_control_data.is_active = this->output_parameters.write;
@@ -132,7 +159,7 @@ public:
 
 
 template<int dim, int n_components, typename Number>
-class Domain2 : public ApplicationBase<dim, n_components, Number>
+class Domain2 : public Domain<dim, n_components, Number>
 {
 private:
   static unsigned int const rank =
@@ -140,7 +167,7 @@ private:
 
 public:
   Domain2(std::string input_file, MPI_Comm const & comm)
-    : ApplicationBase<dim, n_components, Number>(input_file, comm)
+    : Domain<dim, n_components, Number>(input_file, comm)
   {
   }
 
@@ -154,13 +181,15 @@ private:
     p.right_hand_side = true;
 
     // SPATIAL DISCRETIZATION
-    p.grid.triangulation_type = TriangulationType::Distributed;
-    p.grid.mapping_degree     = 3;
-    p.spatial_discretization  = SpatialDiscretization::DG;
-    p.IP_factor               = 1.0e0;
+    p.grid.triangulation_type     = TriangulationType::Distributed;
+    p.mapping_degree              = 3;
+    p.mapping_degree_coarse_grids = p.mapping_degree;
+
+    p.spatial_discretization = SpatialDiscretization::DG;
+    p.IP_factor              = 1.0e0;
 
     // SOLVER
-    p.solver                      = Solver::CG;
+    p.solver                      = LinearSolver::CG;
     p.solver_data.abs_tol         = 1.e-20;
     p.solver_data.rel_tol         = 1.e-10;
     p.solver_data.max_iter        = 1e4;
@@ -179,17 +208,44 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    double const       left = 0.5;
-    dealii::Point<dim> p1, p2;
-    p1[0] = left;
-    p1[1] = 0.0;
-    p2[0] = left + 1.0;
-    p2[1] = 1.0;
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation, {2, 2}, p1, p2);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        double const       left = 0.5;
+        dealii::Point<dim> p1, p2;
+        p1[0] = left;
+        p1[1] = 0.0;
+        p2[0] = left + 1.0;
+        p2[1] = 1.0;
+        dealii::GridGenerator::subdivided_hyper_rectangle(tria, {2, 2}, p1, p2);
+
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -198,15 +254,10 @@ private:
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
       pair;
 
-    typedef
-      typename std::pair<dealii::types::boundary_id, std::shared_ptr<FunctionCached<rank, dim>>>
-        pair_cached;
-
     this->boundary_descriptor->dirichlet_bc.insert(
       pair(0, new dealii::Functions::ZeroFunction<dim>(n_components)));
     this->boundary_descriptor->dirichlet_cached_bc.insert(
-      pair_cached(std::numeric_limits<dealii::types::boundary_id>::max() - 1,
-                  new FunctionCached<rank, dim>()));
+      std::numeric_limits<dealii::types::boundary_id>::max() - 1);
   }
 
   void
@@ -220,7 +271,7 @@ private:
   }
 
   std::shared_ptr<PostProcessorBase<dim, n_components, Number>>
-  create_postprocessor() final
+  create_postprocessor() const final
   {
     PostProcessorData<dim> pp_data;
     pp_data.output_data.time_control_data.is_active = this->output_parameters.write;
@@ -237,19 +288,19 @@ private:
 };
 
 template<int dim, int n_components, typename Number>
-class Application : public ApplicationOversetGridsBase<dim, n_components, Number>
+class Application : public ApplicationBase<dim, n_components, Number>
 {
 public:
   Application(std::string input_file, MPI_Comm const & comm)
-    : ApplicationOversetGridsBase<dim, n_components, Number>(input_file, comm)
+    : ApplicationBase<dim, n_components, Number>(input_file, comm)
   {
     this->domain1 = std::make_shared<Domain1<dim, n_components, Number>>(input_file, comm);
     this->domain2 = std::make_shared<Domain2<dim, n_components, Number>>(input_file, comm);
   }
 };
 
+} // namespace OversetGrids
 } // namespace Poisson
-
 } // namespace ExaDG
 
 #include <exadg/poisson/overset_grids/user_interface/implement_get_application.h>

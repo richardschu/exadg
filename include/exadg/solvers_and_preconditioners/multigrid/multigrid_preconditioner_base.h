@@ -25,16 +25,18 @@
 // deal.II
 #include <deal.II/base/mg_level_object.h>
 #include <deal.II/distributed/tria.h>
+#include <deal.II/fe/mapping.h>
 #include <deal.II/multigrid/mg_constrained_dofs.h>
 
 // ExaDG
 #include <exadg/grid/grid.h>
 #include <exadg/matrix_free/matrix_free_data.h>
 #include <exadg/operators/multigrid_operator_base.h>
+#include <exadg/solvers_and_preconditioners/multigrid/coarse_grid_solvers.h>
 #include <exadg/solvers_and_preconditioners/multigrid/levels_hybrid_multigrid.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
 #include <exadg/solvers_and_preconditioners/multigrid/smoothers/smoother_base.h>
-#include <exadg/solvers_and_preconditioners/multigrid/transfers/mg_transfer.h>
+#include <exadg/solvers_and_preconditioners/multigrid/transfer.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
 
 // forward declarations
@@ -55,14 +57,16 @@ class MGCoarseGridBase;
 
 namespace ExaDG
 {
-template<int dim, typename Number>
+template<int dim, typename Number, typename MultigridNumber_ = float>
 class MultigridPreconditionerBase : public PreconditionerBase<Number>
 {
 public:
-  typedef float MultigridNumber;
+  typedef MultigridNumber_ MultigridNumber;
 
 protected:
-  typedef std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> Map;
+  typedef std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> Map_DBC;
+  typedef std::map<dealii::types::boundary_id, dealii::ComponentMask> Map_DBC_ComponentMask;
+
   typedef std::vector<
     dealii::GridTools::PeriodicFacePair<typename dealii::Triangulation<dim>::cell_iterator>>
     PeriodicFacePairs;
@@ -94,16 +98,21 @@ public:
    * Initialization function.
    */
   void
-  initialize(
-    MultigridData const &                                                  data,
-    MultigridVariant const &                                               multigrid_variant,
-    dealii::Triangulation<dim> const *                                     tria,
-    std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-    dealii::FiniteElement<dim> const &                                     fe,
-    std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-    bool const                                                             operator_is_singular,
-    Map const &                                                            dirichlet_bc,
-    PeriodicFacePairs const &                                              periodic_face_pairs);
+  initialize(MultigridData const &                                 data,
+             std::shared_ptr<Grid<dim> const>                      grid,
+             std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+             dealii::FiniteElement<dim> const &                    fe,
+             bool const                                            operator_is_singular,
+             Map_DBC const &                                       dirichlet_bc,
+             Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask,
+             bool const                                            initialize_preconditioners);
+
+  /*
+   * Update of multigrid preconditioner including operators, smoothers, etc. (e.g. for problems
+   * with time-dependent coefficients).
+   */
+  void
+  update() override;
 
   /*
    * This function applies the multigrid preconditioner dst = P^{-1} src.
@@ -124,13 +133,6 @@ public:
   virtual void
   apply_smoother_on_fine_level(VectorTypeMG & dst, VectorTypeMG const & src) const;
 
-  /*
-   * Update of multigrid preconditioner including operators, smoothers, etc. (e.g. for problems
-   * with time-dependent coefficients).
-   */
-  void
-  update() override;
-
   std::shared_ptr<TimerTree>
   get_timings() const override;
 
@@ -146,52 +148,45 @@ protected:
    * This function initializes the matrix-free objects for all multigrid levels.
    */
   virtual void
-  initialize_matrix_free();
+  initialize_matrix_free_objects();
 
   /*
    * This function updates the matrix-free objects for all multigrid levels, which
    * is necessary if the domain changes over time.
    */
   void
-  update_matrix_free();
+  update_matrix_free_objects();
 
-  /*
-   * This function updates the smoother for all multigrid levels.
+  /**
+   * This function updates the smoother for all smoothing levels.
    * The prerequisite to call this function is that the multigrid operators have been updated.
    */
   void
   update_smoothers();
 
-  /*
-   * Update functions that have to be called/implemented by derived classes.
+  /**
+   * This function updates the coarse-grid solver.
+   * The prerequisite to call this function is that the coarse-grid operator has been updated.
    */
-  virtual void
-  update_smoother(unsigned int level);
-
-  virtual void
-  update_coarse_solver(bool const operator_is_singular);
+  void
+  update_coarse_solver();
 
   /*
    * Dof-handlers and constraints.
    */
   virtual void
-  initialize_dof_handler_and_constraints(bool                               is_singular,
-                                         PeriodicFacePairs const &          periodic_face_pairs,
-                                         dealii::FiniteElement<dim> const & fe,
-                                         dealii::Triangulation<dim> const * tria,
-                                         Map const &                        dirichlet_bc);
+  initialize_dof_handler_and_constraints(bool                          is_singular,
+                                         unsigned int const            n_components,
+                                         Map_DBC const &               dirichlet_bc,
+                                         Map_DBC_ComponentMask const & dirichlet_bc_component_mask);
 
   void
   do_initialize_dof_handler_and_constraints(
-    bool                                                                    is_singular,
-    PeriodicFacePairs const &                                               periodic_face_pairs,
-    dealii::FiniteElement<dim> const &                                      fe,
-    dealii::Triangulation<dim> const *                                      tria,
-    Map const &                                                             dirichlet_bc,
-    std::vector<MGLevelInfo> &                                              level_info,
-    std::vector<MGDoFHandlerIdentifier> &                                   p_levels,
+    bool                          is_singular,
+    unsigned int const            n_components,
+    Map_DBC const &               dirichlet_bc,
+    Map_DBC_ComponentMask const & dirichlet_bc_component_mask,
     dealii::MGLevelObject<std::shared_ptr<dealii::DoFHandler<dim> const>> & dofhandlers,
-    dealii::MGLevelObject<std::shared_ptr<dealii::MGConstrainedDoFs>> &     constrained_dofs,
     dealii::MGLevelObject<std::shared_ptr<dealii::AffineConstraints<MultigridNumber>>> &
       constraints);
 
@@ -203,37 +198,81 @@ protected:
 
   void
   do_initialize_transfer_operators(
-    std::shared_ptr<MGTransfer<VectorTypeMG>> &                         transfers,
-    dealii::MGLevelObject<std::shared_ptr<dealii::MGConstrainedDoFs>> & constrained_dofs,
-    unsigned int const                                                  dof_index);
+    std::shared_ptr<MultigridTransfer<dim, MultigridNumber, VectorTypeMG>> & transfers,
+    unsigned int const                                                       dof_index);
 
-  dealii::MGLevelObject<std::shared_ptr<dealii::DoFHandler<dim> const>> dof_handlers;
-  dealii::MGLevelObject<std::shared_ptr<dealii::MGConstrainedDoFs>>     constrained_dofs;
+  /**
+   * Returns the number of levels.
+   *
+   * The number of levels includes the coarse level and the finer smoothing levels, i.e.
+   * n_levels = 1 if the multigrid preconditioner is a coarse-grid solve on the coarse level only.
+   */
+  unsigned int
+  get_number_of_levels() const;
+
+  /**
+   * This is a generic function allowing to loop over all multigrid levels (including the coarsest
+   * level). The operation to be performed on each level is passed as a lambda with argument level.
+   */
+  void
+  for_all_levels(std::function<void(unsigned int const)> const & function_on_level)
+  {
+    for(unsigned int level = 0; level < this->get_number_of_levels(); ++level)
+      function_on_level(level);
+  }
+
+  /**
+   * This is a generic function allowing to loop over all smoothing levels (excluding the coarsest
+   * level). The operation to be performed on each level is passed as a lambda with argument level.
+   */
+  void
+  for_all_smoothing_levels(std::function<void(unsigned int const)> const & function_on_level)
+  {
+    // level l = 0 is the coarse problem where we do not have a smoother,
+    // so we skip the coarsest level
+    for(unsigned int level = 1; level < this->get_number_of_levels(); ++level)
+      function_on_level(level);
+  }
+
+  /**
+   * This is a generic function allowing to successively transfer information from the fine level to
+   * all coarser multigrid levels. The operation to be performed for a transfer between two
+   * successive levels is passed as a lambda with fine_level as the first argument and coarse_level
+   * as the second argument.
+   */
+  void
+  transfer_from_fine_to_coarse_levels(
+    std::function<void(unsigned int const, unsigned int const)> const & levelwise_transfer)
+  {
+    for(unsigned int fine_level = this->get_number_of_levels() - 1; fine_level > 0; --fine_level)
+      levelwise_transfer(fine_level, fine_level - 1);
+  }
+
+  // Pointer to grid class.
+  std::shared_ptr<Grid<dim> const> grid;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> multigrid_mappings;
+
+  dealii::MGLevelObject<std::shared_ptr<dealii::DoFHandler<dim> const>>              dof_handlers;
   dealii::MGLevelObject<std::shared_ptr<dealii::AffineConstraints<MultigridNumber>>> constraints;
+
   dealii::MGLevelObject<std::shared_ptr<MatrixFreeData<dim, MultigridNumber>>>
     matrix_free_data_objects;
   dealii::MGLevelObject<std::shared_ptr<dealii::MatrixFree<dim, MultigridNumber>>>
-                                                   matrix_free_objects;
-  dealii::MGLevelObject<std::shared_ptr<Operator>> operators;
-  std::shared_ptr<MGTransfer<VectorTypeMG>>        transfers;
+    matrix_free_objects;
 
-  std::vector<MGDoFHandlerIdentifier> p_levels;
-  std::vector<MGLevelInfo>            level_info;
-  unsigned int                        n_levels;
-  unsigned int                        coarse_level;
-  unsigned int                        fine_level;
+  dealii::MGLevelObject<std::shared_ptr<Operator>> operators;
+
+  std::shared_ptr<MultigridTransfer<dim, MultigridNumber, VectorTypeMG>> transfers;
+
+  std::vector<MGLevelInfo> level_info;
 
 private:
-  /*
-   * Multigrid levels (i.e. coarsening strategy, h-/p-/hp-/ph-MG).
+  /**
+   * Initializes multigrid levels according to coarsening strategy (h-/p-/hp-/ph-MG).
    */
   void
-  initialize_levels(dealii::Triangulation<dim> const * tria,
-                    unsigned int const                 degree,
-                    bool const                         is_dg);
-
-  void
-  check_levels(std::vector<MGLevelInfo> const & level_info);
+  initialize_levels(unsigned int const degree, bool const is_dg);
 
   /*
    * Returns the correct mapping depending on the multigrid transfer type and the current h-level.
@@ -241,21 +280,11 @@ private:
   dealii::Mapping<dim> const &
   get_mapping(unsigned int const h_level) const;
 
-  /*
-   * Constrained dofs. This function is required for MGTransfer_dealii::MGLevelObject.
+  /**
+   * Returns the number of h-levels.
    */
-  virtual void
-  initialize_constrained_dofs(dealii::DoFHandler<dim> const & dof_handler,
-                              dealii::MGConstrainedDoFs &     constrained_dofs,
-                              Map const &                     dirichlet_bc);
-
-  /*
-   * Constrained dofs. This function is required for MGTransferGlobalCoarsening.
-   */
-  void
-  initialize_affine_constraints(dealii::DoFHandler<dim> const &              dof_handler,
-                                dealii::AffineConstraints<MultigridNumber> & affine_contraints,
-                                Map const &                                  dirichlet_bc);
+  unsigned int
+  get_number_of_h_levels() const;
 
   /*
    * Data structures needed for matrix-free operator evaluation.
@@ -282,27 +311,16 @@ private:
    * Smoother.
    */
   void
-  initialize_smoothers();
+  initialize_smoothers(bool const initialize_preconditioner);
 
   void
-  initialize_smoother(Operator & matrix, unsigned int level);
-
-  void
-  initialize_chebyshev_smoother_point_jacobi(Operator & matrix, unsigned int const level);
-
-  void
-  initialize_chebyshev_smoother_block_jacobi(Operator & matrix, unsigned int const level);
+  initialize_smoother(Operator & matrix, unsigned int level, bool const initialize_preconditioner);
 
   /*
    * Coarse grid solver.
    */
   void
-  initialize_coarse_solver(bool const operator_is_singular);
-
-  void
-  initialize_chebyshev_smoother_coarse_grid(Operator &         matrix,
-                                            SolverData const & solver_data,
-                                            bool const         operator_is_singular);
+  initialize_coarse_solver(bool const operator_is_singular, bool const initialize_preconditioners);
 
   /*
    * Initialization of actual multigrid algorithm.
@@ -314,28 +332,13 @@ private:
 
   MultigridData data;
 
-  MultigridVariant multigrid_variant;
-
-  dealii::Triangulation<dim> const * triangulation;
-
-  // Only relevant for global coarsening, where this vector contains coarse level triangulations,
-  // and the fine level triangulation as the last element of the vector.
-  std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> coarse_triangulations;
-
-  // In case of global coarsening, this is the mapping associated to the fine level triangulation.
-  std::shared_ptr<dealii::Mapping<dim> const> mapping;
-
-  // Only relevant for global coarsening,where this vector contains coarse level mappings,
-  // and the fine level mapping as the last element of the vector.
-  std::vector<std::shared_ptr<MappingDoFVector<dim, Number>>> coarse_grid_mappings;
-
-  // Only relevant for local-smoothing-multigrid and in case that a mapping of type MappingQCache is
-  // used.
-  std::shared_ptr<MappingDoFVector<dim, Number>> mapping_dof_vector;
+  // TODO try to avoid this private member variable by extracting this information from level_info
+  // when needed.
+  std::vector<MGDoFHandlerIdentifier> p_levels;
 
   dealii::MGLevelObject<std::shared_ptr<Smoother>> smoothers;
 
-  std::shared_ptr<dealii::MGCoarseGridBase<VectorTypeMG>> coarse_grid_solver;
+  std::shared_ptr<CoarseGridSolverBase<Operator>> coarse_grid_solver;
 
   std::shared_ptr<MultigridAlgorithm<VectorTypeMG, Operator, Smoother>> multigrid_algorithm;
 };

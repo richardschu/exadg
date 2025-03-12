@@ -25,7 +25,9 @@
 
 // ExaDG
 #include <exadg/convection_diffusion/preconditioners/multigrid_preconditioner.h>
+#include <exadg/operators/finite_element.h>
 #include <exadg/operators/mapping_flags.h>
+#include <exadg/operators/quadrature.h>
 
 namespace ExaDG
 {
@@ -34,6 +36,7 @@ namespace ConvDiff
 template<int dim, typename Number>
 MultigridPreconditioner<dim, Number>::MultigridPreconditioner(MPI_Comm const & mpi_comm)
   : Base(mpi_comm),
+    degree_velocity(1),
     pde_operator(nullptr),
     mg_operator_type(MultigridOperatorType::Undefined),
     mesh_is_moving(false)
@@ -43,18 +46,18 @@ MultigridPreconditioner<dim, Number>::MultigridPreconditioner(MPI_Comm const & m
 template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::initialize(
-  MultigridData const &                                                  mg_data,
-  MultigridVariant const &                                               multigrid_variant,
-  dealii::Triangulation<dim> const *                                     tria,
-  std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-  dealii::FiniteElement<dim> const &                                     fe,
-  std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-  PDEOperator const &                                                    pde_operator,
-  MultigridOperatorType const &                                          mg_operator_type,
-  bool const                                                             mesh_is_moving,
-  Map const &                                                            dirichlet_bc,
-  PeriodicFacePairs const &                                              periodic_face_pairs)
+  MultigridData const &                                 mg_data,
+  std::shared_ptr<Grid<dim> const>                      grid,
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+  dealii::FiniteElement<dim> const &                    fe,
+  PDEOperator const &                                   pde_operator,
+  MultigridOperatorType const &                         mg_operator_type,
+  bool const                                            mesh_is_moving,
+  Map_DBC const &                                       dirichlet_bc,
+  Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask)
 {
+  this->degree_velocity = fe.degree;
+
   this->pde_operator     = &pde_operator;
   this->mg_operator_type = mg_operator_type;
   this->mesh_is_moving   = mesh_is_moving;
@@ -93,32 +96,80 @@ MultigridPreconditioner<dim, Number>::initialize(
   }
 
   Base::initialize(mg_data,
-                   multigrid_variant,
-                   tria,
-                   coarse_triangulations,
+                   grid,
+                   multigrid_mappings,
                    fe,
-                   mapping,
                    data.operator_is_singular,
                    dirichlet_bc,
-                   periodic_face_pairs);
+                   dirichlet_bc_component_mask,
+                   false /* initialize_preconditioners */);
 }
 
 template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::update()
 {
+  // Update matrix-free objects and operators
   if(mesh_is_moving)
   {
     this->initialize_mapping();
 
-    this->update_matrix_free();
+    this->update_matrix_free_objects();
+
+    this->for_all_levels(
+      [&](unsigned int const level) { this->get_operator(level)->update_after_grid_motion(); });
   }
 
-  update_operators();
+  this->for_all_levels([&](unsigned int const level) {
+    // the velocity field of the convective term is a function of the time
+    this->get_operator(level)->set_time(pde_operator->get_time());
+    // in case of adaptive time stepping, the scaling factor of the time derivative term changes
+    // over time
+    this->get_operator(level)->set_scaling_factor_mass_operator(
+      pde_operator->get_scaling_factor_mass_operator());
+  });
 
-  update_smoothers();
+  if(data.convective_problem and
+     data.convective_kernel_data.velocity_type == TypeVelocityField::DoFVector)
+  {
+    // If necessary, interpolate fine level velocity field to coarser levels and set velocity for
+    // all operators
 
-  this->update_coarse_solver(data.operator_is_singular);
+    VectorType const & velocity = pde_operator->get_velocity();
+
+    // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
+    VectorTypeMG         vector_multigrid_type_copy;
+    VectorTypeMG const * vector_multigrid_type_ptr;
+    if(std::is_same<MultigridNumber, Number>::value)
+    {
+      vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&velocity);
+    }
+    else
+    {
+      vector_multigrid_type_copy = velocity;
+      vector_multigrid_type_ptr  = &vector_multigrid_type_copy;
+    }
+
+    // copy velocity to finest level
+    this->get_operator(this->get_number_of_levels() - 1)
+      ->set_velocity_copy(*vector_multigrid_type_ptr);
+
+    // interpolate velocity from fine to coarse level
+    this->transfer_from_fine_to_coarse_levels(
+      [&](unsigned int const fine_level, unsigned int const coarse_level) {
+        auto const & vector_fine_level   = this->get_operator(fine_level)->get_velocity();
+        auto         vector_coarse_level = this->get_operator(coarse_level)->get_velocity();
+        transfers_velocity->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+        this->get_operator(coarse_level)->set_velocity_copy(vector_coarse_level);
+      });
+  }
+
+  // Once the operators are updated, the update of smoothers and the coarse grid solver is generic
+  // functionality implemented in the base class.
+  this->update_smoothers();
+  this->update_coarse_solver();
+
+  this->update_needed = false;
 }
 
 template<int dim, typename Number>
@@ -126,9 +177,9 @@ void
 MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
   MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
   unsigned int const                     level,
-  unsigned int const                     h_level)
+  unsigned int const                     dealii_tria_level)
 {
-  matrix_free_data.data.mg_level = h_level;
+  matrix_free_data.data.mg_level = dealii_tria_level;
 
   MappingFlags flags;
   if(data.unsteady_problem)
@@ -141,17 +192,19 @@ MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
       Operators::DiffusiveKernel<dim, Number>::get_mapping_flags(this->level_info[level].is_dg(),
                                                                  this->level_info[level].is_dg()));
 
-  if(data.use_cell_based_loops && this->level_info[level].is_dg())
+  if(data.use_cell_based_loops and this->level_info[level].is_dg())
   {
-    auto tria = dynamic_cast<dealii::parallel::distributed::Triangulation<dim> const *>(
-      &this->dof_handlers[level]->get_triangulation());
-    Categorization::do_cell_based_loops(*tria, matrix_free_data.data, h_level);
+    auto tria = &this->dof_handlers[level]->get_triangulation();
+    Categorization::do_cell_based_loops(*tria, matrix_free_data.data, dealii_tria_level);
   }
 
   matrix_free_data.insert_dof_handler(&(*this->dof_handlers[level]), "std_dof_handler");
   matrix_free_data.insert_constraint(&(*this->constraints[level]), "std_dof_handler");
-  matrix_free_data.insert_quadrature(dealii::QGauss<1>(this->level_info[level].degree() + 1),
-                                     "std_quadrature");
+
+  ElementType const element_type = get_element_type(*this->grid->triangulation);
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(element_type, this->level_info[level].degree() + 1);
+  matrix_free_data.insert_quadrature(*quadrature, "std_quadrature");
 
   if(data.convective_problem)
   {
@@ -181,7 +234,7 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
 
   // set dof and quad indices after matrix_free_data has been filled
   data.dof_index = this->matrix_free_data_objects[level]->get_dof_index("std_dof_handler");
-  if(data.convective_problem &&
+  if(data.convective_problem and
      data.convective_kernel_data.velocity_type == TypeVelocityField::DoFVector)
   {
     data.convective_kernel_data.dof_index_velocity =
@@ -207,29 +260,29 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
 template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::initialize_dof_handler_and_constraints(
-  bool const                         operator_is_singular,
-  PeriodicFacePairs const &          periodic_face_pairs,
-  dealii::FiniteElement<dim> const & fe,
-  dealii::Triangulation<dim> const * tria,
-  Map const &                        dirichlet_bc)
+  bool const                    operator_is_singular,
+  unsigned int const            n_components,
+  Map_DBC const &               dirichlet_bc,
+  Map_DBC_ComponentMask const & dirichlet_bc_component_mask)
 {
-  Base::initialize_dof_handler_and_constraints(
-    operator_is_singular, periodic_face_pairs, fe, tria, dirichlet_bc);
+  Base::initialize_dof_handler_and_constraints(operator_is_singular,
+                                               n_components,
+                                               dirichlet_bc,
+                                               dirichlet_bc_component_mask);
 
-  if(data.convective_problem &&
+  if(data.convective_problem and
      data.convective_kernel_data.velocity_type == TypeVelocityField::DoFVector)
   {
-    dealii::FESystem<dim> fe_velocity(dealii::FE_DGQ<dim>(fe.degree), dim);
-    Map                   dirichlet_bc_velocity;
+    std::shared_ptr<dealii::FiniteElement<dim>> fe_velocity = create_finite_element<dim>(
+      get_element_type(*this->grid->triangulation), true, dim, degree_velocity);
+
+    Map_DBC               dirichlet_bc_velocity;
+    Map_DBC_ComponentMask dirichlet_bc_velocity_component_mask;
     this->do_initialize_dof_handler_and_constraints(false,
-                                                    periodic_face_pairs,
-                                                    fe_velocity,
-                                                    tria,
+                                                    fe_velocity->n_components(),
                                                     dirichlet_bc_velocity,
-                                                    this->level_info,
-                                                    this->p_levels,
+                                                    dirichlet_bc_velocity_component_mask,
                                                     dof_handlers_velocity,
-                                                    constrained_dofs_velocity,
                                                     constraints_velocity);
   }
 }
@@ -240,101 +293,12 @@ MultigridPreconditioner<dim, Number>::initialize_transfer_operators()
 {
   Base::initialize_transfer_operators();
 
-  if(data.convective_problem &&
+  if(data.convective_problem and
      data.convective_kernel_data.velocity_type == TypeVelocityField::DoFVector)
   {
     unsigned int const dof_index = 1;
-    this->do_initialize_transfer_operators(transfers_velocity,
-                                           constrained_dofs_velocity,
-                                           dof_index);
+    this->do_initialize_transfer_operators(transfers_velocity, dof_index);
   }
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::update_operators()
-{
-  if(mesh_is_moving)
-  {
-    update_operators_after_mesh_movement();
-  }
-
-  set_time(pde_operator->get_time());
-  set_scaling_factor_mass_operator(pde_operator->get_scaling_factor_mass_operator());
-
-  if(data.convective_problem &&
-     data.convective_kernel_data.velocity_type == TypeVelocityField::DoFVector)
-  {
-    VectorType const & velocity = pde_operator->get_velocity();
-
-    // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
-    VectorTypeMG         vector_multigrid_type_copy;
-    VectorTypeMG const * vector_multigrid_type_ptr;
-    if(std::is_same<MultigridNumber, Number>::value)
-    {
-      vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&velocity);
-    }
-    else
-    {
-      vector_multigrid_type_copy = velocity;
-      vector_multigrid_type_ptr  = &vector_multigrid_type_copy;
-    }
-
-    set_velocity(*vector_multigrid_type_ptr);
-  }
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::set_velocity(VectorTypeMG const & velocity)
-{
-  // copy velocity to finest level
-  this->get_operator(this->fine_level)->set_velocity_copy(velocity);
-
-  // interpolate velocity from fine to coarse level
-  for(unsigned int level = this->fine_level; level > this->coarse_level; --level)
-  {
-    auto & vector_fine_level   = this->get_operator(level - 0)->get_velocity();
-    auto   vector_coarse_level = this->get_operator(level - 1)->get_velocity();
-    transfers_velocity->interpolate(level, vector_coarse_level, vector_fine_level);
-    this->get_operator(level - 1)->set_velocity_copy(vector_coarse_level);
-  }
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::update_operators_after_mesh_movement()
-{
-  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
-  {
-    this->get_operator(level)->update_after_grid_motion();
-  }
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::set_time(double const & time)
-{
-  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
-    this->get_operator(level)->set_time(time);
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::set_scaling_factor_mass_operator(
-  double const & scaling_factor)
-{
-  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
-    this->get_operator(level)->set_scaling_factor_mass_operator(scaling_factor);
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::update_smoothers()
-{
-  // Skip coarsest level
-  for(unsigned int level = this->coarse_level + 1; level <= this->fine_level; ++level)
-    this->update_smoother(level);
 }
 
 template<int dim, typename Number>

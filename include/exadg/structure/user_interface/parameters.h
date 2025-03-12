@@ -23,8 +23,8 @@
 #define INCLUDE_EXADG_STRUCTURE_USER_INTERFACE_INPUT_PARAMETERS_H_
 
 // ExaDG
-#include <exadg/grid/enum_types.h>
 #include <exadg/grid/grid_data.h>
+#include <exadg/operators/enum_types.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
 #include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
 #include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
@@ -130,6 +130,10 @@ public:
   // density rho_0 in initial configuration (only relevant for unsteady problems)
   double density;
 
+  // linear weak damping coefficient (mass proportional) for unsteady problems
+  bool   weak_damping_active;
+  double weak_damping_coefficient;
+
   /**************************************************************************************/
   /*                                                                                    */
   /*                             TEMPORAL DISCRETIZATION                                */
@@ -172,8 +176,20 @@ public:
   // Grid data
   GridData grid;
 
+  // Mapping
+  unsigned int mapping_degree;
+
+  // mapping degree for coarser grids in h-multigrid
+  unsigned int mapping_degree_coarse_grids;
+
   // polynomial degree of shape functions
   unsigned int degree;
+
+  // use a matrix-based implementation of linear(ized) operators
+  bool use_matrix_based_implementation;
+
+  // this parameter is only relevant if use_matrix_based_implementation == true
+  SparseMatrixType sparse_matrix_type;
 
   /**************************************************************************************/
   /*                                                                                    */
@@ -193,7 +209,7 @@ public:
   // description: see enum declaration
   Preconditioner preconditioner;
 
-  // only relevant for nonlinear problems: update of preconditioner
+  // Applies to time-dependent OR nonlinear problems: update of preconditioner
 
   // Should the preconditioner be updated at all (set to false to never update the
   // preconditioner)?

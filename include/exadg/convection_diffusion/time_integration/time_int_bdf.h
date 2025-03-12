@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/time_integration/lambda_functions_ale.h>
 #include <exadg/time_integration/time_int_bdf_base.h>
 
 namespace ExaDG
@@ -45,16 +46,19 @@ class PostProcessorInterface;
 namespace ConvDiff
 {
 template<int dim, typename Number>
-class TimeIntBDF : public TimeIntBDFBase<Number>
+class TimeIntBDF : public TimeIntBDFBase
 {
 public:
-  typedef typename TimeIntBDFBase<Number>::VectorType VectorType;
+  using VectorType             = dealii::LinearAlgebra::distributed::Vector<Number>;
+  using BoostInputArchiveType  = TimeIntBase::BoostInputArchiveType;
+  using BoostOutputArchiveType = TimeIntBase::BoostOutputArchiveType;
 
   TimeIntBDF(std::shared_ptr<Operator<dim, Number>>          operator_in,
+             std::shared_ptr<HelpersALE<dim, Number> const>  helpers_ale_in,
+             std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
              Parameters const &                              param_in,
              MPI_Comm const &                                mpi_comm_in,
-             bool const                                      is_test_in,
-             std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in);
+             bool const                                      is_test_in);
 
   void
   set_velocities_and_times(std::vector<VectorType const *> const & velocities_in,
@@ -63,21 +67,33 @@ public:
   void
   extrapolate_solution(VectorType & vector);
 
+  VectorType const &
+  get_solution_np() const;
+
   void
   ale_update();
 
   void
   print_iterations() const;
 
+  void
+  prepare_coarsening_and_refinement() final;
+
+  void
+  interpolate_after_coarsening_and_refinement() final;
+
 private:
   void
   allocate_vectors() final;
+
+  std::shared_ptr<std::vector<VectorType *>>
+  get_vectors();
 
   void
   initialize_current_solution() final;
 
   void
-  initialize_former_solutions() final;
+  initialize_former_multistep_dof_vectors() final;
 
   void
   initialize_vec_convective_term();
@@ -101,10 +117,10 @@ private:
   print_solver_info() const final;
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) final;
+  read_restart_vectors(BoostInputArchiveType & ia) final;
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const final;
+  write_restart_vectors(BoostOutputArchiveType & oa) const final;
 
   void
   postprocessing() const final;
@@ -134,6 +150,9 @@ private:
 
   // postprocessor
   std::shared_ptr<PostProcessorInterface<Number>> postprocessor;
+
+  // This object allows to access utility functions needed for ALE
+  std::shared_ptr<HelpersALE<dim, Number> const> helpers_ale;
 
   // ALE
   VectorType              grid_velocity;

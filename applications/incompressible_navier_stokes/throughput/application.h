@@ -35,16 +35,6 @@ enum class MeshType
   Curvilinear
 };
 
-void
-string_to_enum(MeshType & enum_type, std::string const & string_type)
-{
-  // clang-format off
-  if     (string_type == "Cartesian")   enum_type = MeshType::Cartesian;
-  else if(string_type == "Curvilinear") enum_type = MeshType::Curvilinear;
-  else AssertThrow(false, dealii::ExcMessage("Not implemented."));
-  // clang-format on
-}
-
 template<int dim, typename Number>
 class Application : public ApplicationBase<dim, Number>
 {
@@ -59,22 +49,14 @@ public:
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
     prm.enter_subsection("Application");
-      prm.add_parameter("MeshType",  mesh_type_string, "Type of mesh (Cartesian versus curvilinear).", dealii::Patterns::Selection("Cartesian|Curvilinear"));
+    {
+      prm.add_parameter("MeshType", mesh_type, "Type of mesh (Cartesian versus curvilinear).");
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
 private:
-  void
-  parse_parameters() final
-  {
-    ApplicationBase<dim, Number>::parse_parameters();
-
-    string_to_enum(mesh_type, mesh_type_string);
-  }
-
   void
   set_parameters() final
   {
@@ -105,8 +87,10 @@ private:
       QuadratureRuleLinearization::Standard; // Overintegration32k;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1; // this->param.degree_u;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = 1; // this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+
     // use EqualOrder so that we can also start with k=1 for the velocity!
     this->param.degree_p = DegreePressure::MixedOrder;
 
@@ -125,13 +109,13 @@ private:
     this->param.apply_penalty_terms_in_postprocessing_step = true;
 
     // TURBULENCE
-    this->param.use_turbulence_model = false;
-    this->param.turbulence_model     = TurbulenceEddyViscosityModel::Sigma;
+    this->param.turbulence_model_data.is_active        = false;
+    this->param.turbulence_model_data.turbulence_model = TurbulenceEddyViscosityModel::Sigma;
     // Smagorinsky: 0.165
     // Vreman: 0.28
     // WALE: 0.50
     // Sigma: 1.35
-    this->param.turbulence_model_constant = 1.35;
+    this->param.turbulence_model_data.constant = 1.35;
 
     // PROJECTION METHODS
 
@@ -145,17 +129,21 @@ private:
 
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
-    // viscous step
-    this->param.solver_viscous         = SolverViscous::CG;
-    this->param.preconditioner_viscous = PreconditionerViscous::None;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      this->param.solver_momentum         = SolverMomentum::CG;
+      this->param.preconditioner_momentum = MomentumPreconditioner::None;
+    }
 
     // PRESSURE-CORRECTION SCHEME
 
     // momentum step
-
-    // linear solver
-    this->param.solver_momentum         = SolverMomentum::GMRES;
-    this->param.preconditioner_momentum = MomentumPreconditioner::None;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // linear solver
+      this->param.solver_momentum         = SolverMomentum::GMRES;
+      this->param.preconditioner_momentum = MomentumPreconditioner::None;
+    }
 
     // COUPLED NAVIER-STOKES SOLVER
 
@@ -170,37 +158,65 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    double const left = -1.0, right = 1.0;
-    double const deformation = 0.1;
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)vector_local_refinements;
 
-    bool curvilinear_mesh = false;
-    if(mesh_type == MeshType::Cartesian)
-    {
-      // do nothing
-    }
-    else if(mesh_type == MeshType::Curvilinear)
-    {
-      curvilinear_mesh = true;
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("Not implemented."));
-    }
+      double const left = -1.0, right = 1.0;
+      double const deformation = 0.1;
 
-    create_periodic_box(this->grid->triangulation,
-                        this->param.grid.n_refine_global,
-                        this->grid->periodic_faces,
-                        this->n_subdivisions_1d_hypercube,
-                        left,
-                        right,
-                        curvilinear_mesh,
-                        deformation);
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Periodic faces might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+
+      if(mesh_type == MeshType::Curvilinear)
+      {
+        AssertThrow(
+          this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+          dealii::ExcMessage(
+            "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+            "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+      }
+
+      create_periodic_box(tria,
+                          global_refinements,
+                          periodic_face_pairs,
+                          this->n_subdivisions_1d_hypercube,
+                          left,
+                          right,
+                          mesh_type == MeshType::Curvilinear,
+                          deformation);
+    };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
-  set_boundary_descriptor()
+  set_boundary_descriptor() final
   {
     // test case with purely periodic boundary conditions
     // boundary descriptors remain empty for velocity and pressure
@@ -231,8 +247,7 @@ private:
     return pp;
   }
 
-  std::string mesh_type_string = "Cartesian";
-  MeshType    mesh_type        = MeshType::Cartesian;
+  MeshType mesh_type = MeshType::Cartesian;
 };
 
 } // namespace IncNS

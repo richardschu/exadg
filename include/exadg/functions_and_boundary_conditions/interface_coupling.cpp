@@ -21,6 +21,7 @@
 
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/interface_coupling.h>
+#include <exadg/postprocessor/write_output.h>
 
 namespace ExaDG
 {
@@ -55,19 +56,51 @@ InterfaceCoupling<rank, dim, Number>::setup(
   {
     // exchange quadrature points with their owners
     map_evaluator.emplace(quad_index,
-                          dealii::Utilities::MPI::RemotePointEvaluation<dim>(
+                          std::make_unique<dealii::Utilities::MPI::RemotePointEvaluation<dim>>(
                             tolerance_, false, 0, [marked_vertices_src_]() {
                               return marked_vertices_src_;
                             }));
 
-    map_evaluator[quad_index].reinit(interface_data_dst->get_array_q_points(quad_index),
-                                     dof_handler_src_.get_triangulation(),
-                                     mapping_src_);
+    auto const * points = &interface_data_dst->get_array_q_points(quad_index);
 
-    AssertThrow(
-      map_evaluator[quad_index].all_points_found() == true,
-      dealii::ExcMessage(
-        "Setup of InterfaceCoupling was not successful. Not all points have been found."));
+    map_evaluator[quad_index]->reinit(*points, dof_handler_src_.get_triangulation(), mapping_src_);
+
+    if(not map_evaluator[quad_index]->all_points_found())
+    {
+      // get vector of points not found
+      std::vector<dealii::Point<dim>> points_not_found;
+      points_not_found.reserve(points->size());
+      unsigned int n_points_not_found = 0;
+      for(unsigned int i = 0; i < points->size(); ++i)
+      {
+        if(not map_evaluator[quad_index]->point_found(i))
+        {
+          n_points_not_found += 1;
+          points_not_found.push_back((*points)[i]);
+        }
+      }
+      n_points_not_found =
+        dealii::Utilities::MPI::sum(n_points_not_found, dof_handler_src->get_communicator());
+
+      std::string const file_name =
+        "interface_coupling_quad_index_" + dealii::Utilities::to_string(quad_index);
+
+      write_grid(dof_handler_src->get_triangulation(),
+                 mapping_src_,
+                 4,
+                 "./",
+                 file_name,
+                 0,
+                 dof_handler_src->get_communicator());
+
+      write_points_in_dummy_triangulation(
+        points_not_found, "./", file_name, 0, dof_handler_src->get_communicator());
+
+      AssertThrow(map_evaluator[quad_index]->all_points_found(),
+                  dealii::ExcMessage(std::string("Setup of InterfaceCoupling was not successful: " +
+                                                 std::to_string(n_points_not_found) +
+                                                 " points have not been found.")));
+    }
   }
 }
 
@@ -80,7 +113,7 @@ InterfaceCoupling<rank, dim, Number>::update_data(VectorType const & dof_vector_
   for(auto quadrature : interface_data_dst->get_quad_indices())
   {
     auto const result =
-      dealii::VectorTools::point_values<n_components>(map_evaluator[quadrature],
+      dealii::VectorTools::point_values<n_components>(*map_evaluator[quadrature],
                                                       *dof_handler_src,
                                                       dof_vector_src,
                                                       dealii::VectorTools::EvaluationFlags::avg);

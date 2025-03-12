@@ -20,6 +20,7 @@
  */
 
 #include <exadg/incompressible_navier_stokes/preconditioners/multigrid_preconditioner_momentum.h>
+#include <exadg/operators/quadrature.h>
 
 namespace ExaDG
 {
@@ -37,17 +38,15 @@ MultigridPreconditioner<dim, Number>::MultigridPreconditioner(MPI_Comm const & c
 template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::initialize(
-  MultigridData const &                                                  mg_data,
-  MultigridVariant const &                                               multigrid_variant,
-  dealii::Triangulation<dim> const *                                     tria,
-  std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-  dealii::FiniteElement<dim> const &                                     fe,
-  std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-  PDEOperator const &                                                    pde_operator,
-  MultigridOperatorType const &                                          mg_operator_type,
-  bool const                                                             mesh_is_moving,
-  Map const &                                                            dirichlet_bc,
-  PeriodicFacePairs const &                                              periodic_face_pairs)
+  MultigridData const &                                 mg_data,
+  std::shared_ptr<Grid<dim> const>                      grid,
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+  dealii::FiniteElement<dim> const &                    fe,
+  PDEOperator const &                                   pde_operator,
+  MultigridOperatorType const &                         mg_operator_type,
+  bool const                                            mesh_is_moving,
+  Map_DBC const &                                       dirichlet_bc,
+  Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask)
 {
   this->pde_operator = &pde_operator;
 
@@ -81,14 +80,13 @@ MultigridPreconditioner<dim, Number>::initialize(
   }
 
   Base::initialize(mg_data,
-                   multigrid_variant,
-                   tria,
-                   coarse_triangulations,
+                   grid,
+                   multigrid_mappings,
                    fe,
-                   mapping,
                    false /*operator_is_singular*/,
                    dirichlet_bc,
-                   periodic_face_pairs);
+                   dirichlet_bc_component_mask,
+                   false /*initialize_preconditioners*/);
 }
 
 
@@ -96,92 +94,29 @@ template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::update()
 {
+  // Update matrix-free objects and operators
   if(mesh_is_moving)
   {
     this->initialize_mapping();
 
-    this->update_matrix_free();
-  }
+    this->update_matrix_free_objects();
 
-  update_operators();
-
-  this->update_smoothers();
-
-  // singular operators do not occur for this operator
-  this->update_coarse_solver(false /* operator_is_singular */);
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
-  MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
-  unsigned int const                     level,
-  unsigned int const                     h_level)
-{
-  matrix_free_data.data.mg_level = h_level;
-
-  if(data.unsteady_problem)
-    matrix_free_data.append_mapping_flags(MassKernel<dim, Number>::get_mapping_flags());
-  if(data.convective_problem)
-    matrix_free_data.append_mapping_flags(
-      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
-  if(data.viscous_problem)
-    matrix_free_data.append_mapping_flags(
-      Operators::ViscousKernel<dim, Number>::get_mapping_flags(this->level_info[level].is_dg(),
-                                                               this->level_info[level].is_dg()));
-
-  if(data.use_cell_based_loops && this->level_info[level].is_dg())
-  {
-    auto tria = dynamic_cast<dealii::parallel::distributed::Triangulation<dim> const *>(
-      &this->dof_handlers[level]->get_triangulation());
-    Categorization::do_cell_based_loops(*tria, matrix_free_data.data, h_level);
-  }
-
-  matrix_free_data.insert_dof_handler(&(*this->dof_handlers[level]), "std_dof_handler");
-  matrix_free_data.insert_constraint(&(*this->constraints[level]), "std_dof_handler");
-  matrix_free_data.insert_quadrature(dealii::QGauss<1>(this->level_info[level].degree() + 1),
-                                     "std_quadrature");
-}
-
-template<int dim, typename Number>
-std::shared_ptr<
-  MultigridOperatorBase<dim, typename MultigridPreconditionerBase<dim, Number>::MultigridNumber>>
-MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const level)
-{
-  // initialize pde_operator in a first step
-  std::shared_ptr<PDEOperatorMG> pde_operator_level(new PDEOperatorMG());
-
-  data.dof_index  = this->matrix_free_data_objects[level]->get_dof_index("std_dof_handler");
-  data.quad_index = this->matrix_free_data_objects[level]->get_quad_index("std_quadrature");
-
-  pde_operator_level->initialize(*this->matrix_free_objects[level],
-                                 *this->constraints[level],
-                                 data);
-
-  // make sure that scaling factor of time derivative term has been set before the smoothers are
-  // initialized
-  pde_operator_level->set_scaling_factor_mass_operator(
-    pde_operator->get_scaling_factor_mass_operator());
-
-  // initialize MGOperator which is a wrapper around the PDEOperatorMG
-  std::shared_ptr<MGOperator> mg_operator(new MGOperator(pde_operator_level));
-
-  return mg_operator;
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::update_operators()
-{
-  if(mesh_is_moving)
-  {
-    update_operators_after_mesh_movement();
+    this->for_all_levels(
+      [&](unsigned int const level) { this->get_operator(level)->update_after_grid_motion(); });
   }
 
   if(data.unsteady_problem)
   {
-    set_time(pde_operator->get_time());
-    set_scaling_factor_mass_operator(pde_operator->get_scaling_factor_mass_operator());
+    this->for_all_levels([&](unsigned int const level) {
+      // The operator also depends on the time. This is due to the fact that the linearized
+      // convective term does not only depend on the linearized velocity field but also on Dirichlet
+      // boundary data which itself depends on the current time.
+      this->get_operator(level)->set_time(pde_operator->get_time());
+      // In case of adaptive time stepping, the scaling factor of the time derivative term changes
+      // over time.
+      this->get_operator(level)->set_scaling_factor_mass_operator(
+        pde_operator->get_scaling_factor_mass_operator());
+    });
   }
 
   if(mg_operator_type == MultigridOperatorType::ReactionConvectionDiffusion)
@@ -201,57 +136,95 @@ MultigridPreconditioner<dim, Number>::update_operators()
       vector_multigrid_type_ptr  = &vector_multigrid_type_copy;
     }
 
-    set_vector_linearization(*vector_multigrid_type_ptr);
+    // copy velocity to finest level
+    this->get_operator(this->get_number_of_levels() - 1)
+      ->set_velocity_copy(*vector_multigrid_type_ptr);
+
+    // interpolate velocity from fine to coarse level
+    this->transfer_from_fine_to_coarse_levels(
+      [&](unsigned int const fine_level, unsigned int const coarse_level) {
+        auto const & vector_fine_level   = this->get_operator(fine_level)->get_velocity();
+        auto         vector_coarse_level = this->get_operator(coarse_level)->get_velocity();
+        this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+        this->get_operator(coarse_level)->set_velocity_copy(vector_coarse_level);
+      });
   }
+
+  // In case the operators have been updated, we also need to update the smoothers and the coarse
+  // grid solver. This is generic functionality implemented in the base class.
+  if(mesh_is_moving or data.unsteady_problem or
+     (mg_operator_type == MultigridOperatorType::ReactionConvectionDiffusion) or
+     this->update_needed)
+  {
+    this->update_smoothers();
+    this->update_coarse_solver();
+  }
+
+  this->update_needed = false;
 }
 
 template<int dim, typename Number>
 void
-MultigridPreconditioner<dim, Number>::set_vector_linearization(
-  VectorTypeMG const & vector_linearization)
+MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
+  MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
+  unsigned int const                     level,
+  unsigned int const                     dealii_tria_level)
 {
-  // copy velocity to finest level
-  this->get_operator(this->fine_level)->set_velocity_copy(vector_linearization);
+  matrix_free_data.data.mg_level = dealii_tria_level;
 
-  // interpolate velocity from fine to coarse level
-  for(unsigned int level = this->fine_level; level > this->coarse_level; --level)
+  if(data.unsteady_problem)
+    matrix_free_data.append_mapping_flags(MassKernel<dim, Number>::get_mapping_flags());
+  if(data.convective_problem)
+    matrix_free_data.append_mapping_flags(
+      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
+  if(data.viscous_problem)
+    matrix_free_data.append_mapping_flags(
+      Operators::ViscousKernel<dim, Number>::get_mapping_flags(this->level_info[level].is_dg(),
+                                                               this->level_info[level].is_dg()));
+
+  if(data.use_cell_based_loops and this->level_info[level].is_dg())
   {
-    auto & vector_fine_level   = this->get_operator(level - 0)->get_velocity();
-    auto   vector_coarse_level = this->get_operator(level - 1)->get_velocity();
-    this->transfers->interpolate(level, vector_coarse_level, vector_fine_level);
-    this->get_operator(level - 1)->set_velocity_copy(vector_coarse_level);
+    auto tria = &this->dof_handlers[level]->get_triangulation();
+    Categorization::do_cell_based_loops(*tria, matrix_free_data.data, dealii_tria_level);
   }
+
+  matrix_free_data.insert_dof_handler(&(*this->dof_handlers[level]), "std_dof_handler");
+  matrix_free_data.insert_constraint(&(*this->constraints[level]), "std_dof_handler");
+
+  ElementType const element_type = get_element_type(*this->grid->triangulation);
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(element_type, this->level_info[level].degree() + 1);
+  matrix_free_data.insert_quadrature(*quadrature, "std_quadrature");
 }
 
 template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::set_time(double const & time)
+std::shared_ptr<
+  MultigridOperatorBase<dim, typename MultigridPreconditionerBase<dim, Number>::MultigridNumber>>
+MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const level)
 {
-  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
-  {
-    get_operator(level)->set_time(time);
-  }
-}
+  // initialize pde_operator in a first step
+  std::shared_ptr<PDEOperatorMG> pde_operator_level(new PDEOperatorMG());
 
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::update_operators_after_mesh_movement()
-{
-  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
-  {
-    get_operator(level)->update_after_grid_motion();
-  }
-}
+  data.dof_index  = this->matrix_free_data_objects[level]->get_dof_index("std_dof_handler");
+  data.quad_index = this->matrix_free_data_objects[level]->get_quad_index("std_quadrature");
 
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::set_scaling_factor_mass_operator(
-  double const & scaling_factor_mass)
-{
-  for(unsigned int level = this->coarse_level; level <= this->fine_level; ++level)
-  {
-    get_operator(level)->set_scaling_factor_mass_operator(scaling_factor_mass);
-  }
+  pde_operator_level->initialize(*this->matrix_free_objects[level],
+                                 *this->constraints[level],
+                                 data);
+
+  // The operator also depends on the time. This is due to the fact that the linearized
+  // convective term does not only depend on the linearized velocity field but also on Dirichlet
+  // boundary data which itself depends on the current time.
+  pde_operator_level->set_time(pde_operator->get_time());
+  // make sure that scaling factor of time derivative term has been set before the smoothers are
+  // initialized
+  pde_operator_level->set_scaling_factor_mass_operator(
+    pde_operator->get_scaling_factor_mass_operator());
+
+  // initialize MGOperator which is a wrapper around the PDEOperatorMG
+  std::shared_ptr<MGOperator> mg_operator(new MGOperator(pde_operator_level));
+
+  return mg_operator;
 }
 
 template<int dim, typename Number>

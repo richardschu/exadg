@@ -22,30 +22,8 @@
 #ifndef INCLUDE_EXADG_FLUID_STRUCTURE_INTERACTION_PRECICE_DRIVER_FLUID_H_
 #define INCLUDE_EXADG_FLUID_STRUCTURE_INTERACTION_PRECICE_DRIVER_FLUID_H_
 
-// application
-#include <exadg/fluid_structure_interaction/user_interface/application_base.h>
-
-// utilities
-#include <exadg/functions_and_boundary_conditions/verify_boundary_conditions.h>
-#include <exadg/matrix_free/matrix_free_data.h>
-#include <exadg/utilities/print_general_infos.h>
-#include <exadg/utilities/timer_tree.h>
-
-// grid
-#include <exadg/grid/grid_motion_elasticity.h>
-#include <exadg/grid/grid_motion_poisson.h>
-#include <exadg/poisson/spatial_discretization/operator.h>
-
-// IncNS
-#include <exadg/incompressible_navier_stokes/postprocessor/postprocessor.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/create_operator.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_pressure_correction.h>
-#include <exadg/incompressible_navier_stokes/time_integration/create_time_integrator.h>
-#include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.h>
-#include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
-#include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
+// ExaDG
+#include <exadg/fluid_structure_interaction/single_field_solvers/fluid.h>
 
 namespace ExaDG
 {
@@ -67,17 +45,6 @@ public:
     : Driver<dim, Number>(input_file, comm, app, is_test)
   {
     fluid = std::make_shared<SolverFluid<dim, Number>>();
-  }
-
-  void
-  setup_application()
-  {
-    dealii::Timer timer_local;
-    timer_local.restart();
-
-    this->application->fluid->setup();
-
-    this->timer_tree.insert({"FSI", "Setup", "Application"}, timer_local.wall_time());
   }
 
 
@@ -102,15 +69,14 @@ public:
     // fluid to structure
     {
       // TODO generalize interface handling for multiple interface IDs
-      this->precice->add_write_surface(this->application->fluid->get_boundary_descriptor()
-                                         ->velocity->dirichlet_cached_bc.begin()
-                                         ->first,
-                                       this->precice_parameters.write_mesh_name,
-                                       {this->precice_parameters.stress_data_name},
-                                       this->precice_parameters.write_data_type,
-                                       fluid->matrix_free,
-                                       fluid->pde_operator->get_dof_index_velocity(),
-                                       fluid->pde_operator->get_quad_index_velocity_linear());
+      this->precice->add_write_surface(
+        *this->application->fluid->get_boundary_descriptor()->velocity->dirichlet_cached_bc.begin(),
+        this->precice_parameters.write_mesh_name,
+        {this->precice_parameters.stress_data_name},
+        this->precice_parameters.write_data_type,
+        fluid->pde_operator->get_matrix_free(),
+        fluid->pde_operator->get_dof_index_velocity(),
+        fluid->pde_operator->get_quad_index_velocity_standard());
     }
 
     // structure to ALE
@@ -119,18 +85,25 @@ public:
       if(this->application->fluid->get_parameters().mesh_movement_type ==
          IncNS::MeshMovementType::Poisson)
       {
-        this->precice->add_read_surface(fluid->ale_matrix_free,
-                                        fluid->ale_poisson_operator->get_container_interface_data(),
-                                        this->precice_parameters.ale_mesh_name,
-                                        {this->precice_parameters.displacement_data_name});
+        std::shared_ptr<Poisson::DeformedMapping<dim, Number>> poisson_ale_mapping =
+          std::dynamic_pointer_cast<Poisson::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+
+        this->precice->add_read_surface(
+          poisson_ale_mapping->get_matrix_free(),
+          poisson_ale_mapping->get_pde_operator()->get_container_interface_data(),
+          this->precice_parameters.ale_mesh_name,
+          {this->precice_parameters.displacement_data_name});
       }
       // Elasticity mesh movement
       else if(this->application->fluid->get_parameters().mesh_movement_type ==
               IncNS::MeshMovementType::Elasticity)
       {
+        std::shared_ptr<Structure::DeformedMapping<dim, Number>> structure_ale_mapping =
+          std::dynamic_pointer_cast<Structure::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+
         this->precice->add_read_surface(
-          fluid->ale_matrix_free,
-          fluid->ale_elasticity_operator->get_container_interface_data_dirichlet(),
+          structure_ale_mapping->get_matrix_free(),
+          structure_ale_mapping->get_pde_operator()->get_container_interface_data_dirichlet(),
           this->precice_parameters.ale_mesh_name,
           {this->precice_parameters.displacement_data_name});
       }
@@ -142,7 +115,7 @@ public:
 
     // structure to fluid
     {
-      this->precice->add_read_surface(fluid->matrix_free,
+      this->precice->add_read_surface(fluid->pde_operator->get_matrix_free(),
                                       fluid->pde_operator->get_container_interface_data(),
                                       this->precice_parameters.read_mesh_name,
                                       {this->precice_parameters.velocity_data_name});
@@ -163,8 +136,6 @@ public:
     timer.restart();
 
     this->pcout << std::endl << "Setting up fluid-structure interaction solver:" << std::endl;
-
-    setup_application();
 
     setup_fluid_and_ale();
 
@@ -194,7 +165,7 @@ public:
         coupling_structure_to_ale();
 
         // move the fluid mesh and update dependent data structures
-        fluid->solve_ale(this->application->fluid, this->is_test);
+        fluid->solve_ale();
 
         // update velocity boundary condition for fluid
         coupling_structure_to_fluid();
@@ -237,7 +208,7 @@ public:
     fluid->time_integrator->print_iterations();
 
     this->pcout << std::endl << "ALE:" << std::endl;
-    fluid->ale_grid_motion->print_iterations();
+    fluid->ale_mapping->print_iterations();
 
     // wall times
     this->pcout << std::endl << "Wall times:" << std::endl;
@@ -258,12 +229,18 @@ public:
     if(this->application->fluid->get_parameters().mesh_movement_type ==
        IncNS::MeshMovementType::Poisson)
     {
-      DoFs += fluid->ale_poisson_operator->get_number_of_dofs();
+      std::shared_ptr<Poisson::DeformedMapping<dim, Number>> poisson_ale_mapping =
+        std::dynamic_pointer_cast<Poisson::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+
+      DoFs += poisson_ale_mapping->get_pde_operator()->get_number_of_dofs();
     }
     else if(this->application->fluid->get_parameters().mesh_movement_type ==
             IncNS::MeshMovementType::Elasticity)
     {
-      DoFs += fluid->ale_elasticity_operator->get_number_of_dofs();
+      std::shared_ptr<Structure::DeformedMapping<dim, Number>> elasticity_ale_mapping =
+        std::dynamic_pointer_cast<Structure::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+
+      DoFs += elasticity_ale_mapping->get_pde_operator()->get_number_of_dofs();
     }
     else
     {

@@ -22,6 +22,8 @@
 #ifndef INCLUDE_EXADG_SOLVERS_AND_PRECONDITIONERS_UTIL_COMPUTE_EIGENVALUES_H_
 #define INCLUDE_EXADG_SOLVERS_AND_PRECONDITIONERS_UTIL_COMPUTE_EIGENVALUES_H_
 
+#include <deal.II/numerics/vector_tools_mean_value.h>
+
 namespace ExaDG
 {
 // manually compute eigenvalues for the coarsest level for proper setup of the
@@ -36,24 +38,23 @@ compute_eigenvalues(Operator const &   op,
   VectorType solution, rhs;
   solution.reinit(inverse_diagonal);
   rhs.reinit(inverse_diagonal, true);
-  // NB: initialize rand in order to obtain "reproducible" results !!!
+  // NB: initialize rand in order to obtain "reproducible" results!
   srand(1);
   for(unsigned int i = 0; i < rhs.locally_owned_size(); ++i)
     rhs.local_element(i) = (double)rand() / RAND_MAX;
   if(operator_is_singular)
-    set_zero_mean_value(rhs);
+    dealii::VectorTools::subtract_mean_value(rhs);
 
-  dealii::SolverControl control(eig_n_iter, rhs.l2_norm() * 1e-5);
-  dealii::internal::PreconditionChebyshevImplementation::EigenvalueTracker eigenvalue_tracker;
+  dealii::SolverControl               control(eig_n_iter, rhs.l2_norm() * 1e-5);
+  dealii::internal::EigenvalueTracker eigenvalue_tracker;
 
   dealii::SolverCG<VectorType> solver(control);
 
-  solver.connect_eigenvalues_slot(
-    std::bind(&dealii::internal::PreconditionChebyshevImplementation::EigenvalueTracker::slot,
-              &eigenvalue_tracker,
-              std::placeholders::_1));
+  solver.connect_eigenvalues_slot(std::bind(&dealii::internal::EigenvalueTracker::slot,
+                                            &eigenvalue_tracker,
+                                            std::placeholders::_1));
 
-  JacobiPreconditioner<Operator> preconditioner(op);
+  JacobiPreconditioner<Operator> preconditioner(op, true /* initialize */);
 
   try
   {

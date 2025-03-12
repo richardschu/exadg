@@ -26,6 +26,11 @@
 
 namespace ExaDG
 {
+/**
+ * A manifold that corresponds to a triangulation generated via
+ *
+ *  dealii::GridGenerator::subdivided_hyper_cube(tria, n_cells_1d, left, right);
+ */
 template<int dim>
 class DeformedCubeManifold : public dealii::ChartManifold<dim, dim, dim>
 {
@@ -48,6 +53,7 @@ public:
     dealii::Point<dim> space_point;
     for(unsigned int d = 0; d < dim; ++d)
       space_point(d) = chart_point(d) + sinval;
+
     return space_point;
   }
 
@@ -60,16 +66,17 @@ public:
       one(d) = 1.;
 
     // Newton iteration to solve the nonlinear equation given by the point
-    dealii::Tensor<1, dim> sinvals;
+    dealii::Tensor<1, dim> sinvals, residual;
+
     for(unsigned int d = 0; d < dim; ++d)
       sinvals[d] = std::sin(frequency * dealii::numbers::PI * (x(d) - left) / (right - left));
-
     double sinval = deformation;
     for(unsigned int d = 0; d < dim; ++d)
       sinval *= sinvals[d];
-    dealii::Tensor<1, dim> residual = space_point - x - sinval * one;
-    unsigned int           its      = 0;
-    while(residual.norm() > 1e-12 && its < 100)
+    residual = space_point - (x + sinval * one);
+
+    unsigned int its = 0;
+    while(residual.norm() > 1e-12 and its < 100)
     {
       dealii::Tensor<2, dim> jacobian;
       for(unsigned int d = 0; d < dim; ++d)
@@ -90,14 +97,16 @@ public:
 
       for(unsigned int d = 0; d < dim; ++d)
         sinvals[d] = std::sin(frequency * dealii::numbers::PI * (x(d) - left) / (right - left));
-
       sinval = deformation;
       for(unsigned int d = 0; d < dim; ++d)
         sinval *= sinvals[d];
-      residual = space_point - x - sinval * one;
+      residual = space_point - (x + sinval * one);
+
       ++its;
     }
+
     AssertThrow(residual.norm() < 1e-12, dealii::ExcMessage("Newton for point did not converge."));
+
     return x;
   }
 
@@ -113,6 +122,38 @@ private:
   double const       deformation;
   unsigned int const frequency;
 };
+
+template<int dim>
+void
+apply_deformed_cube_manifold(dealii::Triangulation<dim> & triangulation,
+                             double const                 left,
+                             double const                 right,
+                             double const                 deformation,
+                             unsigned int const           frequency)
+{
+  DeformedCubeManifold<dim> manifold(left, right, deformation, frequency);
+  triangulation.set_all_manifold_ids(1);
+  triangulation.set_manifold(1, manifold);
+
+  // the vertices need to be placed correctly according to the manifold description such that mesh
+  // refinements and high-order mappings are done correctly (which invoke pull-back and push-forward
+  // operations)
+  std::vector<bool> vertex_touched(triangulation.n_vertices(), false);
+
+  for(auto const & cell : triangulation.cell_iterators())
+  {
+    for(unsigned int const v : cell->vertex_indices())
+    {
+      if(vertex_touched[cell->vertex_index(v)] == false)
+      {
+        dealii::Point<dim> & vertex           = cell->vertex(v);
+        dealii::Point<dim>   new_point        = manifold.push_forward(vertex);
+        vertex                                = new_point;
+        vertex_touched[cell->vertex_index(v)] = true;
+      }
+    }
+  }
+}
 
 } // namespace ExaDG
 

@@ -31,8 +31,9 @@
 
 // ExaDG
 #include <exadg/grid/grid.h>
+#include <exadg/grid/grid_utilities.h>
+#include <exadg/operators/resolution_parameters.h>
 #include <exadg/postprocessor/output_parameters.h>
-#include <exadg/utilities/resolution_parameters.h>
 
 // Fluid
 #include <exadg/incompressible_navier_stokes/postprocessor/postprocessor.h>
@@ -89,7 +90,9 @@ public:
   }
 
   void
-  setup()
+  setup(std::shared_ptr<Grid<dim>> &                      grid,
+        std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+        std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings)
   {
     parse_parameters();
 
@@ -104,8 +107,8 @@ public:
     param.print(pcout, "List of parameters for structure:");
 
     // grid
-    grid = std::make_shared<Grid<dim>>(param.grid, mpi_comm);
-    create_grid();
+    grid = std::make_shared<Grid<dim>>();
+    create_grid(*grid, mapping, multigrid_mappings);
     print_grid_info(pcout, *grid);
 
     // boundary conditions
@@ -126,12 +129,6 @@ public:
   get_parameters() const
   {
     return param;
-  }
-
-  std::shared_ptr<Grid<dim> const>
-  get_grid() const
-  {
-    return grid;
   }
 
   std::shared_ptr<Structure::BoundaryDescriptor<dim> const>
@@ -156,12 +153,11 @@ public:
   create_postprocessor() = 0;
 
 protected:
-  MPI_Comm const & mpi_comm;
+  MPI_Comm const mpi_comm;
 
   dealii::ConditionalOStream pcout;
 
   Structure::Parameters                               param;
-  std::shared_ptr<Grid<dim>>                          grid;
   std::shared_ptr<Structure::MaterialDescriptor>      material_descriptor;
   std::shared_ptr<Structure::BoundaryDescriptor<dim>> boundary_descriptor;
   std::shared_ptr<Structure::FieldFunctions<dim>>     field_functions;
@@ -182,7 +178,9 @@ private:
   set_parameters() = 0;
 
   virtual void
-  create_grid() = 0;
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) = 0;
 
   virtual void
   set_boundary_descriptor() = 0;
@@ -193,7 +191,7 @@ private:
   virtual void
   set_field_functions() = 0;
 
-  ResolutionParameters resolution;
+  SpatialResolutionParameters resolution;
 };
 
 } // namespace StructureFSI
@@ -231,7 +229,9 @@ public:
   }
 
   void
-  setup()
+  setup(std::shared_ptr<Grid<dim>> &                      grid,
+        std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+        std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings)
   {
     parse_parameters();
 
@@ -249,14 +249,14 @@ public:
                 dealii::ExcMessage("Invalid parameter in context of fluid-structure interaction."));
 
     // grid
-    grid = std::make_shared<Grid<dim>>(param.grid, mpi_comm);
-    create_grid();
+    grid = std::make_shared<Grid<dim>>();
+    create_grid(*grid, mapping, multigrid_mappings);
     print_grid_info(pcout, *grid);
 
     // boundary conditions
     boundary_descriptor = std::make_shared<IncNS::BoundaryDescriptor<dim>>();
     set_boundary_descriptor();
-    IncNS::verify_boundary_conditions<dim, Number>(*boundary_descriptor, *grid);
+    IncNS::verify_boundary_conditions<dim>(*boundary_descriptor, *grid);
 
     // field functions
     field_functions = std::make_shared<IncNS::FieldFunctions<dim>>();
@@ -273,7 +273,8 @@ public:
       AssertThrow(ale_poisson_param.right_hand_side == false,
                   dealii::ExcMessage("Parameter does not make sense in context of FSI."));
       AssertThrow(
-        ale_poisson_param.grid.multigrid == param.grid.multigrid,
+        ale_poisson_param.grid.create_coarse_triangulations ==
+          param.grid.create_coarse_triangulations,
         dealii::ExcMessage(
           "ALE and fluid use the same Grid, requiring the same settings in terms of multigrid coarsening."));
 
@@ -296,7 +297,8 @@ public:
       AssertThrow(ale_elasticity_param.body_force == false,
                   dealii::ExcMessage("Parameter does not make sense in context of FSI."));
       AssertThrow(
-        ale_poisson_param.grid.multigrid == param.grid.multigrid,
+        ale_poisson_param.grid.create_coarse_triangulations ==
+          param.grid.create_coarse_triangulations,
         dealii::ExcMessage(
           "ALE and fluid use the same Grid, requiring the same settings in terms of multigrid coarsening."));
 
@@ -325,12 +327,6 @@ public:
   get_parameters() const
   {
     return param;
-  }
-
-  std::shared_ptr<Grid<dim> const>
-  get_grid() const
-  {
-    return grid;
   }
 
   std::shared_ptr<IncNS::BoundaryDescriptor<dim> const>
@@ -391,13 +387,12 @@ public:
   }
 
 protected:
-  MPI_Comm const & mpi_comm;
+  MPI_Comm const mpi_comm;
 
   dealii::ConditionalOStream pcout;
 
   // fluid
   IncNS::Parameters                               param;
-  std::shared_ptr<Grid<dim>>                      grid;
   std::shared_ptr<IncNS::FieldFunctions<dim>>     field_functions;
   std::shared_ptr<IncNS::BoundaryDescriptor<dim>> boundary_descriptor;
 
@@ -431,7 +426,9 @@ private:
   set_parameters() = 0;
 
   virtual void
-  create_grid() = 0;
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) = 0;
 
   virtual void
   set_boundary_descriptor() = 0;
@@ -464,7 +461,7 @@ private:
   virtual void
   set_field_functions_ale_elasticity() = 0;
 
-  ResolutionParameters resolution;
+  SpatialResolutionParameters resolution;
 };
 } // namespace FluidFSI
 
@@ -475,7 +472,7 @@ class ApplicationBase
 {
 public:
   virtual void
-  add_parameters(dealii::ParameterHandler & prm)
+  add_parameters(dealii::ParameterHandler & prm) final
   {
     structure->add_parameters(prm);
     fluid->add_parameters(prm);
@@ -483,14 +480,6 @@ public:
 
   virtual ~ApplicationBase()
   {
-  }
-
-  void
-  setup()
-  {
-    structure->setup();
-
-    fluid->setup();
   }
 
   std::shared_ptr<StructureFSI::ApplicationBase<dim, Number>> structure;

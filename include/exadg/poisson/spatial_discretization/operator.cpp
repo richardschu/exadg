@@ -20,25 +20,24 @@
  */
 
 // deal.II
-#include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/fe_q.h>
-#include <deal.II/fe/fe_simplex_p.h>
-#include <deal.II/fe/fe_system.h>
-#ifdef DEAL_II_WITH_PETSC
-#  include <deal.II/lac/petsc_vector.h>
-#endif
-#include <deal.II/numerics/vector_tools.h>
+#include <deal.II/dofs/dof_tools.h>
+#include <deal.II/lac/petsc_vector.h>
 
 // ExaDG
+#include <exadg/functions_and_boundary_conditions/interpolate.h>
+#include <exadg/grid/grid_data.h>
+#include <exadg/operators/constraints.h>
+#include <exadg/operators/finite_element.h>
+#include <exadg/operators/quadrature.h>
 #include <exadg/poisson/preconditioners/multigrid_preconditioner.h>
 #include <exadg/poisson/spatial_discretization/operator.h>
+#include <exadg/solvers_and_preconditioners/preconditioners/additive_schwarz_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/block_jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/inverse_mass_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_amg.h>
 #include <exadg/solvers_and_preconditioners/solvers/iterative_solvers_dealii_wrapper.h>
 #include <exadg/solvers_and_preconditioners/utilities/check_multigrid.h>
-#include <exadg/solvers_and_preconditioners/utilities/petsc_operation.h>
 #include <exadg/utilities/exceptions.h>
 
 namespace ExaDG
@@ -47,14 +46,18 @@ namespace Poisson
 {
 template<int dim, int n_components, typename Number>
 Operator<dim, n_components, Number>::Operator(
-  std::shared_ptr<Grid<dim> const>                     grid_in,
-  std::shared_ptr<BoundaryDescriptor<rank, dim> const> boundary_descriptor_in,
-  std::shared_ptr<FieldFunctions<dim> const>           field_functions_in,
-  Parameters const &                                   param_in,
-  std::string const &                                  field_in,
-  MPI_Comm const &                                     mpi_comm_in)
+  std::shared_ptr<Grid<dim> const>                      grid_in,
+  std::shared_ptr<dealii::Mapping<dim> const>           mapping_in,
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings_in,
+  std::shared_ptr<BoundaryDescriptor<rank, dim> const>  boundary_descriptor_in,
+  std::shared_ptr<FieldFunctions<dim> const>            field_functions_in,
+  Parameters const &                                    param_in,
+  std::string const &                                   field_in,
+  MPI_Comm const &                                      mpi_comm_in)
   : dealii::Subscriptor(),
     grid(grid_in),
+    mapping(mapping_in),
+    multigrid_mappings(multigrid_mappings_in),
     boundary_descriptor(boundary_descriptor_in),
     field_functions(field_functions_in),
     param(param_in),
@@ -65,101 +68,56 @@ Operator<dim, n_components, Number>::Operator(
 {
   pcout << std::endl << "Construct Poisson operator ..." << std::endl;
 
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
 
   pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, int n_components, typename Number>
 void
-Operator<dim, n_components, Number>::distribute_dofs()
+Operator<dim, n_components, Number>::initialize_dof_handler_and_constraints()
 {
-  if(n_components == 1)
-  {
-    if(param.spatial_discretization == SpatialDiscretization::DG)
-    {
-      if(this->grid->triangulation->all_reference_cells_are_hyper_cube())
-        fe = std::make_shared<dealii::FE_DGQ<dim>>(param.degree);
-      else if(this->grid->triangulation->all_reference_cells_are_simplex())
-        fe = std::make_shared<dealii::FE_SimplexDGP<dim>>(param.degree);
-      else
-        AssertThrow(false, ExcNotImplemented());
-    }
-    else if(param.spatial_discretization == SpatialDiscretization::CG)
-    {
-      if(this->grid->triangulation->all_reference_cells_are_hyper_cube())
-        fe = std::make_shared<dealii::FE_Q<dim>>(param.degree);
-      else if(this->grid->triangulation->all_reference_cells_are_simplex())
-        fe = std::make_shared<dealii::FE_SimplexP<dim>>(param.degree);
-      else
-        AssertThrow(false, ExcNotImplemented());
-    }
-    else
-    {
-      AssertThrow(false, ExcNotImplemented());
-    }
-  }
-  else if(n_components == dim)
-  {
-    if(param.spatial_discretization == SpatialDiscretization::DG)
-    {
-      if(this->grid->triangulation->all_reference_cells_are_hyper_cube())
-        fe = std::make_shared<dealii::FESystem<dim>>(dealii::FE_DGQ<dim>(param.degree), dim);
-      else if(this->grid->triangulation->all_reference_cells_are_simplex())
-        fe = std::make_shared<dealii::FESystem<dim>>(dealii::FE_SimplexDGP<dim>(param.degree), dim);
-      else
-        AssertThrow(false, ExcNotImplemented());
-    }
-    else if(param.spatial_discretization == SpatialDiscretization::CG)
-    {
-      if(this->grid->triangulation->all_reference_cells_are_hyper_cube())
-        fe = std::make_shared<dealii::FESystem<dim>>(dealii::FE_Q<dim>(param.degree), dim);
-      else if(this->grid->triangulation->all_reference_cells_are_simplex())
-        fe = std::make_shared<dealii::FESystem<dim>>(dealii::FE_SimplexP<dim>(param.degree), dim);
-      else
-        AssertThrow(false, ExcNotImplemented());
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("not implemented."));
-    }
-  }
-  else
-  {
-    AssertThrow(false, dealii::ExcMessage("not implemented."));
-  }
+  fe = create_finite_element<dim>(param.grid.element_type,
+                                  param.spatial_discretization == SpatialDiscretization::DG,
+                                  n_components,
+                                  param.degree);
 
   dof_handler.distribute_dofs(*fe);
 
-  // affine constraints only relevant for continuous FE discretization
+  // Affine constraints are only relevant for continuous Galerkin discretizations.
   if(param.spatial_discretization == SpatialDiscretization::CG)
   {
-    affine_constraints.clear();
+    affine_constraints_periodicity_and_hanging_nodes.clear();
 
-    // standard Dirichlet boundaries
-    for(auto it : this->boundary_descriptor->dirichlet_bc)
-    {
-      dealii::ComponentMask mask = dealii::ComponentMask();
-      auto it_mask               = boundary_descriptor->dirichlet_bc_component_mask.find(it.first);
-      if(it_mask != boundary_descriptor->dirichlet_bc_component_mask.end())
-        mask = it_mask->second;
+    add_hanging_node_and_periodicity_constraints(affine_constraints_periodicity_and_hanging_nodes,
+                                                 *this->grid,
+                                                 dof_handler);
 
-      dealii::DoFTools::make_zero_boundary_constraints(dof_handler,
-                                                       it.first,
-                                                       affine_constraints,
-                                                       mask);
-    }
+    // copy periodicity and hanging node constraints, and add further constraints stemming from
+    // Dirichlet boundary conditions
+    affine_constraints.copy_from(affine_constraints_periodicity_and_hanging_nodes);
 
-    // DirichletCached boundaries
-    for(auto it : this->boundary_descriptor->dirichlet_cached_bc)
-    {
-      dealii::ComponentMask mask = dealii::ComponentMask();
-      dealii::DoFTools::make_zero_boundary_constraints(dof_handler,
-                                                       it.first,
-                                                       affine_constraints,
-                                                       mask);
-    }
+    // use all the component masks defined by the user
+    std::map<dealii::types::boundary_id, dealii::ComponentMask> map_bid_to_mask =
+      boundary_descriptor->dirichlet_bc_component_mask;
 
+    // collect all Dirichlet boundary IDs in a set:
+    // DirichletCached boundary IDs are already provided as a set
+    std::set<dealii::types::boundary_id> all_dirichlet_bids =
+      boundary_descriptor->dirichlet_cached_bc;
+
+    // standard Dirichlet boundaries: extract keys from map
+    fill_keys_of_map_into_set(all_dirichlet_bids, boundary_descriptor->dirichlet_bc);
+
+    // fill with default mask if no mask has been defined
+    fill_map_bid_to_mask_with_default_mask(map_bid_to_mask, all_dirichlet_bids);
+
+    // call deal.II utility function to add Dirichlet constraints
+    add_homogeneous_dirichlet_constraints(affine_constraints, dof_handler, map_bid_to_mask);
+
+    // compress constraints *once after* complete setup, since affine constraints to copy from need
+    // to be non-closed to add further constraints
+    affine_constraints_periodicity_and_hanging_nodes.close();
     affine_constraints.close();
   }
 
@@ -204,13 +162,16 @@ Operator<dim, n_components, Number>::fill_matrix_free_data(
   matrix_free_data.insert_dof_handler(&dof_handler, get_dof_name());
   matrix_free_data.insert_constraint(&affine_constraints, get_dof_name());
 
-  if(this->grid->triangulation->all_reference_cells_are_hyper_cube())
-    matrix_free_data.insert_quadrature(dealii::QGauss<1>(param.degree + 1), get_quad_name());
-  else if(this->grid->triangulation->all_reference_cells_are_simplex())
-    matrix_free_data.insert_quadrature(dealii::QGaussSimplex<dim>(param.degree + 1),
-                                       get_quad_name());
-  else
-    AssertThrow(false, ExcNotImplemented());
+  // inhomogeneous Dirichlet boundary conditions: use additional AffineConstraints object, but the
+  // same DoFHandler
+  matrix_free_data.insert_dof_handler(&dof_handler,
+                                      get_dof_name_periodicity_and_hanging_node_constraints());
+  matrix_free_data.insert_constraint(&affine_constraints_periodicity_and_hanging_nodes,
+                                     get_dof_name_periodicity_and_hanging_node_constraints());
+
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(param.grid.element_type, param.degree + 1);
+  matrix_free_data.insert_quadrature(*quadrature, get_quad_name());
 
   // Create a Gauss-Lobatto quadrature rule for DirichletCached boundary conditions.
   // These quadrature points coincide with the nodes of the discretization, so that
@@ -220,7 +181,7 @@ Operator<dim, n_components, Number>::fill_matrix_free_data(
   // conditions. This is not needed in case of discontinuous Galerkin discretizations
   // where boundary conditions are imposed weakly via integrals over the domain
   // boundaries.
-  if(param.spatial_discretization == SpatialDiscretization::CG &&
+  if(param.spatial_discretization == SpatialDiscretization::CG and
      not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
     AssertThrow(this->grid->triangulation->all_reference_cells_are_hyper_cube(),
@@ -233,13 +194,42 @@ Operator<dim, n_components, Number>::fill_matrix_free_data(
 
 template<int dim, int n_components, typename Number>
 void
+Operator<dim, n_components, Number>::setup_coupling_boundary_conditions()
+{
+  if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
+  {
+    interface_data_dirichlet_cached = std::make_shared<ContainerInterfaceData<rank, dim, double>>();
+    std::vector<unsigned int> quad_indices;
+    if(param.spatial_discretization == SpatialDiscretization::DG)
+      quad_indices.emplace_back(get_quad_index());
+    else if(param.spatial_discretization == SpatialDiscretization::CG)
+      quad_indices.emplace_back(get_quad_index_gauss_lobatto());
+    else
+      AssertThrow(false, dealii::ExcMessage("not implemented."));
+
+    interface_data_dirichlet_cached->setup(*matrix_free,
+                                           get_dof_index(),
+                                           quad_indices,
+                                           boundary_descriptor->dirichlet_cached_bc);
+
+    boundary_descriptor->set_dirichlet_cached_data(interface_data_dirichlet_cached);
+  }
+}
+
+template<int dim, int n_components, typename Number>
+void
 Operator<dim, n_components, Number>::setup_operators()
 {
   // Laplace operator
   Poisson::LaplaceOperatorData<rank, dim> laplace_operator_data;
-  laplace_operator_data.dof_index  = get_dof_index();
+  laplace_operator_data.dof_index = get_dof_index();
+  if(param.spatial_discretization == SpatialDiscretization::CG)
+  {
+    laplace_operator_data.dof_index_inhomogeneous =
+      get_dof_index_periodicity_and_hanging_node_constraints();
+  }
   laplace_operator_data.quad_index = get_quad_index();
-  if(param.spatial_discretization == SpatialDiscretization::CG &&
+  if(param.spatial_discretization == SpatialDiscretization::CG and
      not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
     AssertThrow(this->grid->triangulation->all_reference_cells_are_hyper_cube(),
@@ -247,10 +237,14 @@ Operator<dim, n_components, Number>::setup_operators()
 
     laplace_operator_data.quad_index_gauss_lobatto = get_quad_index_gauss_lobatto();
   }
-  laplace_operator_data.bc                    = boundary_descriptor;
-  laplace_operator_data.use_cell_based_loops  = param.enable_cell_based_face_loops;
-  laplace_operator_data.kernel_data.IP_factor = param.IP_factor;
+  laplace_operator_data.bc                     = boundary_descriptor;
+  laplace_operator_data.use_cell_based_loops   = param.enable_cell_based_face_loops;
+  laplace_operator_data.kernel_data.IP_factor  = param.IP_factor;
+  laplace_operator_data.use_matrix_based_vmult = param.use_matrix_based_implementation;
+  laplace_operator_data.sparse_matrix_type     = param.sparse_matrix_type;
   laplace_operator.initialize(*matrix_free, affine_constraints, laplace_operator_data);
+
+  laplace_operator.assemble_matrix_if_necessary();
 
   // rhs operator
   if(param.right_hand_side)
@@ -265,47 +259,53 @@ Operator<dim, n_components, Number>::setup_operators()
 
 template<int dim, int n_components, typename Number>
 void
+Operator<dim, n_components, Number>::setup()
+{
+  // initialize MatrixFree and MatrixFreeData
+  std::shared_ptr<dealii::MatrixFree<dim, Number>> mf =
+    std::make_shared<dealii::MatrixFree<dim, Number>>();
+  std::shared_ptr<MatrixFreeData<dim, Number>> mf_data =
+    std::make_shared<MatrixFreeData<dim, Number>>();
+
+  fill_matrix_free_data(*mf_data);
+
+  if(param.enable_cell_based_face_loops)
+    Categorization::do_cell_based_loops(*grid->triangulation, mf_data->data);
+  mf->reinit(*get_mapping(),
+             mf_data->get_dof_handler_vector(),
+             mf_data->get_constraint_vector(),
+             mf_data->get_quadrature_vector(),
+             mf_data->data);
+
+  // Subsequently, call the other setup function with MatrixFree/MatrixFreeData objects as
+  // arguments.
+  this->setup(mf, mf_data);
+}
+
+template<int dim, int n_components, typename Number>
+void
 Operator<dim, n_components, Number>::setup(
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free_in,
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data_in)
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free_in,
+  std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data_in)
 {
   pcout << std::endl << "Setup Poisson operator ..." << std::endl;
 
   matrix_free      = matrix_free_in;
   matrix_free_data = matrix_free_data_in;
 
-  if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
-  {
-    interface_data_dirichlet_cached = std::make_shared<ContainerInterfaceData<rank, dim, double>>();
-    std::vector<unsigned int> quad_indices;
-    if(param.spatial_discretization == SpatialDiscretization::DG)
-      quad_indices.emplace_back(get_quad_index());
-    else if(param.spatial_discretization == SpatialDiscretization::CG)
-      quad_indices.emplace_back(get_quad_index_gauss_lobatto());
-    else
-      AssertThrow(false, dealii::ExcMessage("not implemented."));
-
-    std::set<dealii::types::boundary_id> bids;
-    for(auto const & bc : boundary_descriptor->dirichlet_cached_bc)
-      bids.insert(bc.first);
-
-    interface_data_dirichlet_cached->setup(matrix_free, get_dof_index(), quad_indices, bids);
-
-    for(auto const & bc : boundary_descriptor->dirichlet_cached_bc)
-      bc.second->set_data_pointer(interface_data_dirichlet_cached);
-  }
+  setup_coupling_boundary_conditions();
 
   setup_operators();
+
+  setup_preconditioner_and_solver();
 
   pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, int n_components, typename Number>
 void
-Operator<dim, n_components, Number>::setup_solver()
+Operator<dim, n_components, Number>::setup_preconditioner_and_solver()
 {
-  pcout << std::endl << "Setup Poisson solver ..." << std::endl;
-
   // initialize preconditioner
   if(param.preconditioner == Poisson::Preconditioner::None)
   {
@@ -313,16 +313,21 @@ Operator<dim, n_components, Number>::setup_solver()
   }
   else if(param.preconditioner == Poisson::Preconditioner::PointJacobi)
   {
-    preconditioner = std::make_shared<JacobiPreconditioner<Laplace>>(laplace_operator);
+    preconditioner = std::make_shared<JacobiPreconditioner<Laplace>>(laplace_operator, true);
   }
   else if(param.preconditioner == Poisson::Preconditioner::BlockJacobi)
   {
-    preconditioner = std::make_shared<BlockJacobiPreconditioner<Laplace>>(laplace_operator);
+    preconditioner = std::make_shared<BlockJacobiPreconditioner<Laplace>>(laplace_operator, true);
+  }
+  else if(param.preconditioner == Poisson::Preconditioner::AdditiveSchwarz)
+  {
+    preconditioner =
+      std::make_shared<AdditiveSchwarzPreconditioner<Laplace>>(laplace_operator, true);
   }
   else if(param.preconditioner == Poisson::Preconditioner::AMG)
   {
     preconditioner = std::make_shared<PreconditionerAMG<Laplace, Number>>(
-      laplace_operator, param.multigrid_data.coarse_problem.amg_data);
+      laplace_operator, true, param.multigrid_data.coarse_problem.amg_data);
   }
   else if(param.preconditioner == Poisson::Preconditioner::Multigrid)
   {
@@ -336,11 +341,12 @@ Operator<dim, n_components, Number>::setup_solver()
     std::shared_ptr<Multigrid> mg_preconditioner =
       std::dynamic_pointer_cast<Multigrid>(preconditioner);
 
-    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
-      pair;
-
     std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
       dirichlet_boundary_conditions = laplace_operator.get_data().bc->dirichlet_bc;
+
+    typedef std::map<dealii::types::boundary_id, dealii::ComponentMask> Map_DBC_ComponentMask;
+    Map_DBC_ComponentMask dirichlet_bc_component_mask =
+      laplace_operator.get_data().bc->dirichlet_bc_component_mask;
 
     // We also need to add DirichletCached boundary conditions. From the
     // perspective of multigrid, there is no difference between standard
@@ -348,26 +354,34 @@ Operator<dim, n_components, Number>::setup_solver()
     // about inhomogeneous boundary data, we simply fill the map with
     // dealii::Functions::ZeroFunction for DirichletCached BCs.
     for(auto iter : laplace_operator.get_data().bc->dirichlet_cached_bc)
+    {
+      typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+        pair;
+
       dirichlet_boundary_conditions.insert(
-        pair(iter.first, new dealii::Functions::ZeroFunction<dim>(n_components)));
+        pair(iter, new dealii::Functions::ZeroFunction<dim>(n_components)));
+
+      typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
+
+      std::vector<bool> default_mask = std::vector<bool>(n_components, true);
+      dirichlet_bc_component_mask.insert(pair_mask(iter, default_mask));
+    }
 
     mg_preconditioner->initialize(mg_data,
-                                  param.grid.multigrid,
-                                  &dof_handler.get_triangulation(),
-                                  grid->coarse_triangulations,
+                                  grid,
+                                  multigrid_mappings,
                                   dof_handler.get_fe(),
-                                  grid->mapping,
                                   laplace_operator.get_data(),
                                   false /* moving_mesh */,
                                   dirichlet_boundary_conditions,
-                                  grid->periodic_faces);
+                                  dirichlet_bc_component_mask);
   }
   else
   {
     AssertThrow(false, dealii::ExcMessage("Specified preconditioner is not implemented!"));
   }
 
-  if(param.solver == Poisson::Solver::CG)
+  if(param.solver == LinearSolver::CG)
   {
     // initialize solver_data
     Krylov::SolverDataCG solver_data;
@@ -384,7 +398,7 @@ Operator<dim, n_components, Number>::setup_solver()
       std::make_shared<Krylov::SolverCG<Laplace, PreconditionerBase<Number>, VectorType>>(
         laplace_operator, *preconditioner, solver_data);
   }
-  else if(param.solver == Solver::FGMRES)
+  else if(param.solver == LinearSolver::FGMRES)
   {
     // initialize solver_data
     Krylov::SolverDataFGMRES solver_data;
@@ -406,8 +420,6 @@ Operator<dim, n_components, Number>::setup_solver()
   {
     AssertThrow(false, dealii::ExcMessage("Specified solver is not implemented!"));
   }
-
-  pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, int n_components, typename Number>
@@ -421,27 +433,15 @@ template<int dim, int n_components, typename Number>
 void
 Operator<dim, n_components, Number>::prescribe_initial_conditions(VectorType & src) const
 {
-  field_functions->initial_solution->set_time(0.0);
-
-  // This is necessary if Number == float
-  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeDouble;
-
-  VectorTypeDouble src_double;
-  src_double = src;
-
-  dealii::VectorTools::interpolate(dof_handler, *(field_functions->initial_solution), src_double);
-
-  src = src_double;
+  Utilities::interpolate(dof_handler, *(field_functions->initial_solution), src, 0.0);
 }
 
 template<int dim, int n_components, typename Number>
 void
 Operator<dim, n_components, Number>::rhs(VectorType & dst, double const time) const
 {
-  dst = 0;
-
   laplace_operator.set_time(time);
-  laplace_operator.rhs_add(dst);
+  laplace_operator.rhs(dst);
 
   if(param.right_hand_side)
     rhs_operator.evaluate_add(dst, time);
@@ -452,6 +452,16 @@ void
 Operator<dim, n_components, Number>::vmult(VectorType & dst, VectorType const & src) const
 {
   laplace_operator.vmult(dst, src);
+}
+
+template<int dim, int n_components, typename Number>
+void
+Operator<dim, n_components, Number>::evaluate(VectorType &       dst,
+                                              VectorType const & src,
+                                              double const       time) const
+{
+  laplace_operator.set_time(time);
+  laplace_operator.evaluate(dst, src);
 }
 
 template<int dim, int n_components, typename Number>
@@ -475,33 +485,23 @@ Operator<dim, n_components, Number>::solve(VectorType &       sol,
     check_multigrid.check();
   }
 
-  // Set constrained degrees of freedom of rhs vector according to the prescribed
-  // Dirichlet boundary conditions.
-  VectorType & rhs_mutable = const_cast<VectorType &>(rhs);
+  unsigned int n_iterations = iterative_solver->solve(sol, rhs);
+
+  // Set Dirichlet degrees of freedom according to Dirichlet boundary condition.
   if(param.spatial_discretization == SpatialDiscretization::CG)
   {
-    laplace_operator.set_constrained_values(rhs_mutable, time);
+    laplace_operator.set_time(time);
+    laplace_operator.set_inhomogeneous_boundary_values(sol);
   }
 
-  unsigned int iterations = iterative_solver->solve(sol, rhs_mutable);
-
-  // This step should actually be optional: The constrained degrees of freedom of the
-  // rhs vector contain the Dirichlet boundary values and the linear operator contains
-  // values of 1 on the diagonal. Hence, sol should already contain the correct
-  // Dirichlet boundary values for constrained degrees of freedom.
-  if(param.spatial_discretization == SpatialDiscretization::CG)
-  {
-    laplace_operator.set_constrained_values(sol, time);
-  }
-
-  return iterations;
+  return n_iterations;
 }
 
 template<int dim, int n_components, typename Number>
-dealii::MatrixFree<dim, Number> const &
+std::shared_ptr<dealii::MatrixFree<dim, Number> const>
 Operator<dim, n_components, Number>::get_matrix_free() const
 {
-  return *matrix_free;
+  return matrix_free;
 }
 
 template<int dim, int n_components, typename Number>
@@ -532,75 +532,18 @@ Operator<dim, n_components, Number>::get_average_convergence_rate() const
   return iterative_solver->rho;
 }
 
-#ifdef DEAL_II_WITH_TRILINOS
-template<int dim, int n_components, typename Number>
-void
-Operator<dim, n_components, Number>::init_system_matrix(
-  dealii::TrilinosWrappers::SparseMatrix & system_matrix,
-  MPI_Comm const &                         mpi_comm) const
-{
-  laplace_operator.init_system_matrix(system_matrix, mpi_comm);
-}
-
-template<int dim, int n_components, typename Number>
-void
-Operator<dim, n_components, Number>::calculate_system_matrix(
-  dealii::TrilinosWrappers::SparseMatrix & system_matrix) const
-{
-  laplace_operator.calculate_system_matrix(system_matrix);
-}
-
-template<int dim, int n_components, typename Number>
-void
-Operator<dim, n_components, Number>::vmult_matrix_based(
-  VectorTypeDouble &                             dst,
-  dealii::TrilinosWrappers::SparseMatrix const & system_matrix,
-  VectorTypeDouble const &                       src) const
-{
-  system_matrix.vmult(dst, src);
-}
-#endif
-
-#ifdef DEAL_II_WITH_PETSC
-template<int dim, int n_components, typename Number>
-void
-Operator<dim, n_components, Number>::init_system_matrix(
-  dealii::PETScWrappers::MPI::SparseMatrix & system_matrix,
-  MPI_Comm const &                           mpi_comm) const
-{
-  laplace_operator.init_system_matrix(system_matrix, mpi_comm);
-}
-
-template<int dim, int n_components, typename Number>
-void
-Operator<dim, n_components, Number>::calculate_system_matrix(
-  dealii::PETScWrappers::MPI::SparseMatrix & system_matrix) const
-{
-  laplace_operator.calculate_system_matrix(system_matrix);
-}
-
-template<int dim, int n_components, typename Number>
-void
-Operator<dim, n_components, Number>::vmult_matrix_based(
-  VectorTypeDouble &                               dst,
-  dealii::PETScWrappers::MPI::SparseMatrix const & system_matrix,
-  VectorTypeDouble const &                         src) const
-{
-  apply_petsc_operation(dst,
-                        src,
-                        system_matrix.get_mpi_communicator(),
-                        [&](dealii::PETScWrappers::VectorBase &       petsc_dst,
-                            dealii::PETScWrappers::VectorBase const & petsc_src) {
-                          system_matrix.vmult(petsc_dst, petsc_src);
-                        });
-}
-#endif
-
 template<int dim, int n_components, typename Number>
 std::string
 Operator<dim, n_components, Number>::get_dof_name() const
 {
   return field + "_" + dof_index;
+}
+
+template<int dim, int n_components, typename Number>
+std::string
+Operator<dim, n_components, Number>::get_dof_name_periodicity_and_hanging_node_constraints() const
+{
+  return field + "_" + dof_index_periodicity_and_handing_node_constraints;
 }
 
 template<int dim, int n_components, typename Number>
@@ -626,6 +569,13 @@ Operator<dim, n_components, Number>::get_dof_index() const
 
 template<int dim, int n_components, typename Number>
 unsigned int
+Operator<dim, n_components, Number>::get_dof_index_periodicity_and_hanging_node_constraints() const
+{
+  return matrix_free_data->get_dof_index(get_dof_name_periodicity_and_hanging_node_constraints());
+}
+
+template<int dim, int n_components, typename Number>
+unsigned int
 Operator<dim, n_components, Number>::get_quad_index() const
 {
   return matrix_free_data->get_quad_index(get_quad_name());
@@ -640,7 +590,7 @@ Operator<dim, n_components, Number>::get_quad_index_gauss_lobatto() const
 
 template<int dim, int n_components, typename Number>
 std::shared_ptr<ContainerInterfaceData<Operator<dim, n_components, Number>::rank, dim, double>>
-Operator<dim, n_components, Number>::get_container_interface_data()
+Operator<dim, n_components, Number>::get_container_interface_data() const
 {
   return interface_data_dirichlet_cached;
 }
@@ -656,7 +606,7 @@ template<int dim, int n_components, typename Number>
 std::shared_ptr<dealii::Mapping<dim> const>
 Operator<dim, n_components, Number>::get_mapping() const
 {
-  return grid->mapping;
+  return mapping;
 }
 
 template class Operator<2, 1, float>;

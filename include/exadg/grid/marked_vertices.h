@@ -25,19 +25,10 @@
 // deal.II
 #include <deal.II/grid/tria.h>
 
-template<typename Key, typename Data>
-std::set<Key>
-extract_set_of_keys_from_map(std::map<Key, Data> const & map)
-{
-  std::set<Key> set;
-  for(auto iter : map)
-  {
-    set.insert(iter.first);
-  }
-
-  return set;
-}
-
+/**
+ * Returns a vector of marked vertices indicating vertices on the boundary of a triangulation that
+ * have been marked according to a given set of boundary_ids.
+ */
 template<int dim>
 std::vector<bool>
 get_marked_vertices_via_boundary_ids(dealii::Triangulation<dim> const &           triangulation,
@@ -49,7 +40,7 @@ get_marked_vertices_via_boundary_ids(dealii::Triangulation<dim> const &         
 
   for(auto const & cell : triangulation.active_cell_iterators())
   {
-    if(!cell->is_artificial() && cell->at_boundary())
+    if(not(cell->is_artificial()) and cell->at_boundary())
     {
       for(auto const & f : cell->face_indices())
       {

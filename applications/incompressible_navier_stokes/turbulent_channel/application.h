@@ -23,6 +23,7 @@
 #define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_
 
 // ExaDG
+#include <exadg/grid/boundary_layer_manifold.h>
 #include <exadg/postprocessor/statistics_manager.h>
 #include <exadg/utilities/numbers.h>
 
@@ -77,81 +78,6 @@ grid_transform_y(double const & eta)
   return y;
 }
 
-/*
- * inverse mapping:
- *
- *  maps y in [-1,1]*length_y/2.0 --> eta in [0,1]
- */
-double
-inverse_grid_transform_y(double const & y)
-{
-  double eta = 0.0;
-
-  if(GRID_STRETCH_FAC >= 0)
-    eta =
-      (std::atanh(y * std::tanh(GRID_STRETCH_FAC) * 2.0 / DIMENSIONS_X2) / GRID_STRETCH_FAC + 1.0) /
-      2.0;
-  else // use a negative GRID_STRETCH_FACTOR deactivate grid stretching
-    eta = (2. * y / DIMENSIONS_X2 + 1.) / 2.0;
-
-  return eta;
-}
-
-template<int dim>
-class ManifoldTurbulentChannel : public dealii::ChartManifold<dim, dim, dim>
-{
-public:
-  ManifoldTurbulentChannel(dealii::Tensor<1, dim> const & dimensions_in)
-  {
-    dimensions = dimensions_in;
-  }
-
-  /*
-   *  push_forward operation that maps point xi in reference coordinates [0,1]^d to
-   *  point x in physical coordinates
-   */
-  dealii::Point<dim>
-  push_forward(dealii::Point<dim> const & xi) const final
-  {
-    dealii::Point<dim> x;
-
-    x[0] = xi[0] * dimensions[0] - dimensions[0] / 2.0;
-    x[1] = grid_transform_y(xi[1]);
-
-    if(dim == 3)
-      x[2] = xi[2] * dimensions[2] - dimensions[2] / 2.0;
-
-    return x;
-  }
-
-  /*
-   *  pull_back operation that maps point x in physical coordinates
-   *  to point xi in reference coordinates [0,1]^d
-   */
-  dealii::Point<dim>
-  pull_back(dealii::Point<dim> const & x) const final
-  {
-    dealii::Point<dim> xi;
-
-    xi[0] = x[0] / dimensions[0] + 0.5;
-    xi[1] = inverse_grid_transform_y(x[1]);
-
-    if(dim == 3)
-      xi[2] = x[2] / dimensions[2] + 0.5;
-
-    return xi;
-  }
-
-  std::unique_ptr<dealii::Manifold<dim>>
-  clone() const final
-  {
-    return std::make_unique<ManifoldTurbulentChannel<dim>>(dimensions);
-  }
-
-private:
-  dealii::Tensor<1, dim> dimensions;
-};
-
 template<int dim>
 class InitialSolutionVelocity : public dealii::Function<dim>
 {
@@ -161,7 +87,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     AssertThrow(std::abs(p[1]) < DIMENSIONS_X2 / 2.0 + 1.e-12,
                 dealii::ExcMessage("Invalid geometry parameters."));
@@ -205,7 +131,7 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator)
+  setup(Operator const & pde_operator) final
   {
     // call setup function of base class
     Base::setup(pde_operator);
@@ -221,7 +147,7 @@ public:
   do_postprocessing(VectorType const &     velocity,
                     VectorType const &     pressure,
                     double const           time,
-                    types::time_step const time_step_number)
+                    types::time_step const time_step_number) final
   {
     Base::do_postprocessing(velocity, pressure, time, time_step_number);
 
@@ -287,9 +213,10 @@ private:
     this->param.solver_info_data.interval_time_steps = 1;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree_u;
-    this->param.degree_p                = DegreePressure::MixedOrder;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
@@ -313,13 +240,13 @@ private:
 
 
     // TURBULENCE
-    this->param.use_turbulence_model = false;
-    this->param.turbulence_model     = TurbulenceEddyViscosityModel::Sigma;
+    this->param.turbulence_model_data.is_active        = false;
+    this->param.turbulence_model_data.turbulence_model = TurbulenceEddyViscosityModel::Sigma;
     // Smagorinsky: 0.165
     // Vreman: 0.28
     // WALE: 0.50
     // Sigma: 1.35
-    this->param.turbulence_model_constant = 1.35;
+    this->param.turbulence_model_data.constant = 1.35;
 
     // PROJECTION METHODS
 
@@ -341,10 +268,13 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    // viscous step
-    this->param.solver_viscous         = SolverViscous::CG;
-    this->param.solver_data_viscous    = SolverData(1000, ABS_TOL, REL_TOL);
-    this->param.preconditioner_viscous = PreconditionerViscous::InverseMassMatrix;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      this->param.solver_momentum         = SolverMomentum::CG;
+      this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
+      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+    }
+
 
     // PRESSURE-CORRECTION SCHEME
 
@@ -353,18 +283,20 @@ private:
     this->param.rotational_formulation       = true;
 
     // momentum step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // Newton solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
 
-    // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
+      // linear solver
+      this->param.solver_momentum = SolverMomentum::GMRES;
+      if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
+        this->param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
+      else
+        this->param.solver_data_momentum = SolverData(1e4, ABS_TOL, REL_TOL, 100);
 
-    // linear solver
-    this->param.solver_momentum = SolverMomentum::GMRES;
-    if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
-      this->param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
-    else
-      this->param.solver_data_momentum = SolverData(1e4, ABS_TOL, REL_TOL, 100);
-
-    this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+    }
 
     // COUPLED NAVIER-STOKES SOLVER
     this->param.use_scaling_continuity = false;
@@ -391,50 +323,87 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    dealii::Tensor<1, dim> dimensions;
-    dimensions[0] = DIMENSIONS_X1;
-    dimensions[1] = DIMENSIONS_X2;
-    if(dim == 3)
-      dimensions[2] = DIMENSIONS_X3;
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)vector_local_refinements;
 
-    dealii::GridGenerator::hyper_rectangle(*this->grid->triangulation,
-                                           dealii::Point<dim>(-dimensions / 2.0),
-                                           dealii::Point<dim>(dimensions / 2.0));
+      dealii::Tensor<1, dim> dimensions;
+      dimensions[0] = DIMENSIONS_X1;
+      dimensions[1] = DIMENSIONS_X2;
+      if(dim == 3)
+        dimensions[2] = DIMENSIONS_X3;
 
-    // manifold
-    unsigned int manifold_id = 1;
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      cell->set_all_manifold_ids(manifold_id);
-    }
+      dealii::GridGenerator::hyper_rectangle(tria,
+                                             dealii::Point<dim>(-dimensions / 2.0),
+                                             dealii::Point<dim>(dimensions / 2.0));
 
-    // apply mesh stretching towards no-slip boundaries in y-direction
-    static const ManifoldTurbulentChannel<dim> manifold(dimensions);
-    this->grid->triangulation->set_manifold(manifold_id, manifold);
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
 
-    // periodicity in x--direction
-    this->grid->triangulation->begin()->face(0)->set_all_boundary_ids(0 + 10);
-    this->grid->triangulation->begin()->face(1)->set_all_boundary_ids(1 + 10);
-    // periodicity in z-direction
-    if(dim == 3)
-    {
-      this->grid->triangulation->begin()->face(4)->set_all_boundary_ids(2 + 10);
-      this->grid->triangulation->begin()->face(5)->set_all_boundary_ids(3 + 10);
-    }
+      // manifold
+      unsigned int manifold_id = 1;
+      for(auto cell : tria.cell_iterators())
+      {
+        cell->set_all_manifold_ids(manifold_id);
+      }
 
-    dealii::GridTools::collect_periodic_faces(
-      *this->grid->triangulation, 0 + 10, 1 + 10, 0, this->grid->periodic_faces);
-    if(dim == 3)
-    {
-      dealii::GridTools::collect_periodic_faces(
-        *this->grid->triangulation, 2 + 10, 3 + 10, 2, this->grid->periodic_faces);
-    }
+      // apply mesh stretching towards no-slip boundaries in y-direction
+      const BoundaryLayerManifold<dim> manifold(dimensions, GRID_STRETCH_FAC);
+      tria.set_manifold(manifold_id, manifold);
 
-    this->grid->triangulation->add_periodicity(this->grid->periodic_faces);
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Periodic faces might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+      // periodicity in x--direction
+      tria.begin()->face(0)->set_all_boundary_ids(0 + 10);
+      tria.begin()->face(1)->set_all_boundary_ids(1 + 10);
+      // periodicity in z-direction
+      if(dim == 3)
+      {
+        tria.begin()->face(4)->set_all_boundary_ids(2 + 10);
+        tria.begin()->face(5)->set_all_boundary_ids(3 + 10);
+      }
+
+      dealii::GridTools::collect_periodic_faces(tria, 0 + 10, 1 + 10, 0, periodic_face_pairs);
+      if(dim == 3)
+      {
+        dealii::GridTools::collect_periodic_faces(tria, 2 + 10, 3 + 10, 2, periodic_face_pairs);
+      }
+
+      tria.add_periodicity(periodic_face_pairs);
+
+      tria.refine_global(global_refinements);
+    };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -484,6 +453,24 @@ private:
     pp_data.mass_data.directory              = this->output_parameters.directory;
     pp_data.mass_data.filename               = this->output_parameters.filename;
     pp_data.mass_data.reference_length_scale = 1.0;
+
+    // pointwise output
+    pp_data.pointwise_output_data.time_control_data.is_active  = false;
+    pp_data.pointwise_output_data.time_control_data.start_time = START_TIME;
+    pp_data.pointwise_output_data.time_control_data.end_time   = END_TIME;
+    pp_data.pointwise_output_data.time_control_data.trigger_interval =
+      (END_TIME - START_TIME) / 1000.0;
+    pp_data.pointwise_output_data.directory =
+      this->output_parameters.directory + "pointwise_output/";
+    pp_data.pointwise_output_data.filename       = this->output_parameters.filename;
+    pp_data.pointwise_output_data.write_velocity = true;
+    pp_data.pointwise_output_data.write_pressure = true;
+    pp_data.pointwise_output_data.update_points_before_evaluation = false;
+
+    dealii::Point<dim> evaluation_point;
+    evaluation_point[0] = 0.5 * DIMENSIONS_X1;
+    evaluation_point[1] = 0.5 * DIMENSIONS_X2;
+    pp_data.pointwise_output_data.evaluation_points.push_back(evaluation_point);
 
     MyPostProcessorData<dim> pp_data_turb_ch;
     pp_data_turb_ch.pp_data = pp_data;

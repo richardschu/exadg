@@ -21,18 +21,20 @@
 
 // deal.II
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/numerics/vector_tools.h>
 
 // ExaDG
 #include <exadg/convection_diffusion/preconditioners/multigrid_preconditioner.h>
 #include <exadg/convection_diffusion/spatial_discretization/operator.h>
 #include <exadg/convection_diffusion/spatial_discretization/project_velocity.h>
-#include <exadg/grid/get_dynamic_mapping.h>
+#include <exadg/functions_and_boundary_conditions/interpolate.h>
+#include <exadg/grid/mapping_dof_vector.h>
+#include <exadg/operators/finite_element.h>
+#include <exadg/operators/grid_related_time_step_restrictions.h>
+#include <exadg/operators/quadrature.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/block_jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/inverse_mass_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/solvers/iterative_solvers_dealii_wrapper.h>
-#include <exadg/time_integration/time_step_calculation.h>
 
 namespace ExaDG
 {
@@ -40,40 +42,62 @@ namespace ConvDiff
 {
 template<int dim, typename Number>
 Operator<dim, Number>::Operator(
-  std::shared_ptr<Grid<dim> const>                  grid_in,
-  std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion_in,
-  std::shared_ptr<BoundaryDescriptor<dim> const>    boundary_descriptor_in,
-  std::shared_ptr<FieldFunctions<dim> const>        field_functions_in,
-  Parameters const &                                param_in,
-  std::string const &                               field_in,
-  MPI_Comm const &                                  mpi_comm_in)
+  std::shared_ptr<Grid<dim> const>                      grid_in,
+  std::shared_ptr<dealii::Mapping<dim> const>           mapping_in,
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings_in,
+  std::shared_ptr<BoundaryDescriptor<dim> const>        boundary_descriptor_in,
+  std::shared_ptr<FieldFunctions<dim> const>            field_functions_in,
+  Parameters const &                                    param_in,
+  std::string const &                                   field_in,
+  MPI_Comm const &                                      mpi_comm_in)
   : dealii::Subscriptor(),
     grid(grid_in),
-    grid_motion(grid_motion_in),
+    mapping(mapping_in),
+    multigrid_mappings(multigrid_mappings_in),
     boundary_descriptor(boundary_descriptor_in),
     field_functions(field_functions_in),
     param(param_in),
     field(field_in),
-    fe(param_in.degree),
     dof_handler(*grid_in->triangulation),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_in) == 0)
 {
   pcout << std::endl << "Construct convection-diffusion operator ..." << std::endl;
 
+  fe = create_finite_element<dim>(ElementType::Hypercube, true, 1, param.degree);
+
   if(needs_own_dof_handler_velocity())
   {
-    fe_velocity = std::make_shared<dealii::FESystem<dim>>(dealii::FE_DGQ<dim>(param.degree), dim);
+    fe_velocity = create_finite_element<dim>(ElementType::Hypercube, true, dim, param.degree);
     dof_handler_velocity = std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
   }
 
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
 
-  affine_constraints.close();
+  pcout << std::endl
+        << "Discontinuous Galerkin finite element discretization:" << std::endl
+        << std::endl;
+
+  print_parameter(pcout, "degree of 1D polynomials", param.degree);
+  print_parameter(pcout, "number of dofs per cell", fe->n_dofs_per_cell());
+  print_parameter(pcout, "number of dofs (total)", dof_handler.n_dofs());
 
   pcout << std::endl << "... done!" << std::endl;
 }
 
+template<int dim, typename Number>
+void
+Operator<dim, Number>::initialize_dof_handler_and_constraints()
+{
+  dof_handler.distribute_dofs(*fe);
+
+  if(needs_own_dof_handler_velocity())
+  {
+    dof_handler_velocity->distribute_dofs(*fe_velocity);
+  }
+
+  affine_constraints.close();
+}
 
 template<int dim, typename Number>
 void
@@ -103,6 +127,11 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
       Operators::DiffusiveKernel<dim, Number>::get_mapping_flags(true, true));
   }
 
+  // mapping flags required for CFL condition
+  MappingFlags flags_cfl;
+  flags_cfl.cells = dealii::update_quadrature_points;
+  matrix_free_data.append_mapping_flags(flags_cfl);
+
   // dealii::DoFHandler, dealii::AffineConstraints
   matrix_free_data.insert_dof_handler(&dof_handler, get_dof_name());
   matrix_free_data.insert_constraint(&affine_constraints, get_dof_name());
@@ -114,28 +143,22 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   }
 
   // dealii::Quadrature
-  matrix_free_data.insert_quadrature(dealii::QGauss<1>(param.degree + 1), get_quad_name());
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(param.grid.element_type, param.degree + 1);
+  matrix_free_data.insert_quadrature(*quadrature, get_quad_name());
 
   if(param.use_overintegration)
   {
-    matrix_free_data.insert_quadrature(dealii::QGauss<1>(param.degree + (param.degree + 2) / 2),
-                                       get_quad_name_overintegration());
+    std::shared_ptr<dealii::Quadrature<dim>> quadrature_over =
+      create_quadrature<dim>(param.grid.element_type, param.degree + (param.degree + 2) / 2);
+    matrix_free_data.insert_quadrature(*quadrature_over, get_quad_name_overintegration());
   }
 }
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free_in,
-                             std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data_in,
-                             std::string const & dof_index_velocity_external_in)
+Operator<dim, Number>::setup_operators()
 {
-  pcout << std::endl << "Setup convection-diffusion operator ..." << std::endl;
-
-  matrix_free      = matrix_free_in;
-  matrix_free_data = matrix_free_data_in;
-
-  dof_index_velocity_external = dof_index_velocity_external_in;
-
   // mass operator
   MassOperatorData<dim> mass_operator_data;
   mass_operator_data.dof_index            = get_dof_index();
@@ -147,7 +170,12 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> ma
   mass_operator.initialize(*matrix_free, affine_constraints, mass_operator_data);
 
   // inverse mass operator
-  inverse_mass_operator.initialize(*matrix_free, get_dof_index(), get_quad_index());
+  InverseMassOperatorData inverse_mass_operator_data;
+  inverse_mass_operator_data.dof_index  = get_dof_index();
+  inverse_mass_operator_data.quad_index = get_quad_index();
+  inverse_mass_operator_data.parameters = param.inverse_mass_operator;
+
+  inverse_mass_operator.initialize(*matrix_free, inverse_mass_operator_data);
 
   // convective operator
   unsigned int const quad_index_convective =
@@ -218,8 +246,8 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> ma
   rhs_operator.initialize(*matrix_free, rhs_operator_data);
 
   // merged operator
-  if(param.temporal_discretization == TemporalDiscretization::BDF ||
-     (param.temporal_discretization == TemporalDiscretization::ExplRK &&
+  if(param.temporal_discretization == TemporalDiscretization::BDF or
+     (param.temporal_discretization == TemporalDiscretization::ExplRK and
       param.use_combined_operator == true))
   {
     CombinedOperatorData<dim> combined_operator_data;
@@ -234,13 +262,13 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> ma
     // linear system of equations has to be solved: the problem is either steady or
     // an unsteady problem is solved with BDF time integration (semi-implicit or fully implicit
     // formulation of convective and diffusive terms)
-    if(param.problem_type == ProblemType::Steady ||
+    if(param.problem_type == ProblemType::Steady or
        param.temporal_discretization == TemporalDiscretization::BDF)
     {
       if(param.problem_type == ProblemType::Unsteady)
         combined_operator_data.unsteady_problem = true;
 
-      if(param.convective_problem() &&
+      if(param.convective_problem() and
          param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
         combined_operator_data.convective_problem = true;
 
@@ -252,11 +280,11 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> ma
       // always false
       combined_operator_data.unsteady_problem = false;
 
-      if(this->param.equation_type == EquationType::Convection ||
+      if(this->param.equation_type == EquationType::Convection or
          this->param.equation_type == EquationType::ConvectionDiffusion)
         combined_operator_data.convective_problem = true;
 
-      if(this->param.equation_type == EquationType::Diffusion ||
+      if(this->param.equation_type == EquationType::Diffusion or
          this->param.equation_type == EquationType::ConvectionDiffusion)
         combined_operator_data.diffusive_problem = true;
     }
@@ -270,7 +298,7 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> ma
 
     combined_operator_data.dof_index = get_dof_index();
     combined_operator_data.quad_index =
-      (param.use_overintegration && combined_operator_data.convective_problem) ?
+      (param.use_overintegration and combined_operator_data.convective_problem) ?
         get_quad_index_overintegration() :
         get_quad_index();
 
@@ -280,170 +308,114 @@ Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> ma
                                  convective_kernel,
                                  diffusive_kernel);
   }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::setup()
+{
+  pcout << std::endl << "Setup convection-diffusion operator ..." << std::endl;
+
+  do_setup();
 
   pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::distribute_dofs()
+Operator<dim, Number>::do_setup()
 {
-  // enumerate degrees of freedom
-  dof_handler.distribute_dofs(fe);
+  // initialize MatrixFree and MatrixFreeData
+  std::shared_ptr<dealii::MatrixFree<dim, Number>> mf =
+    std::make_shared<dealii::MatrixFree<dim, Number>>();
+  std::shared_ptr<MatrixFreeData<dim, Number>> mf_data =
+    std::make_shared<MatrixFreeData<dim, Number>>();
 
-  if(needs_own_dof_handler_velocity())
-  {
-    dof_handler_velocity->distribute_dofs(*fe_velocity);
-  }
+  fill_matrix_free_data(*mf_data);
 
-  unsigned int const ndofs_per_cell = dealii::Utilities::pow(param.degree + 1, dim);
+  if(param.use_cell_based_face_loops)
+    Categorization::do_cell_based_loops(*grid->triangulation, mf_data->data);
 
-  pcout << std::endl
-        << "Discontinuous Galerkin finite element discretization:" << std::endl
-        << std::endl;
+  mf->reinit(*get_mapping(),
+             mf_data->get_dof_handler_vector(),
+             mf_data->get_constraint_vector(),
+             mf_data->get_quadrature_vector(),
+             mf_data->data);
 
-  print_parameter(pcout, "degree of 1D polynomials", param.degree);
-  print_parameter(pcout, "number of dofs per cell", ndofs_per_cell);
-  print_parameter(pcout, "number of dofs (total)", dof_handler.n_dofs());
+  if(param.ale_formulation)
+    matrix_free_own_storage = mf;
+
+  // Subsequently, call the other setup function with MatrixFree/MatrixFreeData objects as
+  // arguments.
+  this->setup(mf, mf_data);
 }
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_dof_name() const
-{
-  return field + dof_index_std;
-}
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_quad_name() const
-{
-  return field + quad_index_std;
-}
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_quad_name_overintegration() const
-{
-  return field + quad_index_overintegration;
-}
-
-template<int dim, typename Number>
-bool
-Operator<dim, Number>::needs_own_dof_handler_velocity() const
-{
-  return param.analytical_velocity_field && param.store_analytical_velocity_in_dof_vector;
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_dof_index() const
-{
-  return matrix_free_data->get_dof_index(get_dof_name());
-}
-
-template<int dim, typename Number>
-std::string
-Operator<dim, Number>::get_dof_name_velocity() const
-{
-  if(needs_own_dof_handler_velocity())
-  {
-    return field + dof_index_velocity;
-  }
-  else // external velocity field not hosted by the convection-diffusion operator
-  {
-    return dof_index_velocity_external;
-  }
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_dof_index_velocity() const
-{
-  if(param.get_type_velocity_field() == TypeVelocityField::DoFVector)
-    return matrix_free_data->get_dof_index(get_dof_name_velocity());
-  else
-    return dealii::numbers::invalid_unsigned_int;
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_quad_index() const
-{
-  return matrix_free_data->get_quad_index(field + quad_index_std);
-}
-
-template<int dim, typename Number>
-unsigned int
-Operator<dim, Number>::get_quad_index_overintegration() const
-{
-  return matrix_free_data->get_quad_index(field + quad_index_overintegration);
-}
-
-template<int dim, typename Number>
-std::shared_ptr<dealii::Mapping<dim> const>
-Operator<dim, Number>::get_mapping() const
-{
-  return get_dynamic_mapping<dim, Number>(grid, grid_motion);
-}
-
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::setup_solver(double const scaling_factor_mass, VectorType const * velocity)
+Operator<dim, Number>::setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free_in,
+                             std::shared_ptr<MatrixFreeData<dim, Number> const> matrix_free_data_in,
+                             std::string const & dof_index_velocity_external_in)
 {
-  pcout << std::endl << "Setup solver ..." << std::endl;
+  matrix_free      = matrix_free_in;
+  matrix_free_data = matrix_free_data_in;
+
+  dof_index_velocity_external = dof_index_velocity_external_in;
+
+  setup_operators();
 
   if(param.linear_system_has_to_be_solved())
   {
-    combined_operator.set_scaling_factor_mass_operator(scaling_factor_mass);
+    setup_preconditioner();
 
-    // The velocity vector needs to be set in case the velocity field is stored in DoF vector.
-    // Otherwise, certain preconditioners requiring the velocity field during initialization can not
-    // be initialized.
-    if(param.get_type_velocity_field() == TypeVelocityField::DoFVector)
-    {
-      AssertThrow(
-        velocity != nullptr,
-        dealii::ExcMessage(
-          "In case of a numerical velocity field, a velocity vector has to be provided."));
-
-      combined_operator.set_velocity_ptr(*velocity);
-    }
-
-    initialize_preconditioner();
-
-    initialize_solver();
+    setup_solver();
   }
-
-  pcout << std::endl << "... done!" << std::endl;
 }
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::initialize_preconditioner()
+Operator<dim, Number>::setup_after_coarsening_and_refinement()
+{
+  initialize_dof_handler_and_constraints();
+
+  print_parameter(pcout,
+                  "number of dofs (total) after adaptive mesh refinement",
+                  dof_handler.n_dofs());
+
+  do_setup();
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::setup_preconditioner()
 {
   if(param.preconditioner == Preconditioner::InverseMassMatrix)
   {
-    preconditioner = std::make_shared<InverseMassPreconditioner<dim, 1, Number>>(*matrix_free,
-                                                                                 get_dof_index(),
-                                                                                 get_quad_index());
+    InverseMassOperatorData inverse_mass_operator_data;
+    inverse_mass_operator_data.dof_index  = get_dof_index();
+    inverse_mass_operator_data.quad_index = get_quad_index();
+    inverse_mass_operator_data.parameters = param.inverse_mass_preconditioner;
+
+    preconditioner =
+      std::make_shared<InverseMassPreconditioner<dim, 1, Number>>(*matrix_free,
+                                                                  inverse_mass_operator_data);
   }
   else if(param.preconditioner == Preconditioner::PointJacobi)
   {
     preconditioner =
-      std::make_shared<JacobiPreconditioner<CombinedOperator<dim, Number>>>(combined_operator);
+      std::make_shared<JacobiPreconditioner<CombinedOperator<dim, Number>>>(combined_operator,
+                                                                            false);
   }
   else if(param.preconditioner == Preconditioner::BlockJacobi)
   {
     preconditioner =
-      std::make_shared<BlockJacobiPreconditioner<CombinedOperator<dim, Number>>>(combined_operator);
+      std::make_shared<BlockJacobiPreconditioner<CombinedOperator<dim, Number>>>(combined_operator,
+                                                                                 false);
   }
   else if(param.preconditioner == Preconditioner::Multigrid)
   {
     if(param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
     {
-      AssertThrow(param.mg_operator_type != MultigridOperatorType::ReactionConvection &&
+      AssertThrow(param.mg_operator_type != MultigridOperatorType::ReactionConvection and
                     param.mg_operator_type != MultigridOperatorType::ReactionConvectionDiffusion,
                   dealii::ExcMessage(
                     "Invalid solver parameters. The convective term is treated explicitly."));
@@ -458,7 +430,7 @@ Operator<dim, Number>::initialize_preconditioner()
     std::shared_ptr<Multigrid> mg_preconditioner =
       std::dynamic_pointer_cast<Multigrid>(preconditioner);
 
-    if(param.mg_operator_type == MultigridOperatorType::ReactionConvection ||
+    if(param.mg_operator_type == MultigridOperatorType::ReactionConvection or
        param.mg_operator_type == MultigridOperatorType::ReactionConvectionDiffusion)
     {
       if(param.get_type_velocity_field() == TypeVelocityField::DoFVector)
@@ -474,26 +446,28 @@ Operator<dim, Number>::initialize_preconditioner()
       }
     }
 
-    CombinedOperatorData<dim> const & data = combined_operator.get_data();
+    std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+      dirichlet_boundary_conditions = combined_operator.get_data().bc->dirichlet_bc;
+
+    typedef std::map<dealii::types::boundary_id, dealii::ComponentMask> Map_DBC_ComponentMask;
+    Map_DBC_ComponentMask                                               dirichlet_bc_component_mask;
 
     mg_preconditioner->initialize(mg_data,
-                                  param.grid.multigrid,
-                                  &dof_handler.get_triangulation(),
-                                  grid->coarse_triangulations,
+                                  grid,
+                                  multigrid_mappings,
                                   dof_handler.get_fe(),
-                                  get_mapping(),
                                   combined_operator,
                                   param.mg_operator_type,
                                   param.ale_formulation,
-                                  data.bc->dirichlet_bc,
-                                  grid->periodic_faces);
+                                  dirichlet_boundary_conditions,
+                                  dirichlet_bc_component_mask);
   }
   else
   {
-    AssertThrow(param.preconditioner == Preconditioner::None ||
-                  param.preconditioner == Preconditioner::InverseMassMatrix ||
-                  param.preconditioner == Preconditioner::PointJacobi ||
-                  param.preconditioner == Preconditioner::BlockJacobi ||
+    AssertThrow(param.preconditioner == Preconditioner::None or
+                  param.preconditioner == Preconditioner::InverseMassMatrix or
+                  param.preconditioner == Preconditioner::PointJacobi or
+                  param.preconditioner == Preconditioner::BlockJacobi or
                   param.preconditioner == Preconditioner::Multigrid,
                 dealii::ExcMessage("Specified preconditioner is not implemented!"));
   }
@@ -501,7 +475,7 @@ Operator<dim, Number>::initialize_preconditioner()
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::initialize_solver()
+Operator<dim, Number>::setup_solver()
 {
   if(param.solver == Solver::CG)
   {
@@ -577,19 +551,7 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::interpolate_velocity(VectorType & velocity, double const time) const
 {
-  field_functions->velocity->set_time(time);
-
-  // This is necessary if Number == float
-  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeDouble;
-
-  VectorTypeDouble vector_double;
-  vector_double = velocity;
-
-  dealii::VectorTools::interpolate(get_dof_handler_velocity(),
-                                   *(field_functions->velocity),
-                                   vector_double);
-
-  velocity = vector_double;
+  Utilities::interpolate(get_dof_handler_velocity(), *(field_functions->velocity), velocity, time);
 }
 
 template<int dim, typename Number>
@@ -598,9 +560,12 @@ Operator<dim, Number>::project_velocity(VectorType & velocity, double const time
 {
   VelocityProjection<dim, Number> l2_projection;
 
+  InverseMassOperatorData inverse_mass_operator_data_l2_projection;
+  inverse_mass_operator_data_l2_projection.dof_index  = get_dof_index_velocity();
+  inverse_mass_operator_data_l2_projection.quad_index = get_quad_index();
+
   l2_projection.apply(*matrix_free,
-                      get_dof_index_velocity(),
-                      get_quad_index(),
+                      inverse_mass_operator_data_l2_projection,
                       field_functions->velocity,
                       time,
                       velocity);
@@ -610,17 +575,7 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::prescribe_initial_conditions(VectorType & src, double const time) const
 {
-  field_functions->initial_solution->set_time(time);
-
-  // This is necessary if Number == float
-  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeDouble;
-
-  VectorTypeDouble src_double;
-  src_double = src;
-
-  dealii::VectorTools::interpolate(dof_handler, *(field_functions->initial_solution), src_double);
-
-  src = src_double;
+  Utilities::interpolate(dof_handler, *(field_functions->initial_solution), src, time);
 }
 
 template<int dim, typename Number>
@@ -812,37 +767,43 @@ Operator<dim, Number>::update_conv_diff_operator(double const       time,
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::move_grid(double const & time) const
+Operator<dim, Number>::update_after_grid_motion(bool const update_matrix_free)
 {
-  grid_motion->update(time, false);
-}
+  if(update_matrix_free)
+  {
+    // Since matrix_free points to matrix_free_own_storage, we also update the actual/main
+    // MatrixFree object called matrix_free.
+    matrix_free_own_storage->update_mapping(*get_mapping());
+  }
 
-template<int dim, typename Number>
-void
-Operator<dim, Number>::move_grid_and_update_dependent_data_structures(double const & time)
-{
-  grid_motion->update(time, false);
-  matrix_free->update_mapping(*get_mapping());
-  update_after_grid_motion();
-}
 
-template<int dim, typename Number>
-void
-Operator<dim, Number>::fill_grid_coordinates_vector(VectorType & vector) const
-{
-  grid_motion->fill_grid_coordinates_vector(vector, this->get_dof_handler_velocity());
-}
-
-template<int dim, typename Number>
-void
-Operator<dim, Number>::update_after_grid_motion()
-{
   // update SIPG penalty parameter of diffusive operator which depends on the deformation
   // of elements
   if(param.diffusive_problem())
   {
     diffusive_kernel->calculate_penalty_parameter(*matrix_free, get_dof_index());
   }
+
+  // The inverse mass operator might contain matrix-based components, in which cases it needs to be
+  // updated after the grid has been deformed.
+  inverse_mass_operator.update();
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors)
+{
+  solution_transfer = std::make_shared<ExaDG::SolutionTransfer<dim, VectorType>>(dof_handler);
+
+  solution_transfer->prepare_coarsening_and_refinement(vectors);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::interpolate_after_coarsening_and_refinement(
+  std::vector<VectorType *> & vectors)
+{
+  solution_transfer->interpolate_after_coarsening_and_refinement(vectors);
 }
 
 template<int dim, typename Number>
@@ -877,12 +838,18 @@ Operator<dim, Number>::calculate_time_step_cfl_global(double const time) const
   // tend to infinity
   max_velocity = std::max(max_velocity, param.max_velocity);
 
-  double const h_min = calculate_minimum_element_length();
+  std::shared_ptr<dealii::Function<dim>> const velocity_field =
+    std::make_shared<dealii::Functions::ConstantFunction<dim>>(max_velocity, dim);
 
-  return ExaDG::calculate_time_step_cfl_global(max_velocity,
-                                               h_min,
-                                               param.degree,
-                                               param.exponent_fe_degree_convection);
+  return calculate_time_step_cfl_local<dim, Number>(*matrix_free,
+                                                    get_dof_index(),
+                                                    get_quad_index(),
+                                                    velocity_field,
+                                                    time,
+                                                    param.degree,
+                                                    param.exponent_fe_degree_convection,
+                                                    CFLConditionType::VelocityComponents,
+                                                    mpi_comm);
 }
 
 template<int dim, typename Number>
@@ -950,7 +917,9 @@ template<int dim, typename Number>
 double
 Operator<dim, Number>::calculate_minimum_element_length() const
 {
-  return calculate_minimum_vertex_distance(dof_handler.get_triangulation(), mpi_comm);
+  return calculate_minimum_vertex_distance(dof_handler.get_triangulation(),
+                                           *get_mapping(),
+                                           mpi_comm);
 }
 
 template<int dim, typename Number>
@@ -979,6 +948,93 @@ dealii::MatrixFree<dim, Number> const &
 Operator<dim, Number>::get_matrix_free() const
 {
   return *matrix_free;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_dof_name() const
+{
+  return field + dof_index_std;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_quad_name() const
+{
+  return field + quad_index_std;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_quad_name_overintegration() const
+{
+  return field + quad_index_overintegration;
+}
+
+template<int dim, typename Number>
+bool
+Operator<dim, Number>::needs_own_dof_handler_velocity() const
+{
+  return param.analytical_velocity_field and param.store_analytical_velocity_in_dof_vector;
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_dof_index() const
+{
+  return matrix_free_data->get_dof_index(get_dof_name());
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_dof_name_velocity() const
+{
+  if(needs_own_dof_handler_velocity())
+  {
+    return field + dof_index_velocity;
+  }
+  else // external velocity field not hosted by the convection-diffusion operator
+  {
+    return dof_index_velocity_external;
+  }
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_dof_index_velocity() const
+{
+  if(param.get_type_velocity_field() == TypeVelocityField::DoFVector)
+    return matrix_free_data->get_dof_index(get_dof_name_velocity());
+  else
+    return dealii::numbers::invalid_unsigned_int;
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_quad_index() const
+{
+  return matrix_free_data->get_quad_index(field + quad_index_std);
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_quad_index_overintegration() const
+{
+  return matrix_free_data->get_quad_index(field + quad_index_overintegration);
+}
+
+template<int dim, typename Number>
+std::shared_ptr<dealii::Mapping<dim> const>
+Operator<dim, Number>::get_mapping() const
+{
+  return mapping;
+}
+
+template<int dim, typename Number>
+dealii::AffineConstraints<Number> const &
+Operator<dim, Number>::get_constraints() const
+{
+  return affine_constraints;
 }
 
 template class Operator<2, float>;

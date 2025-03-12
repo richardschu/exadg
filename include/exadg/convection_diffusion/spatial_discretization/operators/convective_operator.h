@@ -83,7 +83,7 @@ public:
   reinit(dealii::MatrixFree<dim, Number> const & matrix_free,
          ConvectiveKernelData<dim> const &       data_in,
          unsigned int const                      quad_index,
-         bool const                              is_mg)
+         bool const                              use_own_velocity_storage)
   {
     data = data_in;
 
@@ -102,8 +102,7 @@ public:
                                                                        data.dof_index_velocity,
                                                                        quad_index);
 
-      // use own storage of velocity vector only in case of multigrid
-      if(is_mg)
+      if(use_own_velocity_storage)
       {
         velocity.reset();
         matrix_free.initialize_dof_vector(velocity.own(), data.dof_index_velocity);
@@ -313,7 +312,7 @@ public:
     {
       dealii::Point<dim, scalar> q_points = integrator.quadrature_point(q);
 
-      vector velocity = FunctionEvaluator<1, dim, Number>::value(data.velocity, q_points, time);
+      vector velocity = FunctionEvaluator<1, dim, Number>::value(*(data.velocity), q_points, time);
 
       scalar normal_velocity = velocity * normal_m;
 
@@ -390,7 +389,7 @@ public:
     {
       dealii::Point<dim, scalar> q_points = integrator.quadrature_point(q);
 
-      velocity = FunctionEvaluator<1, dim, Number>::value(data.velocity, q_points, time);
+      velocity = FunctionEvaluator<1, dim, Number>::value(*(data.velocity), q_points, time);
     }
     else if(data.velocity_type == TypeVelocityField::DoFVector)
     {
@@ -480,7 +479,7 @@ public:
 
     if(data.velocity_type == TypeVelocityField::Function)
     {
-      velocity = FunctionEvaluator<1, dim, Number>::value(data.velocity,
+      velocity = FunctionEvaluator<1, dim, Number>::value(*(data.velocity),
                                                           integrator.quadrature_point(q),
                                                           time);
     }
@@ -507,7 +506,7 @@ public:
 
     if(data.velocity_type == TypeVelocityField::Function)
     {
-      velocity = FunctionEvaluator<1, dim, Number>::value(data.velocity,
+      velocity = FunctionEvaluator<1, dim, Number>::value(*(data.velocity),
                                                           integrator.quadrature_point(q),
                                                           time);
     }
@@ -580,41 +579,45 @@ public:
 
 private:
   void
-  reinit_cell(unsigned int const cell) const;
+  reinit_cell_derived(IntegratorCell & integrator, unsigned int const cell) const final;
 
   void
-  reinit_face(unsigned int const face) const;
+  reinit_face_derived(IntegratorFace &   integrator_m,
+                      IntegratorFace &   integrator_p,
+                      unsigned int const face) const final;
 
   void
-  reinit_boundary_face(unsigned int const face) const;
+  reinit_boundary_face_derived(IntegratorFace & integrator_m, unsigned int const face) const final;
 
   void
-  reinit_face_cell_based(unsigned int const               cell,
-                         unsigned int const               face,
-                         dealii::types::boundary_id const boundary_id) const;
+  reinit_face_cell_based_derived(IntegratorFace &                 integrator_m,
+                                 IntegratorFace &                 integrator_p,
+                                 unsigned int const               cell,
+                                 unsigned int const               face,
+                                 dealii::types::boundary_id const boundary_id) const final;
 
   void
-  do_cell_integral(IntegratorCell & integrator) const;
+  do_cell_integral(IntegratorCell & integrator) const final;
 
   void
-  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
-  do_face_int_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_int_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
-  do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
   do_boundary_integral(IntegratorFace &                   integrator_m,
                        OperatorType const &               operator_type,
-                       dealii::types::boundary_id const & boundary_id) const;
+                       dealii::types::boundary_id const & boundary_id) const final;
 
   // TODO can be removed later once matrix-free evaluation allows accessing neighboring data for
   // cell-based face loops
   void
   do_face_int_integral_cell_based(IntegratorFace & integrator_m,
-                                  IntegratorFace & integrator_p) const;
+                                  IntegratorFace & integrator_p) const final;
 
   ConvectiveOperatorData<dim> operator_data;
 

@@ -25,6 +25,7 @@
 // deal.II
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_raviart_thomas.h>
+#include <deal.II/fe/fe_simplex_p.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/lac/la_parallel_block_vector.h>
 #include <deal.II/lac/la_parallel_vector.h>
@@ -32,12 +33,8 @@
 
 // ExaDG
 #include <exadg/grid/grid.h>
-#include <exadg/grid/grid_motion_interface.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/calculators/divergence_calculator.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/calculators/q_criterion_calculator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/calculators/streamfunction_calculator_rhs_operator.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/calculators/velocity_magnitude_calculator.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/calculators/vorticity_calculator.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/generalized_newtonian_model.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/convective_operator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/divergence_operator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/gradient_operator.h>
@@ -46,6 +43,7 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/rhs_operator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/viscous_operator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/turbulence_model.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/viscosity_model_base.h>
 #include <exadg/incompressible_navier_stokes/user_interface/boundary_descriptor.h>
 #include <exadg/incompressible_navier_stokes/user_interface/field_functions.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
@@ -89,13 +87,14 @@ public:
   /*
    * Constructor.
    */
-  SpatialOperatorBase(std::shared_ptr<Grid<dim> const>                  grid,
-                      std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion,
-                      std::shared_ptr<BoundaryDescriptor<dim> const>    boundary_descriptor,
-                      std::shared_ptr<FieldFunctions<dim> const>        field_functions,
-                      Parameters const &                                parameters,
-                      std::string const &                               field,
-                      MPI_Comm const &                                  mpi_comm);
+  SpatialOperatorBase(std::shared_ptr<Grid<dim> const>                      grid,
+                      std::shared_ptr<dealii::Mapping<dim> const>           mapping,
+                      std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+                      std::shared_ptr<BoundaryDescriptor<dim> const>        boundary_descriptor,
+                      std::shared_ptr<FieldFunctions<dim> const>            field_functions,
+                      Parameters const &                                    parameters,
+                      std::string const &                                   field,
+                      MPI_Comm const &                                      mpi_comm);
 
   /*
    * Destructor.
@@ -105,24 +104,42 @@ public:
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
 
-  /*
-   * Setup function. Initializes basic finite element components, matrix-free object, and basic
-   * operators. This function does not perform the setup related to the solution of linear systems
-   * of equations.
+  /**
+   * Call this setup() function if the dealii::MatrixFree object can be set up by the present class.
    */
-  virtual void
-  setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free,
-        std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data,
-        std::string const &                              dof_index_temperature = "");
+  void
+  setup();
 
+  /**
+   * Call this setup() function if the dealii::MatrixFree object needs to be created outside this
+   * class. The typical use case would be multiphysics-coupling with one MatrixFree object handed
+   * over to several single-field solvers. Another typical use case is the use of an ALE
+   * formulation.
+   */
+  void
+  setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free,
+        std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data,
+        std::string const &                                    dof_index_temperature = "");
+
+protected:
   /*
    * This function initializes operators, preconditioners, and solvers related to the solution of
    * (non-)linear systems of equation required for implicit formulations. It has to be extended
    * by derived classes if necessary.
    */
   virtual void
-  setup_solvers(double const & scaling_factor_mass, VectorType const & velocity);
+  setup_preconditioners_and_solvers()
+  {
+  }
 
+private:
+  /**
+   * Additional setup to be done by derived classes.
+   */
+  virtual void
+  setup_derived() = 0;
+
+public:
   /*
    * Getters and setters.
    */
@@ -139,23 +156,23 @@ public:
   get_dof_index_pressure() const;
 
   unsigned int
-  get_quad_index_velocity_linear() const;
+  get_quad_index_velocity_standard() const;
+
+  unsigned int
+  get_quad_index_pressure() const;
 
 protected:
   unsigned int
   get_dof_index_velocity_scalar() const;
 
   unsigned int
-  get_quad_index_pressure() const;
+  get_quad_index_velocity_overintegration() const;
 
   unsigned int
-  get_quad_index_velocity_nonlinear() const;
+  get_quad_index_velocity_nodal_points() const;
 
   unsigned int
-  get_quad_index_velocity_gauss_lobatto() const;
-
-  unsigned int
-  get_quad_index_pressure_gauss_lobatto() const;
+  get_quad_index_pressure_nodal_points() const;
 
   unsigned int
   get_quad_index_velocity_linearized() const;
@@ -167,7 +184,7 @@ public:
   dealii::FiniteElement<dim> const &
   get_fe_u() const;
 
-  dealii::FE_DGQ<dim> const &
+  dealii::FiniteElement<dim> const &
   get_fe_p() const;
 
   dealii::DoFHandler<dim> const &
@@ -187,9 +204,6 @@ public:
 
   dealii::types::global_dof_index
   get_number_of_dofs() const;
-
-  double
-  get_viscosity() const;
 
   dealii::VectorizedArray<Number>
   get_viscosity_boundary_face(unsigned int const face, unsigned int const q) const;
@@ -224,6 +238,24 @@ public:
                                VectorType & pressure,
                                double const time) const;
 
+  /*
+   * Interpolate given functions to the corresponding vectors.
+   */
+  void
+  interpolate_functions(VectorType &                                   velocity,
+                        std::shared_ptr<dealii::Function<dim>> const & f_velocity,
+                        VectorType &                                   pressure,
+                        std::shared_ptr<dealii::Function<dim>> const & f_pressure,
+                        double const                                   time) const;
+
+  /*
+   * Interpolate analytical solution functions.
+   */
+  void
+  interpolate_analytical_solution(VectorType & velocity,
+                                  VectorType & pressure,
+                                  double const time) const;
+
   // FSI: coupling fluid -> structure
   // fills a DoF-vector (velocity) with values of traction on fluid-structure interface
   void
@@ -256,10 +288,10 @@ public:
                                double const       time_step_size) const;
 
   /*
-   * Calculates characteristic element length h
+   * Returns characteristic element length for high-order elements / shape functions
    */
   double
-  calculate_characteristic_element_length() const;
+  get_characteristic_element_length() const;
 
   /*
    * For certain setups and types of boundary conditions, the pressure field is only defined up to
@@ -352,10 +384,10 @@ public:
   apply_inverse_mass_operator(VectorType & dst, VectorType const & src) const;
 
   /*
-   *  Update turbulence model, i.e., calculate turbulent viscosity.
+   * Update variable viscosity.
    */
   void
-  update_turbulence_model(VectorType const & velocity);
+  update_viscosity(VectorType const & velocity) const;
 
   /*
    * Projection step.
@@ -387,28 +419,10 @@ public:
   calculate_dissipation_continuity_term(VectorType const & velocity) const;
 
   /*
-   * Moves the grid for ALE-type problems.
-   */
-  void
-  move_grid(double const & time) const;
-
-  /*
-   * Moves the grid and updates dependent data structures for ALE-type problems.
-   */
-  void
-  move_grid_and_update_dependent_data_structures(double const & time);
-
-  /*
-   * Fills a dof-vector with grid coordinates for ALE-type problems.
-   */
-  void
-  fill_grid_coordinates_vector(VectorType & vector) const;
-
-  /*
    * Updates operators after grid has been moved.
    */
   virtual void
-  update_after_grid_motion();
+  update_after_grid_motion(bool const update_matrix_free);
 
   /*
    * Sets the grid velocity.
@@ -420,7 +434,7 @@ public:
    *  Calls constraint_u.distribute(u) and updates the constrained DoFs of the velocity field
    */
   void
-  distribute_constraint_u(VectorType & velocity);
+  distribute_constraint_u(VectorType & velocity) const;
 
 protected:
   /*
@@ -438,9 +452,12 @@ protected:
   std::shared_ptr<Grid<dim> const> grid;
 
   /*
-   * Grid motion for ALE formulations
+   * dealii::Mapping (In case of moving meshes (ALE), this is the dynamic mapping describing the
+   * deformed configuration.)
    */
-  std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion;
+  std::shared_ptr<dealii::Mapping<dim> const> mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings;
 
   /*
    * User interface: Boundary conditions and field functions.
@@ -484,15 +501,15 @@ protected:
    * Element variable used to store the current physical time. This variable is needed for the
    * evaluation of certain integrals or weak forms.
    */
-  double evaluation_time;
+  mutable double evaluation_time;
 
 private:
   /*
    * Basic finite element ingredients.
    */
   std::shared_ptr<dealii::FiniteElement<dim>> fe_u;
-  dealii::FE_DGQ<dim>                         fe_p;
-  dealii::FE_DGQ<dim>                         fe_u_scalar;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_p;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_u_scalar;
 
   dealii::DoFHandler<dim> dof_handler_u;
   dealii::DoFHandler<dim> dof_handler_p;
@@ -504,14 +521,19 @@ private:
   std::string const dof_index_p        = "pressure";
   std::string const dof_index_u_scalar = "velocity_scalar";
 
-  std::string const quad_index_u               = "velocity";
-  std::string const quad_index_p               = "pressure";
-  std::string const quad_index_u_nonlinear     = "velocity_nonlinear";
-  std::string const quad_index_u_gauss_lobatto = "velocity_gauss_lobatto";
-  std::string const quad_index_p_gauss_lobatto = "pressure_gauss_lobatto";
+  std::string const quad_index_u                 = "velocity";
+  std::string const quad_index_p                 = "pressure";
+  std::string const quad_index_u_overintegration = "velocity_overintegration";
+  std::string const quad_index_u_nodal_points    = "velocity_nodal_points";
+  std::string const quad_index_p_nodal_points    = "pressure_nodal_points";
 
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
+  std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;
+
+  // If we want to be able to update the mapping, we need a pointer to a non-const MatrixFree
+  // object. In case this object is created, we let the above object called matrix_free point to
+  // matrix_free_own_storage. This variable is needed for ALE formulations.
+  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free_own_storage;
 
   bool pressure_level_is_undefined;
 
@@ -558,11 +580,9 @@ protected:
   InverseMassOperator<dim, 1, Number>   inverse_mass_velocity_scalar;
 
   /*
-   * solver for mass system (projection). Used when matrix-free inverse mass operator is not
-   * avaliable.
+   * Inverse mass operator used in case of H(div)-conforming space
    */
-  std::shared_ptr<PreconditionerBase<Number>>     mass_preconditioner;
-  std::shared_ptr<Krylov::SolverBase<VectorType>> mass_solver;
+  InverseMassOperatorHdiv<dim, dim, Number> inverse_mass_hdiv;
 
   /*
    * Projection operator.
@@ -574,7 +594,8 @@ protected:
    * Projection solver.
    */
 
-  // elementwise solver/preconditioner
+  // Elementwise solver/preconditioner used in case that only the divergence penalty term is used
+  // and the system of equations is block-diagonal.
   typedef Elementwise::OperatorBase<dim, Number, ProjOperator> ELEMENTWISE_PROJ_OPERATOR;
   std::shared_ptr<ELEMENTWISE_PROJ_OPERATOR>                   elementwise_projection_operator;
 
@@ -582,18 +603,18 @@ protected:
                                               ELEMENTWISE_PRECONDITIONER;
   std::shared_ptr<ELEMENTWISE_PRECONDITIONER> elementwise_preconditioner_projection;
 
-  // projection solver
+  // global solver/preconditioner to be used if the continuity penalty term is applied.
   std::shared_ptr<Krylov::SolverBase<VectorType>> projection_solver;
   std::shared_ptr<PreconditionerBase<Number>>     preconditioner_projection;
 
   /*
    * Calculators used to obtain derived quantities.
    */
-  VorticityCalculator<dim, Number>         vorticity_calculator;
-  DivergenceCalculator<dim, Number>        divergence_calculator;
-  ShearRateCalculator<dim, Number>         shear_rate_calculator;
-  VelocityMagnitudeCalculator<dim, Number> velocity_magnitude_calculator;
-  QCriterionCalculator<dim, Number>        q_criterion_calculator;
+  VorticityCalculator<dim, Number>  vorticity_calculator;
+  DivergenceCalculator<dim, Number> divergence_calculator;
+  ShearRateCalculator<dim, Number>  shear_rate_calculator;
+  MagnitudeCalculator<dim, Number>  magnitude_calculator;
+  QCriterionCalculator<dim, Number> q_criterion_calculator;
 
   MPI_Comm const mpi_comm;
 
@@ -611,13 +632,13 @@ private:
   initialize_boundary_descriptor_laplace();
 
   void
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
+
+  void
+  initialize_dirichlet_cached_bc();
 
   void
   initialize_operators(std::string const & dof_index_temperature);
-
-  void
-  initialize_turbulence_model();
 
   void
   initialize_calculators_for_derived_quantities();
@@ -654,9 +675,10 @@ private:
   mutable VectorType const * pressure_ptr;
 
   /*
-   * LES turbulence modeling.
+   * Variable viscosity models.
    */
-  TurbulenceModel<dim, Number> turbulence_model;
+  mutable TurbulenceModel<dim, Number>           turbulence_model;
+  mutable GeneralizedNewtonianModel<dim, Number> generalized_newtonian_model;
 };
 
 } // namespace IncNS

@@ -47,7 +47,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const
+  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
     double t      = this->get_time();
     double result = 1.0;
@@ -91,12 +91,12 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const
+  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
     double t      = this->get_time();
     double result = 0.0;
 
-    if(BOUNDARY_TYPE == BoundaryConditionType::HomogeneousDBC ||
+    if(BOUNDARY_TYPE == BoundaryConditionType::HomogeneousDBC or
        BOUNDARY_TYPE == BoundaryConditionType::HomogeneousNBC)
     {
       // do nothing, rhs=0
@@ -155,8 +155,9 @@ private:
     this->param.diffusion_number              = 0.04; // 0.01;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = 1;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
     // convective term
     this->param.numerical_flux_convective_operator =
@@ -187,12 +188,41 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    // hypercube volume is [left,right]^dim
-    dealii::GridGenerator::hyper_cube(*this->grid->triangulation, left, right);
+    (void)mapping;
+    (void)multigrid_mappings;
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
+
+        // hypercube volume is [left,right]^dim
+        dealii::GridGenerator::hyper_cube(tria, left, right);
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
 
@@ -206,7 +236,7 @@ private:
     {
       this->boundary_descriptor->dirichlet_bc.insert(pair(0, new Solution<dim>(diffusivity)));
     }
-    else if(BOUNDARY_TYPE == BoundaryConditionType::HomogeneousNBC ||
+    else if(BOUNDARY_TYPE == BoundaryConditionType::HomogeneousNBC or
             BOUNDARY_TYPE == BoundaryConditionType::HomogeneousNBCWithRHS)
     {
       this->boundary_descriptor->neumann_bc.insert(

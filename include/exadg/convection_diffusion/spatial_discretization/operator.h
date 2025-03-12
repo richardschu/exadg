@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef INCLUDE_CONVECTION_DIFFUSION_DG_CONVECTION_DIFFUSION_OPERATION_H_
-#define INCLUDE_CONVECTION_DIFFUSION_DG_CONVECTION_DIFFUSION_OPERATION_H_
+#ifndef INCLUDE_EXADG_CONVECTION_DIFFUSION_SPATIAL_DISCRETIZATION_H_
+#define INCLUDE_EXADG_CONVECTION_DIFFUSION_SPATIAL_DISCRETIZATION_H_
 
 // deal.II
 #include <deal.II/fe/fe_dgq.h>
@@ -33,11 +33,11 @@
 #include <exadg/convection_diffusion/user_interface/field_functions.h>
 #include <exadg/convection_diffusion/user_interface/parameters.h>
 #include <exadg/grid/grid.h>
-#include <exadg/grid/grid_motion_interface.h>
 #include <exadg/matrix_free/matrix_free_data.h>
 #include <exadg/operators/inverse_mass_operator.h>
 #include <exadg/operators/mass_operator.h>
 #include <exadg/operators/rhs_operator.h>
+#include <exadg/operators/solution_transfer.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
 
 namespace ExaDG
@@ -54,46 +54,55 @@ public:
   /*
    * Constructor.
    */
-  Operator(std::shared_ptr<Grid<dim> const>                  grid,
-           std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion,
-           std::shared_ptr<BoundaryDescriptor<dim> const>    boundary_descriptor,
-           std::shared_ptr<FieldFunctions<dim> const>        field_functions,
-           Parameters const &                                param,
-           std::string const &                               field,
-           MPI_Comm const &                                  mpi_comm);
+  Operator(std::shared_ptr<Grid<dim> const>                      grid,
+           std::shared_ptr<dealii::Mapping<dim> const>           mapping,
+           std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+           std::shared_ptr<BoundaryDescriptor<dim> const>        boundary_descriptor,
+           std::shared_ptr<FieldFunctions<dim> const>            field_functions,
+           Parameters const &                                    param,
+           std::string const &                                   field,
+           MPI_Comm const &                                      mpi_comm);
 
 
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
 
-  /*
-   * Setup function. Initializes basic finite element components, matrix-free object, and basic
-   * operators. This function does not perform the setup related to the solution of linear systems
-   * of equations.
+  /**
+   * Call this setup() function if the dealii::MatrixFree object can be set up by the present class.
    */
   void
-  setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free_in,
-        std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data_in,
-        std::string const &                              dof_index_velocity_external_in = "");
+  setup();
+
+  /**
+   * Call this setup() function if the dealii::MatrixFree object needs to be created outside this
+   * class. The typical use case would be multiphysics-coupling with one MatrixFree object handed
+   * over to several single-field solvers. Another typical use case is the use of an ALE
+   * formulation. Note that you need to call the function fill_matrix_free_data() beforehand in
+   * order to correctly initialize dealii::MatrixFree, which is then handed over to this setup()
+   * function.
+   */
+  void
+  setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free_in,
+        std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data_in,
+        std::string const &                                    dof_index_velocity_external_in = "");
 
   /*
-   * This function initializes operators, preconditioners, and solvers related to the solution of
-   * linear systems of equation required for implicit formulations.
+   * Call this setup() function for setup after adaptive mesh refinement.
    */
   void
-  setup_solver(double const scaling_factor_mass = -1.0, VectorType const * velocity = nullptr);
+  setup_after_coarsening_and_refinement();
 
   /*
    * Initialization of dof-vector.
    */
   void
-  initialize_dof_vector(VectorType & src) const;
+  initialize_dof_vector(VectorType & src) const final;
 
   /*
    * Initialization of velocity dof-vector (in case of numerical velocity field).
    */
   void
-  initialize_dof_vector_velocity(VectorType & src) const;
+  initialize_dof_vector_velocity(VectorType & src) const final;
 
   /*
    * Obtain velocity dof-vector by interpolation of specified analytical velocity field.
@@ -105,13 +114,13 @@ public:
    * Obtain velocity dof-vector by L2-projection using the specified analytical velocity field.
    */
   void
-  project_velocity(VectorType & velocity, double const time) const;
+  project_velocity(VectorType & velocity, double const time) const final;
 
   /*
    * Prescribe initial conditions using a specified analytical function.
    */
   void
-  prescribe_initial_conditions(VectorType & src, double const evaluation_time) const;
+  prescribe_initial_conditions(VectorType & src, double const evaluation_time) const final;
 
   /*
    * This function is used in case of explicit time integration:
@@ -124,7 +133,7 @@ public:
   evaluate_explicit_time_int(VectorType &       dst,
                              VectorType const & src,
                              double const       evaluation_time,
-                             VectorType const * velocity = nullptr) const;
+                             VectorType const * velocity = nullptr) const final;
 
   /*
    * This function evaluates the convective term which is needed when using an explicit formulation
@@ -149,7 +158,7 @@ public:
   void
   rhs(VectorType &       dst,
       double const       evaluation_time = 0.0,
-      VectorType const * velocity        = nullptr) const;
+      VectorType const * velocity        = nullptr) const final;
 
   /*
    * This function applies the mass operator to the src-vector and writes the result to the
@@ -196,28 +205,19 @@ public:
                             VectorType const * velocity = nullptr);
 
   /*
-   * Moves the grid for ALE-type problems.
+   * Updates spatial operators after grid has been moved.
    */
   void
-  move_grid(double const & time) const;
+  update_after_grid_motion(bool const update_matrix_free);
 
   /*
-   * Moves the grid and updates dependent data structures for ALE-type problems.
+   * Prepare and interpolation in adaptive mesh refinement.
    */
   void
-  move_grid_and_update_dependent_data_structures(double const & time);
+  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors);
 
-  /*
-   * Fills a dof-vector with grid coordinates for ALE-type problems.
-   */
   void
-  fill_grid_coordinates_vector(VectorType & vector) const;
-
-  /*
-   * Updates operators after grid has been moved.
-   */
-  void
-  update_after_grid_motion();
+  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors);
 
   /*
    * This function solves the linear system of equations in case of implicit time integration or
@@ -230,13 +230,13 @@ public:
         bool const         update_preconditioner,
         double const       scaling_factor = -1.0,
         double const       time           = -1.0,
-        VectorType const * velocity       = nullptr);
+        VectorType const * velocity       = nullptr) final;
 
   /*
    * Calculate time step size according to maximum efficiency criterion
    */
   double
-  calculate_time_step_max_efficiency(unsigned int const order_time_integrator) const;
+  calculate_time_step_max_efficiency(unsigned int const order_time_integrator) const final;
 
   /*
    * Calculate time step size according to CFL criterion
@@ -244,23 +244,22 @@ public:
 
   // global CFL criterion
   double
-  calculate_time_step_cfl_global(double const time) const;
+  calculate_time_step_cfl_global(double const time) const final;
 
   // local CFL criterion: use numerical velocity field
   double
-  calculate_time_step_cfl_numerical_velocity(VectorType const & velocity) const;
+  calculate_time_step_cfl_numerical_velocity(VectorType const & velocity) const final;
 
   // local CFL criterion: use analytical velocity field
   double
-  calculate_time_step_cfl_analytical_velocity(double const time) const;
+  calculate_time_step_cfl_analytical_velocity(double const time) const final;
 
   /*
    * Calculate time step size according to diffusion term
    */
   double
-  calculate_time_step_diffusion() const;
+  calculate_time_step_diffusion() const final;
 
-public:
   /*
    * Setters and getters.
    */
@@ -289,24 +288,36 @@ public:
   std::shared_ptr<dealii::Mapping<dim> const>
   get_mapping() const;
 
+  dealii::AffineConstraints<Number> const &
+  get_constraints() const;
+
 private:
-  /*
+  void
+  do_setup();
+
+  /**
+   * Initializes dealii::DoFHandlers and dealii::AffineConstraints.
+   */
+  void
+  initialize_dof_handler_and_constraints();
+
+  /**
+   * Performs setup of operators.
+   */
+  void
+  setup_operators();
+
+  /**
    * Calculates maximum velocity (required for global CFL criterion).
    */
   double
   calculate_maximum_velocity(double const time) const;
 
-  /*
-   * Calculates minimum element length (required for global CFL criterion).
+  /**
+   * Calculates minimum element length.
    */
   double
   calculate_minimum_element_length() const;
-
-  /*
-   * Initializes dealii::DoFHandlers.
-   */
-  void
-  distribute_dofs();
 
   bool
   needs_own_dof_handler_velocity() const;
@@ -333,13 +344,13 @@ private:
    * Initializes the preconditioner.
    */
   void
-  initialize_preconditioner();
+  setup_preconditioner();
 
   /*
    * Initializes the solver.
    */
   void
-  initialize_solver();
+  setup_solver();
 
   /*
    * Grid
@@ -347,9 +358,16 @@ private:
   std::shared_ptr<Grid<dim> const> grid;
 
   /*
+   * SolutionTransfer for adaptive mesh refinement.
+   */
+  std::shared_ptr<ExaDG::SolutionTransfer<dim, VectorType>> solution_transfer;
+
+  /*
    * Grid motion for ALE formulations
    */
-  std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion;
+  std::shared_ptr<dealii::Mapping<dim> const> mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings;
 
   /*
    * User interface: Boundary conditions and field functions.
@@ -367,14 +385,14 @@ private:
   /*
    * Basic finite element ingredients.
    */
-  dealii::FE_DGQ<dim>     fe;
-  dealii::DoFHandler<dim> dof_handler;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe;
+  dealii::DoFHandler<dim>                     dof_handler;
 
   /*
    * Numerical velocity field.
    */
-  std::shared_ptr<dealii::FESystem<dim>>   fe_velocity;
-  std::shared_ptr<dealii::DoFHandler<dim>> dof_handler_velocity;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_velocity;
+  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_velocity;
 
   /*
    * Constraints.
@@ -392,8 +410,13 @@ private:
   /*
    * Matrix-free operator evaluation.
    */
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;
+  std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;
+
+  // If we want to be able to update the mapping, we need a pointer to a non-const MatrixFree
+  // object. In case this object is created, we let the above object called matrix_free point to
+  // matrix_free_own_storage. This variable is needed for ALE formulations.
+  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free_own_storage;
 
   /*
    * Basic operators.
@@ -432,4 +455,4 @@ private:
 } // namespace ConvDiff
 } // namespace ExaDG
 
-#endif /* INCLUDE_CONVECTION_DIFFUSION_DG_CONVECTION_DIFFUSION_OPERATION_H_ */
+#endif /* INCLUDE_EXADG_CONVECTION_DIFFUSION_SPATIAL_DISCRETIZATION_H_ */

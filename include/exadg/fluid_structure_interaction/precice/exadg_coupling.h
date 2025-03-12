@@ -25,7 +25,7 @@
 // ExaDG
 #include <exadg/fluid_structure_interaction/precice/coupling_base.h>
 #include <exadg/functions_and_boundary_conditions/interface_coupling.h>
-#include <exadg/utilities/n_components_to_rank.h>
+#include <exadg/utilities/tensor_utilities.h>
 
 namespace ExaDG
 {
@@ -43,7 +43,7 @@ public:
   static unsigned int const rank = n_components_to_rank<data_dim, dim>();
 
   ExaDGCoupling(
-    std::shared_ptr<dealii::MatrixFree<dim, double, VectorizedArrayType> const> data,
+    dealii::MatrixFree<dim, double, VectorizedArrayType> const & data,
 #ifdef EXADG_WITH_PRECICE
     std::shared_ptr<precice::SolverInterface> precice,
 #endif
@@ -88,7 +88,7 @@ private:
 
 template<int dim, int data_dim, typename VectorizedArrayType>
 ExaDGCoupling<dim, data_dim, VectorizedArrayType>::ExaDGCoupling(
-  std::shared_ptr<dealii::MatrixFree<dim, double, VectorizedArrayType> const> data,
+  dealii::MatrixFree<dim, double, VectorizedArrayType> const & data,
 #ifdef EXADG_WITH_PRECICE
   std::shared_ptr<precice::SolverInterface> precice,
 #endif

@@ -51,6 +51,7 @@ private:
 
 public:
   Operator(std::shared_ptr<Grid<dim> const>               grid,
+           std::shared_ptr<dealii::Mapping<dim> const>    mapping,
            std::shared_ptr<BoundaryDescriptor<dim> const> boundary_descriptor,
            std::shared_ptr<FieldFunctions<dim> const>     field_functions,
            Parameters const &                             param,
@@ -60,16 +61,27 @@ public:
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
 
+  /**
+   * Call this setup() function if the dealii::MatrixFree object can be set up by the present class.
+   */
   void
-  setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free,
-        std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data);
+  setup();
+
+  /**
+   * Call this setup() function if the dealii::MatrixFree object needs to be created outside this
+   * class. The typical use case would be multiphysics-coupling with one MatrixFree object handed
+   * over to several single-field solvers.
+   */
+  void
+  setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free,
+        std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data);
 
   dealii::types::global_dof_index
   get_number_of_dofs() const;
 
   // initialization of DoF vectors
   void
-  initialize_dof_vector(VectorType & src) const;
+  initialize_dof_vector(VectorType & src) const final;
 
   void
   initialize_dof_vector_scalar(VectorType & src) const;
@@ -79,7 +91,7 @@ public:
 
   // set initial conditions
   void
-  prescribe_initial_conditions(VectorType & src, double const time) const;
+  prescribe_initial_conditions(VectorType & src, double const time) const final;
 
   /*
    *  This function is used in case of explicit time integration:
@@ -89,7 +101,7 @@ public:
    *  and finally applies the inverse mass operator.
    */
   void
-  evaluate(VectorType & dst, VectorType const & src, Number const time) const;
+  evaluate(VectorType & dst, VectorType const & src, Number const time) const final;
 
   void
   evaluate_convective(VectorType & dst, VectorType const & src, Number const time) const;
@@ -112,7 +124,7 @@ public:
   dealii::Mapping<dim> const &
   get_mapping() const;
 
-  dealii::FESystem<dim> const &
+  dealii::FiniteElement<dim> const &
   get_fe() const;
 
   dealii::DoFHandler<dim> const &
@@ -158,22 +170,19 @@ public:
   compute_shear_rate(VectorType & dst, VectorType const & src) const;
 
   double
-  get_wall_time_operator_evaluation() const;
+  get_wall_time_operator_evaluation() const final;
 
   // global CFL criterion: calculates the time step size for a given global maximum velocity
   double
-  calculate_time_step_cfl_global() const;
+  calculate_time_step_cfl_global() const final;
 
   // Calculate time step size according to diffusion term
   double
-  calculate_time_step_diffusion() const;
+  calculate_time_step_diffusion() const final;
 
 private:
-  double
-  calculate_minimum_element_length() const;
-
   void
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
 
   void
   setup_operators();
@@ -196,6 +205,11 @@ private:
   std::shared_ptr<Grid<dim> const> grid;
 
   /*
+   * Mapping
+   */
+  std::shared_ptr<dealii::Mapping<dim> const> mapping;
+
+  /*
    * User interface: Boundary conditions and field functions.
    */
   std::shared_ptr<BoundaryDescriptor<dim> const> boundary_descriptor;
@@ -212,13 +226,9 @@ private:
    * Basic finite element ingredients.
    */
 
-  std::shared_ptr<dealii::FESystem<dim>> fe;        // all (dim+2) components: (rho, rho u, rho E)
-  std::shared_ptr<dealii::FESystem<dim>> fe_vector; // e.g. velocity
-  dealii::FE_DGQ<dim>                    fe_scalar; // scalar quantity, e.g, pressure
-
-  // dealii::Quadrature points
-  unsigned int n_q_points_conv;
-  unsigned int n_q_points_visc;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe; // all (dim+2) components: (rho, rho u, rho E)
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_vector; // e.g. velocity
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_scalar; // scalar quantity, e.g, pressure
 
   // dealii::DoFHandler
   dealii::DoFHandler<dim> dof_handler;        // all (dim+2) components: (rho, rho u, rho E)
@@ -245,8 +255,8 @@ private:
   /*
    * Matrix-free operator evaluation.
    */
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
+  std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;
 
   /*
    * Basic operators.

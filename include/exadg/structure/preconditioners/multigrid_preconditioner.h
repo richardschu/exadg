@@ -24,6 +24,7 @@
 
 #include <exadg/operators/multigrid_operator.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_preconditioner_base.h>
+#include <exadg/structure/spatial_discretization/operators/elasticity_operator_base.h>
 #include <exadg/structure/spatial_discretization/operators/linear_operator.h>
 #include <exadg/structure/spatial_discretization/operators/nonlinear_operator.h>
 
@@ -51,45 +52,45 @@ public:
   typedef MultigridOperator<dim, MultigridNumber, PDEOperatorLinearMG>    MGOperatorLinear;
   typedef MultigridOperator<dim, MultigridNumber, PDEOperatorNonlinearMG> MGOperatorNonlinear;
 
-  typedef typename Base::Map               Map;
-  typedef typename Base::PeriodicFacePairs PeriodicFacePairs;
-  typedef typename Base::VectorType        VectorType;
-  typedef typename Base::VectorTypeMG      VectorTypeMG;
+  typedef typename Base::Map_DBC               Map_DBC;
+  typedef typename Base::Map_DBC_ComponentMask Map_DBC_ComponentMask;
+  typedef typename Base::PeriodicFacePairs     PeriodicFacePairs;
+  typedef typename Base::VectorType            VectorType;
+  typedef typename Base::VectorTypeMG          VectorTypeMG;
 
   MultigridPreconditioner(MPI_Comm const & mpi_comm);
 
   void
-  initialize(
-    MultigridData const &                                                  mg_data,
-    MultigridVariant const &                                               multigrid_variant,
-    dealii::Triangulation<dim> const *                                     tria,
-    std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-    dealii::FiniteElement<dim> const &                                     fe,
-    std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-    ElasticityOperatorBase<dim, Number> const &                            pde_operator,
-    bool const                                                             nonlinear_operator,
-    Map const &                                                            dirichlet_bc,
-    PeriodicFacePairs const &                                              periodic_face_pairs);
+  initialize(MultigridData const &                                 mg_data,
+             std::shared_ptr<Grid<dim> const>                      grid,
+             std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+             dealii::FiniteElement<dim> const &                    fe,
+             ElasticityOperatorBase<dim, Number> const &           pde_operator,
+             bool const                                            nonlinear_operator,
+             Map_DBC const &                                       dirichlet_bc,
+             Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask);
 
   /*
    * This function updates the multigrid preconditioner.
    */
   void
-  update() override;
+  update() final;
 
 private:
   void
+  initialize_dof_handler_and_constraints(
+    bool const                    operator_is_singular,
+    unsigned int const            n_components,
+    Map_DBC const &               dirichlet_bc,
+    Map_DBC_ComponentMask const & dirichlet_bc_component_mask) final;
+
+  void
   fill_matrix_free_data(MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
                         unsigned int const                     level,
-                        unsigned int const                     h_level) override;
+                        unsigned int const                     dealii_tria_level) final;
 
-  /*
-   * Has to be overwritten since we want to use dealii::ComponentMask here
-   */
-  void
-  initialize_constrained_dofs(dealii::DoFHandler<dim> const & dof_handler,
-                              dealii::MGConstrainedDoFs &     constrained_dofs,
-                              Map const &                     dirichlet_bc) override;
+  std::shared_ptr<MGOperatorBase>
+  initialize_operator(unsigned int const level) final;
 
   /*
    * This function updates the multigrid operators for all levels
@@ -97,23 +98,21 @@ private:
   void
   update_operators();
 
-  /*
-   * This function updates solution_linearization.
-   * In order to update operators[level] this function has to be called.
-   */
-  void
-  set_solution_linearization(VectorTypeMG const & vector_linearization);
-
   std::shared_ptr<PDEOperatorNonlinearMG>
   get_operator_nonlinear(unsigned int level);
 
-  std::shared_ptr<MGOperatorBase>
-  initialize_operator(unsigned int const level) override;
+  std::shared_ptr<PDEOperatorLinearMG>
+  get_operator_linear(unsigned int level);
 
 private:
   OperatorData<dim> data;
 
   ElasticityOperatorBase<dim, Number> const * pde_operator;
+
+  // additional constraints without Dirichlet degrees of freedom
+  dealii::MGLevelObject<std::shared_ptr<dealii::DoFHandler<dim> const>> dof_handlers_inhomogeneous;
+  dealii::MGLevelObject<std::shared_ptr<dealii::AffineConstraints<MultigridNumber>>>
+    constraints_inhomogeneous;
 
   bool nonlinear;
 };

@@ -83,7 +83,7 @@ MassOperator<dim, n_components, Number>::do_cell_integral(IntegratorCell & integ
   }
 }
 
-// scalar
+// 1 component
 template class MassOperator<2, 1, float>;
 template class MassOperator<2, 1, double>;
 
@@ -103,5 +103,12 @@ template class MassOperator<2, 3, double>;
 
 template class MassOperator<3, 4, float>;
 template class MassOperator<3, 4, double>;
+
+// dim + 2 components
+template class MassOperator<2, 4, float>;
+template class MassOperator<2, 4, double>;
+
+template class MassOperator<3, 5, float>;
+template class MassOperator<3, 5, double>;
 
 } // namespace ExaDG

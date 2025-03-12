@@ -27,9 +27,8 @@
 // ExaDG
 #include <exadg/convection_diffusion/driver.h>
 #include <exadg/convection_diffusion/time_integration/create_time_integrator.h>
-#include <exadg/grid/get_dynamic_mapping.h>
+#include <exadg/operators/throughput_parameters.h>
 #include <exadg/utilities/print_solver_results.h>
-#include <exadg/utilities/throughput_parameters.h>
 
 namespace ExaDG
 {
@@ -58,49 +57,57 @@ Driver<dim, Number>::setup()
 
   pcout << std::endl << "Setting up scalar convection-diffusion solver:" << std::endl;
 
-  application->setup();
+  application->setup(grid, mapping, multigrid_mappings);
 
-  if(application->get_parameters().ale_formulation) // moving mesh
+  bool const ale = application->get_parameters().ale_formulation;
+
+  if(ale) // moving mesh
   {
     std::shared_ptr<dealii::Function<dim>> mesh_motion =
       application->create_mesh_movement_function();
-    grid_motion =
-      std::make_shared<GridMotionFunction<dim, Number>>(application->get_grid()->mapping,
-                                                        application->get_parameters().degree,
-                                                        *application->get_grid()->triangulation,
-                                                        mesh_motion,
-                                                        application->get_parameters().start_time);
+    ale_mapping = std::make_shared<DeformedMappingFunction<dim, Number>>(
+      mapping,
+      application->get_parameters().degree,
+      *grid->triangulation,
+      mesh_motion,
+      application->get_parameters().start_time);
+
+    ale_multigrid_mappings = std::make_shared<MultigridMappings<dim, Number>>(
+      ale_mapping, application->get_parameters().mapping_degree_coarse_grids);
+
+    helpers_ale = std::make_shared<HelpersALE<dim, Number>>();
+
+    helpers_ale->move_grid = [&](double const & time) {
+      ale_mapping->update(time,
+                          false /* print_solver_info */,
+                          time_integrator->get_number_of_time_steps());
+    };
+
+    helpers_ale->update_pde_operator_after_grid_motion = [&]() {
+      pde_operator->update_after_grid_motion(true);
+    };
+
+    helpers_ale->fill_grid_coordinates_vector = [&](VectorType & grid_coordinates,
+                                                    dealii::DoFHandler<dim> const & dof_handler) {
+      ale_mapping->fill_grid_coordinates_vector(grid_coordinates, dof_handler);
+    };
   }
 
   // initialize convection-diffusion operator
-  pde_operator = std::make_shared<Operator<dim, Number>>(application->get_grid(),
-                                                         grid_motion,
-                                                         application->get_boundary_descriptor(),
-                                                         application->get_field_functions(),
-                                                         application->get_parameters(),
-                                                         "scalar",
-                                                         mpi_comm);
-
-  // initialize matrix_free
-  matrix_free_data = std::make_shared<MatrixFreeData<dim, Number>>();
-  matrix_free_data->append(pde_operator);
-
-  matrix_free = std::make_shared<dealii::MatrixFree<dim, Number>>();
-  if(application->get_parameters().use_cell_based_face_loops)
-    Categorization::do_cell_based_loops(*application->get_grid()->triangulation,
-                                        matrix_free_data->data);
-  std::shared_ptr<dealii::Mapping<dim> const> mapping =
-    get_dynamic_mapping<dim, Number>(application->get_grid(), grid_motion);
-  matrix_free->reinit(*mapping,
-                      matrix_free_data->get_dof_handler_vector(),
-                      matrix_free_data->get_constraint_vector(),
-                      matrix_free_data->get_quadrature_vector(),
-                      matrix_free_data->data);
+  pde_operator =
+    std::make_shared<Operator<dim, Number>>(grid,
+                                            ale ? ale_mapping->get_mapping() : mapping,
+                                            ale ? ale_multigrid_mappings : multigrid_mappings,
+                                            application->get_boundary_descriptor(),
+                                            application->get_field_functions(),
+                                            application->get_parameters(),
+                                            "scalar",
+                                            mpi_comm);
 
   // setup convection-diffusion operator
-  pde_operator->setup(matrix_free, matrix_free_data);
+  pde_operator->setup();
 
-  if(!is_throughput_study)
+  if(not is_throughput_study)
   {
     // initialize postprocessor
     postprocessor = application->create_postprocessor();
@@ -110,61 +117,16 @@ Driver<dim, Number>::setup()
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
     {
       time_integrator = create_time_integrator<dim, Number>(
-        pde_operator, application->get_parameters(), mpi_comm, is_test, postprocessor);
+        pde_operator, helpers_ale, postprocessor, application->get_parameters(), mpi_comm, is_test);
 
       time_integrator->setup(application->get_parameters().restarted_simulation);
     }
     else if(application->get_parameters().problem_type == ProblemType::Steady)
     {
       driver_steady = std::make_shared<DriverSteadyProblems<Number>>(
-        pde_operator, application->get_parameters(), mpi_comm, is_test, postprocessor);
+        pde_operator, postprocessor, application->get_parameters(), mpi_comm, is_test);
 
       driver_steady->setup();
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("Not implemented"));
-    }
-
-    // setup solvers in case of BDF time integration or steady problems
-    typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
-    VectorType const *                                         velocity_ptr = nullptr;
-    VectorType                                                 velocity;
-
-    if(application->get_parameters().problem_type == ProblemType::Unsteady)
-    {
-      if(application->get_parameters().temporal_discretization == TemporalDiscretization::BDF)
-      {
-        std::shared_ptr<TimeIntBDF<dim, Number>> time_integrator_bdf =
-          std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
-
-        if(application->get_parameters().get_type_velocity_field() == TypeVelocityField::DoFVector)
-        {
-          pde_operator->initialize_dof_vector_velocity(velocity);
-          pde_operator->interpolate_velocity(velocity, time_integrator->get_time());
-          velocity_ptr = &velocity;
-        }
-
-        pde_operator->setup_solver(time_integrator_bdf->get_scaling_factor_time_derivative_term(),
-                                   velocity_ptr);
-      }
-      else
-      {
-        AssertThrow(application->get_parameters().temporal_discretization ==
-                      TemporalDiscretization::ExplRK,
-                    dealii::ExcMessage("Not implemented."));
-      }
-    }
-    else if(application->get_parameters().problem_type == ProblemType::Steady)
-    {
-      if(application->get_parameters().get_type_velocity_field() == TypeVelocityField::DoFVector)
-      {
-        pde_operator->initialize_dof_vector_velocity(velocity);
-        pde_operator->interpolate_velocity(velocity, 0.0 /* time */);
-        velocity_ptr = &velocity;
-      }
-
-      pde_operator->setup_solver(1.0 /* scaling_factor_time_derivative_term */, velocity_ptr);
     }
     else
     {
@@ -180,14 +142,94 @@ void
 Driver<dim, Number>::ale_update() const
 {
   // move the mesh and update dependent data structures
-  grid_motion->update(time_integrator->get_next_time(), false);
-  std::shared_ptr<dealii::Mapping<dim> const> mapping =
-    get_dynamic_mapping<dim, Number>(application->get_grid(), grid_motion);
-  matrix_free->update_mapping(*mapping);
-  pde_operator->update_after_grid_motion();
+  helpers_ale->move_grid(time_integrator->get_next_time());
+
+  helpers_ale->update_pde_operator_after_grid_motion();
+
   std::shared_ptr<TimeIntBDF<dim, Number>> time_int_bdf =
     std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
   time_int_bdf->ale_update();
+}
+
+template<int dim, typename Number>
+void
+Driver<dim, Number>::mark_cells_coarsening_and_refinement(dealii::Triangulation<dim> & tria,
+                                                          VectorType const & solution) const
+{
+  mark_cells_kelly_error_estimator(tria,
+                                   pde_operator->get_dof_handler(),
+                                   pde_operator->get_constraints(),
+                                   *pde_operator->get_mapping(),
+                                   solution,
+                                   application->get_parameters().degree +
+                                     1 /* n_face_quadrature_points */,
+                                   application->get_parameters().amr_data);
+}
+
+template<int dim, typename Number>
+void
+Driver<dim, Number>::setup_after_coarsening_and_refinement()
+{
+  // Update mapping
+  AssertThrow(ale_mapping.get() == 0,
+              dealii::ExcMessage(
+                "Combination of adaptive mesh refinement and ALE not implemented."));
+
+  std::shared_ptr<dealii::MappingQCache<dim>> mapping_q_cache =
+    std::dynamic_pointer_cast<dealii::MappingQCache<dim>>(mapping);
+  AssertThrow(
+    mapping_q_cache.get() == 0,
+    dealii::ExcMessage(
+      "Combination of adaptive mesh refinement and dealii::MappingQCache not implemented."));
+
+  pde_operator->setup_after_coarsening_and_refinement();
+
+  postprocessor->setup_after_coarsening_and_refinement();
+}
+
+template<int dim, typename Number>
+void
+Driver<dim, Number>::do_adaptive_refinement()
+{
+  limit_coarsening_and_refinement(*grid->triangulation, application->get_parameters().amr_data);
+
+  if(any_cells_flagged_for_coarsening_or_refinement(*grid->triangulation))
+  {
+    grid->triangulation->prepare_coarsening_and_refinement();
+
+    if(application->get_parameters().problem_type == ProblemType::Unsteady)
+    {
+      time_integrator->prepare_coarsening_and_refinement();
+    }
+    else
+    {
+      AssertThrow(false, dealii::ExcNotImplemented());
+    }
+
+    grid->triangulation->execute_coarsening_and_refinement();
+
+    if(application->get_parameters().involves_h_multigrid())
+    {
+      GridUtilities::create_coarse_triangulations_after_coarsening_and_refinement(
+        *grid->triangulation,
+        grid->periodic_face_pairs,
+        grid->coarse_triangulations,
+        grid->coarse_periodic_face_pairs,
+        application->get_parameters().grid,
+        application->get_parameters().amr_data.preserve_boundary_cells);
+    }
+
+    setup_after_coarsening_and_refinement();
+
+    if(application->get_parameters().problem_type == ProblemType::Unsteady)
+    {
+      time_integrator->interpolate_after_coarsening_and_refinement();
+    }
+    else
+    {
+      AssertThrow(false, dealii::ExcNotImplemented());
+    }
+  }
 }
 
 template<int dim, typename Number>
@@ -196,22 +238,56 @@ Driver<dim, Number>::solve()
 {
   if(application->get_parameters().problem_type == ProblemType::Unsteady)
   {
-    if(application->get_parameters().ale_formulation == true)
+    if(application->get_parameters().enable_adaptivity)
     {
       do
       {
         time_integrator->advance_one_timestep_pre_solve(true);
 
-        ale_update();
-
         time_integrator->advance_one_timestep_solve();
 
+        // Adapt the mesh before post_solve(), in order to recalculate the
+        // time step size based on the new mesh.
+        if(trigger_coarsening_and_refinement_now(
+             application->get_parameters().amr_data.trigger_every_n_time_steps,
+             time_integrator->get_number_of_time_steps()))
+        {
+          // AMR is only implemented for implicit timestepping.
+          std::shared_ptr<TimeIntBDF<dim, Number>> bdf_time_integrator =
+            std::dynamic_pointer_cast<TimeIntBDF<dim, Number>>(time_integrator);
+
+          AssertThrow(bdf_time_integrator.get(),
+                      dealii::ExcMessage("Adaptive mesh refinement only implemented"
+                                         " for implicit time integration."));
+
+          mark_cells_coarsening_and_refinement(*grid->triangulation,
+                                               bdf_time_integrator->get_solution_np());
+
+          do_adaptive_refinement();
+        }
+
         time_integrator->advance_one_timestep_post_solve();
-      } while(!time_integrator->finished());
+      } while(not(time_integrator->finished()));
     }
     else
     {
-      time_integrator->timeloop();
+      if(application->get_parameters().ale_formulation == true)
+      {
+        do
+        {
+          time_integrator->advance_one_timestep_pre_solve(true);
+
+          ale_update();
+
+          time_integrator->advance_one_timestep_solve();
+
+          time_integrator->advance_one_timestep_post_solve();
+        } while(not(time_integrator->finished()));
+      }
+      else
+      {
+        time_integrator->timeloop();
+      }
     }
   }
   else if(application->get_parameters().problem_type == ProblemType::Steady)
@@ -236,7 +312,7 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
   this->pcout << "Performance results for convection-diffusion solver:" << std::endl;
 
   // Averaged number of iterations are only relevant for BDF time integrator
-  if(application->get_parameters().problem_type == ProblemType::Unsteady &&
+  if(application->get_parameters().problem_type == ProblemType::Unsteady and
      application->get_parameters().temporal_discretization == TemporalDiscretization::BDF)
   {
     this->pcout << std::endl << "Average number of iterations:" << std::endl;
@@ -307,14 +383,11 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
 
 template<int dim, typename Number>
 std::tuple<unsigned int, dealii::types::global_dof_index, double>
-Driver<dim, Number>::apply_operator(std::string const & operator_type_string,
-                                    unsigned int const  n_repetitions_inner,
-                                    unsigned int const  n_repetitions_outer) const
+Driver<dim, Number>::apply_operator(OperatorType const & operator_type,
+                                    unsigned int const   n_repetitions_inner,
+                                    unsigned int const   n_repetitions_outer) const
 {
   pcout << std::endl << "Computing matrix-vector product ..." << std::endl;
-
-  OperatorType operator_type;
-  string_to_enum(operator_type, operator_type_string);
 
   dealii::LinearAlgebra::distributed::Vector<Number> dst, src;
 

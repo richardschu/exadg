@@ -28,7 +28,7 @@
 #include <deal.II/fe/component_mask.h>
 
 // ExaDG
-#include <exadg/functions_and_boundary_conditions/function_cached.h>
+#include <exadg/functions_and_boundary_conditions/container_interface_data.h>
 
 namespace ExaDG
 {
@@ -46,22 +46,35 @@ enum class BoundaryType
 template<int dim>
 struct BoundaryDescriptor
 {
+  // Dirichlet
   std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> dirichlet_bc;
+
+  // Initial acceleration prescribed on Dirichlet boundary:
+  // This data structure will only be used if the initial_acceleration is not set in FieldFunctions.
+  // Moreover, this data structure will only be used for unsteady problems.
+  std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+    dirichlet_bc_initial_acceleration;
+
+  // ComponentMask
+  // If a certain boundary ID is not inserted into this map, it is assumed that all components are
+  // active, in analogy to the default constructor of dealii::ComponentMask.
   std::map<dealii::types::boundary_id, dealii::ComponentMask> dirichlet_bc_component_mask;
 
-  // another type of Dirichlet boundary condition where the Dirichlet values come
+  // Another type of Dirichlet boundary condition where the Dirichlet values come
   // from the solution on another domain that is in contact with the actual domain
   // of interest at the given boundary (this type of Dirichlet boundary condition
-  // is required for fluid-structure interaction problems)
-  std::map<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>> dirichlet_cached_bc;
+  // is required for the ALE mesh deformation problem in fluid-structure interaction).
+  // ComponentMask is not implemented/available for this type of boundary condition.
+  std::set<dealii::types::boundary_id> dirichlet_cached_bc;
 
+  // Neumann
   std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> neumann_bc;
 
   // another type of Neumann boundary condition where the traction force comes
   // from the solution on another domain that is in contact with the actual domain
   // of interest at the given boundary (this type of Neumann boundary condition
   // is required for fluid-structure interaction problems)
-  std::map<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>> neumann_cached_bc;
+  std::set<dealii::types::boundary_id> neumann_cached_bc;
 
   inline DEAL_II_ALWAYS_INLINE //
     BoundaryType
@@ -103,6 +116,12 @@ struct BoundaryDescriptor
         dirichlet_bc_component_mask.find(boundary_id) != dirichlet_bc_component_mask.end(),
         dealii::ExcMessage(
           "dirichlet_bc_component_mask must contain the same boundary IDs as dirichlet_bc."));
+
+      AssertThrow(
+        dirichlet_bc_initial_acceleration.find(boundary_id) !=
+          dirichlet_bc_initial_acceleration.end(),
+        dealii::ExcMessage(
+          "dirichlet_bc_initial_acceleration must contain the same boundary IDs as dirichlet_bc."));
     }
 
     if(dirichlet_cached_bc.find(boundary_id) != dirichlet_cached_bc.end())
@@ -120,6 +139,42 @@ struct BoundaryDescriptor
     AssertThrow(counter == 1,
                 dealii::ExcMessage("Boundary face with non-unique boundary type found."));
   }
+
+  void
+  set_dirichlet_cached_data(
+    std::shared_ptr<ContainerInterfaceData<1, dim, double> const> interface_data) const
+  {
+    dirichlet_cached_data = interface_data;
+  }
+
+  void
+  set_neumann_cached_data(
+    std::shared_ptr<ContainerInterfaceData<1, dim, double> const> interface_data) const
+  {
+    neumann_cached_data = interface_data;
+  }
+
+  std::shared_ptr<ContainerInterfaceData<1, dim, double> const>
+  get_dirichlet_cached_data() const
+  {
+    AssertThrow(dirichlet_cached_data.get(),
+                dealii::ExcMessage("Pointer to ContainerInterfaceData has not been initialized."));
+
+    return dirichlet_cached_data;
+  }
+
+  std::shared_ptr<ContainerInterfaceData<1, dim, double> const>
+  get_neumann_cached_data() const
+  {
+    AssertThrow(neumann_cached_data.get(),
+                dealii::ExcMessage("Pointer to ContainerInterfaceData has not been initialized."));
+
+    return neumann_cached_data;
+  }
+
+private:
+  mutable std::shared_ptr<ContainerInterfaceData<1, dim, double> const> dirichlet_cached_data;
+  mutable std::shared_ptr<ContainerInterfaceData<1, dim, double> const> neumann_cached_data;
 };
 
 } // namespace Structure

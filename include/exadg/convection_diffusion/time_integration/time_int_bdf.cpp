@@ -24,6 +24,7 @@
 #include <exadg/convection_diffusion/time_integration/time_int_bdf.h>
 #include <exadg/convection_diffusion/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
+#include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
 #include <exadg/utilities/print_solver_results.h>
 
@@ -34,19 +35,20 @@ namespace ConvDiff
 template<int dim, typename Number>
 TimeIntBDF<dim, Number>::TimeIntBDF(
   std::shared_ptr<Operator<dim, Number>>          operator_in,
+  std::shared_ptr<HelpersALE<dim, Number> const>  helpers_ale_in,
+  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
   Parameters const &                              param_in,
   MPI_Comm const &                                mpi_comm_in,
-  bool const                                      is_test_in,
-  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in)
-  : TimeIntBDFBase<Number>(param_in.start_time,
-                           param_in.end_time,
-                           param_in.max_number_of_time_steps,
-                           param_in.order_time_integrator,
-                           param_in.start_with_low_order,
-                           param_in.adaptive_time_stepping,
-                           param_in.restart_data,
-                           mpi_comm_in,
-                           is_test_in),
+  bool const                                      is_test_in)
+  : TimeIntBDFBase(param_in.start_time,
+                   param_in.end_time,
+                   param_in.max_number_of_time_steps,
+                   param_in.order_time_integrator,
+                   param_in.start_with_low_order,
+                   param_in.adaptive_time_stepping,
+                   param_in.restart_data,
+                   mpi_comm_in,
+                   is_test_in),
     pde_operator(operator_in),
     param(param_in),
     refine_steps_time(param_in.n_refine_time),
@@ -55,6 +57,7 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     vec_convective_term(param_in.order_time_integrator),
     iterations({0, 0}),
     postprocessor(postprocessor_in),
+    helpers_ale(helpers_ale_in),
     vec_grid_coordinates(param_in.order_time_integrator)
 {
 }
@@ -64,35 +67,37 @@ void
 TimeIntBDF<dim, Number>::setup_derived()
 {
   // In the case of an arbitrary Lagrangian-Eulerian formulation:
-  if(param.ale_formulation && param.restarted_simulation == false)
+  if(param.ale_formulation and param.restarted_simulation == false)
   {
     // compute the grid coordinates at start time (and at previous times in case of
     // start_with_low_order == false)
 
-    pde_operator->move_grid(this->get_time());
-    pde_operator->fill_grid_coordinates_vector(vec_grid_coordinates[0]);
+    helpers_ale->move_grid(this->get_time());
+    helpers_ale->fill_grid_coordinates_vector(vec_grid_coordinates[0],
+                                              pde_operator->get_dof_handler_velocity());
 
     if(this->start_with_low_order == false)
     {
       // compute grid coordinates at previous times (start with 1!)
       for(unsigned int i = 1; i < this->order; ++i)
       {
-        pde_operator->move_grid(this->get_previous_time(i));
-        pde_operator->fill_grid_coordinates_vector(vec_grid_coordinates[i]);
+        helpers_ale->move_grid(this->get_previous_time(i));
+        helpers_ale->fill_grid_coordinates_vector(vec_grid_coordinates[i],
+                                                  pde_operator->get_dof_handler_velocity());
       }
     }
   }
 
   // Initialize vec_convective_term: Note that this function has to be called
   // after the solution has been initialized because the solution is evaluated in this function.
-  if(param.convective_problem() &&
+  if(param.convective_problem() and
      param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
   {
     // vec_convective_term does not have to be initialized in ALE case (the convective
     // term is recomputed in each time step for all previous times on the new mesh).
     // vec_convective_term does not have to be initialized in case of a restart, where
     // the vectors are read from memory.
-    if(param.ale_formulation == false && param.restarted_simulation == false)
+    if(param.ale_formulation == false and param.restarted_simulation == false)
     {
       initialize_vec_convective_term();
     }
@@ -134,24 +139,87 @@ TimeIntBDF<dim, Number>::allocate_vectors()
 }
 
 template<int dim, typename Number>
+std::shared_ptr<std::vector<dealii::LinearAlgebra::distributed::Vector<Number> *>>
+TimeIntBDF<dim, Number>::get_vectors()
+{
+  std::shared_ptr<std::vector<VectorType *>> vectors =
+    std::make_shared<std::vector<VectorType *>>();
+
+  for(unsigned int i = 0; i < this->order; i++)
+  {
+    vectors->emplace_back(&solution[i]);
+  }
+
+  vectors->emplace_back(&solution_np);
+
+  vectors->emplace_back(&rhs_vector);
+
+  if(param.convective_problem() and
+     param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  {
+    for(unsigned int i = 0; i < this->order; i++)
+    {
+      vectors->emplace_back(&vec_convective_term[i]);
+    }
+
+    if(param.ale_formulation == false)
+    {
+      vectors->emplace_back(&convective_term_np);
+    }
+  }
+
+  if(this->param.ale_formulation)
+  {
+    vectors->emplace_back(&grid_velocity);
+
+    vectors->emplace_back(&grid_coordinates_np);
+
+    for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
+    {
+      vectors->emplace_back(&vec_grid_coordinates[i]);
+    }
+  }
+
+  return vectors;
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::prepare_coarsening_and_refinement()
+{
+  std::shared_ptr<std::vector<VectorType *>> vectors = get_vectors();
+  pde_operator->prepare_coarsening_and_refinement(*vectors);
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::interpolate_after_coarsening_and_refinement()
+{
+  this->allocate_vectors();
+
+  std::shared_ptr<std::vector<VectorType *>> vectors = get_vectors();
+  pde_operator->interpolate_after_coarsening_and_refinement(*vectors);
+}
+
+template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::initialize_current_solution()
 {
   if(this->param.ale_formulation)
-    pde_operator->move_grid(this->get_time());
+    helpers_ale->move_grid(this->get_time());
 
   pde_operator->prescribe_initial_conditions(solution[0], this->get_time());
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::initialize_former_solutions()
+TimeIntBDF<dim, Number>::initialize_former_multistep_dof_vectors()
 {
   // Start with i=1 since we only want to initialize the solution at former instants of time.
   for(unsigned int i = 1; i < solution.size(); ++i)
   {
     if(this->param.ale_formulation)
-      pde_operator->move_grid(this->get_previous_time(i));
+      helpers_ale->move_grid(this->get_previous_time(i));
 
     pde_operator->prescribe_initial_conditions(solution[i], this->get_previous_time(i));
   }
@@ -316,7 +384,7 @@ TimeIntBDF<dim, Number>::prepare_vectors_for_next_timestep()
 
   solution[0].swap(solution_np);
 
-  if(param.convective_problem() &&
+  if(param.convective_problem() and
      param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
   {
     if(param.ale_formulation == false)
@@ -338,7 +406,8 @@ void
 TimeIntBDF<dim, Number>::ale_update()
 {
   // and compute grid coordinates at the end of the current time step t_{n+1}
-  pde_operator->fill_grid_coordinates_vector(grid_coordinates_np);
+  helpers_ale->fill_grid_coordinates_vector(grid_coordinates_np,
+                                            pde_operator->get_dof_handler_velocity());
 
   // and update grid velocity using BDF time derivative
   compute_bdf_time_derivative(grid_velocity,
@@ -359,21 +428,21 @@ TimeIntBDF<dim, Number>::print_solver_info() const
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & ia)
+TimeIntBDF<dim, Number>::read_restart_vectors(BoostInputArchiveType & ia)
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
-    ia >> solution[i];
+    read_write_distributed_vector(solution[i], ia);
   }
 
-  if(param.convective_problem() &&
+  if(param.convective_problem() and
      param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
   {
     if(this->param.ale_formulation == false)
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        ia >> vec_convective_term[i];
+        read_write_distributed_vector(vec_convective_term[i], ia);
       }
     }
   }
@@ -382,28 +451,28 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
   {
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
     {
-      ia >> vec_grid_coordinates[i];
+      read_write_distributed_vector(vec_grid_coordinates[i], ia);
     }
   }
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive & oa) const
+TimeIntBDF<dim, Number>::write_restart_vectors(BoostOutputArchiveType & oa) const
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
-    oa << solution[i];
+    read_write_distributed_vector(solution[i], oa);
   }
 
-  if(param.convective_problem() &&
+  if(param.convective_problem() and
      param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
   {
     if(this->param.ale_formulation == false)
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        oa << vec_convective_term[i];
+        read_write_distributed_vector(vec_convective_term[i], oa);
       }
     }
   }
@@ -412,7 +481,7 @@ TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive &
   {
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
     {
-      oa << vec_grid_coordinates[i];
+      read_write_distributed_vector(vec_grid_coordinates[i], oa);
     }
   }
 }
@@ -464,7 +533,7 @@ TimeIntBDF<dim, Number>::do_timestep_solve()
   // if the convective term is involved in the equations:
   // add the convective term to the right-hand side of the equations
   // if this term is treated explicitly (additive decomposition)
-  if(param.convective_problem() &&
+  if(param.convective_problem() and
      param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
   {
     // recompute convective term on new mesh for all previous time instants in case of
@@ -499,7 +568,7 @@ TimeIntBDF<dim, Number>::do_timestep_solve()
 
   // solve the linear system of equations
   bool const update_preconditioner =
-    this->param.update_preconditioner &&
+    this->param.update_preconditioner and
     (this->time_step_number % this->param.update_preconditioner_every_time_steps == 0);
 
   unsigned int const N_iter =
@@ -515,7 +584,7 @@ TimeIntBDF<dim, Number>::do_timestep_solve()
 
   // evaluate convective term at end time t_{n+1} at which we know the boundary condition
   // g_u(t_{n+1})
-  if(param.convective_problem() &&
+  if(param.convective_problem() and
      param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
   {
     if(param.ale_formulation == false)
@@ -554,10 +623,11 @@ TimeIntBDF<dim, Number>::postprocessing() const
 
   // To allow a computation of errors at start_time (= if time step number is 1 and if the
   // simulation is not a restarted one), the mesh has to be at the correct position
-  if(this->param.ale_formulation && this->get_time_step_number() == 1 &&
-     !this->param.restarted_simulation)
+  if(this->param.ale_formulation and this->get_time_step_number() == 1 and
+     not this->param.restarted_simulation)
   {
-    pde_operator->move_grid_and_update_dependent_data_structures(this->get_time());
+    helpers_ale->move_grid(this->get_time());
+    helpers_ale->update_pde_operator_after_grid_motion();
   }
 
   postprocessor->do_postprocessing(solution[0], this->get_time(), this->get_time_step_number());
@@ -586,6 +656,13 @@ TimeIntBDF<dim, Number>::set_velocities_and_times(
 {
   velocities = velocities_in;
   times      = times_in;
+}
+
+template<int dim, typename Number>
+dealii::LinearAlgebra::distributed::Vector<Number> const &
+TimeIntBDF<dim, Number>::get_solution_np() const
+{
+  return (this->solution_np);
 }
 
 template<int dim, typename Number>

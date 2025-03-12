@@ -26,8 +26,8 @@
 
 // ExaDG
 #include <exadg/compressible_navier_stokes/driver.h>
+#include <exadg/operators/throughput_parameters.h>
 #include <exadg/utilities/print_solver_results.h>
-#include <exadg/utilities/throughput_parameters.h>
 
 namespace ExaDG
 {
@@ -56,32 +56,21 @@ Driver<dim, Number>::setup()
 
   pcout << std::endl << "Setting up compressible Navier-Stokes solver:" << std::endl;
 
-  application->setup();
+  application->setup(grid, mapping);
 
   // initialize compressible Navier-Stokes operator
-  pde_operator = std::make_shared<Operator<dim, Number>>(application->get_grid(),
+  pde_operator = std::make_shared<Operator<dim, Number>>(grid,
+                                                         mapping,
                                                          application->get_boundary_descriptor(),
                                                          application->get_field_functions(),
                                                          application->get_parameters(),
                                                          "fluid",
                                                          mpi_comm);
 
-  // initialize matrix_free
-  matrix_free_data = std::make_shared<MatrixFreeData<dim, Number>>();
-  matrix_free_data->append(pde_operator);
-
-  matrix_free = std::make_shared<dealii::MatrixFree<dim, Number>>();
-  matrix_free->reinit(*application->get_grid()->mapping,
-                      matrix_free_data->get_dof_handler_vector(),
-                      matrix_free_data->get_constraint_vector(),
-                      matrix_free_data->get_quadrature_vector(),
-                      matrix_free_data->data);
-
-  // setup compressible Navier-Stokes operator
-  pde_operator->setup(matrix_free, matrix_free_data);
+  pde_operator->setup();
 
   // initialize postprocessor
-  if(!is_throughput_study)
+  if(not is_throughput_study)
   {
     postprocessor = application->create_postprocessor();
     postprocessor->setup(*pde_operator);
@@ -145,14 +134,11 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
 
 template<int dim, typename Number>
 std::tuple<unsigned int, dealii::types::global_dof_index, double>
-Driver<dim, Number>::apply_operator(std::string const & operator_type_string,
-                                    unsigned int const  n_repetitions_inner,
-                                    unsigned int const  n_repetitions_outer) const
+Driver<dim, Number>::apply_operator(OperatorType const & operator_type,
+                                    unsigned int const   n_repetitions_inner,
+                                    unsigned int const   n_repetitions_outer) const
 {
   pcout << std::endl << "Computing matrix-vector product ..." << std::endl;
-
-  OperatorType operator_type;
-  string_to_enum(operator_type, operator_type_string);
 
   // Vectors
   VectorType dst, src;

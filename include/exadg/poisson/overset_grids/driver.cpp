@@ -23,37 +23,58 @@
 #include <exadg/poisson/overset_grids/driver.h>
 #include <exadg/utilities/print_general_infos.h>
 #include <exadg/utilities/print_solver_results.h>
-#include <exadg/utilities/throughput_parameters.h>
 
 namespace ExaDG
 {
 namespace Poisson
 {
+namespace OversetGrids
+{
 template<int dim, int n_components, typename Number>
-DriverOversetGrids<dim, n_components, Number>::DriverOversetGrids(
-  MPI_Comm const &                                                        comm,
-  std::shared_ptr<ApplicationOversetGridsBase<dim, n_components, Number>> app)
+Driver<dim, n_components, Number>::Driver(
+  MPI_Comm const &                                            comm,
+  std::shared_ptr<ApplicationBase<dim, n_components, Number>> app)
   : mpi_comm(comm),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0),
     application(app)
 {
   print_general_info<Number>(pcout, mpi_comm, false /* is_test */);
 
-  poisson1 = std::make_shared<SolverPoisson<dim, n_components, Number>>();
-  poisson2 = std::make_shared<SolverPoisson<dim, n_components, Number>>();
+  poisson1 = std::make_shared<Solver<dim, n_components, Number>>();
+  poisson2 = std::make_shared<Solver<dim, n_components, Number>>();
 }
 
 template<int dim, int n_components, typename Number>
 void
-DriverOversetGrids<dim, n_components, Number>::setup()
+Driver<dim, n_components, Number>::setup()
 {
   pcout << std::endl << "Setting up Poisson solver for overset grids:" << std::endl;
 
-  application->setup();
+  // setup application
+  AssertThrow(application->domain1.get(), dealii::ExcMessage("Domain 1 is uninitialized."));
+  AssertThrow(application->domain2.get(), dealii::ExcMessage("Domain 2 is uninitialized."));
+
+  application->domain1->setup_pre(grid1, mapping1, multigrid_mappings1, {"Domain1"});
+  application->domain2->setup_pre(grid2, mapping2, multigrid_mappings2, {"Domain2"});
+
+  // set boundary IDs for domain 1
+  set_boundary_ids_overlap_region(*grid1->triangulation,
+                                  application->boundary_id_overlap,
+                                  *mapping2,
+                                  *grid2->triangulation);
+
+  // set boundary IDs for domain 2
+  set_boundary_ids_overlap_region(*grid2->triangulation,
+                                  application->boundary_id_overlap,
+                                  *mapping1,
+                                  *grid1->triangulation);
+
+  application->domain1->setup_post(grid1);
+  application->domain2->setup_post(grid2);
 
   // setup Poisson solvers
-  poisson1->setup(application->domain1, mpi_comm, false);
-  poisson2->setup(application->domain2, mpi_comm, false);
+  poisson1->setup(application->domain1, grid1, mapping1, multigrid_mappings1, mpi_comm);
+  poisson2->setup(application->domain2, grid2, mapping2, multigrid_mappings2, mpi_comm);
 
   // setup interface coupling
   {
@@ -66,7 +87,7 @@ DriverOversetGrids<dim, n_components, Number>::setup()
     // resolve this, the implementation of InterfaceCoupling needs to be generalized.
     first_to_second->setup(poisson2->pde_operator->get_container_interface_data(),
                            poisson1->pde_operator->get_dof_handler(),
-                           *application->domain1->get_grid()->mapping,
+                           *mapping1,
                            {} /* marked_vertices */,
                            1.e-8 /* geometric tolerance */);
 
@@ -78,7 +99,7 @@ DriverOversetGrids<dim, n_components, Number>::setup()
     second_to_first = std::make_shared<InterfaceCoupling<rank, dim, Number>>();
     second_to_first->setup(poisson1->pde_operator->get_container_interface_data(),
                            poisson2->pde_operator->get_dof_handler(),
-                           *application->domain2->get_grid()->mapping,
+                           *mapping2,
                            {} /* marked_vertices */,
                            1.e-8 /* geometric tolerance */);
 
@@ -88,7 +109,7 @@ DriverOversetGrids<dim, n_components, Number>::setup()
 
 template<int dim, int n_components, typename Number>
 void
-DriverOversetGrids<dim, n_components, Number>::solve()
+Driver<dim, n_components, Number>::solve()
 {
   // initialization of vectors
   dealii::LinearAlgebra::distributed::Vector<Number> rhs_1, rhs_2;
@@ -135,15 +156,16 @@ DriverOversetGrids<dim, n_components, Number>::solve()
   }
 }
 
-template class DriverOversetGrids<2, 1, float>;
-template class DriverOversetGrids<3, 1, float>;
-template class DriverOversetGrids<2, 2, float>;
-template class DriverOversetGrids<3, 3, float>;
+template class Driver<2, 1, float>;
+template class Driver<3, 1, float>;
+template class Driver<2, 2, float>;
+template class Driver<3, 3, float>;
 
-template class DriverOversetGrids<2, 1, double>;
-template class DriverOversetGrids<3, 1, double>;
-template class DriverOversetGrids<2, 2, double>;
-template class DriverOversetGrids<3, 3, double>;
+template class Driver<2, 1, double>;
+template class Driver<3, 1, double>;
+template class Driver<2, 2, double>;
+template class Driver<3, 3, double>;
 
+} // namespace OversetGrids
 } // namespace Poisson
 } // namespace ExaDG

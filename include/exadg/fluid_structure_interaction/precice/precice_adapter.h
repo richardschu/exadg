@@ -36,7 +36,7 @@
 #include <exadg/fluid_structure_interaction/precice/dof_coupling.h>
 #include <exadg/fluid_structure_interaction/precice/exadg_coupling.h>
 #include <exadg/fluid_structure_interaction/precice/quad_coupling.h>
-#include <exadg/utilities/n_components_to_rank.h>
+#include <exadg/utilities/tensor_utilities.h>
 
 // preCICE
 #ifdef EXADG_WITH_PRECICE
@@ -103,21 +103,20 @@ public:
   initialize_precice(VectorType const & dealii_to_precice);
 
   void
-  add_write_surface(
-    dealii::types::boundary_id const                                            surface_id,
-    std::string const &                                                         mesh_name,
-    std::vector<std::string> const &                                            write_data_names,
-    WriteDataType const                                                         write_data_type,
-    std::shared_ptr<dealii::MatrixFree<dim, double, VectorizedArrayType> const> data,
-    unsigned int const                                                          dof_index,
-    unsigned int const                                                          write_quad_index);
+  add_write_surface(dealii::types::boundary_id const                             surface_id,
+                    std::string const &                                          mesh_name,
+                    std::vector<std::string> const &                             write_data_names,
+                    WriteDataType const                                          write_data_type,
+                    dealii::MatrixFree<dim, double, VectorizedArrayType> const & data,
+                    unsigned int const                                           dof_index,
+                    unsigned int const                                           write_quad_index);
 
 
   void
-  add_read_surface(std::shared_ptr<dealii::MatrixFree<dim, double, VectorizedArrayType> const> data,
-                   std::shared_ptr<ContainerInterfaceData<rank, dim, double>> interface_data,
-                   std::string const &                                        mesh_name,
-                   std::vector<std::string> const &                           read_data_name);
+  add_read_surface(dealii::MatrixFree<dim, double, VectorizedArrayType> const & data,
+                   std::shared_ptr<ContainerInterfaceData<rank, dim, double>>   interface_data,
+                   std::string const &                                          mesh_name,
+                   std::vector<std::string> const &                             read_data_name);
 
   /**
    * @brief      Advances preCICE after every timestep
@@ -234,13 +233,13 @@ Adapter<dim, data_dim, VectorType, VectorizedArrayType>::Adapter(ParameterClass 
 template<int dim, int data_dim, typename VectorType, typename VectorizedArrayType>
 void
 Adapter<dim, data_dim, VectorType, VectorizedArrayType>::add_write_surface(
-  dealii::types::boundary_id const dealii_boundary_surface_id,
-  std::string const &              mesh_name,
-  std::vector<std::string> const & write_data_names,
-  WriteDataType const              write_data_type,
-  std::shared_ptr<dealii::MatrixFree<dim, double, VectorizedArrayType> const> data,
-  unsigned int const                                                          dof_index,
-  unsigned int const                                                          quad_index)
+  dealii::types::boundary_id const                             dealii_boundary_surface_id,
+  std::string const &                                          mesh_name,
+  std::vector<std::string> const &                             write_data_names,
+  WriteDataType const                                          write_data_type,
+  dealii::MatrixFree<dim, double, VectorizedArrayType> const & data,
+  unsigned int const                                           dof_index,
+  unsigned int const                                           quad_index)
 {
   // Check, if we already have such an interface
   auto const found_reader = reader.find(mesh_name);
@@ -264,7 +263,7 @@ Adapter<dim, data_dim, VectorType, VectorizedArrayType>::add_write_surface(
   }
   else
   {
-    Assert(write_data_type == WriteDataType::values_on_q_points ||
+    Assert(write_data_type == WriteDataType::values_on_q_points or
              write_data_type == WriteDataType::normal_gradients_on_q_points,
            dealii::ExcNotImplemented());
     writer.insert({mesh_name,
@@ -294,10 +293,10 @@ Adapter<dim, data_dim, VectorType, VectorizedArrayType>::add_write_surface(
 template<int dim, int data_dim, typename VectorType, typename VectorizedArrayType>
 void
 Adapter<dim, data_dim, VectorType, VectorizedArrayType>::add_read_surface(
-  std::shared_ptr<dealii::MatrixFree<dim, double, VectorizedArrayType> const> data,
-  std::shared_ptr<ContainerInterfaceData<rank, dim, double>>                  interface_data,
-  std::string const &                                                         mesh_name,
-  std::vector<std::string> const &                                            read_data_names)
+  dealii::MatrixFree<dim, double, VectorizedArrayType> const & data,
+  std::shared_ptr<ContainerInterfaceData<rank, dim, double>>   interface_data,
+  std::string const &                                          mesh_name,
+  std::vector<std::string> const &                             read_data_names)
 {
   reader.insert(
     {mesh_name,
@@ -321,7 +320,7 @@ Adapter<dim, data_dim, VectorType, VectorizedArrayType>::initialize_precice(
   VectorType const & dealii_to_precice)
 {
 #ifdef EXADG_WITH_PRECICE
-  // if(!dealii_to_precice.has_ghost_elements())
+  // if(not dealii_to_precice.has_ghost_elements())
   //   dealii_to_precice.update_ghost_values();
 
   // Initialize preCICE internally
@@ -342,7 +341,7 @@ Adapter<dim, data_dim, VectorType, VectorizedArrayType>::initialize_precice(
 
   // Maybe, read block-wise and work with an AlignedVector since the read data
   // (forces) is multiple times required during the Newton iteration
-  //    if (shared_memory_parallel && precice->isReadDataAvailable())
+  //    if (shared_memory_parallel and precice->isReadDataAvailable())
   //      precice->readBlockVectorData(read_data_id,
   //                                   read_nodes_ids.size(),
   //                                   read_nodes_ids.data(),

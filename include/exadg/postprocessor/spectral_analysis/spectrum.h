@@ -43,7 +43,7 @@ namespace dealspectrum
  */
 class SpectralAnalysis
 {
-  MPI_Comm const & comm;
+  MPI_Comm const comm;
 
   // reference to DEAL.SPECTRUM setup
   Setup & s;
@@ -171,7 +171,7 @@ public:
   ~SpectralAnalysis()
   {
     // not initialized -> nothing to clean up
-    if(!initialized)
+    if(not initialized)
       return;
 
     // free data structures

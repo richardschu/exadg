@@ -26,6 +26,8 @@
 #include <deal.II/numerics/vector_tools.h>
 
 // ExaDG
+#include <exadg/grid/grid_data.h>
+#include <exadg/operators/quadrature.h>
 #include <exadg/postprocessor/error_calculation.h>
 #include <exadg/utilities/create_directories.h>
 
@@ -33,22 +35,34 @@ namespace ExaDG
 {
 template<int dim, typename VectorType>
 double
-calculate_error(MPI_Comm const &                             mpi_comm,
-                bool const &                                 relative_error,
-                dealii::DoFHandler<dim> const &              dof_handler,
-                dealii::Mapping<dim> const &                 mapping,
-                VectorType const &                           numerical_solution,
-                std::shared_ptr<dealii::Function<dim>> const analytical_solution,
-                double const &                               time,
-                dealii::VectorTools::NormType const &        norm_type,
-                unsigned int const                           additional_quadrature_points = 3)
+calculate_error(MPI_Comm const &                               mpi_comm,
+                bool const &                                   relative_error,
+                dealii::DoFHandler<dim> const &                dof_handler,
+                dealii::Mapping<dim> const &                   mapping,
+                VectorType const &                             numerical_solution,
+                std::shared_ptr<dealii::Function<dim>> const   analytical_solution,
+                double const &                                 time,
+                dealii::VectorTools::NormType const &          norm_type,
+                bool const                                     spatially_weight_error,
+                std::shared_ptr<dealii::Function<dim>> const & weight,
+                unsigned int const                             additional_quadrature_points = 3)
 {
+  if(spatially_weight_error == true)
+    AssertThrow(weight != nullptr,
+                dealii::ExcMessage("No spatial weight provided for error computation."));
+
   double error = 1.0;
   analytical_solution->set_time(time);
 
   dealii::LinearAlgebra::distributed::Vector<double> numerical_solution_double;
   numerical_solution_double = numerical_solution;
   numerical_solution_double.update_ghost_values();
+
+  // quadrature rule
+  ElementType const element_type = get_element_type(dof_handler.get_triangulation());
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(element_type,
+                           dof_handler.get_fe().degree + additional_quadrature_points);
 
   // calculate error norm
   dealii::Vector<double> error_norm_per_cell(dof_handler.get_triangulation().n_active_cells());
@@ -57,9 +71,9 @@ calculate_error(MPI_Comm const &                             mpi_comm,
                                             numerical_solution_double,
                                             *analytical_solution,
                                             error_norm_per_cell,
-                                            dealii::QGauss<dim>(dof_handler.get_fe().degree +
-                                                                additional_quadrature_points),
-                                            norm_type);
+                                            *quadrature,
+                                            norm_type,
+                                            spatially_weight_error ? weight.get() : nullptr);
 
   double error_norm =
     std::sqrt(dealii::Utilities::MPI::sum(error_norm_per_cell.norm_sqr(), mpi_comm));
@@ -77,9 +91,9 @@ calculate_error(MPI_Comm const &                             mpi_comm,
                                               zero_solution,
                                               *analytical_solution,
                                               solution_norm_per_cell,
-                                              dealii::QGauss<dim>(dof_handler.get_fe().degree +
-                                                                  additional_quadrature_points),
-                                              norm_type);
+                                              *quadrature,
+                                              norm_type,
+                                              spatially_weight_error ? weight.get() : nullptr);
 
     double solution_norm =
       std::sqrt(dealii::Utilities::MPI::sum(solution_norm_per_cell.norm_sqr(), mpi_comm));
@@ -116,7 +130,7 @@ ErrorCalculator<dim, Number>::setup(dealii::DoFHandler<dim> const &   dof_handle
 
   time_control.setup(error_data_in.time_control_data);
 
-  if(error_data.analytical_solution && error_data.write_errors_to_file)
+  if(error_data.analytical_solution and error_data.write_errors_to_file)
     create_directories(error_data.directory, mpi_comm);
 }
 
@@ -161,7 +175,9 @@ ErrorCalculator<dim, Number>::do_evaluate(VectorType const & solution_vector, do
                                             solution_vector,
                                             error_data.analytical_solution,
                                             time,
-                                            dealii::VectorTools::L2_norm);
+                                            dealii::VectorTools::L2_norm,
+                                            error_data.spatially_weight_error,
+                                            error_data.weight);
 
   dealii::ConditionalOStream pcout(std::cout,
                                    dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
@@ -209,7 +225,9 @@ ErrorCalculator<dim, Number>::do_evaluate(VectorType const & solution_vector, do
                                               solution_vector,
                                               error_data.analytical_solution,
                                               time,
-                                              dealii::VectorTools::H1_seminorm);
+                                              dealii::VectorTools::H1_seminorm,
+                                              error_data.spatially_weight_error,
+                                              error_data.weight);
 
     dealii::ConditionalOStream pcout(std::cout,
                                      dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);

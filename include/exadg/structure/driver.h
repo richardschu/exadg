@@ -43,48 +43,11 @@ namespace Structure
 {
 enum class OperatorType
 {
-  Nonlinear,
-  Linearized
+  Evaluate, // includes inhomogeneous boundary conditions, where the nonlinear operator is evaluated
+            // in case of nonlinear problems
+  Apply     // homogeneous action of operator, where the linearized operator is applied in case of
+            // nonlinear problems
 };
-
-inline std::string
-enum_to_string(OperatorType const enum_type)
-{
-  std::string string_type;
-
-  switch(enum_type)
-  {
-    // clang-format off
-    case OperatorType::Nonlinear:  string_type = "Nonlinear";  break;
-    case OperatorType::Linearized: string_type = "Linearized"; break;
-    default: AssertThrow(false, dealii::ExcMessage("Not implemented.")); break;
-      // clang-format on
-  }
-
-  return string_type;
-}
-
-inline void
-string_to_enum(OperatorType & enum_type, std::string const string_type)
-{
-  // clang-format off
-  if     (string_type == "Nonlinear")  enum_type = OperatorType::Nonlinear;
-  else if(string_type == "Linearized") enum_type = OperatorType::Linearized;
-  else AssertThrow(false, dealii::ExcMessage("Unknown operator type. Not implemented."));
-  // clang-format on
-}
-
-inline unsigned int
-get_dofs_per_element(std::string const & input_file,
-                     unsigned int const  dim,
-                     unsigned int const  degree)
-{
-  (void)input_file;
-
-  unsigned int const dofs_per_element = dealii::Utilities::pow(degree, dim) * dim;
-
-  return dofs_per_element;
-}
 
 template<int dim, typename Number>
 class Driver
@@ -108,9 +71,9 @@ public:
    * Throughput study
    */
   std::tuple<unsigned int, dealii::types::global_dof_index, double>
-  apply_operator(std::string const & operator_type_string,
-                 unsigned int const  n_repetitions_inner,
-                 unsigned int const  n_repetitions_outer) const;
+  apply_operator(OperatorType const & operator_type,
+                 unsigned int const   n_repetitions_inner,
+                 unsigned int const   n_repetitions_outer) const;
 
 private:
   // MPI communicator
@@ -128,12 +91,11 @@ private:
   // application
   std::shared_ptr<ApplicationBase<dim, Number>> application;
 
-  // user parameters
-  Parameters param;
+  std::shared_ptr<Grid<dim>> grid;
 
-  // matrix-free
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
+  std::shared_ptr<dealii::Mapping<dim>> mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> multigrid_mappings;
 
   // operator
   std::shared_ptr<Operator<dim, Number>> pde_operator;

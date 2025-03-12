@@ -36,11 +36,9 @@ enum class Preconditioner
 {
   Undefined,
   None,
+  PointJacobi,
   InverseMassMatrix
 };
-
-std::string
-enum_to_string(Preconditioner const enum_type);
 
 } // namespace Elementwise
 } // namespace ExaDG

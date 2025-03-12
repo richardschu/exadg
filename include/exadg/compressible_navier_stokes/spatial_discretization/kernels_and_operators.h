@@ -32,7 +32,6 @@
 #include <exadg/compressible_navier_stokes/user_interface/boundary_descriptor.h>
 #include <exadg/compressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/functions_and_boundary_conditions/evaluate_functions.h>
-#include <exadg/grid/grid_utilities.h>
 #include <exadg/matrix_free/integrators.h>
 #include <exadg/operators/interior_penalty_parameter.h>
 
@@ -164,7 +163,7 @@ inline DEAL_II_ALWAYS_INLINE //
   if(boundary_type == BoundaryType::Dirichlet)
   {
     auto bc = boundary_descriptor.dirichlet_bc.find(boundary_id)->second;
-    auto g  = FunctionEvaluator<rank, dim, Number>::value(bc, q_point, time);
+    auto g  = FunctionEvaluator<rank, dim, Number>::value(*bc, q_point, time);
 
     value_p = -value_m + dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>>(2.0 * g);
   }
@@ -205,7 +204,7 @@ inline DEAL_II_ALWAYS_INLINE //
   else if(boundary_type == BoundaryType::Neumann)
   {
     auto bc = boundary_descriptor.neumann_bc.find(boundary_id)->second;
-    auto h  = FunctionEvaluator<rank, dim, Number>::value(bc, q_point, time);
+    auto h  = FunctionEvaluator<rank, dim, Number>::value(*bc, q_point, time);
 
     grad_P_normal =
       -grad_M_normal + dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>>(2.0 * h);
@@ -351,9 +350,11 @@ public:
     vector u        = momentum.get_value(q) / rho;
 
     scalar rhs_density =
-      FunctionEvaluator<0, dim, Number>::value(data.rhs_rho, q_points, eval_time);
-    vector rhs_momentum = FunctionEvaluator<1, dim, Number>::value(data.rhs_u, q_points, eval_time);
-    scalar rhs_energy   = FunctionEvaluator<0, dim, Number>::value(data.rhs_E, q_points, eval_time);
+      FunctionEvaluator<0, dim, Number>::value(*(data.rhs_rho), q_points, eval_time);
+    vector rhs_momentum =
+      FunctionEvaluator<1, dim, Number>::value(*(data.rhs_u), q_points, eval_time);
+    scalar rhs_energy =
+      FunctionEvaluator<0, dim, Number>::value(*(data.rhs_E), q_points, eval_time);
 
     return std::make_tuple(rhs_density, rhs_momentum, rhs_momentum * u + rhs_energy);
   }
@@ -1018,7 +1019,7 @@ public:
                fe_eval_p.read_cell_data(array_penalty_parameter)) *
       IP::get_penalty_factor<dim, Number>(
         degree,
-        GridUtilities::get_element_type(
+        get_element_type(
           fe_eval_m.get_matrix_free().get_dof_handler(data.dof_index).get_triangulation()),
         data.IP_factor) *
       nu;
@@ -1033,7 +1034,7 @@ public:
     scalar tau = fe_eval.read_cell_data(array_penalty_parameter) *
                  IP::get_penalty_factor<dim, Number>(
                    degree,
-                   GridUtilities::get_element_type(
+                   get_element_type(
                      fe_eval.get_matrix_free().get_dof_handler(data.dof_index).get_triangulation()),
                    data.IP_factor) *
                  nu;

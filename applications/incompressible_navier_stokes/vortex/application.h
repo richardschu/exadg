@@ -33,7 +33,7 @@ namespace IncNS
 {
 enum class MeshType
 {
-  UniformCartesian,
+  Cartesian,
   Curvilinear
 };
 
@@ -47,7 +47,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double const t  = this->get_time();
     double const pi = dealii::numbers::PI;
@@ -75,7 +75,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const
+  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
     double const t  = this->get_time();
     double const pi = dealii::numbers::PI;
@@ -105,7 +105,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double const t  = this->get_time();
     double const pi = dealii::numbers::PI;
@@ -117,16 +117,16 @@ public:
     {
       if(component==0)
       {
-        if( (std::abs(p[1]+0.5)< 1e-12) && (p[0]<0) )
+        if( (std::abs(p[1]+0.5)< 1e-12) and (p[0]<0) )
           result = u_x_max*2.0*pi*std::cos(2.0*pi*p[1])*std::exp(-4.0*pi*pi*viscosity*t);
-        else if( (std::abs(p[1]-0.5)< 1e-12) && (p[0]>0) )
+        else if( (std::abs(p[1]-0.5)< 1e-12) and (p[0]>0) )
           result = -u_x_max*2.0*pi*std::cos(2.0*pi*p[1])*std::exp(-4.0*pi*pi*viscosity*t);
       }
       else if(component==1)
       {
-        if( (std::abs(p[0]+0.5)< 1e-12) && (p[1]>0) )
+        if( (std::abs(p[0]+0.5)< 1e-12) and (p[1]>0) )
           result = -u_x_max*2.0*pi*std::cos(2.0*pi*p[0])*std::exp(-4.0*pi*pi*viscosity*t);
-        else if((std::abs(p[0]-0.5)< 1e-12) && (p[1]<0) )
+        else if((std::abs(p[0]-0.5)< 1e-12) and (p[1]<0) )
           result = u_x_max*2.0*pi*std::cos(2.0*pi*p[0])*std::exp(-4.0*pi*pi*viscosity*t);
       }
     }
@@ -135,22 +135,22 @@ public:
     {
       if(component==0)
       {
-        if( (std::abs(p[1]+0.5)< 1e-12) && (p[0]<0) )
+        if( (std::abs(p[1]+0.5)< 1e-12) and (p[0]<0) )
           result = -u_x_max*2.0*pi*(std::cos(2.0*pi*p[0]) - std::cos(2.0*pi*p[1]))*std::exp(-4.0*pi*pi*viscosity*t);
-        else if( (std::abs(p[1]-0.5)< 1e-12) && (p[0]>0) )
+        else if( (std::abs(p[1]-0.5)< 1e-12) and (p[0]>0) )
           result = u_x_max*2.0*pi*(std::cos(2.0*pi*p[0]) - std::cos(2.0*pi*p[1]))*std::exp(-4.0*pi*pi*viscosity*t);
       }
       else if(component==1)
       {
-        if( (std::abs(p[0]+0.5)< 1e-12) && (p[1]>0) )
+        if( (std::abs(p[0]+0.5)< 1e-12) and (p[1]>0) )
           result = -u_x_max*2.0*pi*(std::cos(2.0*pi*p[0]) - std::cos(2.0*pi*p[1]))*std::exp(-4.0*pi*pi*viscosity*t);
-        else if((std::abs(p[0]-0.5)< 1e-12) && (p[1]<0) )
+        else if((std::abs(p[0]-0.5)< 1e-12) and (p[1]<0) )
           result = u_x_max*2.0*pi*(std::cos(2.0*pi*p[0]) - std::cos(2.0*pi*p[1]))*std::exp(-4.0*pi*pi*viscosity*t);
       }
     }
     else
     {
-      AssertThrow(formulation_viscous == FormulationViscousTerm::LaplaceFormulation ||
+      AssertThrow(formulation_viscous == FormulationViscousTerm::LaplaceFormulation or
                   formulation_viscous == FormulationViscousTerm::DivergenceFormulation,
                   dealii::ExcMessage("Specified formulation of viscous term is not implemented!"));
     }
@@ -179,7 +179,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double const t  = this->get_time();
     double const pi = dealii::numbers::PI;
@@ -212,7 +212,7 @@ public:
     }
     else
     {
-      AssertThrow(formulation_viscous == FormulationViscousTerm::LaplaceFormulation ||
+      AssertThrow(formulation_viscous == FormulationViscousTerm::LaplaceFormulation or
                     formulation_viscous == FormulationViscousTerm::DivergenceFormulation,
                   dealii::ExcMessage("Specified formulation of viscous term is not implemented!"));
     }
@@ -285,9 +285,10 @@ private:
 
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree_u;
-    this->param.degree_p                = DegreePressure::MixedOrder;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
     this->param.upwind_factor = 1.0;
@@ -347,13 +348,26 @@ private:
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
     this->param.formulation_convective_term_bc = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    // viscous step
-    this->param.solver_viscous         = SolverViscous::CG;
-    this->param.solver_data_viscous    = SolverData(1000, 1.e-12, 1.e-6);
-    this->param.preconditioner_viscous = PreconditionerViscous::InverseMassMatrix; // Multigrid;
-    this->param.multigrid_data_viscous.type                   = MultigridType::hMG;
-    this->param.multigrid_data_viscous.smoother_data.smoother = MultigridSmoother::Chebyshev;
-    this->param.update_preconditioner_viscous                 = false;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+      {
+        this->param.solver_momentum      = SolverMomentum::CG;
+        this->param.solver_data_momentum = SolverData(1000, 1.e-12, 1.e-6);
+      }
+      else
+      {
+        // Newton solver
+        this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-10, 1.e-6);
+        this->param.solver_momentum             = SolverMomentum::GMRES;
+        this->param.solver_data_momentum        = SolverData(1000, 1.e-12, 1.e-6);
+      }
+
+      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix; // Multigrid;
+      this->param.multigrid_data_momentum.type                   = MultigridType::hMG;
+      this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
+      this->param.update_preconditioner_momentum                 = false;
+    }
 
 
     // PRESSURE-CORRECTION SCHEME
@@ -364,29 +378,31 @@ private:
     this->param.rotational_formulation = true;
 
     // momentum step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // Newton solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-12, 1.e-6);
 
-    // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-12, 1.e-6); // TODO
+      // linear solver
+      this->param.solver_momentum                = SolverMomentum::FGMRES;
+      this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-6, 100);
+      this->param.update_preconditioner_momentum = false;
+      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix; // Multigrid;
+      this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
 
-    // linear solver
-    this->param.solver_momentum                = SolverMomentum::FGMRES;
-    this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-6, 100);
-    this->param.update_preconditioner_momentum = false;
-    this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix; // Multigrid;
-    this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
+      // Jacobi smoother data
+      //  this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Jacobi;
+      //  this->param.multigrid_data_momentum.smoother_data.preconditioner =
+      //  PreconditionerSmoother::BlockJacobi;
+      //  this->param.multigrid_data_momentum.smoother_data.iterations = 5;
+      //  this->param.multigrid_data_momentum.coarse_problem.solver =
+      //  MultigridCoarseGridSolver::GMRES;
 
-    // Jacobi smoother data
-    //  this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Jacobi;
-    //  this->param.multigrid_data_momentum.smoother_data.preconditioner =
-    //  PreconditionerSmoother::BlockJacobi;
-    //  this->param.multigrid_data_momentum.smoother_data.iterations = 5;
-    //  this->param.multigrid_data_momentum.coarse_problem.solver =
-    //  MultigridCoarseGridSolver::GMRES;
-
-    // Chebyshev smoother data
-    this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
-    this->param.multigrid_data_momentum.coarse_problem.solver =
-      MultigridCoarseGridSolver::Chebyshev;
+      // Chebyshev smoother data
+      this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
+      this->param.multigrid_data_momentum.coarse_problem.solver =
+        MultigridCoarseGridSolver::Chebyshev;
+    }
 
 
     // COUPLED NAVIER-STOKES SOLVER
@@ -423,51 +439,79 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    if(ALE)
-    {
-      AssertThrow(mesh_type == MeshType::UniformCartesian,
-                  dealii::ExcMessage(
-                    "Taylor vortex problem: Parameter mesh_type is invalid for ALE."));
-    }
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)periodic_face_pairs;
+      (void)vector_local_refinements;
 
-    if(mesh_type == MeshType::UniformCartesian)
-    {
-      // Uniform Cartesian grid
-      dealii::GridGenerator::subdivided_hyper_cube(*this->grid->triangulation, 2, left, right);
-    }
-    else if(mesh_type == MeshType::Curvilinear)
-    {
-      dealii::GridGenerator::subdivided_hyper_cube(*this->grid->triangulation, 2, left, right);
-
-      this->grid->triangulation->set_all_manifold_ids(1);
-      double const                     deformation = 0.1;
-      unsigned int const               frequency   = 2;
-      static DeformedCubeManifold<dim> manifold(left, right, deformation, frequency);
-      this->grid->triangulation->set_manifold(1, manifold);
-    }
-
-    // boundary IDs
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      for(auto const & f : cell->face_indices())
+      if(ALE)
       {
-        if(((std::fabs(cell->face(f)->center()(0) - right) < 1e-12) &&
-            (cell->face(f)->center()(1) < 0)) ||
-           ((std::fabs(cell->face(f)->center()(0) - left) < 1e-12) &&
-            (cell->face(f)->center()(1) > 0)) ||
-           ((std::fabs(cell->face(f)->center()(1) - left) < 1e-12) &&
-            (cell->face(f)->center()(0) < 0)) ||
-           ((std::fabs(cell->face(f)->center()(1) - right) < 1e-12) &&
-            (cell->face(f)->center()(0) > 0)))
+        AssertThrow(mesh_type == MeshType::Cartesian,
+                    dealii::ExcMessage(
+                      "Taylor vortex problem: Parameter mesh_type is invalid for ALE."));
+      }
+
+      dealii::GridGenerator::subdivided_hyper_cube(tria, 2, left, right);
+
+      if(mesh_type == MeshType::Curvilinear)
+      {
+        AssertThrow(
+          this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+          dealii::ExcMessage(
+            "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+            "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+
+        double const       deformation = 0.1;
+        unsigned int const frequency   = 2;
+
+        apply_deformed_cube_manifold(tria, left, right, deformation, frequency);
+      }
+
+      // boundary IDs
+      for(auto cell : tria.cell_iterators())
+      {
+        for(auto const & f : cell->face_indices())
         {
-          cell->face(f)->set_boundary_id(1);
+          if(((std::fabs(cell->face(f)->center()(0) - right) < 1e-12) and
+              (cell->face(f)->center()(1) < 0)) or
+             ((std::fabs(cell->face(f)->center()(0) - left) < 1e-12) and
+              (cell->face(f)->center()(1) > 0)) or
+             ((std::fabs(cell->face(f)->center()(1) - left) < 1e-12) and
+              (cell->face(f)->center()(0) < 0)) or
+             ((std::fabs(cell->face(f)->center()(1) - right) < 1e-12) and
+              (cell->face(f)->center()(0) > 0)))
+          {
+            cell->face(f)->set_boundary_id(1);
+          }
         }
       }
-    }
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+      tria.refine_global(global_refinements);
+    };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -533,13 +577,13 @@ private:
     this->poisson_param.right_hand_side = false;
 
     // SPATIAL DISCRETIZATION
-    this->poisson_param.degree = this->param.grid.mapping_degree;
+    this->poisson_param.degree = this->param.mapping_degree;
 
     this->poisson_param.spatial_discretization = Poisson::SpatialDiscretization::CG;
     this->poisson_param.IP_factor              = 1.0e0;
 
     // SOLVER
-    this->poisson_param.solver                    = Poisson::Solver::CG;
+    this->poisson_param.solver                    = Poisson::LinearSolver::CG;
     this->poisson_param.solver_data.abs_tol       = 1.e-20;
     this->poisson_param.solver_data.rel_tol       = 1.e-10;
     this->poisson_param.solver_data.max_iter      = 1e4;
@@ -636,7 +680,7 @@ private:
 
   FormulationViscousTerm const formulation_viscous = FormulationViscousTerm::LaplaceFormulation;
 
-  MeshType const mesh_type = MeshType::UniformCartesian;
+  MeshType const mesh_type = MeshType::Cartesian;
 
   bool const ALE = true;
 };

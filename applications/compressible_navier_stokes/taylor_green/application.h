@@ -64,7 +64,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & x, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & x, unsigned int const component = 0) const final
   {
     double const u1 = V_0 * std::sin(x[0] / L) * std::cos(x[1] / L) * std::cos(x[2] / L);
     double const u2 = -V_0 * std::cos(x[0] / L) * std::sin(x[1] / L) * std::cos(x[2] / L);
@@ -99,16 +99,6 @@ enum class MeshType
   Curvilinear
 };
 
-void
-string_to_enum(MeshType & enum_type, std::string const & string_type)
-{
-  // clang-format off
-  if     (string_type == "Cartesian")   enum_type = MeshType::Cartesian;
-  else if(string_type == "Curvilinear") enum_type = MeshType::Curvilinear;
-  else AssertThrow(false, dealii::ExcMessage("Not implemented."));
-  // clang-format on
-}
-
 template<int dim, typename Number>
 class Application : public ApplicationBase<dim, Number>
 {
@@ -119,26 +109,17 @@ public:
   }
 
   void
-  add_parameters(dealii::ParameterHandler & prm)
+  add_parameters(dealii::ParameterHandler & prm) final
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
-     prm.enter_subsection("Application");
-       prm.add_parameter("MeshType", mesh_type_string, "Type of mesh (Cartesian versus curvilinear).", dealii::Patterns::Selection("Cartesian|Curvilinear"));
-     prm.leave_subsection();
-    // clang-format on
+    prm.enter_subsection("Application");
+    {
+      prm.add_parameter("MeshType", mesh_type, "Type of mesh (Cartesian versus curvilinear).");
+    }
   }
 
 private:
-  void
-  parse_parameters() final
-  {
-    ApplicationBase<dim, Number>::parse_parameters();
-
-    string_to_enum(mesh_type, mesh_type_string);
-  }
-
   void
   set_parameters() final
   {
@@ -204,7 +185,7 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1;
+    this->param.mapping_degree          = 1;
     this->param.n_q_points_convective   = QuadratureRule::Overintegration32k;
     this->param.n_q_points_viscous      = QuadratureRule::Overintegration32k;
 
@@ -216,34 +197,55 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> & grid, std::shared_ptr<dealii::Mapping<dim>> & mapping) final
   {
-    double const pi   = dealii::numbers::PI;
-    double const left = -pi * L, right = pi * L;
-    double const deformation = 0.1;
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)vector_local_refinements;
 
-    bool curvilinear_mesh = false;
-    if(mesh_type == MeshType::Cartesian)
-    {
-      // do nothing
-    }
-    else if(mesh_type == MeshType::Curvilinear)
-    {
-      curvilinear_mesh = true;
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("Not implemented."));
-    }
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Periodic faces might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
 
-    create_periodic_box(this->grid->triangulation,
-                        this->param.grid.n_refine_global,
-                        this->grid->periodic_faces,
-                        this->n_subdivisions_1d_hypercube,
-                        left,
-                        right,
-                        curvilinear_mesh,
-                        deformation);
+      if(mesh_type == MeshType::Curvilinear)
+      {
+        AssertThrow(
+          this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+          dealii::ExcMessage(
+            "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+            "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+      }
+
+      double const pi   = dealii::numbers::PI;
+      double const left = -pi * L, right = pi * L;
+      double const deformation = 0.1;
+
+      create_periodic_box(tria,
+                          global_refinements,
+                          periodic_face_pairs,
+                          this->n_subdivisions_1d_hypercube,
+                          left,
+                          right,
+                          mesh_type == MeshType::Curvilinear,
+                          deformation);
+    };
+
+    GridUtilities::create_triangulation<dim>(grid,
+                                             this->mpi_comm,
+                                             this->param.grid,
+                                             lambda_create_triangulation,
+                                             {} /* no local refinements */);
+
+    GridUtilities::create_mapping(mapping,
+                                  this->param.grid.element_type,
+                                  this->param.mapping_degree);
   }
 
   void
@@ -306,8 +308,7 @@ private:
     return pp;
   }
 
-  std::string mesh_type_string = "Cartesian";
-  MeshType    mesh_type        = MeshType::Cartesian;
+  MeshType mesh_type = MeshType::Cartesian;
 
   double const start_time = 0.0;
   double const end_time   = 20.0 * CHARACTERISTIC_TIME;

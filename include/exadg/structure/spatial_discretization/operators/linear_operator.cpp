@@ -35,19 +35,21 @@ LinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) const
 
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
   {
-    // engineering strains (material tensor is symmetric)
-    tensor const gradient = integrator.get_gradient(q);
-
-    // Cauchy stresses
-    tensor const sigma = material->apply_C(gradient, integrator.get_current_cell_index(), q);
+    // Cauchy stresses, only valid for linear elasticity
+    tensor const sigma =
+      material->second_piola_kirchhoff_stress(integrator.get_gradient(q),
+                                              integrator.get_current_cell_index(),
+                                              q);
 
     // test with gradients
     integrator.submit_gradient(sigma, q);
 
     if(this->operator_data.unsteady)
+    {
       integrator.submit_value(this->scaling_factor_mass * this->operator_data.density *
                                 integrator.get_value(q),
                               q);
+    }
   }
 }
 

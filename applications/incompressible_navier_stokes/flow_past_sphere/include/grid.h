@@ -24,8 +24,6 @@
 
 namespace ExaDG
 {
-using namespace dealii;
-
 namespace FlowPastSphere
 {
 double const       radius        = 0.5;
@@ -34,7 +32,7 @@ double const       outer         = 3.8 * radius;
 unsigned int const length_factor = 5;
 
 template<int dim, int spacedim = dim>
-class SphericalManifoldBoundaryLayer : public Manifold<dim, spacedim>
+class SphericalManifoldBoundaryLayer : public dealii::Manifold<dim, spacedim>
 {
 public:
   SphericalManifoldBoundaryLayer(double const radius, double const radius_next)
@@ -42,50 +40,51 @@ public:
   {
   }
 
-  virtual std::unique_ptr<Manifold<dim, spacedim>>
+  virtual std::unique_ptr<dealii::Manifold<dim, spacedim>>
   clone() const override
   {
     return std::make_unique<SphericalManifoldBoundaryLayer<dim, spacedim>>(radius, radius_next);
   }
 
-  virtual Point<spacedim>
-  get_intermediate_point(const Point<spacedim> & p1,
-                         const Point<spacedim> & p2,
-                         const double            w) const override
+  virtual dealii::Point<spacedim>
+  get_intermediate_point(const dealii::Point<spacedim> & p1,
+                         const dealii::Point<spacedim> & p2,
+                         const double                    w) const override
   {
     return push_forward(spherical.get_intermediate_point(pull_back(p1), pull_back(p2), w));
   }
 
-  virtual Point<spacedim>
-  get_new_point(const ArrayView<const Point<spacedim>> & vertices,
-                const ArrayView<const double> &          weights) const override
+  virtual dealii::Point<spacedim>
+  get_new_point(const dealii::ArrayView<const dealii::Point<spacedim>> & vertices,
+                const dealii::ArrayView<const double> &                  weights) const override
   {
-    boost::container::small_vector<Point<spacedim>, 100> pulled_back_vertices;
-    for(Point<spacedim> const & vertex : vertices)
+    boost::container::small_vector<dealii::Point<spacedim>, 100> pulled_back_vertices;
+    for(dealii::Point<spacedim> const & vertex : vertices)
       pulled_back_vertices.push_back(pull_back(vertex));
-    return push_forward(spherical.get_new_point(
-      ArrayView<const Point<spacedim>>(pulled_back_vertices.data(), vertices.size()), weights));
+    return push_forward(spherical.get_new_point(dealii::ArrayView<const dealii::Point<spacedim>>(
+                                                  pulled_back_vertices.data(), vertices.size()),
+                                                weights));
   }
 
   virtual void
-  get_new_points(const ArrayView<const Point<spacedim>> & surrounding_points,
-                 const Table<2, double> &                 weights,
-                 ArrayView<Point<spacedim>>               new_points) const override
+  get_new_points(const dealii::ArrayView<const dealii::Point<spacedim>> & surrounding_points,
+                 const dealii::Table<2, double> &                         weights,
+                 dealii::ArrayView<dealii::Point<spacedim>>               new_points) const override
   {
-    boost::container::small_vector<Point<spacedim>, 100> pulled_back_vertices;
-    for(Point<spacedim> const & vertex : surrounding_points)
+    boost::container::small_vector<dealii::Point<spacedim>, 100> pulled_back_vertices;
+    for(dealii::Point<spacedim> const & vertex : surrounding_points)
       pulled_back_vertices.push_back(pull_back(vertex));
-    spherical.get_new_points(ArrayView<const Point<spacedim>>(pulled_back_vertices.data(),
-                                                              surrounding_points.size()),
+    spherical.get_new_points(dealii::ArrayView<const dealii::Point<spacedim>>(
+                               pulled_back_vertices.data(), surrounding_points.size()),
                              weights,
                              new_points);
-    for(Point<spacedim> & point : new_points)
+    for(dealii::Point<spacedim> & point : new_points)
       point = push_forward(point);
   }
 
 private:
-  Point<spacedim>
-  push_forward(Point<spacedim> const & p) const
+  dealii::Point<spacedim>
+  push_forward(dealii::Point<spacedim> const & p) const
   {
     // apply transformation function
     double const R = p.norm();
@@ -94,8 +93,8 @@ private:
     return p * (r / R);
   }
 
-  Point<spacedim>
-  pull_back(Point<spacedim> const & p) const
+  dealii::Point<spacedim>
+  pull_back(dealii::Point<spacedim> const & p) const
   {
     // inverse of the function above, using the positive root
     double const r = p.norm();
@@ -106,38 +105,46 @@ private:
     return p * (R / r);
   }
 
-  SphericalManifold<spacedim> const spherical;
-  double const                      radius;
-  double const                      radius_next;
-  double const                      stretch_factor;
+  dealii::SphericalManifold<spacedim> const spherical;
+  double const                              radius;
+  double const                              radius_next;
+  double const                              stretch_factor;
 };
 
 
 
 template<int dim>
 void
-create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
+create_sphere_grid(dealii::Triangulation<dim> & tria,
+                   unsigned int const           n_refinements,
+                   TriangulationType const &    triangulation_type)
 {
-  Triangulation<dim> tria1, tria2, tria3, tria4, tria_ser;
-  GridGenerator::hyper_shell(tria1, Point<dim>(), radius, radius_next, 6);
-  GridGenerator::hyper_shell(tria2, Point<dim>(), radius_next, std::sqrt(dim) * outer, 6);
+  AssertThrow(
+    triangulation_type != TriangulationType::FullyDistributed,
+    dealii::ExcMessage(
+      "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+      "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
 
-  Point<dim> lower_left, upper_right;
+  dealii::Triangulation<dim> tria1, tria2, tria3, tria4, tria_ser;
+  dealii::GridGenerator::hyper_shell(tria1, dealii::Point<dim>(), radius, radius_next, 6);
+  dealii::GridGenerator::hyper_shell(
+    tria2, dealii::Point<dim>(), radius_next, std::sqrt(dim) * outer, 6);
+
+  dealii::Point<dim> lower_left, upper_right;
   lower_left[0] = outer;
   for(unsigned int d = 1; d < dim; ++d)
     lower_left[d] = -outer;
   upper_right[0] = (1 + 2 * length_factor) * outer;
   for(unsigned int d = 1; d < dim; ++d)
     upper_right[d] = outer;
-  GridGenerator::subdivided_hyper_rectangle(
+  dealii::GridGenerator::subdivided_hyper_rectangle(
     tria3, {length_factor, 1, 1}, lower_left, upper_right, false);
   lower_left[0]  = -3 * outer;
   upper_right[0] = -outer;
-  GridGenerator::subdivided_hyper_rectangle(tria4, {1, 1, 1}, lower_left, upper_right, false);
+  dealii::GridGenerator::subdivided_hyper_rectangle(
+    tria4, {1, 1, 1}, lower_left, upper_right, false);
 
-  GridGenerator::merge_triangulations({&tria1, &tria2, &tria3, &tria4}, tria_ser);
-  tria_ser.reset_all_manifolds();
-  tria.set_all_manifold_ids(0);
+  dealii::GridGenerator::merge_triangulations({&tria1, &tria2, &tria3, &tria4}, tria_ser);
 
   // Set cells near sphere to spherical manifold for first round of refinement
   for(auto const & cell : tria_ser.active_cell_iterators())
@@ -153,23 +160,23 @@ create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
   // Shift two points somewhat to generate a better balance in points
   for(auto const & cell : tria_ser.active_cell_iterators())
   {
-    if(std::abs(cell->vertex(0)[0] - outer) < 1e-10 && std::abs(cell->vertex(0)[1]) < 1e-10 &&
+    if(std::abs(cell->vertex(0)[0] - outer) < 1e-10 and std::abs(cell->vertex(0)[1]) < 1e-10 and
        std::abs(cell->vertex(0)[2]) < 1e-10)
       cell->vertex(0)[0] += 0.3 * (outer - radius_next);
-    else if(std::abs(cell->vertex(0)[0] - 0.5 * (outer + radius_next)) < 1e-10 &&
-            std::abs(cell->vertex(0)[1]) < 1e-10 && std::abs(cell->vertex(0)[2]) < 1e-10)
+    else if(std::abs(cell->vertex(0)[0] - 0.5 * (outer + radius_next)) < 1e-10 and
+            std::abs(cell->vertex(0)[1]) < 1e-10 and std::abs(cell->vertex(0)[2]) < 1e-10)
       cell->vertex(0)[0] += 0.15 * (outer - radius_next);
-    else if(std::abs(cell->vertex(1)[0] + outer) < 1e-10 && std::abs(cell->vertex(1)[1]) < 1e-10 &&
-            std::abs(cell->vertex(1)[2]) < 1e-10)
+    else if(std::abs(cell->vertex(1)[0] + outer) < 1e-10 and
+            std::abs(cell->vertex(1)[1]) < 1e-10 and std::abs(cell->vertex(1)[2]) < 1e-10)
       cell->vertex(1)[0] -= 0.3 * (outer - radius_next);
-    else if(std::abs(cell->vertex(1)[0] + 0.5 * (outer + radius_next)) < 1e-10 &&
-            std::abs(cell->vertex(1)[1]) < 1e-10 && std::abs(cell->vertex(1)[2]) < 1e-10)
+    else if(std::abs(cell->vertex(1)[0] + 0.5 * (outer + radius_next)) < 1e-10 and
+            std::abs(cell->vertex(1)[1]) < 1e-10 and std::abs(cell->vertex(1)[2]) < 1e-10)
       cell->vertex(1)[0] -= 0.15 * (outer - radius_next);
   }
 
   // Remove refinement to make sure all MPI ranks agree on this mesh
-  Triangulation<dim> tria_inner;
-  GridGenerator::flatten_triangulation(tria_ser, tria_inner);
+  dealii::Triangulation<dim> tria_inner;
+  dealii::GridGenerator::flatten_triangulation(tria_ser, tria_inner);
 
   // Create outer layer of cube cells
   for(unsigned int d = 1; d < dim; ++d)
@@ -177,24 +184,27 @@ create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
   for(unsigned int d = 1; d < dim; ++d)
     upper_right[d] = 2. * outer;
   upper_right[0] = (1 + 2 * length_factor) * outer;
-  Triangulation<dim>        tria_rectangle;
-  std::vector<unsigned int> refinements(dim, 4);
+  dealii::Triangulation<dim> tria_rectangle;
+  std::vector<unsigned int>  refinements(dim, 4);
   refinements[0] = 2 * length_factor + 4;
-  GridGenerator::subdivided_hyper_rectangle(tria_rectangle, refinements, lower_left, upper_right);
+  dealii::GridGenerator::subdivided_hyper_rectangle(tria_rectangle,
+                                                    refinements,
+                                                    lower_left,
+                                                    upper_right);
 
   // Remove cells present in inner mesh
-  std::set<typename Triangulation<dim>::active_cell_iterator> cells_to_remove;
+  std::set<typename dealii::Triangulation<dim>::active_cell_iterator> cells_to_remove;
   for(auto const & cell : tria_rectangle.active_cell_iterators())
-    if(outer - std::abs(cell->center()[1]) > 0. &&
-       (dim < 3 || (outer - std::abs(cell->center()[2]) > 0.)))
+    if(outer - std::abs(cell->center()[1]) > 0. and
+       (dim < 3 or (outer - std::abs(cell->center()[2]) > 0.)))
       cells_to_remove.insert(cell);
 
-  Triangulation<dim> tria_outer;
-  GridGenerator::create_triangulation_with_removed_cells(tria_rectangle,
-                                                         cells_to_remove,
-                                                         tria_outer);
+  dealii::Triangulation<dim> tria_outer;
+  dealii::GridGenerator::create_triangulation_with_removed_cells(tria_rectangle,
+                                                                 cells_to_remove,
+                                                                 tria_outer);
 
-  GridGenerator::merge_triangulations({&tria_inner, &tria_outer}, tria);
+  dealii::GridGenerator::merge_triangulations({&tria_inner, &tria_outer}, tria);
 
   // Set manifold ids again on the final triangulation
   tria.reset_all_manifolds();
@@ -204,7 +214,7 @@ create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
     {
       cell->set_all_manifold_ids(1);
       for(unsigned int v : cell->vertex_indices())
-        AssertThrow(cell->vertex(v).norm() < radius_next + 1e-10, ExcInternalError());
+        AssertThrow(cell->vertex(v).norm() < radius_next + 1e-10, dealii::ExcInternalError());
     }
   }
   tria.set_manifold(1, spherical_manifold);
@@ -221,15 +231,15 @@ create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
         else if(std::abs(cell->face(f)->center()[0] + 3. * outer) < 1e-10)
           cell->face(f)->set_boundary_id(1);
         // symmetry -> id 0
-        else if(2. * outer - std::abs(cell->face(f)->center()[1]) < 1e-10 ||
-                (dim == 3 && (2. * outer - std::abs(cell->face(f)->center()[2]) < 1e-10)))
+        else if(2. * outer - std::abs(cell->face(f)->center()[1]) < 1e-10 or
+                (dim == 3 and (2. * outer - std::abs(cell->face(f)->center()[2]) < 1e-10)))
           cell->face(f)->set_boundary_id(0);
         // outflow -> id 2
         else
         {
           AssertThrow(std::abs(cell->face(f)->center()[0] - (1 + 2 * length_factor) * outer) <
                         1e-10,
-                      ExcInternalError());
+                      dealii::ExcInternalError());
           cell->face(f)->set_boundary_id(2);
         }
       }
@@ -241,8 +251,8 @@ create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
     for(auto const & cell : tria.active_cell_iterators())
       if(cell->is_locally_owned())
       {
-        if(outer - std::abs(cell->center()[1]) > 0. &&
-           (dim < 3 || (outer - std::abs(cell->center()[2]) > 0.)))
+        if(outer - std::abs(cell->center()[1]) > 0. and
+           (dim < 3 or (outer - std::abs(cell->center()[2]) > 0.)))
           cell->set_refine_flag();
       }
     tria.execute_coarsening_and_refinement();
@@ -255,8 +265,8 @@ create_sphere_grid(Triangulation<dim> & tria, unsigned int const n_refinements)
   for(auto const & cell : tria.active_cell_iterators())
     if(cell->is_locally_owned())
     {
-      Point<dim> center = cell->center();
-      if(center[0] > 0 && center[0] < 4.5 * outer)
+      dealii::Point<dim> center = cell->center();
+      if(center[0] > 0 and center[0] < 4.5 * outer)
       {
         // Check radius of 2.5 * radius for (y,z) coordinates
         const double radius_factor = center[0] < 0 ? 2.3 : 2.8;

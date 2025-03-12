@@ -51,8 +51,8 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        1
+  Number of global refinements:              1
+  Create coarse triangulations:              false
   Mapping degree:                            6
   Polynomial degree:                         6
   Quadrature rule convective term:           Standard
@@ -67,7 +67,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                1
   Number of cells:                           4
-  Mapping degree:                            6
 
 Construct compressible Navier-Stokes DG operator ...
 
@@ -76,11 +75,14 @@ Discontinuous Galerkin finite element discretization:
   degree of 1D polynomials:                  6
   number of dofs per cell:                   196
   number of dofs (total):                    784
-  number of 1D q-points (std):               7
-  number of 1D q-points (over-conv):         7
-  number of 1D q-points (over-vis):          7
 
 ... done!
+
+Quadrature rules:
+
+  number of 1D q-points (std):               7
+  number of 1D q-points (conv):              7
+  number of 1D q-points (vis):               7
 
 Setup compressible Navier-Stokes DG operator ...
 
@@ -101,7 +103,7 @@ Calculation of time step size:
 Starting time loop ...
 
 Calculate error for all fields at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.96468e-16
+  Relative error (L2-norm): 3.00839e-16
 
 ________________________________________________________________________________
 
@@ -109,7 +111,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0002e+00:
-  Relative error (L2-norm): 4.12938e-15
+  Relative error (L2-norm): 3.80068e-15
 
 ________________________________________________________________________________
 
@@ -117,7 +119,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 2.0002e+00:
-  Relative error (L2-norm): 6.54722e-15
+  Relative error (L2-norm): 6.10553e-15
 
 ________________________________________________________________________________
 
@@ -125,7 +127,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 3.0001e+00:
-  Relative error (L2-norm): 8.92078e-15
+  Relative error (L2-norm): 8.31015e-15
 
 ________________________________________________________________________________
 
@@ -133,7 +135,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 4.0001e+00:
-  Relative error (L2-norm): 1.05833e-14
+  Relative error (L2-norm): 1.08707e-14
 
 ________________________________________________________________________________
 
@@ -141,7 +143,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 5.0001e+00:
-  Relative error (L2-norm): 1.29661e-14
+  Relative error (L2-norm): 1.31348e-14
 
 ________________________________________________________________________________
 
@@ -149,7 +151,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 6.0001e+00:
-  Relative error (L2-norm): 1.46442e-14
+  Relative error (L2-norm): 1.47283e-14
 
 ________________________________________________________________________________
 
@@ -157,7 +159,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 7.0001e+00:
-  Relative error (L2-norm): 1.54506e-14
+  Relative error (L2-norm): 1.65707e-14
 
 ________________________________________________________________________________
 
@@ -165,7 +167,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 8.0000e+00:
-  Relative error (L2-norm): 1.71162e-14
+  Relative error (L2-norm): 1.88533e-14
 
 ________________________________________________________________________________
 
@@ -173,7 +175,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 9.0000e+00:
-  Relative error (L2-norm): 1.84275e-14
+  Relative error (L2-norm): 2.12081e-14
 
 ________________________________________________________________________________
 
@@ -181,4 +183,4 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+01:
-  Relative error (L2-norm): 1.97827e-14
+  Relative error (L2-norm): 2.37247e-14

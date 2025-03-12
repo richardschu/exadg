@@ -27,7 +27,7 @@
 #include <deal.II/base/types.h>
 
 // ExaDG
-#include <exadg/functions_and_boundary_conditions/function_cached.h>
+#include <exadg/functions_and_boundary_conditions/container_interface_data.h>
 
 namespace ExaDG
 {
@@ -44,14 +44,22 @@ enum class BoundaryType
 template<int rank, int dim>
 struct BoundaryDescriptor
 {
+  // Dirichlet
   std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> dirichlet_bc;
 
-  // dealii::ComponentMask is only used for continuous elements, and is ignored for DG
+  // ComponentMask (only used/relevant for continuous Galerkin, ignored for DG)
+  // If a certain boundary ID is not inserted into this map, it is assumed that all components are
+  // active, in analogy to the default constructor of dealii::ComponentMask.
   std::map<dealii::types::boundary_id, dealii::ComponentMask> dirichlet_bc_component_mask;
 
-  std::map<dealii::types::boundary_id, std::shared_ptr<FunctionCached<rank, dim>>>
-    dirichlet_cached_bc;
+  // Another type of Dirichlet boundary condition where the Dirichlet values come
+  // from the solution on another domain that is in contact with the actual domain
+  // of interest at the given boundary (this type of Dirichlet boundary condition
+  // is required for the ALE mesh deformation problem in fluid-structure interaction).
+  // ComponentMask is not implemented/available for this type of boundary condition.
+  std::set<dealii::types::boundary_id> dirichlet_cached_bc;
 
+  // Neumann
   std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> neumann_bc;
 
   // returns the boundary type
@@ -93,6 +101,25 @@ struct BoundaryDescriptor
     AssertThrow(counter == 1,
                 dealii::ExcMessage("Boundary face with non-unique boundary type found."));
   }
+
+  void
+  set_dirichlet_cached_data(
+    std::shared_ptr<ContainerInterfaceData<rank, dim, double> const> interface_data) const
+  {
+    dirichlet_cached_data = interface_data;
+  }
+
+  std::shared_ptr<ContainerInterfaceData<rank, dim, double> const>
+  get_dirichlet_cached_data() const
+  {
+    AssertThrow(dirichlet_cached_data.get(),
+                dealii::ExcMessage("Pointer to ContainerInterfaceData has not been initialized."));
+
+    return dirichlet_cached_data;
+  }
+
+private:
+  mutable std::shared_ptr<ContainerInterfaceData<rank, dim, double> const> dirichlet_cached_data;
 };
 
 } // namespace Poisson

@@ -27,7 +27,9 @@
 #include <deal.II/numerics/data_out.h>
 
 // ExaDG
+#include <exadg/grid/grid_data.h>
 #include <exadg/incompressible_navier_stokes/postprocessor/output_generator.h>
+#include <exadg/operators/quadrature.h>
 #include <exadg/postprocessor/write_output.h>
 #include <exadg/utilities/create_directories.h>
 
@@ -72,10 +74,13 @@ write_output(
   dealii::Vector<double> aspect_ratios;
   if(output_data.write_aspect_ratio)
   {
-    aspect_ratios =
-      dealii::GridTools::compute_aspect_ratio_of_cells(mapping,
-                                                       dof_handler_velocity.get_triangulation(),
-                                                       dealii::QGauss<dim>(4));
+    dealii::Triangulation<dim> const & tria = dof_handler_velocity.get_triangulation();
+
+    ElementType const element_type = get_element_type(tria);
+
+    std::shared_ptr<dealii::Quadrature<dim>> quadrature = create_quadrature<dim>(element_type, 4);
+
+    aspect_ratios = dealii::GridTools::compute_aspect_ratio_of_cells(mapping, tria, *quadrature);
     data_out.add_data_vector(aspect_ratios, "aspect_ratio");
   }
 
@@ -164,8 +169,12 @@ OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_
     if(output_data.write_grid)
     {
       write_grid(dof_handler_velocity->get_triangulation(),
+                 *mapping,
+                 output_data.degree,
                  output_data.directory,
-                 output_data.filename);
+                 output_data.filename,
+                 0,
+                 mpi_comm);
     }
 
     // processor_id
@@ -187,7 +196,7 @@ OutputGenerator<dim, Number>::evaluate(
   VectorType const &                                                    pressure,
   std::vector<dealii::SmartPointer<SolutionField<dim, Number>>> const & additional_fields,
   double const                                                          time,
-  bool const                                                            unsteady)
+  bool const                                                            unsteady) const
 {
   print_write_output_time(time, time_control.get_counter(), unsteady, mpi_comm);
 

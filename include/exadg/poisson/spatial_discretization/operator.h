@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef INCLUDE_LAPLACE_DG_LAPLACE_OPERATION_H_
-#define INCLUDE_LAPLACE_DG_LAPLACE_OPERATION_H_
+#ifndef INCLUDE_EXADG_POISSON_SPATIAL_DISCRETIZATION_OPERATOR_H_
+#define INCLUDE_EXADG_POISSON_SPATIAL_DISCRETIZATION_OPERATOR_H_
 
 // ExaDG
 #include <exadg/grid/grid.h>
@@ -50,22 +50,32 @@ private:
   typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeDouble;
 
 public:
-  Operator(std::shared_ptr<Grid<dim> const>                     grid,
-           std::shared_ptr<BoundaryDescriptor<rank, dim> const> boundary_descriptor,
-           std::shared_ptr<FieldFunctions<dim> const>           field_functions,
-           Parameters const &                                   param,
-           std::string const &                                  field,
-           MPI_Comm const &                                     mpi_comm);
+  Operator(std::shared_ptr<Grid<dim> const>                      grid,
+           std::shared_ptr<dealii::Mapping<dim> const>           mapping,
+           std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+           std::shared_ptr<BoundaryDescriptor<rank, dim> const>  boundary_descriptor,
+           std::shared_ptr<FieldFunctions<dim> const>            field_functions,
+           Parameters const &                                    param,
+           std::string const &                                   field,
+           MPI_Comm const &                                      mpi_comm);
 
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
 
+  /**
+   * Call this setup() function if the dealii::MatrixFree object can be set up by the present class.
+   */
   void
-  setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free,
-        std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data);
+  setup();
 
+  /**
+   * Call this setup() function if the dealii::MatrixFree object needs to be created outside this
+   * class. The typical use case would be multiphysics-coupling with one MatrixFree object handed
+   * over to several single-field solvers.
+   */
   void
-  setup_solver();
+  setup(std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free,
+        std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data);
 
   void
   initialize_dof_vector(VectorType & src) const;
@@ -82,6 +92,9 @@ public:
   void
   vmult(VectorType & dst, VectorType const & src) const;
 
+  void
+  evaluate(VectorType & dst, VectorType const & src, double const time = 0.0) const;
+
   unsigned int
   solve(VectorType & sol, VectorType const & rhs, double const time) const;
 
@@ -89,7 +102,7 @@ public:
    * Setters and getters.
    */
 
-  dealii::MatrixFree<dim, Number> const &
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const>
   get_matrix_free() const;
 
   dealii::DoFHandler<dim> const &
@@ -106,41 +119,13 @@ public:
 
   // Multiphysics coupling via "Cached" boundary conditions
   std::shared_ptr<ContainerInterfaceData<rank, dim, double>>
-  get_container_interface_data();
+  get_container_interface_data() const;
 
   std::shared_ptr<TimerTree>
   get_timings() const;
 
   std::shared_ptr<dealii::Mapping<dim> const>
   get_mapping() const;
-
-#ifdef DEAL_II_WITH_TRILINOS
-  void
-  init_system_matrix(dealii::TrilinosWrappers::SparseMatrix & system_matrix,
-                     MPI_Comm const &                         mpi_comm) const;
-
-  void
-  calculate_system_matrix(dealii::TrilinosWrappers::SparseMatrix & system_matrix) const;
-
-  void
-  vmult_matrix_based(VectorTypeDouble &                             dst,
-                     dealii::TrilinosWrappers::SparseMatrix const & system_matrix,
-                     VectorTypeDouble const &                       src) const;
-#endif
-
-#ifdef DEAL_II_WITH_PETSC
-  void
-  init_system_matrix(dealii::PETScWrappers::MPI::SparseMatrix & system_matrix,
-                     MPI_Comm const &                           mpi_comm) const;
-
-  void
-  calculate_system_matrix(dealii::PETScWrappers::MPI::SparseMatrix & system_matrix) const;
-
-  void
-  vmult_matrix_based(VectorTypeDouble &                               dst,
-                     dealii::PETScWrappers::MPI::SparseMatrix const & system_matrix,
-                     VectorTypeDouble const &                         src) const;
-#endif
 
   // TODO: we currently need this function public for precice-based FSI
   unsigned int
@@ -153,6 +138,12 @@ private:
   std::string
   get_dof_name() const;
 
+  unsigned int
+  get_dof_index_periodicity_and_hanging_node_constraints() const;
+
+  std::string
+  get_dof_name_periodicity_and_hanging_node_constraints() const;
+
   std::string
   get_quad_name() const;
 
@@ -163,15 +154,28 @@ private:
   get_quad_index_gauss_lobatto() const;
 
   void
-  distribute_dofs();
+  initialize_dof_handler_and_constraints();
+
+  void
+  setup_coupling_boundary_conditions();
 
   void
   setup_operators();
+
+  void
+  setup_preconditioner_and_solver();
 
   /*
    * Grid
    */
   std::shared_ptr<Grid<dim> const> grid;
+
+  /*
+   * Mapping
+   */
+  std::shared_ptr<dealii::Mapping<dim> const> mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings;
 
   /*
    * User interface: Boundary conditions and field functions.
@@ -193,19 +197,36 @@ private:
 
   dealii::DoFHandler<dim> dof_handler;
 
+  // This AffineConstraints object applies homogeneous boundary conditions as needed by vmult()/
+  // apply() functions in iterative solvers for linear systems of equations and preconditioners
+  // such as multigrid, implemented via dealii::MatrixFree and FEEvaluation::read_dof_values()
+  // (or gather_evaluate()).
+  // To deal with inhomogeneous boundary data, a separate object of type AffineConstraints is
+  // needed (see below).
   mutable dealii::AffineConstraints<Number> affine_constraints;
 
-  std::string const dof_index                = "laplace";
-  std::string const quad_index               = "laplace";
-  std::string const quad_index_gauss_lobatto = "laplace_gauss_lobatto";
+  // To treat inhomogeneous Dirichlet BCs correctly in the context of matrix-free operator
+  // evaluation using dealii::MatrixFree/FEEvaluation, we need a separate AffineConstraints
+  // object containing only periodicity and hanging node constraints. This is only relevant
+  // for continuous Galerkin discretizations.
+  dealii::AffineConstraints<Number> affine_constraints_periodicity_and_hanging_nodes;
 
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
+  std::string const dof_index = "dof";
+  std::string const dof_index_periodicity_and_handing_node_constraints =
+    "dof_periodicity_hanging_nodes";
+
+  std::string const quad_index               = "quad";
+  std::string const quad_index_gauss_lobatto = "quad_gauss_lobatto";
+
+  std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;
+  std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;
 
   /*
    * Interface coupling
    */
-  std::shared_ptr<ContainerInterfaceData<rank, dim, double>> interface_data_dirichlet_cached;
+  // TODO: The PDE operator should only have read access to interface data
+  mutable std::shared_ptr<ContainerInterfaceData<rank, dim, double>>
+    interface_data_dirichlet_cached;
 
   RHSOperator<dim, Number, n_components> rhs_operator;
 
@@ -227,4 +248,4 @@ private:
 } // namespace Poisson
 } // namespace ExaDG
 
-#endif
+#endif /* INCLUDE_EXADG_POISSON_SPATIAL_DISCRETIZATION_OPERATOR_H_ */

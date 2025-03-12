@@ -53,21 +53,19 @@ public:
   /*
    * Constructor.
    */
-  OperatorDualSplitting(std::shared_ptr<Grid<dim> const>                  grid,
-                        std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion,
-                        std::shared_ptr<BoundaryDescriptor<dim> const>    boundary_descriptor,
-                        std::shared_ptr<FieldFunctions<dim> const>        field_functions,
-                        Parameters const &                                parameters,
-                        std::string const &                               field,
-                        MPI_Comm const &                                  mpi_comm);
+  OperatorDualSplitting(std::shared_ptr<Grid<dim> const>                      grid,
+                        std::shared_ptr<dealii::Mapping<dim> const>           mapping,
+                        std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+                        std::shared_ptr<BoundaryDescriptor<dim> const>        boundary_descriptor,
+                        std::shared_ptr<FieldFunctions<dim> const>            field_functions,
+                        Parameters const &                                    parameters,
+                        std::string const &                                   field,
+                        MPI_Comm const &                                      mpi_comm);
 
   /*
    * Destructor.
    */
   virtual ~OperatorDualSplitting();
-
-  void
-  setup_solvers(double const & scaling_factor_mass, VectorType const & velocity);
 
   /*
    * Pressure Poisson equation.
@@ -83,7 +81,7 @@ public:
 
   // rhs pressure Poisson equation: velocity divergence term: body force term
   void
-  rhs_ppe_div_term_body_forces_add(VectorType & dst, double const & time);
+  rhs_ppe_div_term_body_forces_add(VectorType & dst, double const & time) const;
 
   // rhs pressure Poisson equation: velocity divergence term: convective term
   void
@@ -91,11 +89,11 @@ public:
 
   // rhs pressure Poisson equation: Neumann BC body force term
   void
-  rhs_ppe_nbc_body_force_term_add(VectorType & dst, double const & time);
+  rhs_ppe_nbc_body_force_term_add(VectorType & dst, double const & time) const;
 
   // rhs pressure Poisson equation: Neumann BC numerical time derivative term
   void
-  rhs_ppe_nbc_numerical_time_derivative_add(VectorType & dst, VectorType const & src);
+  rhs_ppe_nbc_numerical_time_derivative_add(VectorType & dst, VectorType const & src) const;
 
   // rhs pressure Poisson equation: Neumann BC convective term
   void
@@ -118,14 +116,6 @@ public:
   void
   apply_helmholtz_operator(VectorType & dst, VectorType const & src) const;
 
-  void
-  rhs_add_viscous_term(VectorType & dst, double const time) const;
-
-  unsigned int
-  solve_viscous(VectorType &       dst,
-                VectorType const & src,
-                bool const &       update_preconditioner,
-                double const &     scaling_factor_mass);
 
   /*
    * Fill a DoF vector with velocity Dirichlet values on Dirichlet boundaries.
@@ -136,21 +126,9 @@ public:
    * the degrees of freedom of the underlying finite element space.
    */
   void
-  interpolate_velocity_dirichlet_bc(VectorType & dst, double const & time);
+  interpolate_velocity_dirichlet_bc(VectorType & dst, double const & time) const;
 
 private:
-  /*
-   * Setup of Helmholtz solver (operator, preconditioner, solver).
-   */
-  void
-  setup_helmholtz_solver();
-
-  void
-  initialize_helmholtz_preconditioner();
-
-  void
-  initialize_helmholtz_solver();
-
   /*
    * rhs pressure Poisson equation
    */
@@ -228,14 +206,6 @@ private:
     VectorType &                            dst,
     VectorType const &                      src,
     Range const &                           face_range) const;
-
-
-  /*
-   * Viscous step (Helmholtz-like equation).
-   */
-  std::shared_ptr<PreconditionerBase<Number>> helmholtz_preconditioner;
-
-  std::shared_ptr<Krylov::SolverBase<VectorType>> helmholtz_solver;
 };
 
 } // namespace IncNS

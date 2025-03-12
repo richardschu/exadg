@@ -51,8 +51,8 @@ add_periodicity_constraints(unsigned int const                                  
 
     for(unsigned int i = 0; i < dofs_per_face; ++i)
     {
-      if(constraints.can_store_line(dofs_2[i]) && constraints.can_store_line(dofs_1[i]) &&
-         !constraints.is_constrained(dofs_2[i]))
+      if(constraints.can_store_line(dofs_2[i]) and constraints.can_store_line(dofs_1[i]) and
+         not(constraints.is_constrained(dofs_2[i])))
       {
         // constraint dof and ...
         constraints.add_line(dofs_2[i]);
@@ -61,7 +61,7 @@ add_periodicity_constraints(unsigned int const                                  
       }
     }
   }
-  else if(face1->has_children() && face2->has_children())
+  else if(face1->has_children() and face2->has_children())
   {
     // recursively visit all subfaces
     for(unsigned int c = 0; c < face1->n_children(); ++c)
@@ -140,13 +140,14 @@ add_constraints(bool                                is_dg,
                                            affine_constraints_own);
 
   // 2) add Dirichlet BCs
-  affine_constraints_own.add_lines(mg_constrained_dofs.get_boundary_indices(level));
+  if(mg_constrained_dofs.have_boundary_indices())
+    affine_constraints_own.add_lines(mg_constrained_dofs.get_boundary_indices(level));
 
   // constrain zeroth DoF in continuous case (the mean value constraint will
   // be applied in the DG case). In case we have interface matrices, there are
   // Dirichlet constraints on parts of the boundary and no such transformation
   // is required.
-  if(operator_is_singular && affine_constraints_own.can_store_line(0))
+  if(operator_is_singular and affine_constraints_own.can_store_line(0))
   {
     // if dof 0 is constrained, it must be a periodic dof, so we take the
     // value on the other side
@@ -160,7 +161,8 @@ add_constraints(bool                                is_dg,
         affine_constraints_own.add_line(line_index);
         // add the constraint back to the dealii::MGConstrainedDoFs field. This
         // is potentially dangerous but we know what we are doing... ;-)
-        if(level != dealii::numbers::invalid_unsigned_int)
+        if(mg_constrained_dofs.have_boundary_indices() &&
+           level != dealii::numbers::invalid_unsigned_int)
         {
           if(mg_constrained_dofs.get_boundary_indices(level).size() != dof_handler.n_dofs(level))
             const_cast<dealii::IndexSet &>(mg_constrained_dofs.get_boundary_indices(level))
@@ -173,7 +175,7 @@ add_constraints(bool                                is_dg,
       }
       else
       {
-        Assert(lines->size() == 1 && std::abs((*lines)[0].second - 1.) < 1e-15,
+        Assert(lines->size() == 1 and std::abs((*lines)[0].second - 1.) < 1e-15,
                dealii::ExcMessage("Periodic index expected, bailing out"));
 
         line_index = (*lines)[0].first;

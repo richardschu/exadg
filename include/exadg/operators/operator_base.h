@@ -46,9 +46,11 @@
 #include <exadg/solvers_and_preconditioners/solvers/wrapper_elementwise_solvers.h>
 #include <exadg/solvers_and_preconditioners/utilities/invert_diagonal.h>
 
+#include <exadg/utilities/lazy_ptr.h>
+
 #include <exadg/operators/elementwise_operator.h>
+#include <exadg/operators/enum_types.h>
 #include <exadg/operators/integrator_flags.h>
-#include <exadg/operators/lazy_ptr.h>
 #include <exadg/operators/mapping_flags.h>
 #include <exadg/operators/operator_type.h>
 
@@ -58,7 +60,10 @@ struct OperatorBaseData
 {
   OperatorBaseData()
     : dof_index(0),
+      dof_index_inhomogeneous(dealii::numbers::invalid_unsigned_int),
       quad_index(0),
+      use_matrix_based_vmult(false),
+      sparse_matrix_type(SparseMatrixType::Undefined),
       operator_is_singular(false),
       use_cell_based_loops(false),
       implement_block_diagonal_preconditioner_matrix_free(false),
@@ -69,7 +74,19 @@ struct OperatorBaseData
   }
 
   unsigned int dof_index;
+
+  // In addition to the "standard" dof_index above, we need a separate dof index to evaluate
+  // inhomogeneous boundary data correctly. This "inhomogeneous" dof index corresponds to an
+  // AffineConstraints object that only applies periodicity and hanging node constraints.
+  unsigned int dof_index_inhomogeneous;
+
   unsigned int quad_index;
+
+  // this parameter can be used to use sparse matrices for the vmult() operation. The default
+  // case is to use a matrix-free implementation, i.e. use_matrix_based_vmult = false.
+  bool use_matrix_based_vmult;
+
+  SparseMatrixType sparse_matrix_type;
 
   // Solution of linear systems of equations and preconditioning
   bool operator_is_singular;
@@ -96,9 +113,10 @@ public:
   typedef CellIntegrator<dim, n_components, Number>          IntegratorCell;
   typedef FaceIntegrator<dim, n_components, Number>          IntegratorFace;
 
+  static unsigned int const dimension            = dim;
   static unsigned int const vectorization_length = dealii::VectorizedArray<Number>::size();
 
-  typedef std::vector<dealii::LAPACKFullMatrix<Number>> BlockMatrix;
+  typedef dealii::LAPACKFullMatrix<Number> LAPACKMatrix;
 
   typedef dealii::FullMatrix<dealii::TrilinosScalar> FullMatrix_;
 
@@ -106,6 +124,18 @@ public:
 
   virtual ~OperatorBase()
   {
+    if(data.sparse_matrix_type == SparseMatrixType::PETSc)
+    {
+#ifdef DEAL_II_WITH_PETSC
+      if(system_matrix_petsc.m() > 0)
+      {
+        PetscErrorCode ierr = VecDestroy(&petsc_vector_dst);
+        AssertThrow(ierr == 0, dealii::ExcPETScError(ierr));
+        ierr = VecDestroy(&petsc_vector_src);
+        AssertThrow(ierr == 0, dealii::ExcPETScError(ierr));
+      }
+#endif
+    }
   }
 
   /*
@@ -166,23 +196,37 @@ public:
   void
   initialize_dof_vector(VectorType & vector) const;
 
+  /*
+   * For time-dependent problems, the function set_time() needs to be called prior to the present
+   * function.
+   */
   virtual void
-  set_constrained_values(VectorType & solution, double const time) const;
+  set_inhomogeneous_boundary_values(VectorType & solution) const;
 
   void
-  set_constrained_values_to_zero(VectorType & vector) const;
+  set_constrained_dofs_to_zero(VectorType & vector) const;
 
   void
   calculate_inverse_diagonal(VectorType & diagonal) const;
 
   /*
-   * Update block diagonal preconditioner: initialize everything related to block diagonal
-   * preconditioner when this function is called the first time. Recompute block matrices in case of
-   * matrix-based implementation.
+   * Initialize block diagonal preconditioner: initialize everything related to block diagonal
+   * preconditioner.
+   */
+  void
+  initialize_block_diagonal_preconditioner(bool const initialize) const;
+
+  /*
+   * Update block diagonal preconditioner: Recompute block matrices in case of matrix-based
+   * implementation.
    */
   void
   update_block_diagonal_preconditioner() const;
 
+  /**
+   * This function applies the inverse block diagonal to a src vector and stores the result in the
+   * dst vector. This function may be called with identical dst, src vectors.
+   */
   void
   apply_inverse_block_diagonal(VectorType & dst, VectorType const & src) const;
 
@@ -211,6 +255,35 @@ public:
 #endif
 
   /*
+   * Provide near null space basis vectors used e.g. in AMG setup. ExaDG assumes a scalar Laplace
+   * operator as default, filling `constant_modes`, which can be overwritten in derived classes if
+   * necessary. `constant_modes_values` may alternatively be used to provide non-trivial modes.
+   */
+  virtual void
+  get_constant_modes(std::vector<std::vector<bool>> &   constant_modes,
+                     std::vector<std::vector<double>> & constant_modes_values) const
+  {
+    (void)constant_modes_values;
+
+    dealii::DoFHandler<dim> const & dof_handler =
+      this->matrix_free->get_dof_handler(this->data.dof_index);
+
+    if(dof_handler.has_level_dofs())
+    {
+      constant_modes =
+        dealii::DoFTools::extract_level_constant_modes(0,
+                                                       dof_handler,
+                                                       dealii::ComponentMask(n_components, true));
+    }
+    else
+    {
+      constant_modes =
+        dealii::DoFTools::extract_constant_modes(dof_handler,
+                                                 dealii::ComponentMask(n_components, true));
+    }
+  }
+
+  /*
    * Evaluate the homogeneous part of an operator. The homogeneous operator is the operator that is
    * obtained for homogeneous boundary conditions. This operation is typically applied in linear
    * iterative solvers (as well as multigrid preconditioners and smoothers). Operations of this type
@@ -219,8 +292,27 @@ public:
   void
   apply(VectorType & dst, VectorType const & src) const;
 
+  /*
+   * See function apply() for a description.
+   */
   void
   apply_add(VectorType & dst, VectorType const & src) const;
+
+  void
+  assemble_matrix_if_necessary() const;
+
+  /*
+   * Matrix-based version of the apply function. This function is used if use_matrix_based_vmult =
+   * true.
+   */
+  void
+  apply_matrix_based(VectorType & dst, VectorType const & src) const;
+
+  /*
+   * See function apply_matrix_based() for a description.
+   */
+  void
+  apply_matrix_based_add(VectorType & dst, VectorType const & src) const;
 
   /*
    * evaluate inhomogeneous parts of operator related to inhomogeneous boundary face integrals.
@@ -229,10 +321,19 @@ public:
    * rhs only make sense for linear operators (but they have e.g. no meaning for linearized
    * operators of nonlinear problems). For this reason, these functions are currently defined
    * 'virtual' to provide the opportunity to override and assert these functions in derived classes.
+   *
+   * For continuous Galerkin discretizations, this function calls internally the member function
+   * set_inhomogeneous_boundary_values(). Hence, prior to calling this function, one needs to call
+   * set_time() for a correct evaluation in case of time-dependent problems.
+   *
+   * This function sets the dst vector to zero, and afterwards calls rhs_add().
    */
   virtual void
   rhs(VectorType & dst) const;
 
+  /*
+   * See function rhs() for a description.
+   */
   virtual void
   rhs_add(VectorType & dst) const;
 
@@ -243,10 +344,18 @@ public:
    * (but they have e.g. no meaning for linearized operators of nonlinear problems). For this
    * reason, these functions are currently defined 'virtual' to provide the opportunity to override
    * and assert these functions in derived classes.
+   *
+   * Unlike the function rhs(), this function does not internally call the function
+   * set_inhomogeneous_boundary_values() prior to evaluation. Hence, one needs to explicitly call
+   * the function set_inhomogeneous_boundary_values() in case of continuous Galerkin discretizations
+   * with inhomogeneous Dirichlet boundary conditions before calling the present function.
    */
   virtual void
   evaluate(VectorType & dst, VectorType const & src) const;
 
+  /*
+   * See function evaluate() for a description.
+   */
   virtual void
   evaluate_add(VectorType & dst, VectorType const & src) const;
 
@@ -262,16 +371,8 @@ public:
   /*
    * block Jacobi preconditioner (block-diagonal)
    */
-
-  // matrix-based implementation
   void
-  calculate_block_diagonal_matrices() const;
-
-  void
-  add_block_diagonal_matrices(BlockMatrix & matrices) const;
-
-  void
-  apply_block_diagonal_matrix_based(VectorType & dst, VectorType const & src) const;
+  add_block_diagonal_matrices(std::vector<LAPACKMatrix> & matrices) const;
 
   void
   apply_inverse_block_diagonal_matrix_based(VectorType & dst, VectorType const & src) const;
@@ -282,7 +383,20 @@ public:
   // using the matrix-free variant with elementwise iterative solvers and matrix-free operator
   // evaluation.
   void
-  initialize_block_diagonal_preconditioner_matrix_free() const;
+  initialize_block_diagonal_preconditioner_matrix_free(bool const initialize) const;
+
+  // updates block diagonal preconditioner when using the matrix-free variant with elementwise
+  // iterative solvers and matrix-free operator evaluation.
+  void
+  update_block_diagonal_preconditioner_matrix_free() const;
+
+  // initializes block diagonal preconditioner for matrix-based variant
+  void
+  initialize_block_diagonal_preconditioner_matrix_based(bool const initialize) const;
+
+  // updates block diagonal preconditioner for matrix-based variant
+  void
+  update_block_diagonal_preconditioner_matrix_based() const;
 
   void
   apply_add_block_diagonal_elementwise(unsigned int const                            cell,
@@ -290,24 +404,43 @@ public:
                                        dealii::VectorizedArray<Number> const * const src,
                                        unsigned int const problem_size) const;
 
+  /*
+   * additive Schwarz preconditioner (cellwise block-diagonal)
+   */
+  virtual void
+  compute_factorized_additive_schwarz_matrices() const;
+
+  void
+  apply_inverse_additive_schwarz_matrices(VectorType & dst, VectorType const & src) const;
+
 protected:
   void
   reinit(dealii::MatrixFree<dim, Number> const &   matrix_free,
          dealii::AffineConstraints<Number> const & constraints,
          OperatorBaseData const &                  data);
 
+  void
+  reinit_cell(IntegratorCell & integrator, unsigned int const cell) const;
+
+  void
+  reinit_face(IntegratorFace &   integrator_m,
+              IntegratorFace &   integrator_p,
+              unsigned int const face) const;
+
+  void
+  reinit_boundary_face(IntegratorFace & integrator_m, unsigned int const face) const;
+
+  void
+  reinit_face_cell_based(IntegratorFace &                 integrator_m,
+                         IntegratorFace &                 integrator_p,
+                         unsigned int const               cell,
+                         unsigned int const               face,
+                         dealii::types::boundary_id const boundary_id) const;
+
   /*
    * These methods have to be overwritten by derived classes because these functions are
    * operator-specific and define how the operator looks like.
    */
-  virtual void
-  reinit_cell(unsigned int const cell) const;
-
-  virtual void
-  reinit_face(unsigned int const face) const;
-
-  virtual void
-  reinit_boundary_face(unsigned int const face) const;
 
   // standard integration procedure with separate loops for cell and face integrals
   virtual void
@@ -332,12 +465,6 @@ protected:
 
   virtual void
   do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
-
-  // cell-based computation of both cell and face integrals
-  virtual void
-  reinit_face_cell_based(unsigned int const               cell,
-                         unsigned int const               face,
-                         dealii::types::boundary_id const boundary_id) const;
 
   // This function is currently only needed due to limitations of deal.II which do
   // currently not allow to access neighboring data in case of cell-based face loops.
@@ -372,19 +499,17 @@ protected:
    */
   IntegratorFlags integrator_flags;
 
+private:
   /*
    * Is the operator used as a multigrid level operator?
    */
   bool is_mg;
 
+protected:
   /*
    * Is the discretization based on discontinuous Galerkin method?
    */
   bool is_dg;
-
-  std::shared_ptr<IntegratorCell> integrator;
-  std::shared_ptr<IntegratorFace> integrator_m;
-  std::shared_ptr<IntegratorFace> integrator_p;
 
   /*
    * Block Jacobi preconditioner/smoother: matrix-free version with elementwise iterative solver
@@ -401,6 +526,24 @@ protected:
   mutable std::shared_ptr<ELEMENTWISE_SOLVER>         elementwise_solver;
 
 private:
+  virtual void
+  reinit_cell_derived(IntegratorCell & integrator, unsigned int const cell) const;
+
+  virtual void
+  reinit_face_derived(IntegratorFace &   integrator_m,
+                      IntegratorFace &   integrator_p,
+                      unsigned int const face) const;
+
+  virtual void
+  reinit_boundary_face_derived(IntegratorFace & integrator_m, unsigned int const face) const;
+
+  virtual void
+  reinit_face_cell_based_derived(IntegratorFace &                 integrator_m,
+                                 IntegratorFace &                 integrator_p,
+                                 unsigned int const               cell,
+                                 unsigned int const               face,
+                                 dealii::types::boundary_id const boundary_id) const;
+
   /*
    * Helper functions:
    *
@@ -420,13 +563,19 @@ private:
                         IntegratorFace & integrator_2) const;
 
   /*
-   * This function applies Dirichlet BCs for continuous Galerkin discretizations.
+   * This function calculates cell integrals for the full (= homogeneous + inhomogeneous) part,
+   * where inhomogeneous part may occur for continuous Galerkin discretizations due to inhomogeneous
+   * Dirichlet BCs. A prerequisite to call this function is to set inhomogeneous Dirichlet degrees
+   * of freedom appropriately in the DoF-vector src. In case the DoF-vector src is zero apart from
+   * the inhomogeneous Dirichlet degrees of freedom, this function calculates only the inhomogeneous
+   * part of the operator, because the homogeneous operator is zero in this case. For DG
+   * discretizations, this function is equivalent to cell_loop().
    */
   void
-  cell_loop_dbc(dealii::MatrixFree<dim, Number> const & matrix_free,
-                VectorType &                            dst,
-                VectorType const &                      src,
-                Range const &                           range) const;
+  cell_loop_full_operator(dealii::MatrixFree<dim, Number> const & matrix_free,
+                          VectorType &                            dst,
+                          VectorType const &                      src,
+                          Range const &                           range) const;
 
   /*
    * This function loops over all cells and calculates cell integrals.
@@ -522,43 +671,33 @@ private:
    */
   void
   cell_loop_block_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                           BlockMatrix &                           matrices,
-                           BlockMatrix const &                     src,
+                           std::vector<LAPACKMatrix> &             matrices,
+                           std::vector<LAPACKMatrix> const &       src,
                            Range const &                           range) const;
 
   void
   face_loop_block_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                           BlockMatrix &                           matrices,
-                           BlockMatrix const &                     src,
+                           std::vector<LAPACKMatrix> &             matrices,
+                           std::vector<LAPACKMatrix> const &       src,
                            Range const &                           range) const;
 
   void
   boundary_face_loop_block_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                    BlockMatrix &                           matrices,
-                                    BlockMatrix const &                     src,
+                                    std::vector<LAPACKMatrix> &             matrices,
+                                    std::vector<LAPACKMatrix> const &       src,
                                     Range const &                           range) const;
 
   // cell-based variant for computation of both cell and face integrals
   void
   cell_based_loop_block_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                 BlockMatrix &                           matrices,
-                                 BlockMatrix const &                     src,
+                                 std::vector<LAPACKMatrix> &             matrices,
+                                 std::vector<LAPACKMatrix> const &       src,
                                  Range const &                           range) const;
-
-  /*
-   * Apply block diagonal.
-   */
-  void
-  cell_loop_apply_block_diagonal_matrix_based(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                              VectorType &                            dst,
-                                              VectorType const &                      src,
-                                              Range const &                           range) const;
 
   /*
    * Apply inverse block diagonal:
    *
-   * instead of applying the block matrix B we compute dst = B^{-1} * src (LU factorization
-   * should have already been performed with the method update_inverse_block_diagonal())
+   *  we compute dst = B^{-1} * src
    */
   void
   cell_loop_apply_inverse_block_diagonal_matrix_based(
@@ -573,7 +712,9 @@ private:
    */
   template<typename SparseMatrix>
   void
-  internal_init_system_matrix(SparseMatrix & system_matrix, MPI_Comm const & mpi_comm) const;
+  internal_init_system_matrix(SparseMatrix &                   system_matrix,
+                              dealii::DynamicSparsityPattern & dsp,
+                              MPI_Comm const &                 mpi_comm) const;
 
   template<typename SparseMatrix>
   void
@@ -604,10 +745,10 @@ private:
                                              Range const &                           range) const;
 
   /*
-   * This function sets entries in the diagonal corresponding to constraint DoFs to one.
+   * This function sets entries of the DoF-vector corresponding to constraint DoFs to one.
    */
   void
-  set_constraint_diagonal(VectorType & diagonal) const;
+  set_constrained_dofs_to_one(VectorType & vector) const;
 
   /*
    * Do we have to evaluate (boundary) face integrals for this operator? For example, operators
@@ -615,6 +756,13 @@ private:
    */
   bool
   evaluate_face_integrals() const;
+
+  /*
+   * Compute factorized additive Schwarz matrices.
+   */
+  template<typename SparseMatrix>
+  void
+  internal_compute_factorized_additive_schwarz_matrices() const;
 
   /*
    * Data structure containing all operator-specific data.
@@ -630,23 +778,29 @@ private:
   /*
    * Vector of matrices for block-diagonal preconditioners.
    */
-  mutable std::vector<dealii::LAPACKFullMatrix<Number>> matrices;
+  mutable std::vector<LAPACKMatrix> matrices;
 
   /*
-   * We want to initialize the block diagonal preconditioner (block diagonal matrices or elementwise
-   * iterative solvers in case of matrix-free implementation) only once, so we store the status of
-   * initialization in a variable.
+   * Vector with weights for additive Schwarz preconditioner.
    */
-  mutable bool block_diagonal_preconditioner_is_initialized;
+  mutable VectorType weights;
 
   unsigned int n_mpi_processes;
 
-  /*
-   * for CG
-   */
-  std::vector<unsigned int>   constrained_indices;
-  mutable std::vector<Number> constrained_values_src;
-  mutable std::vector<Number> constrained_values_dst;
+  // sparse matrices for matrix-based vmult
+  mutable bool system_matrix_based_been_initialized;
+
+#ifdef DEAL_II_WITH_TRILINOS
+  mutable dealii::TrilinosWrappers::SparseMatrix system_matrix_trilinos;
+#endif
+
+#ifdef DEAL_II_WITH_PETSC
+  mutable dealii::PETScWrappers::MPI::SparseMatrix system_matrix_petsc;
+
+  // PETSc vector objects to avoid re-allocation in every vmult() operation
+  mutable Vec petsc_vector_src;
+  mutable Vec petsc_vector_dst;
+#endif
 };
 } // namespace ExaDG
 

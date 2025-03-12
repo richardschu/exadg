@@ -38,7 +38,7 @@
 
 // IncNS
 #include <exadg/convection_diffusion/spatial_discretization/operator.h>
-#include <exadg/grid/grid_motion_function.h>
+#include <exadg/grid/mapping_deformation_function.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_pressure_correction.h>
@@ -69,6 +69,8 @@ public:
   print_performance_results(double const total_time) const;
 
 private:
+  using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
+
   void
   ale_update() const;
 
@@ -96,16 +98,27 @@ private:
   // application
   std::shared_ptr<ApplicationBase<dim, Number>> application;
 
-  // moving mapping (ALE)
-  std::shared_ptr<GridMotionBase<dim, Number>> grid_motion;
+  std::shared_ptr<Grid<dim>> grid;
+
+  std::shared_ptr<dealii::Mapping<dim>> mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> multigrid_mappings;
+
+  // grid motion (ALE)
+  std::shared_ptr<DeformedMappingBase<dim, Number>> ale_mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> ale_multigrid_mappings;
+
+  // ALE helper functions required by time integrator
+  std::shared_ptr<HelpersALE<dim, Number>> helpers_ale;
 
   bool use_adaptive_time_stepping;
 
-  // INCOMPRESSIBLE NAVIER-STOKES
-
-  //  MatrixFree
+  //  MatrixFree (only a single object for both flow and transport problems)
   std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
   std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
+
+  // INCOMPRESSIBLE NAVIER-STOKES
 
   std::shared_ptr<IncNS::SpatialOperatorBase<dim, Number>> fluid_operator;
 

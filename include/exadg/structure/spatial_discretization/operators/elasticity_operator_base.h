@@ -36,6 +36,7 @@ struct OperatorData : public OperatorBaseData
 {
   OperatorData()
     : OperatorBaseData(),
+      large_deformation(false),
       pull_back_traction(false),
       unsteady(false),
       density(1.0),
@@ -45,6 +46,9 @@ struct OperatorData : public OperatorBaseData
 
   std::shared_ptr<BoundaryDescriptor<dim> const> bc;
   std::shared_ptr<MaterialDescriptor const>      material_descriptor;
+
+  // Boolean parameter differentiating between linear elasticity and finite strain theory
+  bool large_deformation;
 
   // This parameter is only relevant for nonlinear operator
   // with large deformations. When set to true, the traction t
@@ -70,6 +74,7 @@ public:
 
 protected:
   typedef OperatorBase<dim, Number, dim> Base;
+  typedef typename Base::IntegratorCell  IntegratorCell;
   typedef typename Base::VectorType      VectorType;
   typedef typename Base::IntegratorFace  IntegratorFace;
 
@@ -94,15 +99,47 @@ public:
   OperatorData<dim> const &
   get_data() const;
 
+  /*
+   * Provide near null space basis vectors, that is, the rigid body modes, used e.g. in AMG setup.
+   */
+  void
+  get_constant_modes(std::vector<std::vector<bool>> &   constant_modes,
+                     std::vector<std::vector<double>> & constant_modes_values) const override
+  {
+    (void)constant_modes;
+
+    dealii::DoFHandler<dim> const & dof_handler =
+      this->matrix_free->get_dof_handler(this->get_dof_index());
+
+    if(dof_handler.has_level_dofs())
+    {
+      constant_modes_values = dealii::DoFTools::extract_level_rigid_body_modes(
+        0,
+        *this->matrix_free->get_mapping_info().mapping,
+        dof_handler,
+        dealii::ComponentMask(dim, true));
+    }
+    else
+    {
+      constant_modes_values =
+        dealii::DoFTools::extract_rigid_body_modes(*this->matrix_free->get_mapping_info().mapping,
+                                                   dof_handler,
+                                                   dealii::ComponentMask(dim, true));
+    }
+  }
+
   void
   set_scaling_factor_mass_operator(double const scaling_factor) const;
 
+  double
+  get_scaling_factor_mass_operator() const;
+
   void
-  set_constrained_values(VectorType & dst, double const time) const override;
+  set_inhomogeneous_boundary_values(VectorType & dst) const final;
 
 protected:
   void
-  reinit_cell(unsigned int const cell) const override;
+  reinit_cell_derived(IntegratorCell & integrator, unsigned int const cell) const override;
 
   OperatorData<dim> operator_data;
 

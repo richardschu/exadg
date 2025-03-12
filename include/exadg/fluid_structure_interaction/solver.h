@@ -28,6 +28,7 @@
 // ExaDG
 #include <exadg/fluid_structure_interaction/driver.h>
 #include <exadg/fluid_structure_interaction/user_interface/declare_get_application.h>
+#include <exadg/utilities/enum_patterns.h>
 #include <exadg/utilities/general_parameters.h>
 
 namespace ExaDG
@@ -114,17 +115,27 @@ main(int argc, char ** argv)
   ExaDG::GeneralParameters general(input_file);
 
   // run the simulation
-  if(general.dim == 2 && general.precision == "float")
+  if(general.dim == 2 and general.precision == "float")
+  {
     ExaDG::run<2, float>(input_file, mpi_comm, general.is_test);
-  else if(general.dim == 2 && general.precision == "double")
+  }
+  else if(general.dim == 2 and general.precision == "double")
+  {
     ExaDG::run<2, double>(input_file, mpi_comm, general.is_test);
-  else if(general.dim == 3 && general.precision == "float")
+  }
+  else if(general.dim == 3 and general.precision == "float")
+  {
     ExaDG::run<3, float>(input_file, mpi_comm, general.is_test);
-  else if(general.dim == 3 && general.precision == "double")
+  }
+  else if(general.dim == 3 and general.precision == "double")
+  {
     ExaDG::run<3, double>(input_file, mpi_comm, general.is_test);
+  }
   else
+  {
     AssertThrow(false,
                 dealii::ExcMessage("Only dim = 2|3 and precision=float|double implemented."));
+  }
 
   return 0;
 }

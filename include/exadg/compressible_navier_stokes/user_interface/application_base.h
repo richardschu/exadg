@@ -36,6 +36,7 @@
 #include <exadg/compressible_navier_stokes/user_interface/field_functions.h>
 #include <exadg/compressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/grid/grid.h>
+#include <exadg/grid/grid_utilities.h>
 #include <exadg/postprocessor/output_parameters.h>
 
 namespace ExaDG
@@ -85,7 +86,7 @@ public:
   }
 
   void
-  setup()
+  setup(std::shared_ptr<Grid<dim>> & grid, std::shared_ptr<dealii::Mapping<dim>> & mapping)
   {
     parse_parameters();
 
@@ -95,14 +96,14 @@ public:
     param.print(pcout, "List of parameters:");
 
     // grid
-    grid = std::make_shared<Grid<dim>>(param.grid, mpi_comm);
-    create_grid();
+    grid = std::make_shared<Grid<dim>>();
+    create_grid(*grid, mapping);
     print_grid_info(pcout, *grid);
 
     // boundary conditions
     boundary_descriptor = std::make_shared<BoundaryDescriptor<dim>>();
     set_boundary_descriptor();
-    verify_boundary_conditions<dim, Number>(*boundary_descriptor, *grid);
+    verify_boundary_conditions<dim>(*boundary_descriptor, *grid);
 
     // field functions
     field_functions = std::make_shared<FieldFunctions<dim>>();
@@ -116,12 +117,6 @@ public:
   get_parameters() const
   {
     return param;
-  }
-
-  std::shared_ptr<Grid<dim> const>
-  get_grid() const
-  {
-    return grid;
   }
 
   std::shared_ptr<BoundaryDescriptor<dim> const>
@@ -145,13 +140,11 @@ protected:
     prm.parse_input(parameter_file, "", true, true);
   }
 
-  MPI_Comm const & mpi_comm;
+  MPI_Comm const mpi_comm;
 
   dealii::ConditionalOStream pcout;
 
   Parameters param;
-
-  std::shared_ptr<Grid<dim>> grid;
 
   std::shared_ptr<BoundaryDescriptor<dim>> boundary_descriptor;
   std::shared_ptr<FieldFunctions<dim>>     field_functions;
@@ -167,7 +160,7 @@ private:
   set_parameters() = 0;
 
   virtual void
-  create_grid() = 0;
+  create_grid(Grid<dim> & grid, std::shared_ptr<dealii::Mapping<dim>> & mapping) = 0;
 
   virtual void
   set_boundary_descriptor() = 0;

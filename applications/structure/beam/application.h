@@ -38,7 +38,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     double factor = 1.0;
     if(incremental_loading)
@@ -67,7 +67,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -100,7 +100,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
     (void)c;
@@ -133,19 +133,19 @@ public:
   }
 
   void
-  add_parameters(dealii::ParameterHandler & prm)
+  add_parameters(dealii::ParameterHandler & prm) final
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
     prm.enter_subsection("Application");
-    prm.add_parameter("Length",           length,           "Length of domain.");
-    prm.add_parameter("Height",           height,           "Height of domain.");
-    prm.add_parameter("Width",            width,            "Width of domain.");
-    prm.add_parameter("BoundaryType",     boundary_type,    "Type of Neumann BC at right boundary.", dealii::Patterns::Selection("SingleForce|BendingMoment"));
-    prm.add_parameter("Force",            force,            "Value of force on right boundary.");
+    {
+      prm.add_parameter("Length", length, "Length of domain.");
+      prm.add_parameter("Height", height, "Height of domain.");
+      prm.add_parameter("Width", width, "Width of domain.");
+      prm.add_parameter("BoundaryType", boundary_type, "Type of Neumann BC at right boundary.");
+      prm.add_parameter("Force", force, "Value of force on right boundary.");
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
 private:
@@ -156,8 +156,9 @@ private:
     this->param.body_force        = false;
     this->param.large_deformation = true;
 
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = 1;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
     this->param.load_increment = 0.1;
 
@@ -177,64 +178,92 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    dealii::Point<dim> p1, p2;
-    p1[0] = 0;
-    p1[1] = -(this->height / 2);
-    if(dim == 3)
-      p1[2] = -(this->width / 2);
+    (void)mapping;
+    (void)multigrid_mappings;
 
-    p2[0] = this->length;
-    p2[1] = +(this->height / 2);
-    if(dim == 3)
-      p2[2] = (this->width / 2);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    std::vector<unsigned int> repetitions(dim);
-    repetitions[0] = this->repetitions0;
-    repetitions[1] = this->repetitions1;
-    if(dim == 3)
-      repetitions[2] = this->repetitions2;
+        dealii::Point<dim> p1, p2;
+        p1[0] = 0;
+        p1[1] = -(this->height / 2);
+        if(dim == 3)
+          p1[2] = -(this->width / 2);
 
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation,
-                                                      repetitions,
-                                                      p1,
-                                                      p2);
+        p2[0] = this->length;
+        p2[1] = +(this->height / 2);
+        if(dim == 3)
+          p2[2] = (this->width / 2);
 
-    element_length = this->length / (this->repetitions0 * pow(2, this->param.grid.n_refine_global));
+        std::vector<unsigned int> repetitions(dim);
+        repetitions[0] = this->repetitions0;
+        repetitions[1] = this->repetitions1;
+        if(dim == 3)
+          repetitions[2] = this->repetitions2;
 
-    double const tol = 1.e-8;
-    for(auto cell : *this->grid->triangulation)
-    {
-      for(auto const & face : cell.face_indices())
-      {
-        // left face
-        if(std::fabs(cell.face(face)->center()(0) - 0) < tol)
+        dealii::GridGenerator::subdivided_hyper_rectangle(tria, repetitions, p1, p2);
+
+        element_length = this->length / (this->repetitions0 * pow(2, global_refinements));
+
+        double const tol = 1.e-8;
+        for(auto cell : tria)
         {
-          cell.face(face)->set_all_boundary_ids(1);
-        }
-        // right face
-        else if(std::fabs(cell.face(face)->center()(0) - this->length) < tol)
-        {
-          cell.face(face)->set_all_boundary_ids(2);
-        }
-        // top-right edge
-        else if(std::fabs(cell.face(face)->center()(0) - this->length) < element_length &&
-                std::fabs(cell.face(face)->center()(1) - this->height / 2) < tol)
-        {
-          if(boundary_type == "SingleForce")
+          for(auto const & face : cell.face_indices())
           {
-            cell.face(face)->set_all_boundary_ids(3);
-          }
-          else
-          {
-            AssertThrow(boundary_type == "BendingMoment", dealii::ExcMessage("Not implemented."));
+            // left face
+            if(std::fabs(cell.face(face)->center()(0) - 0) < tol)
+            {
+              cell.face(face)->set_all_boundary_ids(1);
+            }
+            // right face
+            else if(std::fabs(cell.face(face)->center()(0) - this->length) < tol)
+            {
+              cell.face(face)->set_all_boundary_ids(2);
+            }
+            // top-right edge
+            else if(std::fabs(cell.face(face)->center()(0) - this->length) < element_length and
+                    std::fabs(cell.face(face)->center()(1) - this->height / 2) < tol)
+            {
+              if(boundary_type == BoundaryType::SingleForce)
+              {
+                cell.face(face)->set_all_boundary_ids(3);
+              }
+              else
+              {
+                AssertThrow(boundary_type == BoundaryType::BendingMoment,
+                            dealii::ExcMessage("Not implemented."));
+              }
+            }
           }
         }
-      }
-    }
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -250,18 +279,21 @@ private:
     // left side
     this->boundary_descriptor->dirichlet_bc.insert(
       pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
+
     this->boundary_descriptor->dirichlet_bc_component_mask.insert(
       pair_mask(1, dealii::ComponentMask()));
 
     // right side
     bool const incremental_loading = (this->param.problem_type == ProblemType::QuasiStatic);
 
-    if(boundary_type == "BendingMoment")
+    if(boundary_type == BoundaryType::BendingMoment)
     {
       this->boundary_descriptor->neumann_bc.insert(
         pair(2, new BendingMoment<dim>(force, height, incremental_loading)));
     }
-    else if(boundary_type == "SingleForce")
+    else if(boundary_type == BoundaryType::SingleForce)
     {
       this->boundary_descriptor->neumann_bc.insert(
         pair(2, new dealii::Functions::ZeroFunction<dim>(dim)));
@@ -308,7 +340,7 @@ private:
     pp_data.output_data.write_higher_order          = false;
     pp_data.output_data.degree                      = this->param.degree;
 
-    if(boundary_type == "SingleForce")
+    if(boundary_type == BoundaryType::SingleForce)
     {
       pp_data.error_data.time_control_data.is_active = true;
       pp_data.error_data.calculate_relative_errors   = true;
@@ -317,7 +349,8 @@ private:
     }
     else
     {
-      AssertThrow(boundary_type == "BendingMoment", dealii::ExcMessage("Not implemented."));
+      AssertThrow(boundary_type == BoundaryType::BendingMoment,
+                  dealii::ExcMessage("Not implemented."));
     }
 
     std::shared_ptr<PostProcessor<dim, Number>> post(
@@ -330,7 +363,13 @@ private:
   double length = 1.0, height = 1.0, width = 1.0;
 
   // single force or bending moment
-  std::string boundary_type = "SingleForce";
+  enum class BoundaryType
+  {
+    SingleForce,
+    BendingMoment
+  };
+  BoundaryType boundary_type = BoundaryType::SingleForce;
+
 
   double force = 2500;
 

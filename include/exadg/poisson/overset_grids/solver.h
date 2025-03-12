@@ -29,7 +29,6 @@
 
 // utilities
 #include <exadg/utilities/general_parameters.h>
-#include <exadg/utilities/resolution_parameters.h>
 
 // application
 #include <exadg/poisson/overset_grids/user_interface/declare_get_application.h>
@@ -48,7 +47,7 @@ create_input_file(std::string const & input_file)
   // for the automatic generation of a default input file
   unsigned int const Dim = 2;
   typedef double     Number;
-  Poisson::get_application_overset_grids<Dim, 1, Number>(input_file, MPI_COMM_WORLD)
+  Poisson::OversetGrids::get_application_overset_grids<Dim, 1, Number>(input_file, MPI_COMM_WORLD)
     ->add_parameters(prm);
 
   prm.print_parameters(input_file,
@@ -60,11 +59,13 @@ template<int dim, int n_components, typename Number>
 void
 run(std::string const & input_file, MPI_Comm const & mpi_comm)
 {
-  std::shared_ptr<Poisson::ApplicationOversetGridsBase<dim, n_components, Number>> application =
-    Poisson::get_application_overset_grids<dim, n_components, Number>(input_file, mpi_comm);
+  std::shared_ptr<Poisson::OversetGrids::ApplicationBase<dim, n_components, Number>> application =
+    Poisson::OversetGrids::get_application_overset_grids<dim, n_components, Number>(input_file,
+                                                                                    mpi_comm);
 
-  std::shared_ptr<Poisson::DriverOversetGrids<dim, n_components, Number>> driver =
-    std::make_shared<Poisson::DriverOversetGrids<dim, n_components, Number>>(mpi_comm, application);
+  std::shared_ptr<Poisson::OversetGrids::Driver<dim, n_components, Number>> driver =
+    std::make_shared<Poisson::OversetGrids::Driver<dim, n_components, Number>>(mpi_comm,
+                                                                               application);
 
   driver->setup();
 
@@ -95,7 +96,7 @@ main(int argc, char ** argv)
   {
     input_file = std::string(argv[1]);
 
-    if(argc == 3 && std::string(argv[2]) == "--help")
+    if(argc == 3 and std::string(argv[2]) == "--help")
     {
       if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
         ExaDG::create_input_file(input_file);
@@ -106,13 +107,13 @@ main(int argc, char ** argv)
 
   ExaDG::GeneralParameters general(input_file);
 
-  if(general.dim == 2 && general.precision == "float")
+  if(general.dim == 2 and general.precision == "float")
     ExaDG::run<2, 1, float>(input_file, mpi_comm);
-  else if(general.dim == 2 && general.precision == "double")
+  else if(general.dim == 2 and general.precision == "double")
     ExaDG::run<2, 1, double>(input_file, mpi_comm);
-  else if(general.dim == 3 && general.precision == "float")
+  else if(general.dim == 3 and general.precision == "float")
     ExaDG::run<3, 1, float>(input_file, mpi_comm);
-  else if(general.dim == 3 && general.precision == "double")
+  else if(general.dim == 3 and general.precision == "double")
     ExaDG::run<3, 1, double>(input_file, mpi_comm);
   else
     AssertThrow(false,

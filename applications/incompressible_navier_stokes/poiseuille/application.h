@@ -33,17 +33,6 @@ enum class BoundaryCondition
   Periodic
 };
 
-inline void
-string_to_enum(BoundaryCondition & enum_type, std::string const string_type)
-{
-  // clang-format off
-  if     (string_type == "ParabolicInflow") enum_type = BoundaryCondition::ParabolicInflow;
-  else if(string_type == "PressureInflow")  enum_type = BoundaryCondition::PressureInflow;
-  else if(string_type == "Periodic")        enum_type = BoundaryCondition::Periodic;
-  else AssertThrow(false, dealii::ExcMessage("Unknown operator type. Not implemented."));
-  // clang-format on
-}
-
 template<int dim>
 class AnalyticalSolutionVelocity : public dealii::Function<dim>
 {
@@ -54,7 +43,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double result = 0.0;
 
@@ -85,7 +74,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const
+  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
     // pressure decreases linearly in flow direction
     double pressure_gradient = -2. * viscosity * max_velocity / std::pow(H / 2., 2.0);
@@ -116,7 +105,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     (void)p;
     (void)component;
@@ -158,7 +147,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & /*p*/, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & /*p*/, unsigned int const component = 0) const final
   {
     double pressure_gradient = 0.0;
 
@@ -186,28 +175,18 @@ public:
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
     prm.enter_subsection("Application");
-      prm.add_parameter("BoundaryConditionType",
-                        boundary_condition_string,
-                        "Type of boundary condition.",
-                        dealii::Patterns::Selection("ParabolicInflow|PressureInflow|Periodic"));
+    {
+      prm.add_parameter("BoundaryConditionType", boundary_condition, "Type of boundary condition.");
       prm.add_parameter("ApplySymmetryBC",
                         apply_symmetry_bc,
                         "Apply symmetry boundary condition.",
                         dealii::Patterns::Bool());
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
 private:
-  void
-  parse_parameters() final
-  {
-    ApplicationBase<dim, Number>::parse_parameters();
-
-    string_to_enum(boundary_condition, boundary_condition_string);
-  }
   void
   set_parameters() final
   {
@@ -228,16 +207,17 @@ private:
 
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                   = SolverType::Unsteady;
-    this->param.temporal_discretization       = TemporalDiscretization::BDFDualSplittingScheme;
-    this->param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Explicit;
-    this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
-    this->param.adaptive_time_stepping        = true;
-    this->param.max_velocity                  = max_velocity;
-    this->param.cfl                           = 2.0e-1;
-    this->param.time_step_size                = 1.0e-1;
-    this->param.order_time_integrator         = 2;    // 1; // 2; // 3;
-    this->param.start_with_low_order          = true; // true; // false;
+    this->param.solver_type                     = SolverType::Unsteady;
+    this->param.temporal_discretization         = TemporalDiscretization::BDFDualSplittingScheme;
+    this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
+    this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
+    this->param.adaptive_time_stepping          = true;
+    this->param.max_velocity                    = max_velocity;
+    this->param.cfl                             = 2.0e-1;
+    this->param.cfl_exponent_fe_degree_velocity = 1.5;
+    this->param.time_step_size                  = 1.0e-1;
+    this->param.order_time_integrator           = 2;    // 1; // 2; // 3;
+    this->param.start_with_low_order            = true; // true; // false;
 
     this->param.convergence_criterion_steady_problem =
       ConvergenceCriterionSteadyProblem::SolutionIncrement; // ResidualSteadyNavierStokes;
@@ -249,9 +229,10 @@ private:
       (this->param.end_time - this->param.start_time) / 10;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree_u;
-    this->param.degree_p                = DegreePressure::MixedOrder;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
@@ -279,10 +260,12 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    // viscous step
-    this->param.solver_viscous         = SolverViscous::CG;
-    this->param.solver_data_viscous    = SolverData(1000, 1.e-20, 1.e-6);
-    this->param.preconditioner_viscous = PreconditionerViscous::InverseMassMatrix; // Multigrid;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      this->param.solver_momentum         = SolverMomentum::CG;
+      this->param.solver_data_momentum    = SolverData(1000, 1.e-20, 1.e-6);
+      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+    }
 
     // PRESSURE-CORRECTION SCHEME
 
@@ -291,15 +274,17 @@ private:
     this->param.rotational_formulation       = true;
 
     // momentum step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // Newton solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
 
-    // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
-
-    // linear solver
-    this->param.solver_momentum                = SolverMomentum::GMRES;
-    this->param.solver_data_momentum           = SolverData(1e4, 1.e-20, 1.e-6, 100);
-    this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
-    this->param.update_preconditioner_momentum = false;
+      // linear solver
+      this->param.solver_momentum                = SolverMomentum::GMRES;
+      this->param.solver_data_momentum           = SolverData(1e4, 1.e-20, 1.e-6, 100);
+      this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
+      this->param.update_preconditioner_momentum = false;
+    }
 
 
     // COUPLED NAVIER-STOKES SOLVER
@@ -333,40 +318,69 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    double const              y_upper = apply_symmetry_bc ? 0.0 : H / 2.;
-    dealii::Point<dim>        point1(0.0, -H / 2.), point2(L, y_upper);
-    std::vector<unsigned int> repetitions({2, 1});
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation,
-                                                      repetitions,
-                                                      point1,
-                                                      point2);
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)vector_local_refinements;
 
-    // set boundary indicator
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      for(auto const & face : cell->face_indices())
+      double const              y_upper = apply_symmetry_bc ? 0.0 : H / 2.;
+      dealii::Point<dim>        point1(0.0, -H / 2.), point2(L, y_upper);
+      std::vector<unsigned int> repetitions({2, 1});
+      dealii::GridGenerator::subdivided_hyper_rectangle(tria, repetitions, point1, point2);
+
+      // set boundary indicator
+      for(auto cell : tria.cell_iterators())
       {
-        if((std::fabs(cell->face(face)->center()(0) - 0.0) < 1e-12))
-          cell->face(face)->set_boundary_id(1);
-        if((std::fabs(cell->face(face)->center()(0) - L) < 1e-12))
-          cell->face(face)->set_boundary_id(2);
+        for(auto const & face : cell->face_indices())
+        {
+          if((std::fabs(cell->face(face)->center()(0) - 0.0) < 1e-12))
+            cell->face(face)->set_boundary_id(1);
+          if((std::fabs(cell->face(face)->center()(0) - L) < 1e-12))
+            cell->face(face)->set_boundary_id(2);
 
-        if(apply_symmetry_bc) // upper wall
-          if((std::fabs(cell->face(face)->center()(1) - y_upper) < 1e-12))
-            cell->face(face)->set_boundary_id(3);
+          if(apply_symmetry_bc) // upper wall
+            if((std::fabs(cell->face(face)->center()(1) - y_upper) < 1e-12))
+              cell->face(face)->set_boundary_id(3);
+        }
       }
-    }
 
-    if(boundary_condition == BoundaryCondition::Periodic)
-    {
-      dealii::GridTools::collect_periodic_faces(
-        *this->grid->triangulation, 1, 2, 0, this->grid->periodic_faces);
-      this->grid->triangulation->add_periodicity(this->grid->periodic_faces);
-    }
+      if(boundary_condition == BoundaryCondition::Periodic)
+      {
+        AssertThrow(
+          this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+          dealii::ExcMessage(
+            "Periodic faces might not be applied correctly for TriangulationType::FullyDistributed. "
+            "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        dealii::GridTools::collect_periodic_faces(tria, 1, 2, 0, periodic_face_pairs);
+        tria.add_periodicity(periodic_face_pairs);
+      }
+
+      tria.refine_global(global_refinements);
+    };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -518,8 +532,7 @@ private:
     return pp;
   }
 
-  std::string       boundary_condition_string = "ParabolicInflow";
-  BoundaryCondition boundary_condition        = BoundaryCondition::ParabolicInflow;
+  BoundaryCondition boundary_condition = BoundaryCondition::ParabolicInflow;
 
   bool apply_symmetry_bc = false;
 

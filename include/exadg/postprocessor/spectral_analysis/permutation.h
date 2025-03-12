@@ -79,7 +79,7 @@ cmp(const void * a, const void * b)
  */
 class Permutator
 {
-  MPI_Comm const & comm;
+  MPI_Comm const comm;
   // reference to DEAL.SPECTRUM setup
   Setup & s;
   // is initialized?
@@ -380,7 +380,7 @@ public:
   virtual ~Permutator()
   {
     // not initialized -> nothing to clean up
-    if(!initialized)
+    if(not initialized)
       return;
 
     delete[] recv_index;

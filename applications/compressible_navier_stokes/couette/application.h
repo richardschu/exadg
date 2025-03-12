@@ -50,7 +50,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double const T =
       T_0 + DYN_VISCOSITY * U_0 * U_0 / (2.0 * LAMBDA) * (p[1] * p[1] / (H * H) - 1.0);
@@ -82,7 +82,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double result = 0.0;
 
@@ -104,7 +104,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     (void)component;
 
@@ -161,7 +161,7 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree;
+    this->param.mapping_degree          = this->param.degree;
     this->param.n_q_points_convective   = QuadratureRule::Standard;
     this->param.n_q_points_viscous      = QuadratureRule::Standard;
 
@@ -173,57 +173,79 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> & grid, std::shared_ptr<dealii::Mapping<dim>> & mapping) final
   {
-    std::vector<unsigned int> repetitions({2, 1});
-    dealii::Point<dim>        point1(0.0, 0.0), point2(L, H);
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation,
-                                                      repetitions,
-                                                      point1,
-                                                      point2);
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)vector_local_refinements;
 
-    // indicator
-    // fixed wall = 0
-    // moving wall = 1
-    /*
-     *             indicator = 1
-     *   ___________________________________
-     *   |             --->                 |
-     *   |                                  |
-     *   | <---- periodic B.C.  --------->  |
-     *   |                                  |
-     *   |                                  |
-     *   |__________________________________|
-     *             indicator = 0
-     */
-    for(auto cell : *this->grid->triangulation)
-    {
-      for(auto const & face : cell.face_indices())
+      std::vector<unsigned int> repetitions({2, 1});
+      dealii::Point<dim>        point1(0.0, 0.0), point2(L, H);
+      dealii::GridGenerator::subdivided_hyper_rectangle(tria, repetitions, point1, point2);
+
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Periodic faces might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+
+      // indicator
+      // fixed wall = 0
+      // moving wall = 1
+      /*
+       *             indicator = 1
+       *   ___________________________________
+       *   |             --->                 |
+       *   |                                  |
+       *   | <---- periodic B.C.  --------->  |
+       *   |                                  |
+       *   |                                  |
+       *   |__________________________________|
+       *             indicator = 0
+       */
+      for(auto cell : tria)
       {
-        if(std::fabs(cell.face(face)->center()(1) - point2[1]) < 1e-12)
+        for(auto const & face : cell.face_indices())
         {
-          cell.face(face)->set_boundary_id(1);
-        }
-        else if(std::fabs(cell.face(face)->center()(1) - 0.0) < 1e-12)
-        {
-          cell.face(face)->set_boundary_id(0);
-        }
-        else if(std::fabs(cell.face(face)->center()(0) - 0.0) < 1e-12)
-        {
-          cell.face(face)->set_boundary_id(0 + 10);
-        }
-        else if(std::fabs(cell.face(face)->center()(0) - point2[0]) < 1e-12)
-        {
-          cell.face(face)->set_boundary_id(1 + 10);
+          if(std::fabs(cell.face(face)->center()(1) - point2[1]) < 1e-12)
+          {
+            cell.face(face)->set_boundary_id(1);
+          }
+          else if(std::fabs(cell.face(face)->center()(1) - 0.0) < 1e-12)
+          {
+            cell.face(face)->set_boundary_id(0);
+          }
+          else if(std::fabs(cell.face(face)->center()(0) - 0.0) < 1e-12)
+          {
+            cell.face(face)->set_boundary_id(0 + 10);
+          }
+          else if(std::fabs(cell.face(face)->center()(0) - point2[0]) < 1e-12)
+          {
+            cell.face(face)->set_boundary_id(1 + 10);
+          }
         }
       }
-    }
 
-    dealii::GridTools::collect_periodic_faces(
-      *this->grid->triangulation, 0 + 10, 1 + 10, 0, this->grid->periodic_faces);
-    this->grid->triangulation->add_periodicity(this->grid->periodic_faces);
+      dealii::GridTools::collect_periodic_faces(tria, 0 + 10, 1 + 10, 0, periodic_face_pairs);
+      tria.add_periodicity(periodic_face_pairs);
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+      tria.refine_global(global_refinements);
+    };
+
+    GridUtilities::create_triangulation<dim>(grid,
+                                             this->mpi_comm,
+                                             this->param.grid,
+                                             lambda_create_triangulation,
+                                             {} /* no local refinements */);
+
+    GridUtilities::create_mapping(mapping,
+                                  this->param.grid.element_type,
+                                  this->param.mapping_degree);
   }
 
   void

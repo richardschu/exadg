@@ -1,8 +1,22 @@
-/*
- * gradient_operator.cpp
+/*  ______________________________________________________________________
  *
- *  Created on: Nov 5, 2018
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/gradient_operator.h>
@@ -340,7 +354,7 @@ GradientOperator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> const &
     velocity.reinit(cell);
     pressure.reinit(cell);
 
-    if(data.integration_by_parts == true &&
+    if(data.integration_by_parts == true and
        data.formulation == FormulationPressureGradientTerm::Weak)
     {
       pressure.gather_evaluate(src, dealii::EvaluationFlags::values);
@@ -482,7 +496,7 @@ GradientOperator<dim, Number>::boundary_face_loop_inhom_operator(
 {
   (void)src;
 
-  if(data.integration_by_parts == true && data.use_boundary_data == true)
+  if(data.integration_by_parts == true and data.use_boundary_data == true)
   {
     FaceIntegratorU velocity(matrix_free, true, data.dof_index_velocity, data.quad_index);
     FaceIntegratorP pressure(matrix_free, true, data.dof_index_pressure, data.quad_index);
@@ -510,7 +524,7 @@ GradientOperator<dim, Number>::boundary_face_loop_inhom_operator_bc_from_dof_vec
   VectorType const &,
   Range const & face_range) const
 {
-  if(data.integration_by_parts == true && data.use_boundary_data == true)
+  if(data.integration_by_parts == true and data.use_boundary_data == true)
   {
     FaceIntegratorU velocity(matrix_free, true, data.dof_index_velocity, data.quad_index);
     FaceIntegratorP pressure(matrix_free, true, data.dof_index_pressure, data.quad_index);

@@ -49,7 +49,7 @@ namespace dealspectrum
 class Interpolator
 {
 public:
-  MPI_Comm const & comm;
+  MPI_Comm const comm;
   // reference to DEAL.SPECTRUM setup
   Setup & s;
   // is initialized?
@@ -85,7 +85,7 @@ public:
   virtual ~Interpolator()
   {
     // not initialized -> nothing to clean up
-    if(!initialized)
+    if(not initialized)
       return;
 
     delete[] src;
@@ -124,7 +124,7 @@ public:
     // ... of equidistant points:
     points_target = s.points_dst;
 
-    // number of gauss lobatto points per cell and ...
+    // number of Gauss-Lobatto points per cell and ...
     dofs_source = dealii::Utilities::pow(points_source, DIM);
     // ...number of equidistant points per cell
     dofs_target = dealii::Utilities::pow(points_target, DIM);

@@ -59,7 +59,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & x, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & x, unsigned int const component = 0) const final
   {
     double t      = this->get_time();
     double result = 0.0;
@@ -140,13 +140,17 @@ public:
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
     prm.enter_subsection("Application");
-      prm.add_parameter("TestCase",     test_case,            "Number of test case.", dealii::Patterns::Integer(1,3));
-      prm.add_parameter("CylinderType", cylinder_type_string, "Type of cylinder.",    dealii::Patterns::Selection("circular|square"));
-      prm.add_parameter("CFL",          cfl_number,           "CFL number.",          dealii::Patterns::Double(0.0, 1.0e6), true);
+    {
+      prm.add_parameter("TestCase",
+                        test_case,
+                        "Number of test case.",
+                        dealii::Patterns::Integer(1, 3));
+      prm.add_parameter("CylinderType", cylinder_type, "Type of cylinder.");
+      prm.add_parameter(
+        "CFL", cfl_number, "CFL number.", dealii::Patterns::Double(0.0, 1.0e6), true);
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
 private:
@@ -192,9 +196,11 @@ private:
     this->param.rel_tol_steady = 1.e-8;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree_u;
-    this->param.degree_p                = DegreePressure::MixedOrder;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.degree_p                    = DegreePressure::MixedOrder;
+    this->param.grid.element_type           = ElementType::Hypercube;
 
     // convective term
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
@@ -245,11 +251,13 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    // viscous step
-    this->param.solver_viscous                = SolverViscous::CG;
-    this->param.solver_data_viscous           = SolverData(1000, ABS_TOL, REL_TOL);
-    this->param.preconditioner_viscous        = PreconditionerViscous::InverseMassMatrix;
-    this->param.update_preconditioner_viscous = false;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      this->param.solver_momentum                = SolverMomentum::CG;
+      this->param.solver_data_momentum           = SolverData(1000, ABS_TOL, REL_TOL);
+      this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
+      this->param.update_preconditioner_momentum = false;
+    }
 
     // PRESSURE-CORRECTION SCHEME
 
@@ -258,30 +266,32 @@ private:
     this->param.rotational_formulation       = true;
 
     // momentum step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // Newton solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
 
-    // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
+      // linear solver
+      this->param.solver_momentum      = SolverMomentum::FGMRES;
+      this->param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
 
-    // linear solver
-    this->param.solver_momentum      = SolverMomentum::FGMRES;
-    this->param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
+      this->param.update_preconditioner_momentum                   = true;
+      this->param.update_preconditioner_momentum_every_newton_iter = 10;
+      this->param.update_preconditioner_momentum_every_time_steps  = 10;
 
-    this->param.update_preconditioner_momentum                   = true;
-    this->param.update_preconditioner_momentum_every_newton_iter = 10;
-    this->param.update_preconditioner_momentum_every_time_steps  = 10;
-
-    this->param.preconditioner_momentum = MomentumPreconditioner::Multigrid;
-    this->param.multigrid_operator_type_momentum =
-      MultigridOperatorType::ReactionConvectionDiffusion;
-    this->param.multigrid_data_momentum.type                   = MultigridType::phMG;
-    this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Jacobi;
-    this->param.multigrid_data_momentum.smoother_data.preconditioner =
-      PreconditionerSmoother::BlockJacobi;
-    this->param.multigrid_data_momentum.smoother_data.iterations        = 1;
-    this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.7;
-    this->param.multigrid_data_momentum.coarse_problem.solver = MultigridCoarseGridSolver::GMRES;
-    this->param.multigrid_data_momentum.coarse_problem.preconditioner =
-      MultigridCoarseGridPreconditioner::BlockJacobi;
+      this->param.preconditioner_momentum = MomentumPreconditioner::Multigrid;
+      this->param.multigrid_operator_type_momentum =
+        MultigridOperatorType::ReactionConvectionDiffusion;
+      this->param.multigrid_data_momentum.type                   = MultigridType::phMG;
+      this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Jacobi;
+      this->param.multigrid_data_momentum.smoother_data.preconditioner =
+        PreconditionerSmoother::BlockJacobi;
+      this->param.multigrid_data_momentum.smoother_data.iterations        = 1;
+      this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.7;
+      this->param.multigrid_data_momentum.coarse_problem.solver = MultigridCoarseGridSolver::GMRES;
+      this->param.multigrid_data_momentum.coarse_problem.preconditioner =
+        MultigridCoarseGridPreconditioner::BlockJacobi;
+    }
 
     // COUPLED NAVIER-STOKES SOLVER
 
@@ -322,13 +332,21 @@ private:
 
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
     auto const lambda_create_triangulation =
-      [&](dealii::Triangulation<dim, dim> & tria,
-          unsigned int const                global_refinements,
-          std::vector<unsigned int> const & vector_local_refinements) {
-        create_coarse_grid<dim>(tria, this->grid->periodic_faces, cylinder_type_string);
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        create_coarse_grid<dim>(tria,
+                                periodic_face_pairs,
+                                this->param.grid.triangulation_type,
+                                cylinder_type,
+                                this->param.grid.element_type);
 
         if(vector_local_refinements.size() > 0)
           refine_local(tria, vector_local_refinements);
@@ -337,10 +355,20 @@ private:
           tria.refine_global(global_refinements);
       };
 
-    GridUtilities::create_fine_and_coarse_triangulations<dim>(*this->grid,
-                                                              this->param.grid,
-                                                              this->param.involves_h_multigrid(),
-                                                              lambda_create_triangulation);
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -498,8 +526,8 @@ private:
     }
   }
 
-  // string to read parameter
-  std::string cylinder_type_string = "circular";
+  // type of cylinder
+  CylinderType cylinder_type = CylinderType::Circular;
 
   // select test case according to Schaefer and Turek benchmark definition: 2D-1/2/3, 3D-1/2/3
   unsigned int test_case = 3; // 1, 2 or 3

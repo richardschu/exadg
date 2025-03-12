@@ -27,12 +27,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            1
-  Element type:                              DG
+  Mapping degree coarse grids:               1
+  FE space:                                  DG
   Polynomial degree:                         1
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -41,7 +43,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -49,15 +51,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -66,7 +64,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            1
 
 Construct Poisson operator ...
 
@@ -80,10 +77,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -121,12 +114,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            2
-  Element type:                              DG
+  Mapping degree coarse grids:               2
+  FE space:                                  DG
   Polynomial degree:                         2
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -135,7 +130,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -143,15 +138,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -160,7 +151,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            2
 
 Construct Poisson operator ...
 
@@ -174,10 +164,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -215,12 +201,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            3
-  Element type:                              DG
+  Mapping degree coarse grids:               3
+  FE space:                                  DG
   Polynomial degree:                         3
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -229,7 +217,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -237,15 +225,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -254,7 +238,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            3
 
 Construct Poisson operator ...
 
@@ -268,10 +251,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -309,12 +288,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            4
-  Element type:                              DG
+  Mapping degree coarse grids:               4
+  FE space:                                  DG
   Polynomial degree:                         4
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -323,7 +304,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -331,15 +312,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -348,7 +325,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            4
 
 Construct Poisson operator ...
 
@@ -362,10 +338,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -403,12 +375,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            5
-  Element type:                              DG
+  Mapping degree coarse grids:               5
+  FE space:                                  DG
   Polynomial degree:                         5
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -417,7 +391,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -425,15 +399,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -442,7 +412,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            5
 
 Construct Poisson operator ...
 
@@ -456,10 +425,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -497,12 +462,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            6
-  Element type:                              DG
+  Mapping degree coarse grids:               6
+  FE space:                                  DG
   Polynomial degree:                         6
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -511,7 +478,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -519,15 +486,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -536,7 +499,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            6
 
 Construct Poisson operator ...
 
@@ -550,10 +512,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -591,12 +549,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            7
-  Element type:                              DG
+  Mapping degree coarse grids:               7
+  FE space:                                  DG
   Polynomial degree:                         7
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -605,7 +565,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -613,15 +573,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -630,7 +586,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            7
 
 Construct Poisson operator ...
 
@@ -644,10 +599,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -685,12 +636,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            8
-  Element type:                              DG
+  Mapping degree coarse grids:               8
+  FE space:                                  DG
   Polynomial degree:                         8
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -699,7 +652,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -707,15 +660,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -724,7 +673,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            8
 
 Construct Poisson operator ...
 
@@ -738,10 +686,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -779,12 +723,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            9
-  Element type:                              DG
+  Mapping degree coarse grids:               9
+  FE space:                                  DG
   Polynomial degree:                         9
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -793,7 +739,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -801,15 +747,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -818,7 +760,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            9
 
 Construct Poisson operator ...
 
@@ -832,10 +773,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -873,12 +810,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            10
-  Element type:                              DG
+  Mapping degree coarse grids:               10
+  FE space:                                  DG
   Polynomial degree:                         10
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -887,7 +826,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -895,15 +834,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -912,7 +847,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            10
 
 Construct Poisson operator ...
 
@@ -926,10 +860,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -967,12 +897,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            11
-  Element type:                              DG
+  Mapping degree coarse grids:               11
+  FE space:                                  DG
   Polynomial degree:                         11
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -981,7 +913,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -989,15 +921,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -1006,7 +934,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            11
 
 Construct Poisson operator ...
 
@@ -1020,10 +947,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup Poisson operator ...
-
-... done!
-
-Setup Poisson solver ...
 
 ... done!
 
@@ -1061,12 +984,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            12
-  Element type:                              DG
+  Mapping degree coarse grids:               12
+  FE space:                                  DG
   Polynomial degree:                         12
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -1075,7 +1000,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -1083,15 +1008,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -1100,7 +1021,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            12
 
 Construct Poisson operator ...
 
@@ -1117,15 +1037,11 @@ Setup Poisson operator ...
 
 ... done!
 
-Setup Poisson solver ...
-
-... done!
-
 Calculate error for all fields for initial data:
   Relative error (L2-norm): 1.00000e+00
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 4.59283e-11
+  Relative error (L2-norm): 4.58640e-11
 
 
 
@@ -1155,12 +1071,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            13
-  Element type:                              DG
+  Mapping degree coarse grids:               13
+  FE space:                                  DG
   Polynomial degree:                         13
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -1169,7 +1087,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -1177,15 +1095,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -1194,7 +1108,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            13
 
 Construct Poisson operator ...
 
@@ -1211,15 +1124,11 @@ Setup Poisson operator ...
 
 ... done!
 
-Setup Poisson solver ...
-
-... done!
-
 Calculate error for all fields for initial data:
   Relative error (L2-norm): 1.00000e+00
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 4.20471e-11
+  Relative error (L2-norm): 4.25200e-11
 
 
 
@@ -1249,12 +1158,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            14
-  Element type:                              DG
+  Mapping degree coarse grids:               14
+  FE space:                                  DG
   Polynomial degree:                         14
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -1263,7 +1174,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -1271,15 +1182,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -1288,7 +1195,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            14
 
 Construct Poisson operator ...
 
@@ -1305,15 +1211,11 @@ Setup Poisson operator ...
 
 ... done!
 
-Setup Poisson solver ...
-
-... done!
-
 Calculate error for all fields for initial data:
   Relative error (L2-norm): 1.00000e+00
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 1.95495e-12
+  Relative error (L2-norm): 2.43668e-12
 
 
 
@@ -1343,12 +1245,14 @@ Mathematical model:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
+  Number of global refinements:              3
+  Create coarse triangulations:              false
   Mapping degree:                            15
-  Element type:                              DG
+  Mapping degree coarse grids:               15
+  FE space:                                  DG
   Polynomial degree:                         15
   IP factor:                                 1.0000e+00
+  Use matrix-based implementation:           false
 
 Solver:
   Solver:                                    CG
@@ -1357,7 +1261,7 @@ Solver:
   Relative solver tolerance:                 1.0000e-10
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
-  Multigrid type:                            cph-MG
+  Multigrid type:                            cphMG
   p-sequence:                                Bisect
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
@@ -1365,15 +1269,11 @@ Solver:
   Smoothing range:                           2.0000e+01
   Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
-  Coarse grid preconditioner:                AMG
+  Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Maximum size of Krylov space:              30
-      AMG type:                              ML
-      Smoother sweeps:                       1
-      Number of cycles:                      1
-      Smoother type:                         ILU
 
 Numerical parameters:
   Enable cell-based face loops:              false
@@ -1382,7 +1282,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            15
 
 Construct Poisson operator ...
 
@@ -1399,12 +1298,8 @@ Setup Poisson operator ...
 
 ... done!
 
-Setup Poisson solver ...
-
-... done!
-
 Calculate error for all fields for initial data:
   Relative error (L2-norm): 1.00000e+00
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 1.82647e-12
+  Relative error (L2-norm): 1.54770e-12

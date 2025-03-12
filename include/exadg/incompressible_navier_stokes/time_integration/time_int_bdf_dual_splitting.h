@@ -36,6 +36,9 @@ template<int dim, typename Number>
 class TimeIntBDFDualSplitting : public TimeIntBDF<dim, Number>
 {
 private:
+  using BoostInputArchiveType  = TimeIntBase::BoostInputArchiveType;
+  using BoostOutputArchiveType = TimeIntBase::BoostOutputArchiveType;
+
   typedef TimeIntBDF<dim, Number> Base;
 
   typedef typename Base::VectorType VectorType;
@@ -43,11 +46,12 @@ private:
   typedef OperatorDualSplitting<dim, Number> Operator;
 
 public:
-  TimeIntBDFDualSplitting(std::shared_ptr<Operator>                       pde_operator_in,
+  TimeIntBDFDualSplitting(std::shared_ptr<Operator>                       operator_in,
+                          std::shared_ptr<HelpersALE<dim, Number> const>  helpers_ale_in,
+                          std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
                           Parameters const &                              param_in,
                           MPI_Comm const &                                mpi_comm_in,
-                          bool const                                      is_test_in,
-                          std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in);
+                          bool const                                      is_test_in);
 
   virtual ~TimeIntBDFDualSplitting()
   {
@@ -79,10 +83,10 @@ private:
   setup_derived() final;
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) final;
+  read_restart_vectors(BoostInputArchiveType & ia) final;
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const final;
+  write_restart_vectors(BoostOutputArchiveType & oa) const final;
 
   void
   do_timestep_solve() final;
@@ -103,7 +107,7 @@ private:
   initialize_current_solution() final;
 
   void
-  initialize_former_solutions() final;
+  initialize_former_multistep_dof_vectors() final;
 
   void
   initialize_velocity_dbc();
@@ -127,7 +131,9 @@ private:
   viscous_step();
 
   void
-  rhs_viscous(VectorType & rhs) const;
+  rhs_viscous(VectorType &       rhs,
+              VectorType const & velocity_mass_operator,
+              VectorType const & transport_velocity) const;
 
   void
   solve_steady_problem() final;
@@ -170,7 +176,11 @@ private:
     iterations_pressure;
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */>
     iterations_projection;
-  std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */> iterations_viscous;
+  std::pair<
+    unsigned int /* calls */,
+    std::tuple<unsigned long long, unsigned long long> /* iteration counts {Newton, linear} */>
+    iterations_viscous;
+
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */> iterations_penalty;
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */> iterations_mass;
 

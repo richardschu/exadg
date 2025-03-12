@@ -37,6 +37,8 @@ public:
   typedef Number                                             value_type;
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
 
+  static unsigned int const dimension = dim;
+
   MultigridOperatorBase() : dealii::Subscriptor()
   {
   }
@@ -82,10 +84,19 @@ public:
   calculate_inverse_diagonal(VectorType & inverse_diagonal_entries) const = 0;
 
   virtual void
+  initialize_block_diagonal_preconditioner(bool const initialize) const = 0;
+
+  virtual void
   update_block_diagonal_preconditioner() const = 0;
 
   virtual void
   apply_inverse_block_diagonal(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
+  apply_inverse_additive_schwarz_matrices(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
+  compute_factorized_additive_schwarz_matrices() const = 0;
 
 #ifdef DEAL_II_WITH_TRILINOS
   virtual void
@@ -104,6 +115,10 @@ public:
   virtual void
   calculate_system_matrix(dealii::PETScWrappers::MPI::SparseMatrix & system_matrix) const = 0;
 #endif
+
+  virtual void
+  get_constant_modes(std::vector<std::vector<bool>> &   constant_modes,
+                     std::vector<std::vector<double>> & constant_modes_values) const = 0;
 };
 
 } // namespace ExaDG

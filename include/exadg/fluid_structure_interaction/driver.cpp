@@ -59,15 +59,6 @@ Driver<dim, Number>::setup()
 
   pcout << std::endl << "Setting up fluid-structure interaction solver:" << std::endl;
 
-  // setup application
-  {
-    dealii::Timer timer_local;
-
-    application->setup();
-
-    timer_tree.insert({"FSI", "Setup", "Application"}, timer_local.wall_time());
-  }
-
   // setup structure
   {
     dealii::Timer timer_local;
@@ -104,28 +95,34 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling structure -> ALE ..." << std::endl;
 
-    auto const & tria         = structure->pde_operator->get_dof_handler().get_triangulation();
-    auto const   boundary_ids = extract_set_of_keys_from_map(
-      application->structure->get_boundary_descriptor()->neumann_cached_bc);
+    auto const & tria       = structure->pde_operator->get_dof_handler().get_triangulation();
+    auto const boundary_ids = application->structure->get_boundary_descriptor()->neumann_cached_bc;
     auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
 
     if(application->fluid->get_parameters().mesh_movement_type == IncNS::MeshMovementType::Poisson)
     {
       structure_to_ale = std::make_shared<InterfaceCoupling<1, dim, Number>>();
-      structure_to_ale->setup(fluid->ale_poisson_operator->get_container_interface_data(),
-                              structure->pde_operator->get_dof_handler(),
-                              *application->structure->get_grid()->mapping,
-                              marked_vertices_structure,
-                              parameters.geometric_tolerance);
+
+      std::shared_ptr<Poisson::DeformedMapping<dim, Number>> poisson_grid_motion =
+        std::dynamic_pointer_cast<Poisson::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+      structure_to_ale->setup(
+        poisson_grid_motion->get_pde_operator()->get_container_interface_data(),
+        structure->pde_operator->get_dof_handler(),
+        *structure->mapping,
+        marked_vertices_structure,
+        parameters.geometric_tolerance);
     }
     else if(application->fluid->get_parameters().mesh_movement_type ==
             IncNS::MeshMovementType::Elasticity)
     {
       structure_to_ale = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+
+      std::shared_ptr<Structure::DeformedMapping<dim, Number>> elasticity_grid_motion =
+        std::dynamic_pointer_cast<Structure::DeformedMapping<dim, Number>>(fluid->ale_mapping);
       structure_to_ale->setup(
-        fluid->ale_elasticity_operator->get_container_interface_data_dirichlet(),
+        elasticity_grid_motion->get_pde_operator()->get_container_interface_data_dirichlet(),
         structure->pde_operator->get_dof_handler(),
-        *application->structure->get_grid()->mapping,
+        *structure->mapping,
         marked_vertices_structure,
         parameters.geometric_tolerance);
     }
@@ -146,15 +143,14 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling structure -> fluid ..." << std::endl;
 
-    auto const & tria         = structure->pde_operator->get_dof_handler().get_triangulation();
-    auto const   boundary_ids = extract_set_of_keys_from_map(
-      application->structure->get_boundary_descriptor()->neumann_cached_bc);
+    auto const & tria       = structure->pde_operator->get_dof_handler().get_triangulation();
+    auto const boundary_ids = application->structure->get_boundary_descriptor()->neumann_cached_bc;
     auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
 
     structure_to_fluid = std::make_shared<InterfaceCoupling<1, dim, Number>>();
     structure_to_fluid->setup(fluid->pde_operator->get_container_interface_data(),
                               structure->pde_operator->get_dof_handler(),
-                              *application->structure->get_grid()->mapping,
+                              *structure->mapping,
                               marked_vertices_structure,
                               parameters.geometric_tolerance);
 
@@ -170,18 +166,15 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling fluid -> structure ..." << std::endl;
 
-    std::shared_ptr<dealii::Mapping<dim> const> mapping_fluid =
-      get_dynamic_mapping<dim, Number>(application->fluid->get_grid(), fluid->ale_grid_motion);
-
-    auto const & tria         = fluid->pde_operator->get_dof_handler_u().get_triangulation();
-    auto const   boundary_ids = extract_set_of_keys_from_map(
-      application->fluid->get_boundary_descriptor()->velocity->dirichlet_cached_bc);
+    auto const & tria = fluid->pde_operator->get_dof_handler_u().get_triangulation();
+    auto const   boundary_ids =
+      application->fluid->get_boundary_descriptor()->velocity->dirichlet_cached_bc;
     auto const marked_vertices_fluid = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
 
     fluid_to_structure = std::make_shared<InterfaceCoupling<1, dim, Number>>();
     fluid_to_structure->setup(structure->pde_operator->get_container_interface_data_neumann(),
                               fluid->pde_operator->get_dof_handler_u(),
-                              *mapping_fluid,
+                              *fluid->mapping,
                               marked_vertices_fluid,
                               parameters.geometric_tolerance);
 
@@ -221,18 +214,14 @@ Driver<dim, Number>::coupling_structure_to_ale(VectorType const & displacement_s
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::coupling_structure_to_fluid(bool const extrapolate) const
+Driver<dim, Number>::coupling_structure_to_fluid(unsigned int iteration) const
 {
   dealii::Timer sub_timer;
   sub_timer.restart();
 
   VectorType velocity_structure;
   structure->pde_operator->initialize_dof_vector(velocity_structure);
-  if(extrapolate)
-    structure->time_integrator->extrapolate_velocity_to_np(velocity_structure);
-  else
-    velocity_structure = structure->time_integrator->get_velocity_np();
-
+  partitioned_solver->get_structure_velocity(velocity_structure, iteration);
   structure_to_fluid->update_data(velocity_structure);
 
   timer_tree.insert({"FSI", "Coupling structure -> fluid"}, sub_timer.wall_time());
@@ -276,19 +265,21 @@ Driver<dim, Number>::apply_dirichlet_neumann_scheme(VectorType &       d_tilde,
   coupling_structure_to_ale(d);
 
   // move the fluid mesh and update dependent data structures
-  fluid->solve_ale(application->fluid, is_test);
+  fluid->solve_ale();
 
   // update velocity boundary condition for fluid
-  coupling_structure_to_fluid(iteration == 0);
+  coupling_structure_to_fluid(iteration);
 
   // solve fluid problem
-  fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
+  fluid->time_integrator->advance_one_timestep_partitioned_solve(iteration ==
+                                                                 0 /* use_extrapolation */);
 
   // update stress boundary condition for solid
-  coupling_fluid_to_structure(/* end_of_time_step = */ true);
+  coupling_fluid_to_structure(true /* end_of_time_step */);
 
   // solve structural problem
-  structure->time_integrator->advance_one_timestep_partitioned_solve(iteration == 0);
+  structure->time_integrator->advance_one_timestep_partitioned_solve(iteration ==
+                                                                     0 /* use_extrapolation */);
 
   d_tilde = structure->time_integrator->get_displacement_np();
 }
@@ -310,7 +301,7 @@ Driver<dim, Number>::solve() const
   }
 
   // The fluid domain is the master that dictates when the time loop is finished
-  while(!fluid->time_integrator->finished())
+  while(not fluid->time_integrator->finished())
   {
     // pre-solve
     fluid->time_integrator->advance_one_timestep_pre_solve(true);
@@ -353,7 +344,7 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
   fluid->time_integrator->print_iterations();
 
   pcout << std::endl << "ALE:" << std::endl;
-  fluid->ale_grid_motion->print_iterations();
+  fluid->ale_mapping->print_iterations();
 
   pcout << std::endl << "Structure:" << std::endl;
   structure->time_integrator->print_iterations();
@@ -380,12 +371,18 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
 
   if(application->fluid->get_parameters().mesh_movement_type == IncNS::MeshMovementType::Poisson)
   {
-    DoFs += fluid->pde_operator->get_number_of_dofs();
+    std::shared_ptr<Poisson::DeformedMapping<dim, Number>> poisson_ale_mapping =
+      std::dynamic_pointer_cast<Poisson::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+
+    DoFs += poisson_ale_mapping->get_pde_operator()->get_number_of_dofs();
   }
   else if(application->fluid->get_parameters().mesh_movement_type ==
           IncNS::MeshMovementType::Elasticity)
   {
-    DoFs += fluid->ale_elasticity_operator->get_number_of_dofs();
+    std::shared_ptr<Structure::DeformedMapping<dim, Number>> structure_ale_mapping =
+      std::dynamic_pointer_cast<Structure::DeformedMapping<dim, Number>>(fluid->ale_mapping);
+
+    DoFs += structure_ale_mapping->get_pde_operator()->get_number_of_dofs();
   }
   else
   {

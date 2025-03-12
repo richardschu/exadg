@@ -24,10 +24,14 @@
 
 // C/C++
 #include <iomanip>
+#include <iostream>
 
 // deal.II
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/mpi.h>
+
+// ExaDG
+#include <exadg/utilities/enum_utilities.h>
 
 namespace ExaDG
 {
@@ -82,7 +86,10 @@ template<typename ParameterType>
 void
 print_value(dealii::ConditionalOStream const & pcout, ParameterType const value)
 {
-  pcout << value << std::endl;
+  if constexpr(Utilities::is_enum<ParameterType>())
+    pcout << Utilities::enum_to_string(value) << std::endl;
+  else
+    pcout << value << std::endl;
 }
 
 // specialization of template function for parameters of type bool

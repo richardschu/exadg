@@ -23,6 +23,7 @@
 #include <deal.II/fe/fe_values.h>
 
 // ExaDG
+#include <exadg/grid/grid_data.h>
 #include <exadg/incompressible_navier_stokes/postprocessor/line_plot_calculation_statistics_homogeneous.h>
 #include <exadg/utilities/create_directories.h>
 
@@ -45,6 +46,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::LinePlotCalculatorStatisti
     averaging_direction(2),
     write_final_output(false)
 {
+  AssertThrow(get_element_type(dof_handler_velocity.get_triangulation()) == ElementType::Hypercube,
+              dealii::ExcMessage("Only implemented for hypercube elements."));
 }
 
 template<int dim, typename Number>
@@ -83,7 +86,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                 dealii::ExcMessage("Invalid line type, expected LineHomogeneousAveraging<dim>"));
     averaging_direction = line_hom->averaging_direction;
 
-    AssertThrow(averaging_direction == 0 || averaging_direction == 1 || averaging_direction == 2,
+    AssertThrow(averaging_direction == 0 or averaging_direction == 1 or averaging_direction == 2,
                 dealii::ExcMessage("Take the average either in x, y or z-direction"));
 
     unsigned int line_iterator = 0;
@@ -143,8 +146,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               quantity != (*line)->quantities.end();
               ++quantity)
           {
-            if((*quantity)->type == QuantityType::Velocity ||
-               (*quantity)->type == QuantityType::SkinFriction ||
+            if((*quantity)->type == QuantityType::Velocity or
+               (*quantity)->type == QuantityType::SkinFriction or
                (*quantity)->type == QuantityType::ReynoldsStresses)
             {
               velocity_has_to_be_evaluated = true;
@@ -365,8 +368,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         ++quantity)
     {
       // evaluate quantities that involve velocity
-      if((*quantity)->type == QuantityType::Velocity ||
-         (*quantity)->type == QuantityType::SkinFriction ||
+      if((*quantity)->type == QuantityType::Velocity or
+         (*quantity)->type == QuantityType::SkinFriction or
          (*quantity)->type == QuantityType::ReynoldsStresses)
       {
         evaluate_velocity = true;
@@ -382,7 +385,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         ++quantity)
     {
       // evaluate quantities that involve velocity
-      if((*quantity)->type == QuantityType::Pressure ||
+      if((*quantity)->type == QuantityType::Pressure or
          (*quantity)->type == QuantityType::PressureCoefficient)
       {
         evaluate_pressure = true;
@@ -428,8 +431,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate_velocity(
       std::vector<dealii::Point<dim>> points(gauss_1d.size());  // 1D points
       std::vector<double>             weights(gauss_1d.size()); // 1D weights
 
-      typename dealii::DoFHandler<dim>::active_cell_iterator const cell = cell_and_ref_point->first;
-
       dealii::Point<dim> const p_unit = cell_and_ref_point->second;
 
       // Find points and weights for Gauss quadrature
@@ -442,6 +443,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate_velocity(
                                              dealii::update_quadrature_points |
                                              dealii::update_gradients);
 
+      typename dealii::DoFHandler<dim>::active_cell_iterator const cell = cell_and_ref_point->first;
       fe_values.reinit(typename dealii::Triangulation<dim>::active_cell_iterator(cell));
 
       cell->get_dof_indices(dof_indices);
@@ -471,7 +473,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate_velocity(
         {
           dealii::Tensor<1, dim> velocity;
 
-          if((*quantity)->type == QuantityType::Velocity ||
+          if((*quantity)->type == QuantityType::Velocity or
              (*quantity)->type == QuantityType::ReynoldsStresses)
           {
             // evaluate velocity solution in current quadrature points
@@ -655,8 +657,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::average_pressure_for_given
     std::vector<dealii::Point<dim>> points(gauss_1d.size());  // 1D points
     std::vector<double>             weights(gauss_1d.size()); // 1D weights
 
-    typename dealii::DoFHandler<dim>::active_cell_iterator const cell = cell_and_ref_point->first;
-
     dealii::Point<dim> const p_unit = cell_and_ref_point->second;
 
     // Find points and weights for Gauss quadrature
@@ -668,6 +668,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::average_pressure_for_given
                                          dealii::update_values | dealii::update_jacobians |
                                            dealii::update_quadrature_points);
 
+    typename dealii::DoFHandler<dim>::active_cell_iterator const cell = cell_and_ref_point->first;
     fe_values.reinit(typename dealii::Triangulation<dim>::active_cell_iterator(cell));
 
     cell->get_dof_indices(dof_indices);
@@ -875,7 +876,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
           f.close();
         }
 
-        if((*quantity)->type == QuantityType::Pressure ||
+        if((*quantity)->type == QuantityType::Pressure or
            (*quantity)->type == QuantityType::PressureCoefficient)
         {
           std::string   filename = filename_prefix + "_pressure" + ".txt";

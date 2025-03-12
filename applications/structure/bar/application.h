@@ -43,7 +43,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -53,6 +53,54 @@ public:
 
     if(unsteady)
       factor = std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0);
+
+    if(c == 0)
+      return displacement * factor;
+    else
+      return 0.0;
+  }
+
+private:
+  double const displacement;
+  bool const   quasistatic;
+  bool const   unsteady;
+  double const end_time;
+};
+
+// TODO: only the time factor is different compared to the above function -> refactor and unify the
+// code
+template<int dim>
+class AccelerationDBC : public dealii::Function<dim>
+{
+public:
+  AccelerationDBC(double const displacement,
+                  bool const   quasistatic_solver,
+                  bool const   unsteady,
+                  double const end_time)
+    : dealii::Function<dim>(dim),
+      displacement(displacement),
+      quasistatic(quasistatic_solver),
+      unsteady(unsteady),
+      end_time(end_time)
+  {
+  }
+
+  double
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  {
+    (void)p;
+
+    double factor = 1.0;
+    if(quasistatic)
+      factor *= this->get_time();
+
+    if(unsteady)
+    {
+      factor =
+        2 * std::pow(2.0 * dealii::numbers::PI / end_time, 2.0) *
+        (1.0 -
+         2.0 * std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0));
+    }
 
     if(c == 0)
       return displacement * factor;
@@ -77,7 +125,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -106,7 +154,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -138,7 +186,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     if(c == 0)
       return A * p[0] * p[0] + B * p[0]; // displacement in x-direction
@@ -164,7 +212,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     if(c == 0)
       return A * p[0] * p[0] + B * p[0]; // displacement in x-direction
@@ -187,63 +235,91 @@ public:
   }
 
   void
-  add_parameters(dealii::ParameterHandler & prm)
+  add_parameters(dealii::ParameterHandler & prm) final
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
     prm.enter_subsection("Application");
-    prm.add_parameter("Length",           length,           "Length of domain.");
-    prm.add_parameter("Height",           height,           "Height of domain.");
-    prm.add_parameter("Width",            width,            "Width of domain.");
-    prm.add_parameter("UseVolumeForce",   use_volume_force, "Use volume force.");
-    prm.add_parameter("VolumeForce",      volume_force,     "Volume force.");
-    prm.add_parameter("BoundaryType",     boundary_type,    "Type of boundary condition, Dirichlet vs Neumann.", dealii::Patterns::Selection("Dirichlet|Neumann"));
-    prm.add_parameter("Displacement",     displacement,     "Displacement of right boundary in case of Dirichlet BC.");
-    prm.add_parameter("Traction",         area_force,       "Traction acting on right boundary in case of Neumann BC.");
+    {
+      prm.add_parameter("Length", length, "Length of domain.");
+      prm.add_parameter("Height", height, "Height of domain.");
+      prm.add_parameter("Width", width, "Width of domain.");
+      prm.add_parameter("UseVolumeForce", use_volume_force, "Use volume force.");
+      prm.add_parameter("VolumeForce", volume_force, "Volume force.");
+      prm.add_parameter("BoundaryType",
+                        boundary_type,
+                        "Type of boundary condition, Dirichlet vs Neumann.");
+      prm.add_parameter("ProblemType",
+                        problem_type,
+                        "Problem type considered, QuasiStatic vs Unsteady vs. Steady");
+      prm.add_parameter("LargeDeformation",
+                        large_deformation,
+                        "Consider finite strains or linear elasticity.");
+      prm.add_parameter("Preconditioner", preconditioner, "Preconditioner for the linear system.");
+      prm.add_parameter("WeakDamping",
+                        weak_damping_coefficient,
+                        "Weak damping coefficient for unsteady problems.");
+      prm.add_parameter("Displacement",
+                        displacement,
+                        "Displacement of right boundary in case of Dirichlet BC.");
+      prm.add_parameter("Traction",
+                        area_force,
+                        "Traction acting on right boundary in case of Neumann BC.");
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
 private:
   void
   set_parameters() final
   {
-    this->param.problem_type         = ProblemType::QuasiStatic;
+    this->param.problem_type         = problem_type;
     this->param.body_force           = use_volume_force;
-    this->param.large_deformation    = true;
+    this->param.large_deformation    = large_deformation;
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
 
     this->param.density = density;
+    if(this->param.problem_type == ProblemType::Unsteady and weak_damping_coefficient > 0.0)
+    {
+      this->param.weak_damping_active      = true;
+      this->param.weak_damping_coefficient = weak_damping_coefficient;
+    }
 
-    this->param.start_time                           = start_time;
-    this->param.end_time                             = end_time;
-    this->param.time_step_size                       = end_time / 200.;
-    this->param.gen_alpha_type                       = GenAlphaType::BossakAlpha;
-    this->param.spectral_radius                      = 0.8;
-    this->param.solver_info_data.interval_time_steps = 2;
+    this->param.start_time      = start_time;
+    this->param.end_time        = end_time;
+    this->param.time_step_size  = end_time / 2.;
+    this->param.gen_alpha_type  = GenAlphaType::BossakAlpha;
+    this->param.spectral_radius = 0.8;
+    this->param.solver_info_data.interval_time_steps =
+      problem_type == ProblemType::Unsteady ? 20 : 2;
 
-    this->param.grid.mapping_degree = 1;
-    this->param.grid.element_type   = ElementType::Hypercube; // Simplex;
+    this->param.mapping_degree              = 1;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+
+    this->param.grid.element_type = ElementType::Hypercube; // Simplex;
     if(this->param.grid.element_type == ElementType::Simplex)
     {
-      this->param.grid.triangulation_type = TriangulationType::FullyDistributed;
-      this->param.grid.multigrid          = MultigridVariant::GlobalCoarsening;
+      this->param.grid.triangulation_type           = TriangulationType::FullyDistributed;
+      this->param.grid.create_coarse_triangulations = true;
     }
     else if(this->param.grid.element_type == ElementType::Hypercube)
     {
-      this->param.grid.triangulation_type = TriangulationType::Distributed;
-      this->param.grid.multigrid          = MultigridVariant::LocalSmoothing;
+      this->param.grid.triangulation_type           = TriangulationType::Distributed;
+      this->param.grid.create_coarse_triangulations = false; // can also be set to true if desired
     }
 
-    this->param.load_increment = 0.1;
+    this->param.load_increment = 0.5;
 
-    this->param.newton_solver_data                   = Newton::SolverData(1e2, 1.e-9, 1.e-9);
-    this->param.solver                               = Solver::FGMRES;
-    this->param.solver_data                          = SolverData(1e3, 1.e-12, 1.e-8, 100);
-    this->param.preconditioner                       = Preconditioner::Multigrid;
-    this->param.multigrid_data.type                  = MultigridType::phMG;
+    this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-9);
+    this->param.solver              = Solver::FGMRES;
+    this->param.solver_data         = SolverData(1e3, 1.e-12, 1.e-8, 100);
+    this->param.preconditioner      = preconditioner;
+    this->param.multigrid_data.type = MultigridType::phMG;
+
+    this->param.multigrid_data.smoother_data.smoother       = MultigridSmoother::Chebyshev;
+    this->param.multigrid_data.smoother_data.preconditioner = PreconditionerSmoother::PointJacobi;
+
     this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::CG;
     this->param.multigrid_data.coarse_problem.preconditioner =
       MultigridCoarseGridPreconditioner::AMG;
@@ -256,12 +332,18 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
     auto const lambda_create_triangulation =
-      [&](dealii::Triangulation<dim, dim> & tria,
-          unsigned int const                global_refinements,
-          std::vector<unsigned int> const & vector_local_refinements) {
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+
         // left-bottom-front and right-top-back point
         dealii::Point<dim> p1, p2;
 
@@ -350,10 +432,20 @@ private:
           tria.refine_global(global_refinements);
       };
 
-    GridUtilities::create_fine_and_coarse_triangulations<dim>(*this->grid,
-                                                              this->param.grid,
-                                                              this->param.involves_h_multigrid(),
-                                                              lambda_create_triangulation);
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -375,6 +467,9 @@ private:
     }
     this->boundary_descriptor->dirichlet_bc.insert(
       pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
+
     this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(1, mask_left));
 
     // right face: Dirichlet or Neumann BC
@@ -383,7 +478,7 @@ private:
     if(this->param.problem_type == ProblemType::QuasiStatic)
       quasistatic_solver = true;
 
-    if(boundary_type == "Dirichlet")
+    if(boundary_type == BoundaryType::Dirichlet)
     {
       std::vector<bool> mask_right = {true, clamp_at_right_boundary};
       if(dim == 3)
@@ -394,10 +489,17 @@ private:
 
       bool const unsteady = (this->param.problem_type == ProblemType::Unsteady);
       this->boundary_descriptor->dirichlet_bc.insert(
-        pair(2, new DisplacementDBC<dim>(displacement, quasistatic_solver, unsteady, end_time)));
+        pair(2,
+             new DisplacementDBC<dim>(
+               displacement, quasistatic_solver, unsteady, 200.0 /* end_time */)));
+      this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+        pair(2,
+             new AccelerationDBC<dim>(
+               displacement, quasistatic_solver, unsteady, 200.0 /* end_time */)));
+
       this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(2, mask_right));
     }
-    else if(boundary_type == "Neumann")
+    else if(boundary_type == BoundaryType::Neumann)
     {
       this->boundary_descriptor->neumann_bc.insert(
         pair(2, new AreaForce<dim>(area_force, quasistatic_solver)));
@@ -425,6 +527,9 @@ private:
       {
         this->boundary_descriptor->dirichlet_bc.insert(
           pair(3, new dealii::Functions::ZeroFunction<dim>(dim)));
+        this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+          pair(3, new dealii::Functions::ZeroFunction<dim>(dim)));
+
         std::vector<bool> mask_y = {false, true};
         this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(3, mask_y));
       }
@@ -432,11 +537,17 @@ private:
       {
         this->boundary_descriptor->dirichlet_bc.insert(
           pair(3, new dealii::Functions::ZeroFunction<dim>(dim)));
+        this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+          pair(3, new dealii::Functions::ZeroFunction<dim>(dim)));
+
         std::vector<bool> mask_y = {false, true, false};
         this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(3, mask_y));
 
         this->boundary_descriptor->dirichlet_bc.insert(
           pair(4, new dealii::Functions::ZeroFunction<dim>(dim)));
+        this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+          pair(4, new dealii::Functions::ZeroFunction<dim>(dim)));
+
         std::vector<bool> mask_z = {false, false, true};
         this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(4, mask_z));
       }
@@ -486,15 +597,18 @@ private:
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree;
 
+    pp_data.error_data.time_control_data.start_time       = start_time;
+    pp_data.error_data.time_control_data.trigger_interval = (end_time - start_time);
+
     pp_data.error_data.time_control_data.is_active = true;
     pp_data.error_data.calculate_relative_errors   = true;
     double const vol_force                         = use_volume_force ? this->volume_force : 0.0;
-    if(boundary_type == "Dirichlet")
+    if(boundary_type == BoundaryType::Dirichlet)
     {
       pp_data.error_data.analytical_solution.reset(
         new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->E_modul));
     }
-    else if(boundary_type == "Neumann")
+    else if(boundary_type == BoundaryType::Neumann)
     {
       pp_data.error_data.analytical_solution.reset(
         new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->E_modul));
@@ -512,14 +626,25 @@ private:
 
   double length = 1.0, height = 1.0, width = 1.0;
 
-  bool use_volume_force = true;
+  bool use_volume_force  = true;
+  bool large_deformation = true;
 
   bool const clamp_at_right_boundary = false;
   bool const clamp_at_left_boundary  = false;
 
   double volume_force = 1.0;
 
-  std::string boundary_type = "Dirichlet";
+  enum class BoundaryType
+  {
+    Dirichlet,
+    Neumann
+  };
+  BoundaryType boundary_type = BoundaryType::Dirichlet;
+  ProblemType  problem_type  = ProblemType::Unsteady;
+
+  double weak_damping_coefficient = 0.0;
+
+  Preconditioner preconditioner = Preconditioner::Multigrid;
 
   double displacement = 1.0; // "Dirichlet"
   double area_force   = 1.0; // "Neumann"
@@ -530,7 +655,7 @@ private:
   double const E_modul = 200.0;
 
   double const start_time = 0.0;
-  double const end_time   = 100.0;
+  double const end_time   = 1.0;
 
   double const density = 0.001;
 };

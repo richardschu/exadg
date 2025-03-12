@@ -52,7 +52,7 @@ inline DEAL_II_ALWAYS_INLINE //
                            FaceIntegrator<dim, n_components, Number> const & integrator,
                            OperatorType const &                              operator_type)
 {
-  if(operator_type == OperatorType::full || operator_type == OperatorType::homogeneous)
+  if(operator_type == OperatorType::full or operator_type == OperatorType::homogeneous)
   {
     return integrator.get_value(q);
   }
@@ -83,9 +83,9 @@ inline DEAL_II_ALWAYS_INLINE //
 {
   dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>> value_p;
 
-  if(boundary_type == BoundaryType::Dirichlet || boundary_type == BoundaryType::DirichletCached)
+  if(boundary_type == BoundaryType::Dirichlet or boundary_type == BoundaryType::DirichletCached)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>> g;
 
@@ -94,12 +94,12 @@ inline DEAL_II_ALWAYS_INLINE //
         auto bc       = boundary_descriptor->dirichlet_bc.find(boundary_id)->second;
         auto q_points = integrator.quadrature_point(q);
 
-        g = FunctionEvaluator<rank, dim, Number>::value(bc, q_points, time);
+        g = FunctionEvaluator<rank, dim, Number>::value(*bc, q_points, time);
       }
       else if(boundary_type == BoundaryType::DirichletCached)
       {
-        auto bc = boundary_descriptor->dirichlet_cached_bc.find(boundary_id)->second;
-        g       = FunctionEvaluator<rank, dim, Number>::value(bc,
+        auto bc = boundary_descriptor->get_dirichlet_cached_data();
+        g       = FunctionEvaluator<rank, dim, Number>::value(*bc,
                                                         integrator.get_current_cell_index(),
                                                         q,
                                                         integrator.get_quadrature_index());
@@ -168,7 +168,7 @@ inline DEAL_II_ALWAYS_INLINE //
 {
   dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>> normal_gradient_m;
 
-  if(operator_type == OperatorType::full || operator_type == OperatorType::homogeneous)
+  if(operator_type == OperatorType::full or operator_type == OperatorType::homogeneous)
   {
     normal_gradient_m = integrator.get_normal_derivative(q);
   }
@@ -199,18 +199,18 @@ inline DEAL_II_ALWAYS_INLINE //
 {
   dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>> normal_gradient_p;
 
-  if(boundary_type == BoundaryType::Dirichlet || boundary_type == BoundaryType::DirichletCached)
+  if(boundary_type == BoundaryType::Dirichlet or boundary_type == BoundaryType::DirichletCached)
   {
     normal_gradient_p = normal_gradient_m;
   }
   else if(boundary_type == BoundaryType::Neumann)
   {
-    if(operator_type == OperatorType::full || operator_type == OperatorType::inhomogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::inhomogeneous)
     {
       auto bc       = boundary_descriptor->neumann_bc.find(boundary_id)->second;
       auto q_points = integrator.quadrature_point(q);
 
-      auto h = FunctionEvaluator<rank, dim, Number>::value(bc, q_points, time);
+      auto h = FunctionEvaluator<rank, dim, Number>::value(*bc, q_points, time);
 
       normal_gradient_p =
         -normal_gradient_m + dealii::Tensor<rank, dim, dealii::VectorizedArray<Number>>(2.0 * h);
@@ -253,13 +253,13 @@ inline DEAL_II_ALWAYS_INLINE //
     auto bc       = boundary_descriptor->neumann_bc.find(boundary_id)->second;
     auto q_points = integrator.quadrature_point(q);
 
-    normal_gradient = FunctionEvaluator<rank, dim, Number>::value(bc, q_points, time);
+    normal_gradient = FunctionEvaluator<rank, dim, Number>::value(*bc, q_points, time);
   }
   else
   {
     // do nothing
 
-    Assert(boundary_type == BoundaryType::Dirichlet ||
+    Assert(boundary_type == BoundaryType::Dirichlet or
              boundary_type == BoundaryType::DirichletCached,
            dealii::ExcMessage("Boundary type of face is invalid or not implemented."));
   }

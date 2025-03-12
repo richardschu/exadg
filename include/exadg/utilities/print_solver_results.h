@@ -132,6 +132,27 @@ print_throughput_unsteady(dealii::ConditionalOStream const &    pcout,
   // clang-format on
 }
 
+inline void
+print_throughput_unsteady(dealii::ConditionalOStream const & pcout,
+                          double const                       avg_n_dofs,
+                          double const                       overall_time_avg,
+                          unsigned int const                 N_time_steps,
+                          unsigned int const                 N_mpi_processes)
+{
+  double const time_per_timestep = overall_time_avg / (double)N_time_steps;
+
+  // clang-format off
+  pcout << std::endl
+        << "Throughput per time step:" << std::endl
+        << "  Number of MPI processes    = " << N_mpi_processes << std::endl
+        << "  Average Degrees of freedom = " << std::scientific << std::setprecision(2)<< avg_n_dofs << std::endl
+        << "  Wall time                  = " << std::scientific << std::setprecision(2) << overall_time_avg << " s" << std::endl
+        << "  Time steps                 = " << std::left << N_time_steps << std::endl
+        << "  Wall time per time step    = " << std::scientific << std::setprecision(2) << time_per_timestep << " s" << std::endl
+        << "  Throughput                 = " << std::scientific << std::setprecision(2) << avg_n_dofs / (time_per_timestep * N_mpi_processes) << " DoFs/s/core" << std::endl
+        << std::flush;
+  // clang-format on
+}
 
 inline void
 print_costs(dealii::ConditionalOStream const & pcout,
@@ -212,6 +233,78 @@ print_list_of_iterations(dealii::ConditionalOStream const & pcout,
           << std::setprecision(2) << std::right << std::setw(6) << iterations_avg[i] << std::endl;
   }
 }
+
+struct SolverResult
+{
+  SolverResult() : degree(1), dofs(1), n_10(0), tau_10(0.0)
+  {
+  }
+
+  SolverResult(unsigned int const                    degree_,
+               dealii::types::global_dof_index const dofs_,
+               double const                          n_10_,
+               double const                          tau_10_)
+    : degree(degree_), dofs(dofs_), n_10(n_10_), tau_10(tau_10_)
+  {
+  }
+
+  static void
+  print_header(dealii::ConditionalOStream const & pcout)
+  {
+    // names
+    pcout << std::setw(7) << "degree";
+    pcout << std::setw(15) << "dofs";
+    pcout << std::setw(8) << "n_10";
+    pcout << std::setw(15) << "tau_10";
+    pcout << std::setw(15) << "throughput";
+    pcout << std::endl;
+
+    // units
+    pcout << std::setw(7) << " ";
+    pcout << std::setw(15) << " ";
+    pcout << std::setw(8) << " ";
+    pcout << std::setw(15) << "in s*core/DoF";
+    pcout << std::setw(15) << "in DoF/s/core";
+    pcout << std::endl;
+
+    pcout << std::endl;
+  }
+
+  void
+  print(dealii::ConditionalOStream const & pcout) const
+  {
+    pcout << std::setw(7) << std::fixed << degree;
+    pcout << std::setw(15) << std::fixed << dofs;
+    pcout << std::setw(8) << std::fixed << std::setprecision(1) << n_10;
+    pcout << std::setw(15) << std::scientific << std::setprecision(2) << tau_10;
+    pcout << std::setw(15) << std::scientific << std::setprecision(2) << 1.0 / tau_10;
+    pcout << std::endl;
+  }
+
+  unsigned int                    degree;
+  dealii::types::global_dof_index dofs;
+  double                          n_10;
+  double                          tau_10;
+};
+
+inline void
+print_results(std::vector<SolverResult> const & results, MPI_Comm const & mpi_comm)
+{
+  // summarize results for all polynomial degrees and problem sizes
+  dealii::ConditionalOStream pcout(std::cout,
+                                   dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
+
+  pcout << std::endl << print_horizontal_line() << std::endl << std::endl;
+
+  pcout << "Summary of results:" << std::endl << std::endl;
+
+  SolverResult::print_header(pcout);
+  for(std::vector<SolverResult>::const_iterator it = results.begin(); it != results.end(); ++it)
+    it->print(pcout);
+
+  pcout << print_horizontal_line() << std::endl << std::endl;
+}
+
 } // namespace ExaDG
 
 #endif /* INCLUDE_EXADG_UTILITIES_PRINT_SOLVER_RESULTS_H_ */

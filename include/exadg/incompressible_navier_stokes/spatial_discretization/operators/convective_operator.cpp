@@ -1,8 +1,22 @@
-/*
- * convective_operator.cpp
+/*  ______________________________________________________________________
  *
- *  Created on: Nov 5, 2018
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/convective_operator.h>
@@ -90,28 +104,6 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator_add(VectorType &   
 
 template<int dim, typename Number>
 void
-ConvectiveOperator<dim, Number>::rhs(VectorType & dst) const
-{
-  (void)dst;
-
-  AssertThrow(false,
-              dealii::ExcMessage(
-                "The function rhs() does not make sense for the convective operator."));
-}
-
-template<int dim, typename Number>
-void
-ConvectiveOperator<dim, Number>::rhs_add(VectorType & dst) const
-{
-  (void)dst;
-
-  AssertThrow(false,
-              dealii::ExcMessage(
-                "The function rhs_add() does not make sense for the convective operator."));
-}
-
-template<int dim, typename Number>
-void
 ConvectiveOperator<dim, Number>::evaluate(VectorType & dst, VectorType const & src) const
 {
   (void)dst;
@@ -153,7 +145,7 @@ ConvectiveOperator<dim, Number>::cell_loop_nonlinear_operator(
   {
     integrator.reinit(cell);
 
-    // Strictly speaking, the variable integrator_flags refers to the linearized operator, but
+    // Strictly speaking, the variable integrator_flags refers to the linear operator, but
     // integrator_flags is also valid for the nonlinear operator.
     integrator.gather_evaluate(src, this->integrator_flags.cell_evaluate);
 
@@ -197,7 +189,7 @@ ConvectiveOperator<dim, Number>::face_loop_nonlinear_operator(
     integrator_m.reinit(face);
     integrator_p.reinit(face);
 
-    // Strictly speaking, the variable integrator_flags refers to the linearized operator, but
+    // Strictly speaking, the variable integrator_flags refers to the linear operator, but
     // integrator_flags is also valid for the nonlinear operator.
     integrator_m.gather_evaluate(src, this->integrator_flags.face_evaluate);
 
@@ -240,7 +232,7 @@ ConvectiveOperator<dim, Number>::boundary_face_loop_nonlinear_operator(
   {
     integrator_m.reinit(face);
 
-    // Strictly speaking, the variable integrator_flags refers to the linearized operator, but
+    // Strictly speaking, the variable integrator_flags refers to the linear operator, but
     // integrator_flags is also valid for the nonlinear operator.
     integrator_m.gather_evaluate(src, this->integrator_flags.face_evaluate);
 
@@ -334,14 +326,15 @@ ConvectiveOperator<dim, Number>::do_boundary_integral_nonlinear_operator(
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
   {
     vector u_m = integrator.get_value(q);
-    vector u_p = calculate_exterior_value_nonlinear(u_m,
-                                                    q,
-                                                    integrator,
-                                                    boundary_type,
-                                                    operator_data.kernel_data.type_dirichlet_bc,
-                                                    boundary_id,
-                                                    operator_data.bc,
-                                                    this->time);
+    vector u_p = calculate_exterior_value_convective(u_m,
+                                                     q,
+                                                     integrator,
+                                                     OperatorType::full,
+                                                     boundary_type,
+                                                     operator_data.kernel_data.type_dirichlet_bc,
+                                                     boundary_id,
+                                                     operator_data.bc,
+                                                     this->time);
 
     vector normal_m = integrator.get_normal_vector(q);
 
@@ -358,39 +351,47 @@ ConvectiveOperator<dim, Number>::do_boundary_integral_nonlinear_operator(
 
 template<int dim, typename Number>
 void
-ConvectiveOperator<dim, Number>::reinit_cell(unsigned int const cell) const
+ConvectiveOperator<dim, Number>::reinit_cell_derived(IntegratorCell &   integrator,
+                                                     unsigned int const cell) const
 {
-  Base::reinit_cell(cell);
+  (void)integrator;
 
   kernel->reinit_cell(cell);
 }
 
 template<int dim, typename Number>
 void
-ConvectiveOperator<dim, Number>::reinit_face(unsigned int const face) const
+ConvectiveOperator<dim, Number>::reinit_face_derived(IntegratorFace &   integrator_m,
+                                                     IntegratorFace &   integrator_p,
+                                                     unsigned int const face) const
 {
-  Base::reinit_face(face);
+  (void)integrator_m;
+  (void)integrator_p;
 
   kernel->reinit_face(face);
 }
 
 template<int dim, typename Number>
 void
-ConvectiveOperator<dim, Number>::reinit_boundary_face(unsigned int const face) const
+ConvectiveOperator<dim, Number>::reinit_boundary_face_derived(IntegratorFace &   integrator_m,
+                                                              unsigned int const face) const
 {
-  Base::reinit_boundary_face(face);
+  (void)integrator_m;
 
   kernel->reinit_boundary_face(face);
 }
 
 template<int dim, typename Number>
 void
-ConvectiveOperator<dim, Number>::reinit_face_cell_based(
+ConvectiveOperator<dim, Number>::reinit_face_cell_based_derived(
+  IntegratorFace &                 integrator_m,
+  IntegratorFace &                 integrator_p,
   unsigned int const               cell,
   unsigned int const               face,
   dealii::types::boundary_id const boundary_id) const
 {
-  Base::reinit_face_cell_based(cell, face, boundary_id);
+  (void)integrator_m;
+  (void)integrator_p;
 
   kernel->reinit_face_cell_based(cell, face, boundary_id);
 }
@@ -405,7 +406,7 @@ ConvectiveOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) c
 
     if(operator_data.kernel_data.formulation == FormulationConvectiveTerm::DivergenceFormulation)
     {
-      tensor flux = kernel->get_volume_flux_linearized_divergence_formulation(delta_u, q);
+      tensor flux = kernel->get_volume_flux_divergence_formulation(delta_u, q);
 
       integrator.submit_gradient(flux, q);
     }
@@ -414,8 +415,7 @@ ConvectiveOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) c
     {
       tensor grad_delta_u = integrator.get_gradient(q);
 
-      vector flux =
-        kernel->get_volume_flux_linearized_convective_formulation(delta_u, grad_delta_u, q);
+      vector flux = kernel->get_volume_flux_convective_formulation(delta_u, grad_delta_u, q);
 
       integrator.submit_value(flux, q);
     }
@@ -441,7 +441,7 @@ ConvectiveOperator<dim, Number>::do_face_integral(IntegratorFace & integrator_m,
 
     vector normal_m = integrator_m.get_normal_vector(q);
 
-    std::tuple<vector, vector> flux = kernel->calculate_flux_linearized_interior_and_neighbor(
+    std::tuple<vector, vector> flux = kernel->calculate_flux_linear_operator_interior_and_neighbor(
       u_m, u_p, delta_u_m, delta_u_p, normal_m, q);
 
     integrator_m.submit_value(std::get<0>(flux) /* flux_m */, q);
@@ -467,7 +467,7 @@ ConvectiveOperator<dim, Number>::do_face_int_integral(IntegratorFace & integrato
     vector normal_m = integrator_m.get_normal_vector(q);
 
     vector flux =
-      kernel->calculate_flux_linearized_interior(u_m, u_p, delta_u_m, delta_u_p, normal_m, q);
+      kernel->calculate_flux_linear_operator_interior(u_m, u_p, delta_u_m, delta_u_p, normal_m, q);
 
     integrator_m.submit_value(flux, q);
   }
@@ -487,7 +487,8 @@ ConvectiveOperator<dim, Number>::do_face_int_integral_cell_based(
     // TODO
     // Accessing exterior data is currently not available in deal.II/matrixfree.
     // Hence, we simply use the interior value, but note that the diagonal and block-diagonal
-    // are not calculated exactly.
+    // are not calculated exactly. Note that the present implementation also does not take
+    // into account boundary conditions on boundary faces.
     vector u_p = u_m;
 
     vector delta_u_m = integrator_m.get_value(q);
@@ -496,7 +497,7 @@ ConvectiveOperator<dim, Number>::do_face_int_integral_cell_based(
     vector normal_m = integrator_m.get_normal_vector(q);
 
     vector flux =
-      kernel->calculate_flux_linearized_interior(u_m, u_p, delta_u_m, delta_u_p, normal_m, q);
+      kernel->calculate_flux_linear_operator_interior(u_m, u_p, delta_u_m, delta_u_p, normal_m, q);
 
     integrator_m.submit_value(flux, q);
   }
@@ -520,7 +521,7 @@ ConvectiveOperator<dim, Number>::do_face_ext_integral(IntegratorFace & integrato
     vector normal_p = -integrator_p.get_normal_vector(q);
 
     vector flux =
-      kernel->calculate_flux_linearized_interior(u_p, u_m, delta_u_p, delta_u_m, normal_p, q);
+      kernel->calculate_flux_linear_operator_interior(u_p, u_m, delta_u_p, delta_u_m, normal_p, q);
 
     integrator_p.submit_value(flux, q);
   }
@@ -533,33 +534,57 @@ ConvectiveOperator<dim, Number>::do_boundary_integral(
   OperatorType const &               operator_type,
   dealii::types::boundary_id const & boundary_id) const
 {
-  // make sure that this function is only accessed for OperatorType::homogeneous
-  AssertThrow(
-    operator_type == OperatorType::homogeneous,
-    dealii::ExcMessage(
-      "For the linearized convective operator, only OperatorType::homogeneous makes sense."));
-
   BoundaryTypeU boundary_type = operator_data.bc->get_boundary_type(boundary_id);
 
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
   {
-    vector u_m = kernel->get_velocity_m(q);
-    vector u_p = calculate_exterior_value_nonlinear(u_m,
-                                                    q,
-                                                    integrator,
-                                                    boundary_type,
-                                                    operator_data.kernel_data.type_dirichlet_bc,
-                                                    boundary_id,
-                                                    operator_data.bc,
-                                                    this->time);
+    // use function calculate_interior_value() instead of integrator.get_value() since OperatorType
+    // might be homogeneous or inhomogeneous
+    vector delta_u_m = calculate_interior_value(q, integrator, operator_type);
 
-    vector delta_u_m = integrator.get_value(q);
     vector delta_u_p =
-      kernel->calculate_exterior_value_linearized(delta_u_m, q, integrator, boundary_type);
+      calculate_exterior_value_convective(delta_u_m,
+                                          q,
+                                          integrator,
+                                          operator_type,
+                                          boundary_type,
+                                          operator_data.kernel_data.type_dirichlet_bc,
+                                          boundary_id,
+                                          operator_data.bc,
+                                          this->time);
+
+    vector u_m = kernel->get_velocity_m(q);
+    vector u_p;
+
+    if(operator_data.kernel_data.temporal_treatment == TreatmentOfConvectiveTerm::Implicit)
+    {
+      u_p = calculate_exterior_value_convective(u_m,
+                                                q,
+                                                integrator,
+                                                OperatorType::full,
+                                                boundary_type,
+                                                operator_data.kernel_data.type_dirichlet_bc,
+                                                boundary_id,
+                                                operator_data.bc,
+                                                this->time);
+    }
+    else if(operator_data.kernel_data.temporal_treatment ==
+            TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      // for a linearly implicit treatment of the convective term, we do not impose boundary
+      // conditions for the transport velocity u. Boundary conditions are only imposed for the
+      // solution variable denoted here as "value_m" and "value_p".
+      u_p = u_m;
+    }
+    else
+    {
+      AssertThrow(false, dealii::ExcMessage("not implemented"));
+    }
+
 
     vector normal_m = integrator.get_normal_vector(q);
 
-    vector flux = kernel->calculate_flux_linearized_boundary(
+    vector flux = kernel->calculate_flux_linear_operator_boundary(
       u_m, u_p, delta_u_m, delta_u_p, normal_m, boundary_type, q);
 
     integrator.submit_value(flux, q);

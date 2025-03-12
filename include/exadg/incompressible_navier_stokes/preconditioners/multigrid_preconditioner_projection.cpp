@@ -19,8 +19,10 @@
  *  ______________________________________________________________________
  */
 
+#include <exadg/grid/grid_data.h>
 #include <exadg/incompressible_navier_stokes/preconditioners/multigrid_preconditioner_projection.h>
 #include <exadg/operators/mass_kernel.h>
+#include <exadg/operators/quadrature.h>
 
 namespace ExaDG
 {
@@ -36,16 +38,14 @@ MultigridPreconditionerProjection<dim, Number>::MultigridPreconditionerProjectio
 template<int dim, typename Number>
 void
 MultigridPreconditionerProjection<dim, Number>::initialize(
-  MultigridData const &                                                  mg_data,
-  MultigridVariant const &                                               multigrid_variant,
-  dealii::Triangulation<dim> const *                                     tria,
-  std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-  dealii::FiniteElement<dim> const &                                     fe,
-  std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-  PDEOperator const &                                                    pde_operator,
-  bool const                                                             mesh_is_moving,
-  Map const &                                                            dirichlet_bc,
-  PeriodicFacePairs const &                                              periodic_face_pairs)
+  MultigridData const &                                 mg_data,
+  std::shared_ptr<Grid<dim> const>                      grid,
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+  dealii::FiniteElement<dim> const &                    fe,
+  PDEOperator const &                                   pde_operator,
+  bool const                                            mesh_is_moving,
+  Map_DBC const &                                       dirichlet_bc,
+  Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask)
 {
   this->pde_operator = &pde_operator;
 
@@ -54,14 +54,13 @@ MultigridPreconditionerProjection<dim, Number>::initialize(
   this->mesh_is_moving = mesh_is_moving;
 
   Base::initialize(mg_data,
-                   multigrid_variant,
-                   tria,
-                   coarse_triangulations,
+                   grid,
+                   multigrid_mappings,
                    fe,
-                   mapping,
                    false /*operator_is_singular*/,
                    dirichlet_bc,
-                   periodic_face_pairs);
+                   dirichlet_bc_component_mask,
+                   false /* initialize_preconditioners */);
 }
 
 template<int dim, typename Number>
@@ -72,15 +71,56 @@ MultigridPreconditionerProjection<dim, Number>::update()
   {
     this->initialize_mapping();
 
-    this->update_matrix_free();
+    this->update_matrix_free_objects();
   }
 
-  update_operators();
+  // update operators for all levels
+  double const time_step_size = pde_operator->get_time_step_size();
 
+  VectorType const & velocity = pde_operator->get_velocity();
+
+  // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
+  VectorTypeMG         velocity_multigrid_type_copy;
+  VectorTypeMG const * velocity_multigrid_type_ptr;
+  if(std::is_same<MultigridNumber, Number>::value)
+  {
+    velocity_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&velocity);
+  }
+  else
+  {
+    velocity_multigrid_type_copy = velocity;
+    velocity_multigrid_type_ptr  = &velocity_multigrid_type_copy;
+  }
+
+  // update operator on fine level
+  this->get_operator(this->get_number_of_levels() - 1)
+    ->update(*velocity_multigrid_type_ptr, time_step_size);
+
+  // we store only two vectors since the velocity is no longer needed after having updated the
+  // operators
+  VectorTypeMG velocity_fine_level = *velocity_multigrid_type_ptr;
+  VectorTypeMG velocity_coarse_level;
+
+  this->transfer_from_fine_to_coarse_levels(
+    [&](unsigned int const fine_level, unsigned int const coarse_level) {
+      // interpolate velocity from fine to coarse level
+      this->get_operator(coarse_level)->initialize_dof_vector(velocity_coarse_level);
+      this->transfers->interpolate(fine_level, velocity_coarse_level, velocity_fine_level);
+
+      // update operator
+      this->get_operator(coarse_level)->update(velocity_coarse_level, time_step_size);
+
+      // current coarse level becomes the fine level in the next iteration
+      this->get_operator(coarse_level)->initialize_dof_vector(velocity_fine_level);
+      velocity_fine_level.copy_locally_owned_data_from(velocity_coarse_level);
+    });
+
+  // Once the operators are updated, the update of smoothers and the coarse grid solver is generic
+  // functionality implemented in the base class.
   this->update_smoothers();
+  this->update_coarse_solver();
 
-  // singular operators do not occur for this operator
-  this->update_coarse_solver(false /* operator_is_singular */);
+  this->update_needed = false;
 }
 
 template<int dim, typename Number>
@@ -88,30 +128,32 @@ void
 MultigridPreconditionerProjection<dim, Number>::fill_matrix_free_data(
   MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
   unsigned int const                     level,
-  unsigned int const                     h_level)
+  unsigned int const                     dealii_tria_level)
 {
-  matrix_free_data.data.mg_level = h_level;
+  matrix_free_data.data.mg_level = dealii_tria_level;
 
   MappingFlags flags;
   matrix_free_data.append_mapping_flags(MassKernel<dim, Number>::get_mapping_flags());
   if(data.use_divergence_penalty)
     matrix_free_data.append_mapping_flags(
       Operators::DivergencePenaltyKernel<dim, Number>::get_mapping_flags());
-  if(data.use_continuity_penalty && this->level_info[level].is_dg())
+  if(data.use_continuity_penalty and this->level_info[level].is_dg())
     matrix_free_data.append_mapping_flags(
       Operators::ContinuityPenaltyKernel<dim, Number>::get_mapping_flags());
 
-  if(data.use_cell_based_loops && this->level_info[level].is_dg())
+  if(data.use_cell_based_loops and this->level_info[level].is_dg())
   {
-    auto tria = dynamic_cast<dealii::parallel::distributed::Triangulation<dim> const *>(
-      &this->dof_handlers[level]->get_triangulation());
-    Categorization::do_cell_based_loops(*tria, matrix_free_data.data, h_level);
+    auto tria = &this->dof_handlers[level]->get_triangulation();
+    Categorization::do_cell_based_loops(*tria, matrix_free_data.data, dealii_tria_level);
   }
 
   matrix_free_data.insert_dof_handler(&(*this->dof_handlers[level]), "std_dof_handler");
   matrix_free_data.insert_constraint(&(*this->constraints[level]), "std_dof_handler");
-  matrix_free_data.insert_quadrature(dealii::QGauss<1>(this->level_info[level].degree() + 1),
-                                     "std_quadrature");
+
+  ElementType const element_type = get_element_type(*this->grid->triangulation);
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(element_type, this->level_info[level].degree() + 1);
+  matrix_free_data.insert_quadrature(*quadrature, "std_quadrature");
 }
 
 template<int dim, typename Number>
@@ -145,50 +187,6 @@ MultigridPreconditionerProjection<dim, Number>::initialize_operator(unsigned int
   std::shared_ptr<MGOperator> mg_operator(new MGOperator(pde_operator_level));
 
   return mg_operator;
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditionerProjection<dim, Number>::update_operators()
-{
-  double const time_step_size = pde_operator->get_time_step_size();
-
-  VectorType const & velocity = pde_operator->get_velocity();
-
-  // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
-  VectorTypeMG         velocity_multigrid_type_copy;
-  VectorTypeMG const * velocity_multigrid_type_ptr;
-  if(std::is_same<MultigridNumber, Number>::value)
-  {
-    velocity_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&velocity);
-  }
-  else
-  {
-    velocity_multigrid_type_copy = velocity;
-    velocity_multigrid_type_ptr  = &velocity_multigrid_type_copy;
-  }
-
-  // update operator
-  this->get_operator(this->fine_level)->update(*velocity_multigrid_type_ptr, time_step_size);
-
-  // we store only two vectors since the velocity is no longer needed after having updated the
-  // operators
-  VectorTypeMG velocity_fine_level = *velocity_multigrid_type_ptr;
-  VectorTypeMG velocity_coarse_level;
-
-  for(unsigned int level = this->fine_level; level > this->coarse_level; --level)
-  {
-    // interpolate velocity from fine to coarse level
-    this->get_operator(level - 1)->initialize_dof_vector(velocity_coarse_level);
-    this->transfers->interpolate(level, velocity_coarse_level, velocity_fine_level);
-
-    // update operator
-    this->get_operator(level - 1)->update(velocity_coarse_level, time_step_size);
-
-    // current coarse level becomes the fine level in the next iteration
-    this->get_operator(level - 1)->initialize_dof_vector(velocity_fine_level);
-    velocity_fine_level.copy_locally_owned_data_from(velocity_coarse_level);
-  }
 }
 
 template<int dim, typename Number>

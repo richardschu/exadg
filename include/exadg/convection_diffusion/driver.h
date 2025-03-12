@@ -43,8 +43,9 @@
 #include <exadg/convection_diffusion/user_interface/field_functions.h>
 #include <exadg/convection_diffusion/user_interface/parameters.h>
 #include <exadg/functions_and_boundary_conditions/verify_boundary_conditions.h>
-#include <exadg/grid/grid_motion_function.h>
+#include <exadg/grid/mapping_deformation_function.h>
 #include <exadg/matrix_free/matrix_free_data.h>
+#include <exadg/operators/adaptive_mesh_refinement.h>
 #include <exadg/utilities/print_functions.h>
 #include <exadg/utilities/print_general_infos.h>
 
@@ -60,53 +61,12 @@ enum class OperatorType
   MassConvectionDiffusionOperator
 };
 
-inline std::string
-enum_to_string(OperatorType const enum_type)
-{
-  std::string string_type;
-
-  switch(enum_type)
-  {
-    // clang-format off
-    case OperatorType::MassOperator:                    string_type = "MassOperator";                    break;
-    case OperatorType::ConvectiveOperator:              string_type = "ConvectiveOperator";              break;
-    case OperatorType::DiffusiveOperator:               string_type = "DiffusiveOperator";               break;
-    case OperatorType::MassConvectionDiffusionOperator: string_type = "MassConvectionDiffusionOperator"; break;
-    default: AssertThrow(false, dealii::ExcMessage("Not implemented.")); break;
-      // clang-format on
-  }
-
-  return string_type;
-}
-
-inline void
-string_to_enum(OperatorType & enum_type, std::string const string_type)
-{
-  // clang-format off
-  if     (string_type == "MassOperator")                    enum_type = OperatorType::MassOperator;
-  else if(string_type == "ConvectiveOperator")              enum_type = OperatorType::ConvectiveOperator;
-  else if(string_type == "DiffusiveOperator")               enum_type = OperatorType::DiffusiveOperator;
-  else if(string_type == "MassConvectionDiffusionOperator") enum_type = OperatorType::MassConvectionDiffusionOperator;
-  else AssertThrow(false, dealii::ExcMessage("Unknown operator type. Not implemented."));
-  // clang-format on
-}
-
-inline unsigned int
-get_dofs_per_element(std::string const & input_file,
-                     unsigned int const  dim,
-                     unsigned int const  degree)
-{
-  (void)input_file;
-
-  unsigned int const dofs_per_element = dealii::Utilities::pow(degree + 1, dim);
-
-  return dofs_per_element;
-}
-
 template<int dim, typename Number = double>
 class Driver
 {
 public:
+  using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
+
   Driver(MPI_Comm const &                              mpi_comm,
          std::shared_ptr<ApplicationBase<dim, Number>> application,
          bool const                                    is_test,
@@ -125,13 +85,23 @@ public:
    * Throughput study
    */
   std::tuple<unsigned int, dealii::types::global_dof_index, double>
-  apply_operator(std::string const & operator_type,
-                 unsigned int const  n_repetitions_inner,
-                 unsigned int const  n_repetitions_outer) const;
+  apply_operator(OperatorType const & operator_type,
+                 unsigned int const   n_repetitions_inner,
+                 unsigned int const   n_repetitions_outer) const;
 
 private:
   void
   ale_update() const;
+
+  void
+  mark_cells_coarsening_and_refinement(dealii::Triangulation<dim> & tria,
+                                       VectorType const &           solution) const;
+
+  void
+  setup_after_coarsening_and_refinement();
+
+  void
+  do_adaptive_refinement();
 
   // MPI communicator
   MPI_Comm const mpi_comm;
@@ -148,11 +118,20 @@ private:
   // application
   std::shared_ptr<ApplicationBase<dim, Number>> application;
 
-  // moving mapping (ALE)
-  std::shared_ptr<GridMotionBase<dim, Number>> grid_motion;
+  // Grid and mapping
+  std::shared_ptr<Grid<dim>> grid;
 
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
+  std::shared_ptr<dealii::Mapping<dim>> mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> multigrid_mappings;
+
+  // ALE mapping
+  std::shared_ptr<DeformedMappingFunction<dim, Number>> ale_mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> ale_multigrid_mappings;
+
+  // ALE helper functions required by time integrator
+  std::shared_ptr<HelpersALE<dim, Number>> helpers_ale;
 
   std::shared_ptr<Operator<dim, Number>> pde_operator;
 

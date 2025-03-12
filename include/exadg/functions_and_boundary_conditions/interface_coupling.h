@@ -27,7 +27,7 @@
 
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/container_interface_data.h>
-#include <exadg/utilities/n_components_to_rank.h>
+#include <exadg/utilities/tensor_utilities.h>
 
 namespace ExaDG
 {
@@ -73,7 +73,8 @@ private:
   /*
    *  Evaluates solution on src-side in those points specified by dst-side
    */
-  std::map<quad_index, dealii::Utilities::MPI::RemotePointEvaluation<dim>> map_evaluator;
+  std::map<quad_index, std::unique_ptr<dealii::Utilities::MPI::RemotePointEvaluation<dim>>>
+    map_evaluator;
 
   /*
    * src-side

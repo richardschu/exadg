@@ -1,8 +1,22 @@
-/*
- * projection_operator.h
+/*  ______________________________________________________________________
  *
- *  Created on: Jun 17, 2016
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
 
 #ifndef INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATORS_PROJECTION_OPERATOR_H_
@@ -115,35 +129,39 @@ public:
 
 private:
   void
-  reinit_cell(unsigned int const cell) const;
+  reinit_cell_derived(IntegratorCell & integrator, unsigned int const cell) const final;
 
   void
-  reinit_face(unsigned int const face) const;
+  reinit_face_derived(IntegratorFace &   integrator_m,
+                      IntegratorFace &   integrator_p,
+                      unsigned int const face) const final;
 
   void
-  reinit_boundary_face(unsigned int const face) const;
+  reinit_boundary_face_derived(IntegratorFace & integrator_m, unsigned int const face) const final;
 
   void
-  reinit_face_cell_based(unsigned int const               cell,
-                         unsigned int const               face,
-                         dealii::types::boundary_id const boundary_id) const;
+  reinit_face_cell_based_derived(IntegratorFace &                 integrator_m,
+                                 IntegratorFace &                 integrator_p,
+                                 unsigned int const               cell,
+                                 unsigned int const               face,
+                                 dealii::types::boundary_id const boundary_id) const final;
 
   void
-  do_cell_integral(IntegratorCell & integrator) const;
+  do_cell_integral(IntegratorCell & integrator) const final;
 
   void
-  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
-  do_face_int_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_int_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
-  do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
   do_boundary_integral(IntegratorFace &                   integrator_m,
                        OperatorType const &               operator_type,
-                       dealii::types::boundary_id const & boundary_id) const;
+                       dealii::types::boundary_id const & boundary_id) const final;
 
   ProjectionOperatorData<dim> operator_data;
 

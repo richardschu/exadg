@@ -23,62 +23,11 @@
 #define INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATOR_PRESSURE_CORRECTION_H_
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_projection_methods.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
 
 namespace ExaDG
 {
 namespace IncNS
 {
-// forward declaration
-template<int dim, typename Number>
-class OperatorPressureCorrection;
-
-template<int dim, typename Number>
-class NonlinearMomentumOperator
-{
-private:
-  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
-
-  typedef OperatorPressureCorrection<dim, Number> PDEOperator;
-
-public:
-  NonlinearMomentumOperator()
-    : pde_operator(nullptr), rhs_vector(nullptr), time(0.0), scaling_factor_mass(1.0)
-  {
-  }
-
-  void
-  initialize(PDEOperator const & pde_operator)
-  {
-    this->pde_operator = &pde_operator;
-  }
-
-  void
-  update(VectorType const & rhs_vector, double const & time, double const & scaling_factor)
-  {
-    this->rhs_vector          = &rhs_vector;
-    this->time                = time;
-    this->scaling_factor_mass = scaling_factor;
-  }
-
-  /*
-   * The implementation of the Newton solver requires a function called
-   * 'evaluate_residual'.
-   */
-  void
-  evaluate_residual(VectorType & dst, VectorType const & src)
-  {
-    pde_operator->evaluate_nonlinear_residual(dst, src, rhs_vector, time, scaling_factor_mass);
-  }
-
-private:
-  PDEOperator const * pde_operator;
-
-  VectorType const * rhs_vector;
-  double             time;
-  double             scaling_factor_mass;
-};
-
 template<int dim, typename Number = double>
 class OperatorPressureCorrection : public OperatorProjectionMethods<dim, Number>
 {
@@ -102,13 +51,15 @@ public:
   /*
    * Constructor.
    */
-  OperatorPressureCorrection(std::shared_ptr<Grid<dim> const>                  grid,
-                             std::shared_ptr<GridMotionInterface<dim, Number>> grid_motion,
-                             std::shared_ptr<BoundaryDescriptor<dim> const>    boundary_descriptor,
-                             std::shared_ptr<FieldFunctions<dim> const>        field_functions,
-                             Parameters const &                                parameters,
-                             std::string const &                               field,
-                             MPI_Comm const &                                  mpi_comm);
+  OperatorPressureCorrection(
+    std::shared_ptr<Grid<dim> const>                      grid,
+    std::shared_ptr<dealii::Mapping<dim> const>           mapping,
+    std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+    std::shared_ptr<BoundaryDescriptor<dim> const>        boundary_descriptor,
+    std::shared_ptr<FieldFunctions<dim> const>            field_functions,
+    Parameters const &                                    parameters,
+    std::string const &                                   field,
+    MPI_Comm const &                                      mpi_comm);
 
   /*
    * Destructor.
@@ -116,59 +67,15 @@ public:
   virtual ~OperatorPressureCorrection();
 
   /*
-   * Calls setup() function of base class and additionally initializes the inverse pressure mass
-   * matrix operator needed for the pressure correction scheme, as well as the pressure mass
-   * operator needed in the ALE case only (where the mass operator may be evaluated at different
-   * times depending on the specific ALE formulation chosen).
-   */
-  virtual void
-  setup(std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free,
-        std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data,
-        std::string const &                              dof_index_temperature = "");
-
-  void
-  setup_solvers(double const & scaling_factor_mass, VectorType const & velocity);
-
-  /*
-   * Momentum step:
-   */
-
-  /*
-   * Stokes equations or convective term treated explicitly: solve linear system of equations
-   */
-  unsigned int
-  solve_linear_momentum_equation(VectorType &       solution,
-                                 VectorType const & rhs,
-                                 bool const &       update_preconditioner,
-                                 double const &     scaling_factor_mass);
-
-  /*
-   * Calculation of right-hand side vector:
-   */
-
-  // viscous term
-  void
-  rhs_add_viscous_term(VectorType & dst, double const time) const;
-
-  /*
-   * Convective term treated implicitly: solve non-linear system of equations
-   */
-  std::tuple<unsigned int, unsigned int>
-  solve_nonlinear_momentum_equation(VectorType &       dst,
-                                    VectorType const & rhs_vector,
-                                    double const &     time,
-                                    bool const &       update_preconditioner,
-                                    double const &     scaling_factor_mass);
-
-  /*
-   * This function evaluates the nonlinear residual.
+   * Initializes the inverse pressure mass matrix operator needed for the pressure correction
+   * scheme, as well as the pressure mass operator needed in the ALE case only (where the mass
+   * operator may be evaluated at different times depending on the specific ALE formulation chosen).
    */
   void
-  evaluate_nonlinear_residual(VectorType &       dst,
-                              VectorType const & src,
-                              VectorType const * rhs_vector,
-                              double const &     time,
-                              double const &     scaling_factor_mass) const;
+  setup_derived() final;
+
+  void
+  update_after_grid_motion(bool const update_matrix_free) final;
 
   /*
    * This function evaluates the nonlinear residual of the steady Navier-Stokes equations (momentum
@@ -222,21 +129,9 @@ public:
   rhs_ppe_laplace_add_dirichlet_bc_from_dof_vector(VectorType & dst, VectorType const & src) const;
 
   void
-  interpolate_pressure_dirichlet_bc(VectorType & dst, double const & time);
+  interpolate_pressure_dirichlet_bc(VectorType & dst, double const & time) const;
 
 private:
-  /*
-   * Setup of momentum solver (operator, preconditioner, solver).
-   */
-  void
-  setup_momentum_solver();
-
-  void
-  initialize_momentum_preconditioner();
-
-  void
-  initialize_momentum_solver();
-
   /*
    * Setup of inverse mass operator for pressure.
    */
@@ -267,23 +162,6 @@ private:
     Range const &                           face_range) const;
 
   InverseMassOperator<dim, 1, Number> inverse_mass_pressure;
-
-  /*
-   * Momentum equation.
-   */
-
-  // Nonlinear operator and solver
-  NonlinearMomentumOperator<dim, Number> nonlinear_operator;
-
-  std::shared_ptr<Newton::Solver<VectorType,
-                                 NonlinearMomentumOperator<dim, Number>,
-                                 MomentumOperator<dim, Number>,
-                                 Krylov::SolverBase<VectorType>>>
-    momentum_newton_solver;
-
-  // linear solver (momentum_operator serves as linear operator)
-  std::shared_ptr<PreconditionerBase<Number>>     momentum_preconditioner;
-  std::shared_ptr<Krylov::SolverBase<VectorType>> momentum_linear_solver;
 };
 
 } // namespace IncNS

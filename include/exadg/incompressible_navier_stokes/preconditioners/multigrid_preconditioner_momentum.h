@@ -48,79 +48,40 @@ private:
   typedef MultigridOperatorBase<dim, MultigridNumber>            MGOperatorBase;
   typedef MultigridOperator<dim, MultigridNumber, PDEOperatorMG> MGOperator;
 
-  typedef typename Base::Map               Map;
-  typedef typename Base::PeriodicFacePairs PeriodicFacePairs;
-  typedef typename Base::VectorType        VectorType;
-  typedef typename Base::VectorTypeMG      VectorTypeMG;
+  typedef typename Base::Map_DBC               Map_DBC;
+  typedef typename Base::Map_DBC_ComponentMask Map_DBC_ComponentMask;
+  typedef typename Base::PeriodicFacePairs     PeriodicFacePairs;
+  typedef typename Base::VectorType            VectorType;
+  typedef typename Base::VectorTypeMG          VectorTypeMG;
 
 public:
   MultigridPreconditioner(MPI_Comm const & comm);
 
   void
-  initialize(
-    MultigridData const &                                                  mg_data,
-    MultigridVariant const &                                               multigrid_variant,
-    dealii::Triangulation<dim> const *                                     tria,
-    std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-    dealii::FiniteElement<dim> const &                                     fe,
-    std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-    PDEOperator const &                                                    pde_operator,
-    MultigridOperatorType const &                                          mg_operator_type,
-    bool const                                                             mesh_is_moving,
-    Map const &                                                            dirichlet_bc,
-    PeriodicFacePairs const &                                              periodic_face_pairs);
+  initialize(MultigridData const &                                 mg_data,
+             std::shared_ptr<Grid<dim> const>                      grid,
+             std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+             dealii::FiniteElement<dim> const &                    fe,
+             PDEOperator const &                                   pde_operator,
+             MultigridOperatorType const &                         mg_operator_type,
+             bool const                                            mesh_is_moving,
+             Map_DBC const &                                       dirichlet_bc,
+             Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask);
 
   /*
    * This function updates the multigrid preconditioner.
    */
   void
-  update() override;
+  update() final;
 
 private:
   void
   fill_matrix_free_data(MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
                         unsigned int const                     level,
-                        unsigned int const                     h_level) override;
+                        unsigned int const                     dealii_tria_level) final;
 
   std::shared_ptr<MGOperatorBase>
-  initialize_operator(unsigned int const level) override;
-
-  /*
-   * This function updates the multigrid operators for all levels
-   */
-  void
-  update_operators();
-
-  /*
-   * This function updates vector_linearization.
-   * In order to update operators[level] this function has to be called.
-   */
-  void
-  set_vector_linearization(VectorTypeMG const & vector_linearization);
-
-  /*
-   * This function updates the evaluation time. In order to update the operators this function
-   * has to be called. (This is due to the fact that the linearized convective term does not only
-   * depend on the linearized velocity field but also on Dirichlet boundary data which itself
-   * depends on the current time.)
-   */
-  void
-  set_time(double const & time);
-
-  /*
-   * This function performs the updates that are necessary after the mesh has been moved
-   * and after matrix_free has been updated.
-   */
-  void
-  update_operators_after_mesh_movement();
-
-  /*
-   * This function updates scaling_factor_time_derivative_term. In order to update the
-   * operators this function has to be called. This is necessary if adaptive time stepping
-   * is used where the scaling factor of the mass operator is variable.
-   */
-  void
-  set_scaling_factor_mass_operator(double const & scaling_factor_mass);
+  initialize_operator(unsigned int const level) final;
 
   std::shared_ptr<PDEOperatorMG>
   get_operator(unsigned int level);

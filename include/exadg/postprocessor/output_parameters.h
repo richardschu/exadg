@@ -22,8 +22,9 @@
 #ifndef INCLUDE_EXADG_POSTPROCESSOR_OUTPUT_PARAMETERS_H_
 #define INCLUDE_EXADG_POSTPROCESSOR_OUTPUT_PARAMETERS_H_
 
-// deal.II
 #include <deal.II/base/parameter_handler.h>
+
+#include <exadg/utilities/enum_patterns.h>
 
 namespace ExaDG
 {
@@ -36,13 +37,13 @@ struct OutputParameters
   void
   add_parameters(dealii::ParameterHandler & prm, std::string const & subsection_name = "Output")
   {
-    // clang-format off
     prm.enter_subsection(subsection_name);
-      prm.add_parameter("OutputDirectory",  directory, "Directory where output is written.");
-      prm.add_parameter("OutputName",       filename,  "Name of output files.");
-      prm.add_parameter("WriteOutput",      write,     "Decides whether output is written.");
+    {
+      prm.add_parameter("OutputDirectory", directory, "Directory where output is written.");
+      prm.add_parameter("OutputName", filename, "Name of output files.");
+      prm.add_parameter("WriteOutput", write, "Decides whether output is written.");
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
   std::string directory;

@@ -1,10 +1,23 @@
-/*
- * viscous_operator.cpp
+/*  ______________________________________________________________________
  *
- *  Created on: Nov 5, 2018
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
-
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/viscous_operator.h>
 
@@ -38,35 +51,38 @@ ViscousOperator<dim, Number>::update()
 
 template<int dim, typename Number>
 void
-ViscousOperator<dim, Number>::reinit_face(unsigned int const face) const
+ViscousOperator<dim, Number>::reinit_face_derived(IntegratorFace &   integrator_m,
+                                                  IntegratorFace &   integrator_p,
+                                                  unsigned int const face) const
 {
-  Base::reinit_face(face);
+  (void)face;
 
-  kernel->reinit_face(*this->integrator_m, *this->integrator_p, operator_data.dof_index);
+  kernel->reinit_face(integrator_m, integrator_p, operator_data.dof_index);
 }
 
 template<int dim, typename Number>
 void
-ViscousOperator<dim, Number>::reinit_boundary_face(unsigned int const face) const
+ViscousOperator<dim, Number>::reinit_boundary_face_derived(IntegratorFace &   integrator_m,
+                                                           unsigned int const face) const
 {
-  Base::reinit_boundary_face(face);
+  (void)face;
 
-  kernel->reinit_boundary_face(*this->integrator_m, operator_data.dof_index);
+  kernel->reinit_boundary_face(integrator_m, operator_data.dof_index);
 }
 
 template<int dim, typename Number>
 void
-ViscousOperator<dim, Number>::reinit_face_cell_based(
+ViscousOperator<dim, Number>::reinit_face_cell_based_derived(
+  IntegratorFace &                 integrator_m,
+  IntegratorFace &                 integrator_p,
   unsigned int const               cell,
   unsigned int const               face,
   dealii::types::boundary_id const boundary_id) const
 {
-  Base::reinit_face_cell_based(cell, face, boundary_id);
+  (void)cell;
+  (void)face;
 
-  kernel->reinit_face_cell_based(boundary_id,
-                                 *this->integrator_m,
-                                 *this->integrator_p,
-                                 operator_data.dof_index);
+  kernel->reinit_face_cell_based(boundary_id, integrator_m, integrator_p, operator_data.dof_index);
 }
 
 template<int dim, typename Number>
@@ -150,7 +166,7 @@ ViscousOperator<dim, Number>::do_face_ext_integral(IntegratorFace & integrator_m
   {
     vector value_m; // set exterior values to zero
     vector value_p = integrator_p.get_value(q);
-    // multiply by -1.0 to get the correct normal vector !!!
+    // multiply by -1.0 to get the correct normal vector !
     vector normal_p = -integrator_p.get_normal_vector(q);
 
     scalar average_viscosity =
@@ -160,7 +176,7 @@ ViscousOperator<dim, Number>::do_face_ext_integral(IntegratorFace & integrator_m
 
     // set exterior gradient to zero
     vector normal_gradient_m;
-    // multiply by -1.0 since normal vector n⁺ = -n⁻ !!!
+    // multiply by -1.0 since normal vector n⁺ = -n⁻ !
     vector normal_gradient_p = -kernel->calculate_normal_gradient(q, integrator_p);
 
     vector value_flux = kernel->calculate_value_flux(

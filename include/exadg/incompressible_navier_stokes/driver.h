@@ -23,8 +23,8 @@
 #define INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_DRIVER_H_
 
 #include <exadg/functions_and_boundary_conditions/verify_boundary_conditions.h>
-#include <exadg/grid/grid_motion_function.h>
-#include <exadg/grid/grid_motion_poisson.h>
+#include <exadg/grid/mapping_deformation_function.h>
+#include <exadg/grid/mapping_deformation_poisson.h>
 #include <exadg/incompressible_navier_stokes/postprocessor/postprocessor_base.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
@@ -35,6 +35,7 @@
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
 #include <exadg/incompressible_navier_stokes/user_interface/application_base.h>
 #include <exadg/matrix_free/matrix_free_data.h>
+#include <exadg/operators/finite_element.h>
 #include <exadg/utilities/print_general_infos.h>
 
 namespace ExaDG
@@ -60,99 +61,49 @@ enum class OperatorType{
 };
 // clang-format on
 
-inline std::string
-enum_to_string(OperatorType const enum_type)
+enum class PressureDegree
 {
-  std::string string_type;
-
-  switch(enum_type)
-  {
-    // clang-format off
-    case OperatorType::CoupledNonlinearResidual: string_type = "CoupledNonlinearResidual"; break;
-    case OperatorType::CoupledLinearized:        string_type = "CoupledLinearized";        break;
-    case OperatorType::PressurePoissonOperator:  string_type = "PressurePoissonOperator";  break;
-    case OperatorType::ConvectiveOperator:       string_type = "ConvectiveOperator";       break;
-    case OperatorType::HelmholtzOperator:        string_type = "HelmholtzOperator";        break;
-    case OperatorType::ProjectionOperator:       string_type = "ProjectionOperator";       break;
-    case OperatorType::VelocityConvDiffOperator: string_type = "VelocityConvDiffOperator"; break;
-    case OperatorType::InverseMassOperator:      string_type = "InverseMassOperator";      break;
-
-    default:AssertThrow(false, dealii::ExcMessage("Not implemented.")); break;
-      // clang-format on
-  }
-
-  return string_type;
-}
-
-inline void
-string_to_enum(OperatorType & enum_type, std::string const string_type)
-{
-  // clang-format off
-  if     (string_type == "CoupledNonlinearResidual")  enum_type = OperatorType::CoupledNonlinearResidual;
-  else if(string_type == "CoupledLinearized")         enum_type = OperatorType::CoupledLinearized;
-  else if(string_type == "PressurePoissonOperator")   enum_type = OperatorType::PressurePoissonOperator;
-  else if(string_type == "ConvectiveOperator")        enum_type = OperatorType::ConvectiveOperator;
-  else if(string_type == "HelmholtzOperator")         enum_type = OperatorType::HelmholtzOperator;
-  else if(string_type == "ProjectionOperator")        enum_type = OperatorType::ProjectionOperator;
-  else if(string_type == "VelocityConvDiffOperator")  enum_type = OperatorType::VelocityConvDiffOperator;
-  else if(string_type == "InverseMassOperator")       enum_type = OperatorType::InverseMassOperator;
-  else AssertThrow(false, dealii::ExcMessage("Unknown operator type. Not implemented."));
-  // clang-format on
-}
+  MixedOrder,
+  EqualOrder
+};
 
 inline unsigned int
-get_dofs_per_element(std::string const & input_file,
-                     unsigned int const  dim,
-                     unsigned int const  degree)
+get_dofs_per_element(OperatorType const &     operator_type,
+                     PressureDegree const &   pressure_degree,
+                     unsigned int const       dim,
+                     unsigned int const       degree,
+                     ExaDG::ElementType const element_type)
 {
-  std::string operator_type_string, pressure_degree = "MixedOrder";
-
-  dealii::ParameterHandler prm;
-  // clang-format off
-  prm.enter_subsection("Discretization");
-    prm.add_parameter("PressureDegree",
-                      pressure_degree,
-                      "Degree of pressure shape functions.",
-                      dealii::Patterns::Selection("MixedOrder|EqualOrder"),
-                      true);
-  prm.leave_subsection();
-  prm.enter_subsection("Throughput");
-    prm.add_parameter("OperatorType",
-                      operator_type_string,
-                      "Type of operator.",
-                      dealii::Patterns::Anything(),
-                      true);
-  prm.leave_subsection();
-  // clang-format on
-  prm.parse_input(input_file, "", true, true);
-
-  OperatorType operator_type;
-  string_to_enum(operator_type, operator_type_string);
-
-  unsigned int const velocity_dofs_per_element = dim * dealii::Utilities::pow(degree + 1, dim);
-  unsigned int       pressure_dofs_per_element = 1;
-  if(pressure_degree == "MixedOrder")
-    pressure_dofs_per_element = dealii::Utilities::pow(degree, dim);
-  else if(pressure_degree == "EqualOrder")
-    pressure_dofs_per_element = dealii::Utilities::pow(degree + 1, dim);
+  unsigned int degree_p = 1;
+  if(pressure_degree == PressureDegree::MixedOrder)
+    degree_p = degree - 1;
+  else if(pressure_degree == PressureDegree::EqualOrder)
+    degree_p = degree;
   else
     AssertThrow(false, dealii::ExcMessage("Not implemented."));
 
-  if(operator_type == OperatorType::CoupledNonlinearResidual ||
+  unsigned int const velocity_dofs_per_element = ExaDG::get_dofs_per_element(
+    element_type, true /* is_dg */, dim /* n_components */, degree, dim);
+
+  unsigned int const pressure_dofs_per_element = ExaDG::get_dofs_per_element(
+    element_type, true /* is_dg */, 1 /* n_components */, degree_p, dim);
+
+  // coupled/monolithic problem
+  if(operator_type == OperatorType::CoupledNonlinearResidual or
      operator_type == OperatorType::CoupledLinearized)
   {
     return velocity_dofs_per_element + pressure_dofs_per_element;
   }
-  // velocity
-  else if(operator_type == OperatorType::ConvectiveOperator ||
-          operator_type == OperatorType::VelocityConvDiffOperator ||
-          operator_type == OperatorType::HelmholtzOperator ||
-          operator_type == OperatorType::ProjectionOperator ||
+  // velocity only
+  else if(operator_type == OperatorType::ConvectiveOperator or
+          operator_type == OperatorType::VelocityConvDiffOperator or
+          operator_type == OperatorType::HelmholtzOperator or
+          operator_type == OperatorType::ProjectionOperator or
           operator_type == OperatorType::InverseMassOperator)
   {
     return velocity_dofs_per_element;
   }
-  // pressure
+  // pressure only
   else if(operator_type == OperatorType::PressurePoissonOperator)
   {
     return pressure_dofs_per_element;
@@ -187,11 +138,13 @@ public:
    * Throughput study
    */
   std::tuple<unsigned int, dealii::types::global_dof_index, double>
-  apply_operator(std::string const & operator_type,
-                 unsigned int const  n_repetitions_inner,
-                 unsigned int const  n_repetitions_outer) const;
+  apply_operator(OperatorType const & operator_type,
+                 unsigned int const   n_repetitions_inner,
+                 unsigned int const   n_repetitions_outer) const;
 
 private:
+  using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
+
   void
   ale_update() const;
 
@@ -210,19 +163,20 @@ private:
   // application
   std::shared_ptr<ApplicationBase<dim, Number>> application;
 
-  // moving mapping (ALE)
-  std::shared_ptr<GridMotionBase<dim, Number>> grid_motion;
+  // Grid and mapping
+  std::shared_ptr<Grid<dim>> grid;
 
-  // solve mesh deformation by a Poisson problem
-  std::shared_ptr<MatrixFreeData<dim, Number>>         poisson_matrix_free_data;
-  std::shared_ptr<dealii::MatrixFree<dim, Number>>     poisson_matrix_free;
-  std::shared_ptr<Poisson::Operator<dim, dim, Number>> poisson_operator;
+  std::shared_ptr<dealii::Mapping<dim>> mapping;
 
-  /*
-   * MatrixFree
-   */
-  std::shared_ptr<MatrixFreeData<dim, Number>>     matrix_free_data;
-  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
+  std::shared_ptr<MultigridMappings<dim, Number>> multigrid_mappings;
+
+  // ALE mapping
+  std::shared_ptr<DeformedMappingBase<dim, Number>> ale_mapping;
+
+  std::shared_ptr<MultigridMappings<dim, Number>> ale_multigrid_mappings;
+
+  // ALE helper functions required by time integrator
+  std::shared_ptr<HelpersALE<dim, Number>> helpers_ale;
 
   /*
    * Spatial discretization

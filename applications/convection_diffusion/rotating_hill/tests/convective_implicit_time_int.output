@@ -49,9 +49,10 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        3
-  Mapping degree:                            1
+  Number of global refinements:              3
+  Create coarse triangulations:              false
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   Polynomial degree:                         4
   Numerical flux convective term:            LaxFriedrichsFlux
 
@@ -66,9 +67,9 @@ Solver:
   Update every time steps:                   1
   Block Jacobi matrix-free:                  false
   Multigrid operator type:                   ReactionConvection
-  Multigrid type:                            h-MG
+  Multigrid type:                            hMG
   Smoother:                                  Jacobi
-  Preconditioner smoother:                   BlockJacobi
+  Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Relaxation factor:                         8.0000e-01
   Coarse grid solver:                        GMRES
@@ -83,7 +84,7 @@ Solver:
   Interval time steps:                       4294967295
 
 Numerical parameters:
-  Use cell-based face loops:                 true
+  Use cell-based face loops:                 false
   Store velocity in DoF vector:              false
   Use over-integration:                      false
 
@@ -91,7 +92,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                3
   Number of cells:                           64
-  Mapping degree:                            1
 
 Construct convection-diffusion operator ...
 
@@ -107,7 +107,7 @@ Setup convection-diffusion operator ...
 
 ... done!
 
-Setup BDF time integrator ...
+Setup Multistep time integrator ...
 
 Calculation of time step size according to CFL condition:
 
@@ -117,10 +117,6 @@ Calculation of time step size according to CFL condition:
 Adjust time step size to hit end time:
 
   Time step size:                            1.0040e-03
-
-... done!
-
-Setup solver ...
 
 ... done!
 

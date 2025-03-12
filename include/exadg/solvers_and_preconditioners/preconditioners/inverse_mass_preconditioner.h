@@ -27,6 +27,16 @@
 
 namespace ExaDG
 {
+/**
+ * A preconditioner available for discontinuous Galerkin methods. This class is simply a wrapper
+ * around the InverseMassOperator, realizing the interface defined by PreconditionerBase. It is
+ * not only available for ElementType:::Hypercube, but e.g. also for ElementType::Simplex.
+ *
+ * Note, however, that application of this preconditioner might be expensive in case that the
+ * inverse mass can not be realized as a matrix-free operator evaluation (which is the case for
+ * simplex elements). In this case, you might want to use a simple Jacobi preconditioner as an
+ * efficient alternative to the inverse mass preconditioner.
+ */
 template<int dim, int n_components, typename Number>
 class InverseMassPreconditioner : public PreconditionerBase<Number>
 {
@@ -34,22 +44,25 @@ public:
   typedef typename PreconditionerBase<Number>::VectorType VectorType;
 
   InverseMassPreconditioner(dealii::MatrixFree<dim, Number> const & matrix_free,
-                            unsigned int const                      dof_index,
-                            unsigned int const                      quad_index)
+                            InverseMassOperatorData const           inverse_mass_operator_data)
   {
-    inverse_mass_operator.initialize(matrix_free, dof_index, quad_index);
+    inverse_mass_operator.initialize(matrix_free, inverse_mass_operator_data);
+
+    this->update_needed = false;
   }
 
   void
-  vmult(VectorType & dst, VectorType const & src) const
+  vmult(VectorType & dst, VectorType const & src) const final
   {
     inverse_mass_operator.apply(dst, src);
   }
 
   void
-  update()
+  update() final
   {
-    // do nothing
+    inverse_mass_operator.update();
+
+    this->update_needed = false;
   }
 
 private:

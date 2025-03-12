@@ -78,7 +78,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     (void)component;
 
@@ -101,7 +101,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component = 0) const
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
   {
     double result = 0.0;
 
@@ -178,9 +178,10 @@ private:
 
 
     // SPATIAL DISCRETIZATION
-    param.grid.triangulation_type = TriangulationType::Distributed;
-    param.grid.mapping_degree     = param.degree_u;
-    param.degree_p                = DegreePressure::MixedOrder;
+    param.grid.triangulation_type     = TriangulationType::Distributed;
+    param.mapping_degree              = param.degree_u;
+    param.mapping_degree_coarse_grids = param.mapping_degree;
+    param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
     param.upwind_factor = 1.0;
@@ -233,10 +234,12 @@ private:
       param.order_time_integrator <= 2 ? param.order_time_integrator : 2;
     param.formulation_convective_term_bc = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    // viscous step
-    param.solver_viscous         = SolverViscous::CG;
-    param.solver_data_viscous    = SolverData(1000, ABS_TOL, REL_TOL);
-    param.preconditioner_viscous = PreconditionerViscous::InverseMassMatrix;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      this->param.solver_momentum         = SolverMomentum::CG;
+      this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
+      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+    }
 
 
     // PRESSURE-CORRECTION SCHEME
@@ -247,23 +250,25 @@ private:
     param.rotational_formulation = true;
 
     // momentum step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // Newton solver
+      param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
 
-    // Newton solver
-    param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
+      // linear solver
+      param.solver_momentum = SolverMomentum::FGMRES;
+      if(param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
+        param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEARIZED, REL_TOL_LINEARIZED, 100);
+      else
+        param.solver_data_momentum = SolverData(1e4, ABS_TOL, REL_TOL, 100);
+      param.update_preconditioner_momentum = false;
+      param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix; // Multigrid;
+      param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
 
-    // linear solver
-    param.solver_momentum = SolverMomentum::FGMRES;
-    if(param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
-      param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEARIZED, REL_TOL_LINEARIZED, 100);
-    else
-      param.solver_data_momentum = SolverData(1e4, ABS_TOL, REL_TOL, 100);
-    param.update_preconditioner_momentum = false;
-    param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix; // Multigrid;
-    param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
-
-    // Chebyshev smoother data
-    param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
-    param.multigrid_data_momentum.coarse_problem.solver  = MultigridCoarseGridSolver::Chebyshev;
+      // Chebyshev smoother data
+      param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
+      param.multigrid_data_momentum.coarse_problem.solver  = MultigridCoarseGridSolver::Chebyshev;
+    }
 
 
     // COUPLED NAVIER-STOKES SOLVER
@@ -418,51 +423,79 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    create_triangulation(*this->grid->triangulation);
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      for(auto const & f : cell->face_indices())
-      {
-        double const x   = cell->face(f)->center()(0);
-        double const y   = cell->face(f)->center()(1);
-        double const z   = cell->face(f)->center()(2);
-        double const TOL = 1.e-10;
+        create_triangulation(tria);
 
-        // inflow
-        if(std::fabs(x - 0.0) < TOL)
+        for(auto cell : tria.cell_iterators())
         {
-          cell->face(f)->set_boundary_id(BOUNDARY_ID_INFLOW);
+          for(auto const & f : cell->face_indices())
+          {
+            double const x   = cell->face(f)->center()(0);
+            double const y   = cell->face(f)->center()(1);
+            double const z   = cell->face(f)->center()(2);
+            double const TOL = 1.e-10;
+
+            // inflow
+            if(std::fabs(x - 0.0) < TOL)
+            {
+              cell->face(f)->set_boundary_id(BOUNDARY_ID_INFLOW);
+            }
+
+            // outflow
+            if(std::fabs(x - L_F) < TOL)
+            {
+              cell->face(f)->set_boundary_id(BOUNDARY_ID_OUTFLOW);
+            }
+
+            // fluid-structure interface
+            if((std::fabs(x - L_IN) < TOL or std::fabs(x - (L_IN + T_S)) < TOL) and
+               y < H_S - H_F / 2.0 + TOL and std::fabs(z) < B_S / 2.0 + TOL)
+            {
+              cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
+            }
+            if((std::fabs(z - (-B_S / 2.0)) < TOL or std::fabs(z - (+B_S / 2.0)) < TOL) and
+               y < H_S - H_F / 2.0 + TOL and std::fabs(x - (L_IN + T_S / 2.0)) < T_S / 2.0 + TOL)
+            {
+              cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
+            }
+            if(std::fabs(y - (H_S - H_F / 2.0)) < TOL and
+               std::fabs(x - (L_IN + T_S / 2.0)) < T_S / 2.0 + TOL and
+               std::fabs(z) < B_S / 2.0 + TOL)
+            {
+              cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
+            }
+          }
         }
 
-        // outflow
-        if(std::fabs(x - L_F) < TOL)
-        {
-          cell->face(f)->set_boundary_id(BOUNDARY_ID_OUTFLOW);
-        }
+        tria.refine_global(global_refinements);
+      };
 
-        // fluid-structure interface
-        if((std::fabs(x - L_IN) < TOL || std::fabs(x - (L_IN + T_S)) < TOL) &&
-           y < H_S - H_F / 2.0 + TOL && std::fabs(z) < B_S / 2.0 + TOL)
-        {
-          cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
-        }
-        if((std::fabs(z - (-B_S / 2.0)) < TOL || std::fabs(z - (+B_S / 2.0)) < TOL) &&
-           y < H_S - H_F / 2.0 + TOL && std::fabs(x - (L_IN + T_S / 2.0)) < T_S / 2.0 + TOL)
-        {
-          cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
-        }
-        if(std::fabs(y - (H_S - H_F / 2.0)) < TOL &&
-           std::fabs(x - (L_IN + T_S / 2.0)) < T_S / 2.0 + TOL && std::fabs(z) < B_S / 2.0 + TOL)
-        {
-          cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
-        }
-      }
-    }
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -472,8 +505,6 @@ private:
 
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
       pair;
-    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>>
-      pair_fsi;
 
     // fill boundary descriptor velocity
 
@@ -490,8 +521,7 @@ private:
       pair(BOUNDARY_ID_OUTFLOW, new dealii::Functions::ZeroFunction<dim>(dim)));
 
     // fluid-structure interface
-    boundary_descriptor->velocity->dirichlet_cached_bc.insert(
-      pair_fsi(BOUNDARY_ID_FSI, new FunctionCached<1, dim>()));
+    boundary_descriptor->velocity->dirichlet_cached_bc.insert(BOUNDARY_ID_FSI);
 
     // fill boundary descriptor pressure
 
@@ -560,11 +590,11 @@ private:
     param.right_hand_side = false;
 
     // SPATIAL DISCRETIZATION
-    param.degree                 = this->param.grid.mapping_degree;
+    param.degree                 = this->param.mapping_degree;
     param.spatial_discretization = SpatialDiscretization::CG;
 
     // SOLVER
-    param.solver         = Poisson::Solver::FGMRES;
+    param.solver         = Poisson::LinearSolver::FGMRES;
     param.solver_data    = SolverData(1e4, ABS_TOL, REL_TOL, 100);
     param.preconditioner = Preconditioner::Multigrid;
 
@@ -585,9 +615,6 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>>
-      pair_fsi;
-
     // let the mesh slide along the outer walls
     std::vector<bool> mask = {false, true, true};
     boundary_descriptor->dirichlet_bc.insert(
@@ -607,8 +634,7 @@ private:
       pair_mask(BOUNDARY_ID_OUTFLOW, dealii::ComponentMask()));
 
     // fluid-structure interface
-    boundary_descriptor->dirichlet_cached_bc.insert(
-      pair_fsi(BOUNDARY_ID_FSI, new FunctionCached<1, dim>()));
+    boundary_descriptor->dirichlet_cached_bc.insert(BOUNDARY_ID_FSI);
   }
 
 
@@ -635,7 +661,7 @@ private:
     param.large_deformation    = false;
     param.pull_back_traction   = false;
 
-    param.degree = this->param.grid.mapping_degree;
+    param.degree = this->param.mapping_degree;
 
     param.newton_solver_data = Newton::SolverData(1e4, ABS_TOL, REL_TOL);
     param.solver             = Structure::Solver::FGMRES;
@@ -662,17 +688,18 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>>
-      pair_fsi;
-
     // let the mesh slide along the outer walls
     std::vector<bool> mask = {false, true, true};
     boundary_descriptor->dirichlet_bc.insert(
+      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+    boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
       pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
     boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(BOUNDARY_ID_WALLS, mask));
 
     // inflow
     boundary_descriptor->dirichlet_bc.insert(
+      pair(BOUNDARY_ID_INFLOW, new dealii::Functions::ZeroFunction<dim>(dim)));
+    boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
       pair(BOUNDARY_ID_INFLOW, new dealii::Functions::ZeroFunction<dim>(dim)));
     boundary_descriptor->dirichlet_bc_component_mask.insert(
       pair_mask(BOUNDARY_ID_INFLOW, dealii::ComponentMask()));
@@ -680,12 +707,13 @@ private:
     // outflow
     boundary_descriptor->dirichlet_bc.insert(
       pair(BOUNDARY_ID_OUTFLOW, new dealii::Functions::ZeroFunction<dim>(dim)));
+    boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(BOUNDARY_ID_OUTFLOW, new dealii::Functions::ZeroFunction<dim>(dim)));
     boundary_descriptor->dirichlet_bc_component_mask.insert(
       pair_mask(BOUNDARY_ID_OUTFLOW, dealii::ComponentMask()));
 
     // fluid-structure interface
-    boundary_descriptor->dirichlet_cached_bc.insert(
-      pair_fsi(BOUNDARY_ID_FSI, new FunctionCached<1, dim>()));
+    boundary_descriptor->dirichlet_cached_bc.insert(BOUNDARY_ID_FSI);
   }
 
   void
@@ -756,8 +784,9 @@ private:
     param.spectral_radius                      = 0.8;
     param.solver_info_data.interval_time_steps = OUTPUT_SOLVER_INFO_EVERY_TIME_STEPS;
 
-    param.grid.triangulation_type = TriangulationType::Distributed;
-    param.grid.mapping_degree     = param.degree;
+    param.grid.triangulation_type     = TriangulationType::Distributed;
+    param.mapping_degree              = param.degree;
+    param.mapping_degree_coarse_grids = param.mapping_degree;
 
     param.newton_solver_data = Newton::SolverData(1e4, ABS_TOL, REL_TOL);
     param.solver             = Structure::Solver::FGMRES;
@@ -776,51 +805,75 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    dealii::Point<dim> p1, p2;
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    p1[0] = L_IN;
-    p1[1] = -H_F / 2.0;
-    p1[2] = -B_S / 2.0;
+        dealii::Point<dim> p1, p2;
 
-    p2[0] = L_IN + T_S;
-    p2[1] = H_S - H_F / 2.0;
-    p2[2] = B_S / 2.0;
+        p1[0] = L_IN;
+        p1[1] = -H_F / 2.0;
+        p1[2] = -B_S / 2.0;
 
-    std::vector<unsigned int> repetitions(dim);
-    repetitions[0] = N_CELLS_STRUCTURE_X;
-    repetitions[1] = N_CELLS_STRUCTURE_Y;
-    repetitions[2] = N_CELLS_STRUCTURE_Z;
+        p2[0] = L_IN + T_S;
+        p2[1] = H_S - H_F / 2.0;
+        p2[2] = B_S / 2.0;
 
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation,
-                                                      repetitions,
-                                                      p1,
-                                                      p2);
+        std::vector<unsigned int> repetitions(dim);
+        repetitions[0] = N_CELLS_STRUCTURE_X;
+        repetitions[1] = N_CELLS_STRUCTURE_Y;
+        repetitions[2] = N_CELLS_STRUCTURE_Z;
 
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      for(auto const & f : cell->face_indices())
-      {
-        if(cell->face(f)->at_boundary())
+        dealii::GridGenerator::subdivided_hyper_rectangle(tria, repetitions, p1, p2);
+
+        for(auto cell : tria.cell_iterators())
         {
-          double const y   = cell->face(f)->center()(1);
-          double const TOL = 1.e-10;
+          for(auto const & f : cell->face_indices())
+          {
+            if(cell->face(f)->at_boundary())
+            {
+              double const y   = cell->face(f)->center()(1);
+              double const TOL = 1.e-10;
 
-          // lower boundary
-          if(std::fabs(y - (-H_F / 2.0)) < TOL)
-          {
-            cell->face(f)->set_boundary_id(BOUNDARY_ID_WALLS);
-          }
-          else // all other boundaries at FSI interface
-          {
-            cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
+              // lower boundary
+              if(std::fabs(y - (-H_F / 2.0)) < TOL)
+              {
+                cell->face(f)->set_boundary_id(BOUNDARY_ID_WALLS);
+              }
+              else // all other boundaries at FSI interface
+              {
+                cell->face(f)->set_boundary_id(BOUNDARY_ID_FSI);
+              }
+            }
           }
         }
-      }
-    }
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -833,18 +886,16 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<FunctionCached<1, dim>>>
-      pair_fsi;
-
     // lower boundary is clamped
     boundary_descriptor->dirichlet_bc.insert(
+      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+    boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
       pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
     boundary_descriptor->dirichlet_bc_component_mask.insert(
       pair_mask(BOUNDARY_ID_WALLS, dealii::ComponentMask()));
 
     // fluid-structure interface
-    boundary_descriptor->neumann_cached_bc.insert(
-      pair_fsi(BOUNDARY_ID_FSI, new FunctionCached<1, dim>()));
+    boundary_descriptor->neumann_cached_bc.insert(BOUNDARY_ID_FSI);
   }
 
   void

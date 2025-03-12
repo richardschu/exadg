@@ -187,7 +187,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     if(c == 0)
     {
@@ -222,13 +222,50 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     if(c == 0)
     {
       double time_factor = 0.0;
       if(unsteady)
         time_factor = time_derivative(this->get_time(), frequency);
+
+      return space_function(p[0], length, max_displacement) * time_factor;
+    }
+    else
+      return 0.0;
+  }
+
+private:
+  double const max_displacement, length;
+  bool const   unsteady;
+  double const frequency;
+};
+
+template<int dim>
+class InitialAcceleration : public dealii::Function<dim>
+{
+public:
+  InitialAcceleration(double const max_displacement,
+                      double const length,
+                      bool const   unsteady,
+                      double const frequency)
+    : dealii::Function<dim>(dim),
+      max_displacement(max_displacement),
+      length(length),
+      unsteady(unsteady),
+      frequency(frequency)
+  {
+  }
+
+  double
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  {
+    if(c == 0)
+    {
+      double time_factor = 0.0;
+      if(unsteady)
+        time_factor = time_2nd_derivative(this->get_time(), frequency);
 
       return space_function(p[0], length, max_displacement) * time_factor;
     }
@@ -263,7 +300,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     if(c == 0)
     {
@@ -322,8 +359,9 @@ private:
     this->param.spectral_radius                      = 0.8;
     this->param.solver_info_data.interval_time_steps = 1e4;
 
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = 1;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
     this->param.newton_solver_data  = Newton::SolverData(1e4, 1.e-10, 1.e-10);
     this->param.solver              = Solver::CG;
@@ -336,34 +374,61 @@ private:
     this->param.update_preconditioner_every_newton_iterations =
       this->param.newton_solver_data.max_iter;
     this->param.update_preconditioner_once_newton_converged = true;
+
+    this->param.use_matrix_based_implementation = false;                   // true;
+    this->param.sparse_matrix_type              = SparseMatrixType::PETSc; // Trilinos;
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    // left-bottom-front and right-top-back point
-    dealii::Point<dim> p1, p2;
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements) {
+        (void)periodic_face_pairs;
+        (void)vector_local_refinements;
 
-    for(unsigned d = 0; d < dim; d++)
-      p1[d] = 0.0;
+        // left-bottom-front and right-top-back point
+        dealii::Point<dim> p1, p2;
 
-    p2[0] = this->length;
-    p2[1] = this->height;
-    if(dim == 3)
-      p2[2] = this->width;
+        for(unsigned d = 0; d < dim; d++)
+          p1[d] = 0.0;
 
-    std::vector<unsigned int> repetitions(dim);
-    repetitions[0] = this->n_subdivisions_1d_hypercube;
-    repetitions[1] = this->n_subdivisions_1d_hypercube;
-    if(dim == 3)
-      repetitions[2] = this->n_subdivisions_1d_hypercube;
+        p2[0] = this->length;
+        p2[1] = this->height;
+        if(dim == 3)
+          p2[2] = this->width;
 
-    dealii::GridGenerator::subdivided_hyper_rectangle(*this->grid->triangulation,
-                                                      repetitions,
-                                                      p1,
-                                                      p2);
+        std::vector<unsigned int> repetitions(dim);
+        repetitions[0] = this->n_subdivisions_1d_hypercube;
+        repetitions[1] = this->n_subdivisions_1d_hypercube;
+        if(dim == 3)
+          repetitions[2] = this->n_subdivisions_1d_hypercube;
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+        dealii::GridGenerator::subdivided_hyper_rectangle(tria, repetitions, p1, p2);
+
+        tria.refine_global(global_refinements);
+      };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -375,6 +440,9 @@ private:
 
     this->boundary_descriptor->dirichlet_bc.insert(
       pair(0, new Solution<dim>(max_displacement, length, unsteady, frequency)));
+    this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(0, new InitialAcceleration<dim>(max_displacement, length, unsteady, frequency)));
+
     this->boundary_descriptor->dirichlet_bc_component_mask.insert(
       pair_mask(0, dealii::ComponentMask()));
   }
@@ -400,6 +468,12 @@ private:
       new dealii::Functions::ZeroFunction<dim>(dim));
     this->field_functions->initial_velocity.reset(
       new InitialVelocity<dim>(max_displacement, length, unsteady, frequency));
+
+    if(prescribe_initial_acceleration_as_field_function)
+    {
+      this->field_functions->initial_acceleration.reset(
+        new InitialAcceleration<dim>(max_displacement, length, unsteady, frequency));
+    }
   }
 
   std::shared_ptr<PostProcessor<dim, Number>>
@@ -440,6 +514,8 @@ private:
   double const start_time       = 0.0;
   double const end_time         = 1.0;
   double const frequency        = 3.0 / 2.0 * dealii::numbers::PI / end_time;
+
+  bool const prescribe_initial_acceleration_as_field_function = false;
 };
 
 } // namespace Structure

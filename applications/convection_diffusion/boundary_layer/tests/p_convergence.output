@@ -48,9 +48,10 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        4
+  Number of global refinements:              4
+  Create coarse triangulations:              false
   Mapping degree:                            1
+  Mapping degree coarse grids:               1
   Polynomial degree:                         1
   Numerical flux convective term:            LaxFriedrichsFlux
   IP factor viscous term:                    1.0000e+00
@@ -65,7 +66,7 @@ Solver:
   Update preconditioner:                     false
   Block Jacobi matrix-free:                  false
   Multigrid operator type:                   ReactionConvectionDiffusion
-  Multigrid type:                            ph-MG
+  Multigrid type:                            phMG
   p-sequence:                                Bisect
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
@@ -91,7 +92,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                4
   Number of cells:                           256
-  Mapping degree:                            1
 
 Construct convection-diffusion operator ...
 
@@ -104,10 +104,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup convection-diffusion operator ...
-
-... done!
-
-Setup solver ...
 
 ... done!
 
@@ -170,9 +166,10 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        4
+  Number of global refinements:              4
+  Create coarse triangulations:              false
   Mapping degree:                            1
+  Mapping degree coarse grids:               1
   Polynomial degree:                         2
   Numerical flux convective term:            LaxFriedrichsFlux
   IP factor viscous term:                    1.0000e+00
@@ -187,7 +184,7 @@ Solver:
   Update preconditioner:                     false
   Block Jacobi matrix-free:                  false
   Multigrid operator type:                   ReactionConvectionDiffusion
-  Multigrid type:                            ph-MG
+  Multigrid type:                            phMG
   p-sequence:                                Bisect
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
@@ -213,7 +210,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                4
   Number of cells:                           256
-  Mapping degree:                            1
 
 Construct convection-diffusion operator ...
 
@@ -226,10 +222,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup convection-diffusion operator ...
-
-... done!
-
-Setup solver ...
 
 ... done!
 
@@ -292,9 +284,10 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        4
+  Number of global refinements:              4
+  Create coarse triangulations:              false
   Mapping degree:                            1
+  Mapping degree coarse grids:               1
   Polynomial degree:                         3
   Numerical flux convective term:            LaxFriedrichsFlux
   IP factor viscous term:                    1.0000e+00
@@ -309,7 +302,7 @@ Solver:
   Update preconditioner:                     false
   Block Jacobi matrix-free:                  false
   Multigrid operator type:                   ReactionConvectionDiffusion
-  Multigrid type:                            ph-MG
+  Multigrid type:                            phMG
   p-sequence:                                Bisect
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
@@ -335,7 +328,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                4
   Number of cells:                           256
-  Mapping degree:                            1
 
 Construct convection-diffusion operator ...
 
@@ -348,10 +340,6 @@ Discontinuous Galerkin finite element discretization:
 ... done!
 
 Setup convection-diffusion operator ...
-
-... done!
-
-Setup solver ...
 
 ... done!
 
@@ -414,9 +402,10 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        4
+  Number of global refinements:              4
+  Create coarse triangulations:              false
   Mapping degree:                            1
+  Mapping degree coarse grids:               1
   Polynomial degree:                         4
   Numerical flux convective term:            LaxFriedrichsFlux
   IP factor viscous term:                    1.0000e+00
@@ -431,7 +420,7 @@ Solver:
   Update preconditioner:                     false
   Block Jacobi matrix-free:                  false
   Multigrid operator type:                   ReactionConvectionDiffusion
-  Multigrid type:                            ph-MG
+  Multigrid type:                            phMG
   p-sequence:                                Bisect
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
@@ -457,7 +446,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                4
   Number of cells:                           256
-  Mapping degree:                            1
 
 Construct convection-diffusion operator ...
 
@@ -473,10 +461,6 @@ Setup convection-diffusion operator ...
 
 ... done!
 
-Setup solver ...
-
-... done!
-
 Calculate error for all fields for initial data:
   Relative error (L2-norm): 1.00000e+00
 
@@ -485,7 +469,7 @@ Solving steady state problem ...
 ... done!
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 6.62910e-06
+  Relative error (L2-norm): 6.62789e-06
 
 
 
@@ -536,9 +520,10 @@ Temporal discretization:
 Spatial Discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Multigrid variant:                         LocalSmoothing
-  Global refinements:                        4
+  Number of global refinements:              4
+  Create coarse triangulations:              false
   Mapping degree:                            1
+  Mapping degree coarse grids:               1
   Polynomial degree:                         5
   Numerical flux convective term:            LaxFriedrichsFlux
   IP factor viscous term:                    1.0000e+00
@@ -553,7 +538,7 @@ Solver:
   Update preconditioner:                     false
   Block Jacobi matrix-free:                  false
   Multigrid operator type:                   ReactionConvectionDiffusion
-  Multigrid type:                            ph-MG
+  Multigrid type:                            phMG
   p-sequence:                                Bisect
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
@@ -579,7 +564,6 @@ Generating grid for 2-dimensional problem:
 
   Max. number of refinements:                4
   Number of cells:                           256
-  Mapping degree:                            1
 
 Construct convection-diffusion operator ...
 
@@ -595,10 +579,6 @@ Setup convection-diffusion operator ...
 
 ... done!
 
-Setup solver ...
-
-... done!
-
 Calculate error for all fields for initial data:
   Relative error (L2-norm): 1.00000e+00
 
@@ -607,4 +587,4 @@ Solving steady state problem ...
 ... done!
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 4.54842e-07
+  Relative error (L2-norm): 4.43534e-07

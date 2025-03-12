@@ -35,7 +35,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const component) const
+  value(dealii::Point<dim> const & p, unsigned int const component) const final
   {
     double const r = p.norm();
 
@@ -62,7 +62,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const /*component = 0*/) const
+  value(dealii::Point<dim> const & p, unsigned int const /*component = 0*/) const final
   {
     double       t           = this->get_time();
     double const time_factor = std::max(0.0, 1.0 - t / characteristic_time);
@@ -91,12 +91,40 @@ private:
   double const T_ref, delta_T, length, characteristic_time;
 };
 
+// physical quantities
+double const R0 = 0.55;
+double const R1 = 1.0;
+
+double const Ra                  = 1.0e8;
+double const beta                = Ra;
+double const kinematic_viscosity = 1.0;
+double const thermal_diffusivity = 1.0;
+
+double const T0 = 1.0;
+double const T1 = 0.0;
+
+double const H = R1 - R0;
+double const U = std::sqrt(Ra * kinematic_viscosity * thermal_diffusivity / (H * H));
+double const characteristic_time = H / U;
+double const start_time          = 0.0;
+double const end_time            = 200.0 * characteristic_time;
+
+// CFL > 4 did not show further speed-up for 2d example
+double const CFL                    = 2.0; // 0.4;
+bool const   adaptive_time_stepping = true;
+
+// solver tolerance
+double const reltol = 1.e-3;
+
+// vtu output
+double const output_interval_time = (end_time - start_time) / 200.0;
+
 template<int dim, typename Number>
-class Application : public FTI::ApplicationBase<dim, Number>
+class Fluid : public FluidBase<dim, Number>
 {
 public:
-  Application(std::string input_file, MPI_Comm const & comm)
-    : FTI::ApplicationBase<dim, Number>(input_file, comm, 1)
+  Fluid(std::string parameter_file, MPI_Comm const & comm)
+    : FluidBase<dim, Number>(parameter_file, comm)
   {
   }
 
@@ -140,9 +168,10 @@ private:
     this->param.solver_info_data.interval_time = output_interval_time;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = this->param.degree_u;
-    this->param.degree_p                = DegreePressure::MixedOrder;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
@@ -184,10 +213,14 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    // viscous step
-    this->param.solver_viscous              = SolverViscous::CG;
-    this->param.solver_data_viscous         = SolverData(1000, 1.e-30, reltol);
-    this->param.multigrid_data_viscous.type = MultigridType::cphMG;
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    {
+      this->param.solver_momentum                  = SolverMomentum::CG;
+      this->param.solver_data_momentum             = SolverData(1000, 1.e-30, reltol);
+      this->param.preconditioner_momentum          = MomentumPreconditioner::Multigrid;
+      this->param.multigrid_data_momentum.type     = MultigridType::cphMG;
+      this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
+    }
 
 
     // PRESSURE-CORRECTION SCHEME
@@ -197,16 +230,18 @@ private:
     this->param.rotational_formulation       = true;
 
     // momentum step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+    {
+      // Newton solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-30, reltol);
 
-    // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-30, reltol);
-
-    // linear solver
-    this->param.solver_momentum                  = SolverMomentum::CG;
-    this->param.solver_data_momentum             = SolverData(1e4, 1.e-30, reltol, 100);
-    this->param.preconditioner_momentum          = MomentumPreconditioner::Multigrid;
-    this->param.multigrid_data_momentum.type     = MultigridType::cphMG;
-    this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
+      // linear solver
+      this->param.solver_momentum                  = SolverMomentum::CG;
+      this->param.solver_data_momentum             = SolverData(1e4, 1.e-30, reltol, 100);
+      this->param.preconditioner_momentum          = MomentumPreconditioner::Multigrid;
+      this->param.multigrid_data_momentum.type     = MultigridType::cphMG;
+      this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
+    }
 
     // COUPLED NAVIER-STOKES SOLVER
 
@@ -236,102 +271,70 @@ private:
   }
 
   void
-  set_parameters_scalar(unsigned int const scalar_index) final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    using namespace ConvDiff;
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)periodic_face_pairs;
+      (void)vector_local_refinements;
 
-    Parameters param;
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
 
-    // MATHEMATICAL MODEL
-    param.problem_type                = ProblemType::Unsteady;
-    param.equation_type               = EquationType::ConvectionDiffusion;
-    param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
-    param.analytical_velocity_field   = false;
-    param.right_hand_side             = false;
+      dealii::GridGenerator::hyper_shell(tria, dealii::Point<dim>(), R0, R1, (dim == 3) ? 48 : 12);
 
-    // PHYSICAL QUANTITIES
-    param.start_time  = start_time;
-    param.end_time    = end_time;
-    param.diffusivity = thermal_diffusivity;
+      dealii::Point<dim> center =
+        dim == 2 ? dealii::Point<dim>(0., 0.) : dealii::Point<dim>(0., 0., 0.);
 
-    // TEMPORAL DISCRETIZATION
-    param.temporal_discretization       = TemporalDiscretization::BDF;
-    param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Implicit;
-    param.adaptive_time_stepping        = adaptive_time_stepping;
-    param.order_time_integrator         = 2;
-    param.start_with_low_order          = true;
-    param.calculation_of_time_step_size = TimeStepCalculation::CFL;
-    param.time_step_size                = 1.0e-2;
-    param.cfl                           = CFL;
-    param.max_velocity                  = U;
-    param.exponent_fe_degree_convection = 1.5;
-    param.time_step_size                = characteristic_time / 1.e0;
-    param.time_step_size_max            = characteristic_time / 1.e0;
-
-    // output of solver information
-    param.solver_info_data.interval_time = output_interval_time;
-
-    // SPATIAL DISCRETIZATION
-    param.grid.triangulation_type = TriangulationType::Distributed;
-    param.grid.mapping_degree     = param.degree;
-
-    // convective term
-    param.numerical_flux_convective_operator = NumericalFluxConvectiveOperator::LaxFriedrichsFlux;
-
-    // viscous term
-    param.IP_factor = 1.0;
-
-    // NUMERICAL PARAMETERS
-    param.implement_block_diagonal_preconditioner_matrix_free = false;
-    param.use_cell_based_face_loops                           = false;
-
-    // SOLVER
-    param.solver                = ConvDiff::Solver::GMRES; // CG;
-    param.solver_data           = SolverData(1e4, 1.e-30, reltol, 100);
-    param.preconditioner        = Preconditioner::InverseMassMatrix;
-    param.multigrid_data.type   = MultigridType::cphMG;
-    param.mg_operator_type      = MultigridOperatorType::ReactionDiffusion;
-    param.update_preconditioner = false;
-
-    // NUMERICAL PARAMETERS
-    param.use_combined_operator = true;
-    param.use_overintegration   = true;
-
-    this->scalar_param[scalar_index] = param;
-  }
-
-  void
-  create_grid() final
-  {
-    dealii::GridGenerator::hyper_shell(
-      *this->grid->triangulation, dealii::Point<dim>(), R0, R1, (dim == 3) ? 48 : 12);
-
-    dealii::Point<dim> center =
-      dim == 2 ? dealii::Point<dim>(0., 0.) : dealii::Point<dim>(0., 0., 0.);
-
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      for(auto const & f : cell->face_indices())
+      for(auto cell : tria.cell_iterators())
       {
-        if(cell->face(f)->at_boundary())
+        for(auto const & f : cell->face_indices())
         {
-          bool face_at_outer_boundary = true;
-          for(auto const & v : cell->face(f)->vertex_indices())
+          if(cell->face(f)->at_boundary())
           {
-            if(std::abs(center.distance(cell->face(f)->vertex(v)) - R1) > 1e-12 * R1)
+            bool face_at_outer_boundary = true;
+            for(auto const & v : cell->face(f)->vertex_indices())
             {
-              face_at_outer_boundary = false;
-              break;
+              if(std::abs(center.distance(cell->face(f)->vertex(v)) - R1) > 1e-12 * R1)
+              {
+                face_at_outer_boundary = false;
+                break;
+              }
             }
-          }
 
-          if(face_at_outer_boundary)
-            cell->face(f)->set_boundary_id(1);
+            if(face_at_outer_boundary)
+              cell->face(f)->set_boundary_id(1);
+          }
         }
       }
-    }
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+      tria.refine_global(global_refinements);
+    };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -374,7 +377,7 @@ private:
     pp_data.output_data.time_control_data.start_time       = start_time;
     pp_data.output_data.time_control_data.trigger_interval = output_interval_time;
     pp_data.output_data.directory          = this->output_parameters.directory + "vtu/";
-    pp_data.output_data.filename           = this->output_parameters.filename + "_fluid";
+    pp_data.output_data.filename           = this->output_parameters.filename;
     pp_data.output_data.write_processor_id = true;
     pp_data.output_data.degree             = this->param.degree_u;
     pp_data.output_data.write_higher_order = (dim == 2);
@@ -384,41 +387,112 @@ private:
 
     return pp;
   }
+};
+
+template<int dim, typename Number>
+class Scalar : public ScalarBase<dim, Number>
+{
+public:
+  Scalar(std::string parameter_file, MPI_Comm const & comm)
+    : ScalarBase<dim, Number>(parameter_file, comm)
+  {
+  }
+
+private:
+  void
+  set_parameters() final
+  {
+    using namespace ConvDiff;
+
+    // MATHEMATICAL MODEL
+    this->param.problem_type                = ProblemType::Unsteady;
+    this->param.equation_type               = EquationType::ConvectionDiffusion;
+    this->param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
+    this->param.analytical_velocity_field   = false;
+    this->param.right_hand_side             = false;
+
+    // PHYSICAL QUANTITIES
+    this->param.start_time  = start_time;
+    this->param.end_time    = end_time;
+    this->param.diffusivity = thermal_diffusivity;
+
+    // TEMPORAL DISCRETIZATION
+    this->param.temporal_discretization       = TemporalDiscretization::BDF;
+    this->param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Implicit;
+    this->param.adaptive_time_stepping        = adaptive_time_stepping;
+    this->param.order_time_integrator         = 2;
+    this->param.start_with_low_order          = true;
+    this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
+    this->param.time_step_size                = 1.0e-2;
+    this->param.cfl                           = CFL;
+    this->param.max_velocity                  = U;
+    this->param.exponent_fe_degree_convection = 1.5;
+    this->param.time_step_size                = characteristic_time / 1.e0;
+    this->param.time_step_size_max            = characteristic_time / 1.e0;
+
+    // output of solver information
+    this->param.solver_info_data.interval_time = output_interval_time;
+
+    // SPATIAL DISCRETIZATION
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = this->param.degree;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+
+    // convective term
+    this->param.numerical_flux_convective_operator =
+      NumericalFluxConvectiveOperator::LaxFriedrichsFlux;
+
+    // viscous term
+    this->param.IP_factor = 1.0;
+
+    // NUMERICAL PARAMETERS
+    this->param.implement_block_diagonal_preconditioner_matrix_free = false;
+    this->param.use_cell_based_face_loops                           = false;
+
+    // SOLVER
+    this->param.solver                = ConvDiff::Solver::GMRES; // CG;
+    this->param.solver_data           = SolverData(1e4, 1.e-30, reltol, 100);
+    this->param.preconditioner        = Preconditioner::InverseMassMatrix;
+    this->param.multigrid_data.type   = MultigridType::cphMG;
+    this->param.mg_operator_type      = MultigridOperatorType::ReactionDiffusion;
+    this->param.update_preconditioner = false;
+
+    // NUMERICAL PARAMETERS
+    this->param.use_combined_operator = true;
+    this->param.use_overintegration   = true;
+  }
 
   void
-  set_boundary_descriptor_scalar(unsigned int scalar_index = 0) final
+  set_boundary_descriptor() final
   {
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
       pair;
 
-    this->scalar_boundary_descriptor[scalar_index]->dirichlet_bc.insert(
+    this->boundary_descriptor->dirichlet_bc.insert(
       pair(0, new TemperatureBC<dim>(T1, T0 - T1, H, characteristic_time)));
-    this->scalar_boundary_descriptor[scalar_index]->dirichlet_bc.insert(
+    this->boundary_descriptor->dirichlet_bc.insert(
       pair(1, new dealii::Functions::ConstantFunction<dim>(T1)));
   }
 
+
   void
-  set_field_functions_scalar(unsigned int scalar_index = 0) final
+  set_field_functions() final
   {
-    this->scalar_field_functions[scalar_index]->initial_solution.reset(
-      new dealii::Functions::ConstantFunction<dim>(T1));
-    this->scalar_field_functions[scalar_index]->right_hand_side.reset(
-      new dealii::Functions::ZeroFunction<dim>(1));
-    this->scalar_field_functions[scalar_index]->velocity.reset(
-      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->field_functions->initial_solution.reset(new dealii::Functions::ConstantFunction<dim>(T1));
+    this->field_functions->right_hand_side.reset(new dealii::Functions::ZeroFunction<dim>(1));
+    this->field_functions->velocity.reset(new dealii::Functions::ZeroFunction<dim>(dim));
   }
 
   std::shared_ptr<ConvDiff::PostProcessorBase<dim, Number>>
-  create_postprocessor_scalar(unsigned int const scalar_index) final
+  create_postprocessor() final
   {
     ConvDiff::PostProcessorData<dim> pp_data;
     pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
     pp_data.output_data.time_control_data.start_time       = start_time;
     pp_data.output_data.time_control_data.trigger_interval = output_interval_time;
-    pp_data.output_data.directory = this->output_parameters.directory + "vtu/";
-    pp_data.output_data.filename =
-      this->output_parameters.filename + "_scalar_" + std::to_string(scalar_index);
-    pp_data.output_data.degree             = this->scalar_param[scalar_index].degree;
+    pp_data.output_data.directory          = this->output_parameters.directory + "vtu/";
+    pp_data.output_data.filename           = this->output_parameters.filename;
+    pp_data.output_data.degree             = this->param.degree;
     pp_data.output_data.write_higher_order = (dim == 2);
     pp_data.output_data.write_surface_mesh = true;
 
@@ -427,34 +501,21 @@ private:
 
     return pp;
   }
+};
 
-  // physical quantities
-  double const R0 = 0.55;
-  double const R1 = 1.0;
+template<int dim, typename Number>
+class Application : public ApplicationBase<dim, Number>
+{
+public:
+  Application(std::string input_file, MPI_Comm const & comm)
+    : ApplicationBase<dim, Number>(input_file, comm)
+  {
+    this->fluid = std::make_shared<Fluid<dim, Number>>(input_file, comm);
 
-  double const Ra                  = 1.0e8;
-  double const beta                = Ra;
-  double const kinematic_viscosity = 1.0;
-  double const thermal_diffusivity = 1.0;
-
-  double const T0 = 1.0;
-  double const T1 = 0.0;
-
-  double const H = R1 - R0;
-  double const U = std::sqrt(Ra * kinematic_viscosity * thermal_diffusivity / (H * H));
-  double const characteristic_time = H / U;
-  double const start_time          = 0.0;
-  double const end_time            = 200.0 * characteristic_time;
-
-  // CFL > 4 did not show further speed-up for 2d example
-  double const CFL                    = 2.0; // 0.4;
-  bool const   adaptive_time_stepping = true;
-
-  // solver tolerance
-  double const reltol = 1.e-3;
-
-  // vtu output
-  double const output_interval_time = (end_time - start_time) / 200.0;
+    // create one (or even more) scalar fields
+    this->scalars.resize(1);
+    this->scalars[0] = std::make_shared<Scalar<dim, Number>>(input_file, comm);
+  }
 };
 
 } // namespace FTI

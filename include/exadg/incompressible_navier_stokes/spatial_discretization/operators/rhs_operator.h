@@ -1,8 +1,22 @@
-/*
- * body_force_operator.h
+/*  ______________________________________________________________________
  *
- *  Created on: Nov 5, 2018
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
 
 #ifndef INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATORS_RHS_OPERATOR_H_
@@ -81,12 +95,13 @@ public:
   {
     dealii::Point<dim, scalar> q_points = integrator.quadrature_point(q);
 
-    vector f = FunctionEvaluator<1, dim, Number>::value(data.f, q_points, time);
+    vector f = FunctionEvaluator<1, dim, Number>::value(*(data.f), q_points, time);
 
     if(data.boussinesq_term)
     {
-      vector g = FunctionEvaluator<1, dim, Number>::value(data.gravitational_force, q_points, time);
-      scalar T = integrator_temperature.get_value(q);
+      vector g =
+        FunctionEvaluator<1, dim, Number>::value(*(data.gravitational_force), q_points, time);
+      scalar T     = integrator_temperature.get_value(q);
       scalar T_ref = data.reference_temperature;
       // solve only for the dynamic pressure variations
       if(data.boussinesq_dynamic_part_only)

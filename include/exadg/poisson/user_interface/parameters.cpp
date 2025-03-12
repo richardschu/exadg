@@ -35,12 +35,16 @@ Parameters::Parameters()
 
     // SPATIAL DISCRETIZATION
     grid(GridData()),
+    mapping_degree(1),
+    mapping_degree_coarse_grids(1),
     spatial_discretization(SpatialDiscretization::Undefined),
     degree(1),
     IP_factor(1.0),
+    use_matrix_based_implementation(false),
+    sparse_matrix_type(SparseMatrixType::Undefined),
 
     // SOLVER
-    solver(Solver::Undefined),
+    solver(LinearSolver::Undefined),
     solver_data(SolverData(1e4, 1.e-20, 1.e-12)),
     compute_performance_metrics(false),
     preconditioner(Preconditioner::Undefined),
@@ -62,8 +66,14 @@ Parameters::check() const
 
   AssertThrow(degree > 0, dealii::ExcMessage("Polynomial degree must be larger than zero."));
 
+  if(use_matrix_based_implementation)
+  {
+    AssertThrow(sparse_matrix_type != SparseMatrixType::Undefined,
+                dealii::ExcMessage("Parameter must be defined."));
+  }
+
   // SOLVER
-  AssertThrow(solver != Solver::Undefined, dealii::ExcMessage("parameter must be defined."));
+  AssertThrow(solver != LinearSolver::Undefined, dealii::ExcMessage("parameter must be defined."));
   AssertThrow(preconditioner != Preconditioner::Undefined,
               dealii::ExcMessage("parameter must be defined."));
 }
@@ -110,12 +120,24 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
 
   grid.print(pcout);
 
-  print_parameter(pcout, "Element type", enum_to_string(spatial_discretization));
+  print_parameter(pcout, "Mapping degree", mapping_degree);
+
+  if(involves_h_multigrid())
+    print_parameter(pcout, "Mapping degree coarse grids", mapping_degree_coarse_grids);
+
+  print_parameter(pcout, "FE space", spatial_discretization);
 
   print_parameter(pcout, "Polynomial degree", degree);
 
   if(spatial_discretization == SpatialDiscretization::DG)
     print_parameter(pcout, "IP factor", IP_factor);
+
+  print_parameter(pcout, "Use matrix-based implementation", use_matrix_based_implementation);
+
+  if(use_matrix_based_implementation)
+  {
+    print_parameter(pcout, "Sparse matrix type", sparse_matrix_type);
+  }
 }
 
 void
@@ -123,11 +145,11 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
 {
   pcout << std::endl << "Solver:" << std::endl;
 
-  print_parameter(pcout, "Solver", enum_to_string(solver));
+  print_parameter(pcout, "Solver", solver);
 
   solver_data.print(pcout);
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner));
+  print_parameter(pcout, "Preconditioner", preconditioner);
 
   if(preconditioner == Preconditioner::Multigrid)
     multigrid_data.print(pcout);

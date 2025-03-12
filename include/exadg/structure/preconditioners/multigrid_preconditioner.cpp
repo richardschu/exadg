@@ -19,6 +19,8 @@
  *  ______________________________________________________________________
  */
 
+#include <exadg/grid/grid_data.h>
+#include <exadg/operators/quadrature.h>
 #include <exadg/structure/preconditioners/multigrid_preconditioner.h>
 
 namespace ExaDG
@@ -34,52 +36,132 @@ MultigridPreconditioner<dim, Number>::MultigridPreconditioner(MPI_Comm const & m
 template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::initialize(
-  MultigridData const &                                                  mg_data,
-  MultigridVariant const &                                               multigrid_variant,
-  dealii::Triangulation<dim> const *                                     tria,
-  std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations,
-  dealii::FiniteElement<dim> const &                                     fe,
-  std::shared_ptr<dealii::Mapping<dim> const>                            mapping,
-  ElasticityOperatorBase<dim, Number> const &                            pde_operator,
-  bool const                                                             nonlinear_operator,
-  Map const &                                                            dirichlet_bc,
-  PeriodicFacePairs const &                                              periodic_face_pairs)
+  MultigridData const &                                 mg_data,
+  std::shared_ptr<Grid<dim> const>                      grid,
+  std::shared_ptr<MultigridMappings<dim, Number>> const multigrid_mappings,
+  dealii::FiniteElement<dim> const &                    fe,
+  ElasticityOperatorBase<dim, Number> const &           pde_operator_in,
+  bool const                                            nonlinear_in,
+  Map_DBC const &                                       dirichlet_bc,
+  Map_DBC_ComponentMask const &                         dirichlet_bc_component_mask)
 {
-  this->pde_operator = &pde_operator;
+  pde_operator = &pde_operator_in;
 
-  this->data = this->pde_operator->get_data();
+  data = this->pde_operator->get_data();
 
-  this->nonlinear = nonlinear_operator;
+  nonlinear = nonlinear_in;
 
   Base::initialize(mg_data,
-                   multigrid_variant,
-                   tria,
-                   coarse_triangulations,
+                   grid,
+                   multigrid_mappings,
                    fe,
-                   mapping,
                    false /*operator_is_singular*/,
                    dirichlet_bc,
-                   periodic_face_pairs);
+                   dirichlet_bc_component_mask,
+                   false /* initialize_preconditioners */);
 }
 
 template<int dim, typename Number>
 void
 MultigridPreconditioner<dim, Number>::update()
 {
+  // update operators for all levels
+  if(data.unsteady)
+  {
+    this->for_all_levels([&](unsigned int const level) {
+      if(nonlinear)
+      {
+        this->get_operator_nonlinear(level)->set_time(pde_operator->get_time());
+        this->get_operator_nonlinear(level)->set_scaling_factor_mass_operator(
+          pde_operator->get_scaling_factor_mass_operator());
+      }
+      else
+      {
+        this->get_operator_linear(level)->set_time(pde_operator->get_time());
+        this->get_operator_linear(level)->set_scaling_factor_mass_operator(
+          pde_operator->get_scaling_factor_mass_operator());
+      }
+    });
+  }
+
   if(nonlinear)
   {
-    update_operators();
+    PDEOperatorNonlinear const * pde_operator_nonlinear =
+      dynamic_cast<PDEOperatorNonlinear const *>(pde_operator);
 
-    this->update_smoothers();
+    VectorType const & vector_linearization = pde_operator_nonlinear->get_solution_linearization();
 
-    // singular operators do not occur for this operator
-    this->update_coarse_solver(false /* operator_is_singular */);
+    // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
+    VectorTypeMG         vector_multigrid_type_copy;
+    VectorTypeMG const * vector_multigrid_type_ptr;
+    if(std::is_same<MultigridNumber, Number>::value)
+    {
+      vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&vector_linearization);
+    }
+    else
+    {
+      vector_multigrid_type_copy = vector_linearization;
+      vector_multigrid_type_ptr  = &vector_multigrid_type_copy;
+    }
+
+    // Copy displacement vector to finest level
+    // Note: This function also re-assembles the sparse matrix in case a matrix-based implementation
+    // is used
+    this->get_operator_nonlinear(this->get_number_of_levels() - 1)
+      ->set_solution_linearization(*vector_multigrid_type_ptr);
+
+    // interpolate displacement vector from fine to coarse level
+    this->transfer_from_fine_to_coarse_levels(
+      [&](unsigned int const fine_level, unsigned int const coarse_level) {
+        auto const & vector_fine_level =
+          this->get_operator_nonlinear(fine_level)->get_solution_linearization();
+        auto vector_coarse_level =
+          this->get_operator_nonlinear(coarse_level)->get_solution_linearization();
+        this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+        // Note: This function also re-assembles the sparse matrix in case a matrix-based
+        // implementation is used
+        this->get_operator_nonlinear(coarse_level)->set_solution_linearization(vector_coarse_level);
+      });
   }
-  else
+  else // linear problems
   {
-    AssertThrow(false,
-                dealii::ExcMessage(
-                  "Update of multigrid preconditioner is not implemented for linear elasticity."));
+    pde_operator->assemble_matrix_if_necessary();
+  }
+
+  // Update the smoothers and the coarse grid solver. This is generic functionality implemented in
+  // the base class.
+  this->update_smoothers();
+  this->update_coarse_solver();
+
+  this->update_needed = false;
+}
+
+template<int dim, typename Number>
+void
+MultigridPreconditioner<dim, Number>::initialize_dof_handler_and_constraints(
+  bool const                    operator_is_singular,
+  unsigned int const            n_components,
+  Map_DBC const &               dirichlet_bc,
+  Map_DBC_ComponentMask const & dirichlet_bc_component_mask)
+{
+  Base::initialize_dof_handler_and_constraints(operator_is_singular,
+                                               n_components,
+                                               dirichlet_bc,
+                                               dirichlet_bc_component_mask);
+
+  // additional constraints without Dirichlet degrees of freedom:
+  // Due to the interface of the base class MultigridPreconditionerBase, we also need to set up
+  // additional DoFHandler objects.
+  if(nonlinear)
+  {
+    Map_DBC               dirichlet_bc_empty;
+    Map_DBC_ComponentMask dirichlet_bc_empty_component_mask;
+    this->do_initialize_dof_handler_and_constraints(false,
+                                                    n_components,
+                                                    dirichlet_bc_empty,
+                                                    dirichlet_bc_empty_component_mask,
+                                                    dof_handlers_inhomogeneous,
+                                                    constraints_inhomogeneous);
   }
 }
 
@@ -88,107 +170,31 @@ void
 MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
   MatrixFreeData<dim, MultigridNumber> & matrix_free_data,
   unsigned int const                     level,
-  unsigned int const                     h_level)
+  unsigned int const                     dealii_tria_level)
 {
-  matrix_free_data.data.mg_level = h_level;
+  matrix_free_data.data.mg_level = dealii_tria_level;
 
   if(nonlinear)
     matrix_free_data.append_mapping_flags(PDEOperatorNonlinear::get_mapping_flags());
   else // linear
     matrix_free_data.append_mapping_flags(PDEOperatorLinear::get_mapping_flags());
 
-  matrix_free_data.insert_dof_handler(&(*this->dof_handlers[level]), "elasticity_dof_handler");
-  matrix_free_data.insert_constraint(&(*this->constraints[level]), "elasticity_dof_handler");
+  matrix_free_data.insert_dof_handler(&(*this->dof_handlers[level]), "elasticity_dof_index");
+  matrix_free_data.insert_constraint(&(*this->constraints[level]), "elasticity_dof_index");
 
-  if(this->dof_handlers[level]->get_triangulation().all_reference_cells_are_hyper_cube())
+  // additional constraints without Dirichlet degrees of freedom
+  if(nonlinear)
   {
-    matrix_free_data.insert_quadrature(dealii::QGauss<1>(this->level_info[level].degree() + 1),
-                                       "elasticity_quadrature");
-  }
-  else if(this->dof_handlers[level]->get_triangulation().all_reference_cells_are_simplex())
-  {
-    matrix_free_data.insert_quadrature(dealii::QGaussSimplex<dim>(this->level_info[level].degree() +
-                                                                  1),
-                                       "elasticity_quadrature");
-  }
-  else
-  {
-    AssertThrow(
-      false,
-      dealii::ExcMessage(
-        "Only pure hypercube or pure simplex meshes are implemented for Structure::MultigridPreconditioner."));
-  }
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::initialize_constrained_dofs(
-  dealii::DoFHandler<dim> const & dof_handler,
-  dealii::MGConstrainedDoFs &     constrained_dofs,
-  Map const &                     dirichlet_bc)
-{
-  // We use data.bc->dirichlet_bc since we also need dirichlet_bc_component_mask,
-  // but the argument dirichlet_bc could be used as well
-  (void)dirichlet_bc;
-
-  constrained_dofs.initialize(dof_handler);
-  for(auto it : data.bc->dirichlet_bc)
-  {
-    std::set<dealii::types::boundary_id> dirichlet_boundary;
-    dirichlet_boundary.insert(it.first);
-
-    dealii::ComponentMask mask    = dealii::ComponentMask();
-    auto                  it_mask = data.bc->dirichlet_bc_component_mask.find(it.first);
-    if(it_mask != data.bc->dirichlet_bc_component_mask.end())
-      mask = it_mask->second;
-
-    constrained_dofs.make_zero_boundary_constraints(dof_handler, dirichlet_boundary, mask);
-  }
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::update_operators()
-{
-  PDEOperatorNonlinear const * pde_operator_nonlinear =
-    dynamic_cast<PDEOperatorNonlinear const *>(pde_operator);
-
-  VectorType const & vector_linearization = pde_operator_nonlinear->get_solution_linearization();
-
-  // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
-  VectorTypeMG         vector_multigrid_type_copy;
-  VectorTypeMG const * vector_multigrid_type_ptr;
-  if(std::is_same<MultigridNumber, Number>::value)
-  {
-    vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&vector_linearization);
-  }
-  else
-  {
-    vector_multigrid_type_copy = vector_linearization;
-    vector_multigrid_type_ptr  = &vector_multigrid_type_copy;
+    matrix_free_data.insert_dof_handler(&(*dof_handlers_inhomogeneous[level]),
+                                        "elasticity_dof_index_inhomogeneous");
+    matrix_free_data.insert_constraint(&(*constraints_inhomogeneous[level]),
+                                       "elasticity_dof_index_inhomogeneous");
   }
 
-  set_solution_linearization(*vector_multigrid_type_ptr);
-}
-
-template<int dim, typename Number>
-void
-MultigridPreconditioner<dim, Number>::set_solution_linearization(
-  VectorTypeMG const & vector_linearization)
-{
-  // copy velocity to finest level
-  this->get_operator_nonlinear(this->fine_level)->set_solution_linearization(vector_linearization);
-
-  // interpolate velocity from fine to coarse level
-  for(unsigned int level = this->fine_level; level > this->coarse_level; --level)
-  {
-    auto & vector_fine_level =
-      this->get_operator_nonlinear(level - 0)->get_solution_linearization();
-    auto vector_coarse_level =
-      this->get_operator_nonlinear(level - 1)->get_solution_linearization();
-    this->transfers->interpolate(level, vector_coarse_level, vector_fine_level);
-    this->get_operator_nonlinear(level - 1)->set_solution_linearization(vector_coarse_level);
-  }
+  ElementType const element_type = get_element_type(*this->grid->triangulation);
+  std::shared_ptr<dealii::Quadrature<dim>> quadrature =
+    create_quadrature<dim>(element_type, this->level_info[level].degree() + 1);
+  matrix_free_data.insert_quadrature(*quadrature, "elasticity_quadrature");
 }
 
 template<int dim, typename Number>
@@ -204,17 +210,41 @@ MultigridPreconditioner<dim, Number>::get_operator_nonlinear(unsigned int level)
 
 template<int dim, typename Number>
 std::shared_ptr<
+  LinearOperator<dim, typename MultigridPreconditionerBase<dim, Number>::MultigridNumber>>
+MultigridPreconditioner<dim, Number>::get_operator_linear(unsigned int level)
+{
+  std::shared_ptr<MGOperatorLinear> mg_operator =
+    std::dynamic_pointer_cast<MGOperatorLinear>(this->operators[level]);
+
+  return mg_operator->get_pde_operator();
+}
+
+template<int dim, typename Number>
+std::shared_ptr<
   MultigridOperatorBase<dim, typename MultigridPreconditionerBase<dim, Number>::MultigridNumber>>
 MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const level)
 {
   std::shared_ptr<MGOperatorBase> mg_operator_level;
 
-  data.dof_index  = this->matrix_free_data_objects[level]->get_dof_index("elasticity_dof_handler");
+  data.dof_index = this->matrix_free_data_objects[level]->get_dof_index("elasticity_dof_index");
+  if(nonlinear)
+  {
+    data.dof_index_inhomogeneous =
+      this->matrix_free_data_objects[level]->get_dof_index("elasticity_dof_index_inhomogeneous");
+  }
   data.quad_index = this->matrix_free_data_objects[level]->get_quad_index("elasticity_quadrature");
 
   if(nonlinear)
   {
     std::shared_ptr<PDEOperatorNonlinearMG> pde_operator_level(new PDEOperatorNonlinearMG());
+
+    if(data.unsteady)
+    {
+      pde_operator_level->set_time(pde_operator->get_time());
+      pde_operator_level->set_scaling_factor_mass_operator(
+        pde_operator->get_scaling_factor_mass_operator());
+    }
+
     pde_operator_level->initialize(*this->matrix_free_objects[level],
                                    *this->constraints[level],
                                    data);
@@ -224,6 +254,14 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
   else // linear
   {
     std::shared_ptr<PDEOperatorLinearMG> pde_operator_level(new PDEOperatorLinearMG());
+
+    if(data.unsteady)
+    {
+      pde_operator_level->set_time(pde_operator->get_time());
+      pde_operator_level->set_scaling_factor_mass_operator(
+        pde_operator->get_scaling_factor_mass_operator());
+    }
+
     pde_operator_level->initialize(*this->matrix_free_objects[level],
                                    *this->constraints[level],
                                    data);

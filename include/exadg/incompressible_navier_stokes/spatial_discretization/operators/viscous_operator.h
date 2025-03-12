@@ -1,14 +1,28 @@
-/*
- * viscous_operator.h
+/*  ______________________________________________________________________
  *
- *  Created on: Nov 5, 2018
- *      Author: fehn
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2021 by the ExaDG authors
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  ______________________________________________________________________
  */
 
 #ifndef INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATORS_VISCOUS_OPERATOR_H_
 #define INCLUDE_EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATORS_VISCOUS_OPERATOR_H_
 
-#include <exadg/grid/grid_utilities.h>
+#include <exadg/grid/grid_data.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/weak_boundary_conditions.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/matrix_free/integrators.h>
@@ -56,7 +70,7 @@ private:
   typedef FaceIntegrator<dim, dim, Number> IntegratorFace;
 
 public:
-  ViscousKernel() : degree(1), tau(dealii::make_vectorized_array<Number>(0.0))
+  ViscousKernel() : quad_index(0), degree(1), tau(dealii::make_vectorized_array<Number>(0.0))
   {
   }
 
@@ -68,8 +82,10 @@ public:
   {
     this->data = data;
 
+    this->quad_index = quad_index;
+
     dealii::FiniteElement<dim> const & fe = matrix_free.get_dof_handler(dof_index).get_fe();
-    degree                                = fe.degree;
+    this->degree                          = fe.degree;
 
     calculate_penalty_parameter(matrix_free, dof_index);
 
@@ -78,7 +94,8 @@ public:
     if(data.viscosity_is_variable)
     {
       // allocate vectors for variable coefficients and initialize with constant viscosity
-      viscosity_coefficients.initialize(matrix_free, quad_index, data.viscosity);
+      viscosity_coefficients.initialize(matrix_free, quad_index, true, false);
+      viscosity_coefficients.set_coefficients(data.viscosity);
     }
   }
 
@@ -93,6 +110,24 @@ public:
   get_data() const
   {
     return this->data;
+  }
+
+  unsigned int
+  get_quad_index() const
+  {
+    return this->quad_index;
+  }
+
+  unsigned int
+  get_degree() const
+  {
+    return this->degree;
+  }
+
+  void
+  set_constant_coefficient(Number const & constant_coefficient)
+  {
+    viscosity_coefficients.set_coefficients(constant_coefficient);
   }
 
   void
@@ -111,6 +146,12 @@ public:
   set_coefficient_face(unsigned int const face, unsigned int const q, scalar const & value)
   {
     viscosity_coefficients.set_coefficient_face(face, q, value);
+  }
+
+  scalar
+  get_coefficient_face_neighbor(unsigned int const face, unsigned int const q)
+  {
+    return viscosity_coefficients.get_coefficient_face_neighbor(face, q);
   }
 
   void
@@ -159,7 +200,7 @@ public:
                    integrator_p.read_cell_data(array_penalty_parameter)) *
           IP::get_penalty_factor<dim, Number>(
             degree,
-            GridUtilities::get_element_type(
+            get_element_type(
               integrator_m.get_matrix_free().get_dof_handler(dof_index).get_triangulation()),
             data.IP_factor);
   }
@@ -170,7 +211,7 @@ public:
     tau = integrator_m.read_cell_data(array_penalty_parameter) *
           IP::get_penalty_factor<dim, Number>(
             degree,
-            GridUtilities::get_element_type(
+            get_element_type(
               integrator_m.get_matrix_free().get_dof_handler(dof_index).get_triangulation()),
             data.IP_factor);
   }
@@ -187,7 +228,7 @@ public:
                      integrator_p.read_cell_data(array_penalty_parameter)) *
             IP::get_penalty_factor<dim, Number>(
               degree,
-              GridUtilities::get_element_type(
+              get_element_type(
                 integrator_m.get_matrix_free().get_dof_handler(dof_index).get_triangulation()),
               data.IP_factor);
     }
@@ -196,7 +237,7 @@ public:
       tau = integrator_m.read_cell_data(array_penalty_parameter) *
             IP::get_penalty_factor<dim, Number>(
               degree,
-              GridUtilities::get_element_type(
+              get_element_type(
                 integrator_m.get_matrix_free().get_dof_handler(dof_index).get_triangulation()),
               data.IP_factor);
     }
@@ -296,7 +337,7 @@ public:
     }
     else
     {
-      AssertThrow(data.formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation ||
+      AssertThrow(data.formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation or
                     data.formulation_viscous_term == FormulationViscousTerm::LaplaceFormulation,
                   dealii::ExcMessage("Specified formulation of viscous term is not implemented."));
 
@@ -304,8 +345,9 @@ public:
     }
   }
 
-  /*
-   *  Calculation of "gradient_flux".
+  /**
+   * Calculates the `gradient flux`, i.e. the numerical flux that is tested with the shape function
+   * gradients.
    */
   inline DEAL_II_ALWAYS_INLINE //
     tensor
@@ -314,7 +356,7 @@ public:
                             vector const & normal,
                             scalar const & viscosity) const
   {
-    tensor value_flux;
+    tensor flux;
 
     vector jump_value  = value_m - value_p;
     tensor jump_tensor = outer_product(jump_value, normal);
@@ -323,11 +365,11 @@ public:
     {
       if(data.IP_formulation == InteriorPenaltyFormulation::NIPG)
       {
-        value_flux = 0.5 * viscosity * jump_tensor;
+        flux = 0.5 * viscosity * jump_tensor;
       }
       else if(data.IP_formulation == InteriorPenaltyFormulation::SIPG)
       {
-        value_flux = -0.5 * viscosity * jump_tensor;
+        flux = -0.5 * viscosity * jump_tensor;
       }
       else
       {
@@ -339,11 +381,11 @@ public:
     {
       if(data.IP_formulation == InteriorPenaltyFormulation::NIPG)
       {
-        value_flux = 0.5 * viscosity * (jump_tensor + transpose(jump_tensor));
+        flux = 0.5 * viscosity * (jump_tensor + transpose(jump_tensor));
       }
       else if(data.IP_formulation == InteriorPenaltyFormulation::SIPG)
       {
-        value_flux = -0.5 * viscosity * (jump_tensor + transpose(jump_tensor));
+        flux = -0.5 * viscosity * (jump_tensor + transpose(jump_tensor));
       }
       else
       {
@@ -357,7 +399,7 @@ public:
                   dealii::ExcMessage("Specified formulation of viscous term is not implemented."));
     }
 
-    return value_flux;
+    return flux;
   }
 
   /*
@@ -388,7 +430,7 @@ public:
     }
     else
     {
-      AssertThrow(data.formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation ||
+      AssertThrow(data.formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation or
                     data.formulation_viscous_term == FormulationViscousTerm::LaplaceFormulation,
                   dealii::ExcMessage("Specified formulation of viscous term is not implemented."));
     }
@@ -398,10 +440,12 @@ public:
     return normal_gradient;
   }
 
-  /*
-   *  Calculation of "value_flux". Strictly speaking, this value is not a numerical flux since
-   *  the flux is multiplied by the normal vector, i.e., "gradient_flux" = numerical_flux * normal,
-   *  where normal denotes the normal vector of element e⁻.
+
+  /**
+   * Calculates the `value flux`, i.e. the flux that is tested with the shape function values.
+   * Strictly speaking, this is not a numerical flux, but the right-hand side of the L2 product
+   * notation of the integral. In this case it is the inner product of the numerical flux and the
+   * the normal vector of element e⁻.
    */
   inline DEAL_II_ALWAYS_INLINE //
     vector
@@ -412,7 +456,7 @@ public:
                          vector const & normal,
                          scalar const & viscosity) const
   {
-    vector gradient_flux;
+    vector flux;
 
     vector jump_value              = value_m - value_p;
     vector average_normal_gradient = 0.5 * (normal_gradient_m + normal_gradient_p);
@@ -421,33 +465,33 @@ public:
     {
       if(data.penalty_term_div_formulation == PenaltyTermDivergenceFormulation::Symmetrized)
       {
-        gradient_flux = viscosity * average_normal_gradient -
-                        viscosity * tau * (jump_value + (jump_value * normal) * normal);
+        flux = viscosity * average_normal_gradient -
+               viscosity * tau * (jump_value + (jump_value * normal) * normal);
       }
       else if(data.penalty_term_div_formulation == PenaltyTermDivergenceFormulation::NotSymmetrized)
       {
-        gradient_flux = viscosity * average_normal_gradient - viscosity * tau * jump_value;
+        flux = viscosity * average_normal_gradient - viscosity * tau * jump_value;
       }
       else
       {
         AssertThrow(
-          data.penalty_term_div_formulation == PenaltyTermDivergenceFormulation::Symmetrized ||
+          data.penalty_term_div_formulation == PenaltyTermDivergenceFormulation::Symmetrized or
             data.penalty_term_div_formulation == PenaltyTermDivergenceFormulation::NotSymmetrized,
           dealii::ExcMessage("Specified formulation of viscous term is not implemented."));
       }
     }
     else if(data.formulation_viscous_term == FormulationViscousTerm::LaplaceFormulation)
     {
-      gradient_flux = viscosity * average_normal_gradient - viscosity * tau * jump_value;
+      flux = viscosity * average_normal_gradient - viscosity * tau * jump_value;
     }
     else
     {
-      AssertThrow(data.formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation ||
+      AssertThrow(data.formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation or
                     data.formulation_viscous_term == FormulationViscousTerm::LaplaceFormulation,
                   dealii::ExcMessage("Specified formulation of viscous term is not implemented."));
     }
 
-    return gradient_flux;
+    return flux;
   }
 
   // clang-format off
@@ -471,7 +515,7 @@ public:
   {
     vector normal_gradient_m;
 
-    if(operator_type == OperatorType::full || operator_type == OperatorType::homogeneous)
+    if(operator_type == OperatorType::full or operator_type == OperatorType::homogeneous)
     {
       normal_gradient_m = calculate_normal_gradient(q, integrator);
     }
@@ -489,6 +533,8 @@ public:
 
 private:
   ViscousKernelData data;
+
+  unsigned int quad_index;
 
   unsigned int degree;
 
@@ -539,32 +585,36 @@ public:
 
 private:
   void
-  reinit_face(unsigned int const face) const;
+  reinit_face_derived(IntegratorFace &   integrator_m,
+                      IntegratorFace &   integrator_p,
+                      unsigned int const face) const final;
 
   void
-  reinit_boundary_face(unsigned int const face) const;
+  reinit_boundary_face_derived(IntegratorFace & integrator_m, unsigned int const face) const final;
 
   void
-  reinit_face_cell_based(unsigned int const               cell,
-                         unsigned int const               face,
-                         dealii::types::boundary_id const boundary_id) const;
+  reinit_face_cell_based_derived(IntegratorFace &                 integrator_m,
+                                 IntegratorFace &                 integrator_p,
+                                 unsigned int const               cell,
+                                 unsigned int const               face,
+                                 dealii::types::boundary_id const boundary_id) const final;
 
   void
-  do_cell_integral(IntegratorCell & integrator) const;
+  do_cell_integral(IntegratorCell & integrator) const final;
 
   void
-  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
-  do_face_int_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_int_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
-  do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
+  do_face_ext_integral(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const final;
 
   void
   do_boundary_integral(IntegratorFace &                   integrator,
                        OperatorType const &               operator_type,
-                       dealii::types::boundary_id const & boundary_id) const;
+                       dealii::types::boundary_id const & boundary_id) const final;
 
   ViscousOperatorData<dim> operator_data;
 

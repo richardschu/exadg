@@ -24,6 +24,7 @@
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
+#include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
 
 namespace ExaDG
@@ -32,20 +33,21 @@ namespace IncNS
 {
 template<int dim, typename Number>
 TimeIntBDF<dim, Number>::TimeIntBDF(
-  std::shared_ptr<OperatorBase>                   operator_in,
-  Parameters const &                              param_in,
-  MPI_Comm const &                                mpi_comm_in,
-  bool const                                      is_test_in,
-  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in)
-  : TimeIntBDFBase<Number>(param_in.start_time,
-                           param_in.end_time,
-                           param_in.max_number_of_time_steps,
-                           param_in.order_time_integrator,
-                           param_in.start_with_low_order,
-                           param_in.adaptive_time_stepping,
-                           param_in.restart_data,
-                           mpi_comm_in,
-                           is_test_in),
+  std::shared_ptr<SpatialOperatorBase<dim, Number>> operator_in,
+  std::shared_ptr<HelpersALE<dim, Number> const>    helpers_ale_in,
+  std::shared_ptr<PostProcessorInterface<Number>>   postprocessor_in,
+  Parameters const &                                param_in,
+  MPI_Comm const &                                  mpi_comm_in,
+  bool const                                        is_test_in)
+  : TimeIntBDFBase(param_in.start_time,
+                   param_in.end_time,
+                   param_in.max_number_of_time_steps,
+                   param_in.order_time_integrator,
+                   param_in.start_with_low_order,
+                   param_in.adaptive_time_stepping,
+                   param_in.restart_data,
+                   mpi_comm_in,
+                   is_test_in),
     param(param_in),
     refine_steps_time(param_in.n_refine_time),
     cfl(param.cfl / std::pow(2.0, refine_steps_time)),
@@ -53,9 +55,14 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     vec_convective_term(this->order),
     use_extrapolation(true),
     store_solution(false),
+    helpers_ale(helpers_ale_in),
     postprocessor(postprocessor_in),
     vec_grid_coordinates(param_in.order_time_integrator)
 {
+  needs_vector_convective_term =
+    this->param.convective_problem() and
+    (this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit or
+     this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme);
 }
 
 template<int dim, typename Number>
@@ -63,8 +70,7 @@ void
 TimeIntBDF<dim, Number>::allocate_vectors()
 {
   // convective term
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(needs_vector_convective_term)
   {
     for(unsigned int i = 0; i < vec_convective_term.size(); ++i)
       this->operator_base->initialize_vector_velocity(vec_convective_term[i]);
@@ -91,33 +97,34 @@ void
 TimeIntBDF<dim, Number>::setup_derived()
 {
   // In the case of an arbitrary Lagrangian-Eulerian formulation:
-  if(param.ale_formulation && param.restarted_simulation == false)
+  if(param.ale_formulation and param.restarted_simulation == false)
   {
     // compute the grid coordinates at start time (and at previous times in case of
     // start_with_low_order == false)
 
-    operator_base->move_grid(this->get_time());
-    operator_base->fill_grid_coordinates_vector(vec_grid_coordinates[0]);
+    helpers_ale->move_grid(this->get_time());
+    helpers_ale->fill_grid_coordinates_vector(vec_grid_coordinates[0],
+                                              this->operator_base->get_dof_handler_u());
 
     if(this->start_with_low_order == false)
     {
       // compute grid coordinates at previous times (start with 1!)
       for(unsigned int i = 1; i < this->order; ++i)
       {
-        operator_base->move_grid(this->get_previous_time(i));
-        operator_base->fill_grid_coordinates_vector(vec_grid_coordinates[i]);
+        helpers_ale->move_grid(this->get_previous_time(i));
+        helpers_ale->fill_grid_coordinates_vector(vec_grid_coordinates[i],
+                                                  this->operator_base->get_dof_handler_u());
       }
     }
   }
 
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(needs_vector_convective_term)
   {
     // vec_convective_term does not have to be initialized in ALE case (the convective
     // term is recomputed in each time step for all previous times on the new mesh).
     // vec_convective_term does not have to be initialized in case of a restart, where
     // the vectors are read from memory.
-    if(this->param.ale_formulation == false && this->param.restarted_simulation == false)
+    if(this->param.ale_formulation == false and this->param.restarted_simulation == false)
     {
       initialize_vec_convective_term();
     }
@@ -128,8 +135,7 @@ template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::prepare_vectors_for_next_timestep()
 {
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(needs_vector_convective_term)
   {
     if(this->param.ale_formulation == false)
     {
@@ -150,7 +156,8 @@ void
 TimeIntBDF<dim, Number>::ale_update()
 {
   // and compute grid coordinates at the end of the current time step t_{n+1}
-  operator_base->fill_grid_coordinates_vector(grid_coordinates_np);
+  helpers_ale->fill_grid_coordinates_vector(grid_coordinates_np,
+                                            this->operator_base->get_dof_handler_u());
 
   // and update grid velocity using BDF time derivative
   compute_bdf_time_derivative(grid_velocity,
@@ -175,6 +182,59 @@ TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_e
 
 template<int dim, typename Number>
 void
+TimeIntBDF<dim, Number>::get_quantities_and_times(
+  std::vector<VectorType const *> &                             quantities,
+  std::vector<double> &                                         times,
+  std::function<VectorType const *(unsigned int const)> const & get_quantity) const
+{
+  /*
+   *
+   *   time t
+   *  -------->   t_{n-2}        t_{n-1}         t_{n}         t_{n+1}
+   *  _______________|______________|______________|______________|___________\
+   *                 |              |              |              |           /
+   *           quantities[2]  quantities[1]  quantities[0]
+   *              times[2]       times[1]       times[0]
+   */
+
+  unsigned int const current_order = this->get_current_order();
+
+  quantities.resize(current_order);
+  times.resize(current_order);
+
+  for(unsigned int i = 0; i < current_order; ++i)
+  {
+    quantities[i] = get_quantity(i);
+    times[i]      = this->get_previous_time(i);
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::get_quantities_and_times_np(
+  std::vector<VectorType const *> &                             quantities,
+  std::vector<double> &                                         times,
+  std::function<VectorType const *(unsigned int const)> const & get_quantity,
+  std::function<VectorType const *()> const &                   get_quantity_np) const
+{
+  /*
+   *
+   *   time t
+   *  -------->   t_{n-2}        t_{n-1}         t_{n}         t_{n+1}
+   *  _______________|______________|______________|______________|___________\
+   *                 |              |              |              |           /
+   *           quantities[3]  quantities[2]  quantities[1]  quantities[0]
+   *              times[3]       times[2]       times[1]       times[0]
+   */
+
+  get_quantities_and_times(quantities, times, get_quantity);
+
+  quantities.insert(quantities.begin(), get_quantity_np());
+  times.insert(times.begin(), this->get_next_time());
+}
+
+template<int dim, typename Number>
+void
 TimeIntBDF<dim, Number>::initialize_vec_convective_term()
 {
   this->operator_base->evaluate_convective_term(vec_convective_term[0],
@@ -194,29 +254,28 @@ TimeIntBDF<dim, Number>::initialize_vec_convective_term()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & ia)
+TimeIntBDF<dim, Number>::read_restart_vectors(BoostInputArchiveType & ia)
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
     VectorType tmp = get_velocity(i);
-    ia >> tmp;
+    read_write_distributed_vector(tmp, ia);
     set_velocity(tmp, i);
   }
   for(unsigned int i = 0; i < this->order; i++)
   {
     VectorType tmp = get_pressure(i);
-    ia >> tmp;
+    read_write_distributed_vector(tmp, ia);
     set_pressure(tmp, i);
   }
 
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(needs_vector_convective_term)
   {
     if(this->param.ale_formulation == false)
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        ia >> vec_convective_term[i];
+        read_write_distributed_vector(vec_convective_term[i], ia);
       }
     }
   }
@@ -225,32 +284,31 @@ TimeIntBDF<dim, Number>::read_restart_vectors(boost::archive::binary_iarchive & 
   {
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
     {
-      ia >> vec_grid_coordinates[i];
+      read_write_distributed_vector(vec_grid_coordinates[i], ia);
     }
   }
 }
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive & oa) const
+TimeIntBDF<dim, Number>::write_restart_vectors(BoostOutputArchiveType & oa) const
 {
   for(unsigned int i = 0; i < this->order; i++)
   {
-    oa << get_velocity(i);
+    read_write_distributed_vector(get_velocity(i), oa);
   }
   for(unsigned int i = 0; i < this->order; i++)
   {
-    oa << get_pressure(i);
+    read_write_distributed_vector(get_pressure(i), oa);
   }
 
-  if(this->param.convective_problem() &&
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  if(needs_vector_convective_term)
   {
     if(this->param.ale_formulation == false)
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        oa << vec_convective_term[i];
+        read_write_distributed_vector(vec_convective_term[i], oa);
       }
     }
   }
@@ -259,7 +317,7 @@ TimeIntBDF<dim, Number>::write_restart_vectors(boost::archive::binary_oarchive &
   {
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); i++)
     {
-      oa << vec_grid_coordinates[i];
+      read_write_distributed_vector(vec_grid_coordinates[i], oa);
     }
   }
 }
@@ -381,34 +439,7 @@ void
 TimeIntBDF<dim, Number>::get_velocities_and_times(std::vector<VectorType const *> & velocities,
                                                   std::vector<double> &             times) const
 {
-  /*
-   * the convective term is nonlinear, so we have to initialize the transport velocity
-   * and the discrete time instants that can be used for interpolation
-   *
-   *   time t
-   *  -------->   t_{n-2}   t_{n-1}   t_{n}     t_{n+1}
-   *  _______________|_________|________|___________|___________\
-   *                 |         |        |           |           /
-   *               sol[2]    sol[1]   sol[0]
-   *             times[2]  times[1]  times[0]
-   */
-  unsigned int current_order = this->order;
-  if(this->time_step_number <= this->order && this->param.start_with_low_order == true)
-  {
-    current_order = this->time_step_number;
-  }
-
-  AssertThrow(current_order > 0 && current_order <= this->order,
-              dealii::ExcMessage("Invalid parameter current_order"));
-
-  velocities.resize(current_order);
-  times.resize(current_order);
-
-  for(unsigned int i = 0; i < current_order; ++i)
-  {
-    velocities.at(i) = &get_velocity(i);
-    times.at(i)      = this->get_previous_time(i);
-  }
+  get_quantities_and_times(velocities, times, [&](const auto i) { return &get_velocity(i); });
 }
 
 template<int dim, typename Number>
@@ -416,37 +447,33 @@ void
 TimeIntBDF<dim, Number>::get_velocities_and_times_np(std::vector<VectorType const *> & velocities,
                                                      std::vector<double> &             times) const
 {
-  /*
-   * the convective term is nonlinear, so we have to initialize the transport velocity
-   * and the discrete time instants that can be used for interpolation
-   *
-   *   time t
-   *  -------->     t_{n-2}   t_{n-1}   t_{n}     t_{n+1}
-   *  _______________|_________|________|___________|___________\
-   *                 |         |        |           |           /
-   *               sol[3]   sol[2]    sol[1]     sol[0]
-   *              times[3] times[2]  times[1]   times[0]
-   */
-  unsigned int current_order = this->order;
-  if(this->time_step_number <= this->order && this->param.start_with_low_order == true)
-  {
-    current_order = this->time_step_number;
-  }
-
-  AssertThrow(current_order > 0 && current_order <= this->order,
-              dealii::ExcMessage("Invalid parameter current_order"));
-
-  velocities.resize(current_order + 1);
-  times.resize(current_order + 1);
-
-  velocities.at(0) = &get_velocity_np();
-  times.at(0)      = this->get_next_time();
-  for(unsigned int i = 0; i < current_order; ++i)
-  {
-    velocities.at(i + 1) = &get_velocity(i);
-    times.at(i + 1)      = this->get_previous_time(i);
-  }
+  get_quantities_and_times_np(
+    velocities,
+    times,
+    [&](const auto i) { return &get_velocity(i); },
+    [&]() { return &get_velocity_np(); });
 }
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::get_pressures_and_times(std::vector<VectorType const *> & pressures,
+                                                 std::vector<double> &             times) const
+{
+  get_quantities_and_times(pressures, times, [&](const auto i) { return &get_pressure(i); });
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::get_pressures_and_times_np(std::vector<VectorType const *> & pressures,
+                                                    std::vector<double> &             times) const
+{
+  get_quantities_and_times_np(
+    pressures,
+    times,
+    [&](const auto i) { return &get_pressure(i); },
+    [&]() { return &get_pressure_np(); });
+}
+
 
 template<int dim, typename Number>
 void
@@ -457,10 +484,11 @@ TimeIntBDF<dim, Number>::postprocessing() const
 
   // To allow a computation of errors at start_time (= if time step number is 1 and if the
   // simulation is not a restarted one), the mesh has to be at the correct position
-  if(this->param.ale_formulation && this->get_time_step_number() == 1 &&
-     !this->param.restarted_simulation)
+  if(this->param.ale_formulation and this->get_time_step_number() == 1 and
+     not this->param.restarted_simulation)
   {
-    operator_base->move_grid_and_update_dependent_data_structures(this->get_time());
+    helpers_ale->move_grid(this->get_time());
+    helpers_ale->update_pde_operator_after_grid_motion();
   }
 
   // We need to distribute the dofs before computing the error since

@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/time_integration/lambda_functions_ale.h>
 #include <exadg/time_integration/time_int_bdf_base.h>
 
 namespace ExaDG
@@ -41,20 +42,21 @@ template<typename Number>
 class PostProcessorInterface;
 
 template<int dim, typename Number>
-class TimeIntBDF : public TimeIntBDFBase<Number>
+class TimeIntBDF : public TimeIntBDFBase
 {
 public:
-  typedef TimeIntBDFBase<Number>                                  Base;
-  typedef typename Base::VectorType                               VectorType;
-  typedef dealii::LinearAlgebra::distributed::BlockVector<Number> BlockVectorType;
+  using Base                   = TimeIntBDFBase;
+  using VectorType             = dealii::LinearAlgebra::distributed::Vector<Number>;
+  using BlockVectorType        = dealii::LinearAlgebra::distributed::BlockVector<Number>;
+  using BoostInputArchiveType  = TimeIntBase::BoostInputArchiveType;
+  using BoostOutputArchiveType = TimeIntBase::BoostOutputArchiveType;
 
-  typedef SpatialOperatorBase<dim, Number> OperatorBase;
-
-  TimeIntBDF(std::shared_ptr<OperatorBase>                   operator_in,
-             Parameters const &                              param_in,
-             MPI_Comm const &                                mpi_comm_in,
-             bool const                                      is_test_in,
-             std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in);
+  TimeIntBDF(std::shared_ptr<SpatialOperatorBase<dim, Number>> operator_in,
+             std::shared_ptr<HelpersALE<dim, Number> const>    helpers_ale_in,
+             std::shared_ptr<PostProcessorInterface<Number>>   postprocessor_in,
+             Parameters const &                                param_in,
+             MPI_Comm const &                                  mpi_comm_in,
+             bool const                                        is_test_in);
 
   virtual ~TimeIntBDF()
   {
@@ -81,6 +83,14 @@ public:
                               std::vector<double> &             times) const;
 
   void
+  get_pressures_and_times(std::vector<VectorType const *> & pressures,
+                          std::vector<double> &             times) const;
+
+  void
+  get_pressures_and_times_np(std::vector<VectorType const *> & pressures,
+                             std::vector<double> &             times) const;
+
+  void
   ale_update();
 
   void
@@ -100,10 +110,10 @@ protected:
   setup_derived() override;
 
   void
-  read_restart_vectors(boost::archive::binary_iarchive & ia) override;
+  read_restart_vectors(BoostInputArchiveType & ia) override;
 
   void
-  write_restart_vectors(boost::archive::binary_oarchive & oa) const override;
+  write_restart_vectors(BoostOutputArchiveType & oa) const override;
 
   void
   prepare_vectors_for_next_timestep() override;
@@ -118,9 +128,10 @@ protected:
   double const cfl;
 
   // spatial discretization operator
-  std::shared_ptr<OperatorBase> operator_base;
+  std::shared_ptr<SpatialOperatorBase<dim, Number>> operator_base;
 
   // convective term formulated explicitly
+  bool                    needs_vector_convective_term;
   std::vector<VectorType> vec_convective_term;
   VectorType              convective_term_np;
 
@@ -128,7 +139,23 @@ protected:
   bool use_extrapolation;
   bool store_solution;
 
+  // This object allows to access utility functions needed for ALE
+  std::shared_ptr<HelpersALE<dim, Number> const> helpers_ale;
+
 private:
+  void
+  get_quantities_and_times(
+    std::vector<VectorType const *> &                             quantities,
+    std::vector<double> &                                         times,
+    std::function<VectorType const *(unsigned int const)> const & get_quantity) const;
+
+  void
+  get_quantities_and_times_np(
+    std::vector<VectorType const *> &                             quantities,
+    std::vector<double> &                                         times,
+    std::function<VectorType const *(unsigned int const)> const & get_quantity,
+    std::function<VectorType const *()> const &                   get_quantity_np) const;
+
   void
   initialize_vec_convective_term();
 

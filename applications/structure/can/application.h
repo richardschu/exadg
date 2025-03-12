@@ -38,7 +38,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -67,7 +67,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -95,7 +95,7 @@ public:
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const
+  value(dealii::Point<dim> const & p, unsigned int const c) const final
   {
     (void)p;
 
@@ -119,22 +119,28 @@ public:
   }
 
   void
-  add_parameters(dealii::ParameterHandler & prm)
+  add_parameters(dealii::ParameterHandler & prm) final
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
-    // clang-format off
     prm.enter_subsection("Application");
-    prm.add_parameter("InnerRadius",      inner_radius,     "Inner radius.");
-    prm.add_parameter("OuterRadius",      outer_radius,     "Outer radius.");
-    prm.add_parameter("Height",           height,           "Height.");
-    prm.add_parameter("UseVolumeForce",   use_volume_force, "Use volume force.");
-    prm.add_parameter("VolumeForce",      volume_force,     "Volume force.");
-    prm.add_parameter("BoundaryType",     boundary_type,    "Type of boundary condition, Dirichlet vs Neumann.", dealii::Patterns::Selection("Dirichlet|Neumann"));
-    prm.add_parameter("Displacement",     displacement,     "Diplacement of right boundary in case of Dirichlet BC.");
-    prm.add_parameter("Traction",         area_force,       "Traction acting on right boundary in case of Neumann BC.");
+    {
+      prm.add_parameter("InnerRadius", inner_radius, "Inner radius.");
+      prm.add_parameter("OuterRadius", outer_radius, "Outer radius.");
+      prm.add_parameter("Height", height, "Height.");
+      prm.add_parameter("UseVolumeForce", use_volume_force, "Use volume force.");
+      prm.add_parameter("VolumeForce", volume_force, "Volume force.");
+      prm.add_parameter("BoundaryType",
+                        boundary_type,
+                        "Type of boundary condition, Dirichlet vs Neumann.");
+      prm.add_parameter("Displacement",
+                        displacement,
+                        "Diplacement of right boundary in case of Dirichlet BC.");
+      prm.add_parameter("Traction",
+                        area_force,
+                        "Traction acting on right boundary in case of Neumann BC.");
+    }
     prm.leave_subsection();
-    // clang-format on
   }
 
 private:
@@ -147,8 +153,9 @@ private:
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
 
-    this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.grid.mapping_degree     = 1;
+    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.mapping_degree              = 1;
+    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
     this->param.load_increment = 0.1;
 
@@ -168,44 +175,75 @@ private:
   }
 
   void
-  create_grid() final
+  create_grid(Grid<dim> &                                       grid,
+              std::shared_ptr<dealii::Mapping<dim>> &           mapping,
+              std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
     AssertThrow(dim == 3, dealii::ExcMessage("This application only makes sense for dim=3."));
 
-    dealii::GridGenerator::cylinder_shell(*this->grid->triangulation,
-                                          height,
-                                          inner_radius,
-                                          outer_radius);
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
+      (void)periodic_face_pairs;
+      (void)vector_local_refinements;
 
-    // 0 = bottom ; 1 = top ; 2 = inner and outer radius
-    for(auto cell : this->grid->triangulation->cell_iterators())
-    {
-      for(auto const & f : cell->face_indices())
+      AssertThrow(
+        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
+        dealii::ExcMessage(
+          "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
+          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
+
+      dealii::GridGenerator::cylinder_shell(tria, height, inner_radius, outer_radius);
+
+      // 0 = bottom ; 1 = top ; 2 = inner and outer radius
+      for(auto cell : tria.cell_iterators())
       {
-        if(cell->face(f)->at_boundary())
+        for(auto const & f : cell->face_indices())
         {
-          dealii::Point<dim> const face_center = cell->face(f)->center();
+          if(cell->face(f)->at_boundary())
+          {
+            dealii::Point<dim> const face_center = cell->face(f)->center();
 
-          // bottom
-          if(dim == 3 && std::abs(face_center[dim - 1] - 0.0) < 1.e-8)
-          {
-            cell->face(f)->set_boundary_id(0);
-          }
-          // top
-          else if(dim == 3 && std::abs(face_center[dim - 1] - height) < 1.e-8)
-          {
-            cell->face(f)->set_boundary_id(1);
-          }
-          // inner radius and outer radius
-          else
-          {
-            cell->face(f)->set_boundary_id(2);
+            // bottom
+            if(dim == 3 and std::abs(face_center[dim - 1] - 0.0) < 1.e-8)
+            {
+              cell->face(f)->set_boundary_id(0);
+            }
+            // top
+            else if(dim == 3 and std::abs(face_center[dim - 1] - height) < 1.e-8)
+            {
+              cell->face(f)->set_boundary_id(1);
+            }
+            // inner radius and outer radius
+            else
+            {
+              cell->face(f)->set_boundary_id(2);
+            }
           }
         }
       }
-    }
 
-    this->grid->triangulation->refine_global(this->param.grid.n_refine_global);
+      tria.refine_global(global_refinements);
+    };
+
+    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                            this->mpi_comm,
+                                                            this->param.grid,
+                                                            this->param.involves_h_multigrid(),
+                                                            lambda_create_triangulation,
+                                                            {} /* no local refinements */);
+
+    // mappings
+    GridUtilities::create_mapping_with_multigrid(mapping,
+                                                 multigrid_mappings,
+                                                 this->param.grid.element_type,
+                                                 this->param.mapping_degree,
+                                                 this->param.mapping_degree_coarse_grids,
+                                                 this->param.involves_h_multigrid());
   }
 
   void
@@ -220,20 +258,27 @@ private:
     std::vector<bool> mask_lower = {true, true, true}; // clamp boundary, i.e., fix all directions
     this->boundary_descriptor->dirichlet_bc.insert(
       pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+
     this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(0, mask_lower));
 
     // BC at the top (boundary_id = 1)
     bool const incremental_loading = (this->param.problem_type == ProblemType::QuasiStatic);
-    if(boundary_type == "Dirichlet")
+    if(boundary_type == BoundaryType::Dirichlet)
     {
       std::vector<bool> mask_upper = {false, false, true}; // let boundary slide in x-y-plane
       //      std::vector<bool> mask_upper = {true, true, true}; // clamp boundary, i.e., fix all
       //      directions
       this->boundary_descriptor->dirichlet_bc.insert(
         pair(1, new DisplacementDBC<dim>(displacement, incremental_loading)));
+      // DisplacementDBC is a linearly increasing function, so the acceleration is zero.
+      this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+        pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
+
       this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(1, mask_upper));
     }
-    else if(boundary_type == "Neumann")
+    else if(boundary_type == BoundaryType::Neumann)
     {
       this->boundary_descriptor->neumann_bc.insert(
         pair(1, new AreaForce<dim>(area_force, incremental_loading)));
@@ -296,7 +341,13 @@ private:
 
   double volume_force = 1.0;
 
-  std::string boundary_type = "Dirichlet";
+  enum class BoundaryType
+  {
+    Dirichlet,
+    Neumann
+  };
+  BoundaryType boundary_type = BoundaryType::Dirichlet;
+
 
   double displacement = 0.2; // "Dirichlet"
   double area_force   = 1.0; // "Neumann"

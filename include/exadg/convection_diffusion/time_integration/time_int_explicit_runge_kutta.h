@@ -56,10 +56,10 @@ public:
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
 
   TimeIntExplRK(std::shared_ptr<Interface::Operator<Number>>    operator_in,
+                std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
                 Parameters const &                              param_in,
                 MPI_Comm const &                                mpi_comm_in,
-                bool const                                      is_test_in,
-                std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in);
+                bool const                                      is_test_in);
 
   void
   set_velocities_and_times(std::vector<VectorType const *> const & velocities_in,
@@ -70,28 +70,28 @@ public:
 
 private:
   void
-  initialize_vectors();
+  initialize_vectors() final;
 
   void
-  initialize_solution();
+  initialize_solution() final;
 
   void
-  postprocessing() const;
+  postprocessing() const final;
 
   bool
-  print_solver_info() const;
+  print_solver_info() const final;
 
   void
   do_timestep_solve() final;
 
   void
-  calculate_time_step_size();
+  calculate_time_step_size() final;
 
   double
-  recalculate_time_step_size() const;
+  recalculate_time_step_size() const final;
 
   void
-  initialize_time_integrator();
+  initialize_time_integrator() final;
 
   std::shared_ptr<Interface::Operator<Number>> pde_operator;
 

@@ -60,7 +60,14 @@ public:
   std::shared_ptr<TimerTree>
   get_timings() const;
 
+  void
+  get_structure_velocity(VectorType & velocity_structure, unsigned int const iteration) const;
+
 private:
+  void
+  get_structure_displacement(VectorType &       displacement_structure,
+                             unsigned int const iteration) const;
+
   bool
   check_convergence(VectorType const & residual) const;
 
@@ -119,7 +126,7 @@ PartitionedSolver<dim, Number>::check_convergence(VectorType const & residual) c
   double const ref_norm_rel  = structure->time_integrator->get_velocity_np().l2_norm() *
                               structure->time_integrator->get_time_step_size();
 
-  bool const converged = (residual_norm < parameters.abs_tol * ref_norm_abs) ||
+  bool const converged = (residual_norm < parameters.abs_tol * ref_norm_abs) or
                          (residual_norm < parameters.rel_tol * ref_norm_rel);
 
   return converged;
@@ -174,6 +181,66 @@ PartitionedSolver<dim, Number>::get_timings() const
 
 template<int dim, typename Number>
 void
+PartitionedSolver<dim, Number>::get_structure_velocity(VectorType & velocity_structure,
+                                                       unsigned int iteration) const
+{
+  if(iteration == 0)
+  {
+    if(parameters.initial_guess_coupling_scheme ==
+       InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep)
+    {
+      structure->time_integrator->extrapolate_velocity_to_np(velocity_structure);
+    }
+    else if(parameters.initial_guess_coupling_scheme ==
+            InitialGuessCouplingScheme::ConvergedSolutionOfPreviousTimeStep)
+    {
+      velocity_structure = structure->time_integrator->get_velocity_n();
+    }
+    else
+    {
+      AssertThrow(false,
+                  dealii::ExcMessage(
+                    "Behavior for this `InitialGuessCouplingScheme` is not defined."));
+    }
+  }
+  else
+  {
+    velocity_structure = structure->time_integrator->get_velocity_np();
+  }
+}
+
+template<int dim, typename Number>
+void
+PartitionedSolver<dim, Number>::get_structure_displacement(VectorType & displacement_structure,
+                                                           unsigned int const iteration) const
+{
+  if(iteration == 0)
+  {
+    if(this->parameters.initial_guess_coupling_scheme ==
+       InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep)
+    {
+      structure->time_integrator->extrapolate_displacement_to_np(displacement_structure);
+    }
+    else if(this->parameters.initial_guess_coupling_scheme ==
+            InitialGuessCouplingScheme::ConvergedSolutionOfPreviousTimeStep)
+    {
+      displacement_structure = structure->time_integrator->get_displacement_n();
+    }
+    else
+    {
+      AssertThrow(false,
+                  dealii::ExcMessage(
+                    "Behavior for this `InitialGuessCouplingScheme` is not defined."));
+    }
+  }
+  else
+  {
+    displacement_structure = structure->time_integrator->get_displacement_np();
+  }
+}
+
+template<int dim, typename Number>
+void
 PartitionedSolver<dim, Number>::solve(
   std::function<void(VectorType &, VectorType const &, unsigned int)> const &
     apply_dirichlet_neumann_scheme)
@@ -182,7 +249,7 @@ PartitionedSolver<dim, Number>::solve(
   unsigned int k = 0;
 
   // fixed-point iteration with dynamic relaxation (Aitken relaxation)
-  if(parameters.method == "Aitken")
+  if(parameters.acceleration_method == AccelerationMethod::Aitken)
   {
     VectorType r_old, d;
     structure->pde_operator->initialize_dof_vector(r_old);
@@ -190,14 +257,11 @@ PartitionedSolver<dim, Number>::solve(
 
     bool   converged = false;
     double omega     = 1.0;
-    while(not converged and k < parameters.partitioned_iter_max)
+    while(not(converged) and k < parameters.partitioned_iter_max)
     {
       print_solver_info_header(k);
 
-      if(k == 0)
-        structure->time_integrator->extrapolate_displacement_to_np(d);
-      else
-        d = structure->time_integrator->get_displacement_np();
+      get_structure_displacement(d, k);
 
       VectorType d_tilde(d);
       apply_dirichlet_neumann_scheme(d_tilde, d, k);
@@ -236,7 +300,7 @@ PartitionedSolver<dim, Number>::solve(
       ++k;
     }
   }
-  else if(parameters.method == "IQN-ILS")
+  else if(parameters.acceleration_method == AccelerationMethod::IQN_ILS)
   {
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
@@ -257,10 +321,7 @@ PartitionedSolver<dim, Number>::solve(
     {
       print_solver_info_header(k);
 
-      if(k == 0)
-        structure->time_integrator->extrapolate_displacement_to_np(d);
-      else
-        d = structure->time_integrator->get_displacement_np();
+      get_structure_displacement(d, k);
 
       apply_dirichlet_neumann_scheme(d_tilde, d, k);
 
@@ -357,7 +418,7 @@ PartitionedSolver<dim, Number>::solve(
 
     timer_tree->insert({"IQN-ILS"}, timer.wall_time());
   }
-  else if(parameters.method == "IQN-IMVLS")
+  else if(parameters.acceleration_method == AccelerationMethod::IQN_IMVLS)
   {
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
@@ -381,14 +442,11 @@ PartitionedSolver<dim, Number>::solve(
     unsigned int const n = fluid->time_integrator->get_number_of_time_steps();
 
     bool converged = false;
-    while(not converged and k < parameters.partitioned_iter_max)
+    while(not(converged) and k < parameters.partitioned_iter_max)
     {
       print_solver_info_header(k);
 
-      if(k == 0)
-        structure->time_integrator->extrapolate_displacement_to_np(d);
-      else
-        d = structure->time_integrator->get_displacement_np();
+      get_structure_displacement(d, k);
 
       apply_dirichlet_neumann_scheme(d_tilde, d, k);
 
@@ -486,7 +544,7 @@ PartitionedSolver<dim, Number>::solve(
   }
   else
   {
-    AssertThrow(false, dealii::ExcMessage("This method is not implemented."));
+    AssertThrow(false, dealii::ExcMessage("This AccelerationMethod is not implemented."));
   }
 
   partitioned_iterations.first += 1;

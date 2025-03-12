@@ -66,7 +66,10 @@ Parameters::Parameters()
 
     // SPATIAL DISCRETIZATION
     grid(GridData()),
+    mapping_degree(1),
+    mapping_degree_coarse_grids(1),
     degree(1),
+    enable_adaptivity(false),
     numerical_flux_convective_operator(NumericalFluxConvectiveOperator::Undefined),
     IP_factor(1.0),
 
@@ -104,7 +107,7 @@ Parameters::check() const
 
   if(analytical_velocity_field)
   {
-    if(equation_type == EquationType::Convection ||
+    if(equation_type == EquationType::Convection or
        equation_type == EquationType::ConvectionDiffusion)
     {
       if(temporal_discretization == TemporalDiscretization::ExplRK)
@@ -123,13 +126,13 @@ Parameters::check() const
                 dealii::ExcMessage("Problem type has to be Unsteady when using ALE formulation."));
 
     AssertThrow(
-      temporal_discretization == TemporalDiscretization::BDF &&
-        (treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit ||
+      temporal_discretization == TemporalDiscretization::BDF and
+        (treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit or
          treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit),
       dealii::ExcMessage(
         "ALE formulation is not implemented for the specified type of time integration."));
 
-    AssertThrow(equation_type == EquationType::Convection ||
+    AssertThrow(equation_type == EquationType::Convection or
                   equation_type == EquationType::ConvectionDiffusion,
                 dealii::ExcMessage(
                   "ALE formulation can only be used if the problem involves convection."));
@@ -152,7 +155,7 @@ Parameters::check() const
   AssertThrow(end_time > start_time, dealii::ExcMessage("parameter must be defined"));
 
   // Set the diffusivity whenever the diffusive term is involved.
-  if(equation_type == EquationType::Diffusion || equation_type == EquationType::ConvectionDiffusion)
+  if(equation_type == EquationType::Diffusion or equation_type == EquationType::ConvectionDiffusion)
   {
     AssertThrow(diffusivity > (0.0 - std::numeric_limits<double>::epsilon()),
                 dealii::ExcMessage("parameter must be defined"));
@@ -166,7 +169,7 @@ Parameters::check() const
 
     if(temporal_discretization == TemporalDiscretization::BDF)
     {
-      if(equation_type == EquationType::Convection ||
+      if(equation_type == EquationType::Convection or
          equation_type == EquationType::ConvectionDiffusion)
       {
         AssertThrow(treatment_of_convective_term != TreatmentOfConvectiveTerm::Undefined,
@@ -192,7 +195,7 @@ Parameters::check() const
     if(calculation_of_time_step_size == TimeStepCalculation::CFL)
     {
       AssertThrow(
-        equation_type == EquationType::Convection ||
+        equation_type == EquationType::Convection or
           equation_type == EquationType::ConvectionDiffusion,
         dealii::ExcMessage(
           "Type of time step calculation CFL does not make sense for the specified equation type."));
@@ -203,7 +206,7 @@ Parameters::check() const
     if(calculation_of_time_step_size == TimeStepCalculation::Diffusion)
     {
       AssertThrow(
-        equation_type == EquationType::Diffusion ||
+        equation_type == EquationType::Diffusion or
           equation_type == EquationType::ConvectionDiffusion,
         dealii::ExcMessage(
           "Type of time step calculation Diffusion does not make sense for the specified equation type."));
@@ -222,7 +225,7 @@ Parameters::check() const
       AssertThrow(diffusion_number > 0., dealii::ExcMessage("parameter must be defined"));
     }
 
-    if(calculation_of_time_step_size == TimeStepCalculation::Diffusion ||
+    if(calculation_of_time_step_size == TimeStepCalculation::Diffusion or
        calculation_of_time_step_size == TimeStepCalculation::CFLAndDiffusion)
     {
       AssertThrow(
@@ -233,7 +236,7 @@ Parameters::check() const
 
     if(adaptive_time_stepping == true)
     {
-      AssertThrow(calculation_of_time_step_size == TimeStepCalculation::CFL ||
+      AssertThrow(calculation_of_time_step_size == TimeStepCalculation::CFL or
                     calculation_of_time_step_size == TimeStepCalculation::CFLAndDiffusion,
                   dealii::ExcMessage(
                     "Adaptive time stepping can only be used in combination with CFL condition."));
@@ -241,13 +244,13 @@ Parameters::check() const
 
     if(temporal_discretization == TemporalDiscretization::ExplRK)
     {
-      AssertThrow(order_time_integrator >= 1 && order_time_integrator <= 4,
+      AssertThrow(order_time_integrator >= 1 and order_time_integrator <= 4,
                   dealii::ExcMessage("Specified order of time integrator ExplRK not implemented!"));
     }
 
     if(temporal_discretization == TemporalDiscretization::BDF)
     {
-      AssertThrow(order_time_integrator >= 1 && order_time_integrator <= 4,
+      AssertThrow(order_time_integrator >= 1 and order_time_integrator <= 4,
                   dealii::ExcMessage("Specified order of time integrator BDF not implemented!"));
     }
   }
@@ -255,9 +258,24 @@ Parameters::check() const
   // SPATIAL DISCRETIZATION
   grid.check();
 
+  if(enable_adaptivity)
+  {
+    AssertThrow(not ale_formulation,
+                dealii::ExcMessage("Combination of adaptive mesh refinement "
+                                   "and ALE formulation not implemented."));
+
+    AssertThrow(temporal_discretization == TemporalDiscretization::BDF,
+                dealii::ExcMessage("Adaptive mesh refinement only implemented"
+                                   "for implicit time integration."));
+
+    AssertThrow(grid.element_type == ElementType::Hypercube,
+                dealii::ExcMessage("Adaptive mesh refinement is currently "
+                                   "only supported for hypercube elements."));
+  }
+
   AssertThrow(degree > 0, dealii::ExcMessage("Polynomial degree must be larger than zero."));
 
-  if(equation_type == EquationType::Convection ||
+  if(equation_type == EquationType::Convection or
      equation_type == EquationType::ConvectionDiffusion)
   {
     AssertThrow(numerical_flux_convective_operator != NumericalFluxConvectiveOperator::Undefined,
@@ -280,7 +298,7 @@ Parameters::check() const
 
       if(treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
       {
-        AssertThrow(mg_operator_type != MultigridOperatorType::ReactionConvection &&
+        AssertThrow(mg_operator_type != MultigridOperatorType::ReactionConvection and
                       mg_operator_type != MultigridOperatorType::ReactionConvectionDiffusion,
                     dealii::ExcMessage(
                       "Invalid solver parameters. The convective term is treated explicitly."));
@@ -340,28 +358,28 @@ bool
 Parameters::linear_system_including_convective_term_has_to_be_solved() const
 {
   bool equation_with_convective_term =
-    equation_type == EquationType::Convection || equation_type == EquationType::ConvectionDiffusion;
+    equation_type == EquationType::Convection or equation_type == EquationType::ConvectionDiffusion;
 
   bool solver_with_convective_term =
-    problem_type == ProblemType::Steady ||
-    (problem_type == ProblemType::Unsteady &&
-     temporal_discretization == TemporalDiscretization::BDF &&
+    problem_type == ProblemType::Steady or
+    (problem_type == ProblemType::Unsteady and
+     temporal_discretization == TemporalDiscretization::BDF and
      treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit);
 
-  return (equation_with_convective_term && solver_with_convective_term);
+  return (equation_with_convective_term and solver_with_convective_term);
 }
 
 bool
 Parameters::convective_problem() const
 {
-  return (equation_type == EquationType::Convection ||
+  return (equation_type == EquationType::Convection or
           equation_type == EquationType::ConvectionDiffusion);
 }
 
 bool
 Parameters::diffusive_problem() const
 {
-  return (equation_type == EquationType::Diffusion ||
+  return (equation_type == EquationType::Diffusion or
           equation_type == EquationType::ConvectionDiffusion);
 }
 
@@ -370,7 +388,7 @@ bool
 Parameters::linear_system_has_to_be_solved() const
 {
   bool linear_solver_needed =
-    problem_type == ProblemType::Steady || (problem_type == ProblemType::Unsteady &&
+    problem_type == ProblemType::Steady or (problem_type == ProblemType::Unsteady and
                                             temporal_discretization == TemporalDiscretization::BDF);
 
   return linear_solver_needed;
@@ -379,7 +397,7 @@ Parameters::linear_system_has_to_be_solved() const
 TypeVelocityField
 Parameters::get_type_velocity_field() const
 {
-  if(analytical_velocity_field == true && store_analytical_velocity_in_dof_vector == false)
+  if(analytical_velocity_field == true and store_analytical_velocity_in_dof_vector == false)
     return TypeVelocityField::Function;
   else
     return TypeVelocityField::DoFVector;
@@ -417,18 +435,16 @@ Parameters::print_parameters_mathematical_model(dealii::ConditionalOStream const
 {
   pcout << std::endl << "Mathematical model:" << std::endl;
 
-  print_parameter(pcout, "Problem type", enum_to_string(problem_type));
-  print_parameter(pcout, "Equation type", enum_to_string(equation_type));
+  print_parameter(pcout, "Problem type", problem_type);
+  print_parameter(pcout, "Equation type", equation_type);
   print_parameter(pcout, "Right-hand side", right_hand_side);
 
-  if(equation_type == EquationType::Convection ||
+  if(equation_type == EquationType::Convection or
      equation_type == EquationType::ConvectionDiffusion)
   {
     print_parameter(pcout, "Analytical velocity field", analytical_velocity_field);
     print_parameter(pcout, "ALE formulation", ale_formulation);
-    print_parameter(pcout,
-                    "Formulation convective term",
-                    enum_to_string(formulation_convective_term));
+    print_parameter(pcout, "Formulation convective term", formulation_convective_term);
   }
 }
 
@@ -444,7 +460,7 @@ Parameters::print_parameters_physical_quantities(dealii::ConditionalOStream cons
   }
 
   // diffusivity
-  if(equation_type == EquationType::Diffusion || equation_type == EquationType::ConvectionDiffusion)
+  if(equation_type == EquationType::Diffusion or equation_type == EquationType::ConvectionDiffusion)
   {
     print_parameter(pcout, "Diffusivity", diffusivity);
   }
@@ -455,11 +471,11 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 {
   pcout << std::endl << "Temporal discretization:" << std::endl;
 
-  print_parameter(pcout, "Temporal discretization method", enum_to_string(temporal_discretization));
+  print_parameter(pcout, "Temporal discretization method", temporal_discretization);
 
   if(temporal_discretization == TemporalDiscretization::ExplRK)
   {
-    print_parameter(pcout, "Explicit time integrator", enum_to_string(time_integrator_rk));
+    print_parameter(pcout, "Explicit time integrator", time_integrator_rk);
   }
 
   print_parameter(pcout, "Maximum number of time steps", max_number_of_time_steps);
@@ -470,14 +486,10 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
   {
     print_parameter(pcout, "Order of time integrator", order_time_integrator);
     print_parameter(pcout, "Start with low order method", start_with_low_order);
-    print_parameter(pcout,
-                    "Treatment of convective term",
-                    enum_to_string(treatment_of_convective_term));
+    print_parameter(pcout, "Treatment of convective term", treatment_of_convective_term);
   }
 
-  print_parameter(pcout,
-                  "Calculation of time step size",
-                  enum_to_string(calculation_of_time_step_size));
+  print_parameter(pcout, "Calculation of time step size", calculation_of_time_step_size);
 
   print_parameter(pcout, "Adaptive time stepping", adaptive_time_stepping);
 
@@ -489,9 +501,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 
     print_parameter(pcout, "Maximum allowable time step size", time_step_size_max);
 
-    print_parameter(pcout,
-                    "Type of CFL condition",
-                    enum_to_string(adaptive_time_stepping_cfl_type));
+    print_parameter(pcout, "Type of CFL condition", adaptive_time_stepping_cfl_type);
   }
 
 
@@ -511,17 +521,25 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
 
   grid.print(pcout);
 
+  print_parameter(pcout, "Mapping degree", mapping_degree);
+
+  if(involves_h_multigrid())
+    print_parameter(pcout, "Mapping degree coarse grids", mapping_degree_coarse_grids);
+
   print_parameter(pcout, "Polynomial degree", degree);
 
-  if(equation_type == EquationType::Convection ||
-     equation_type == EquationType::ConvectionDiffusion)
+  if(enable_adaptivity)
   {
-    print_parameter(pcout,
-                    "Numerical flux convective term",
-                    enum_to_string(numerical_flux_convective_operator));
+    amr_data.print(pcout);
   }
 
-  if(equation_type == EquationType::Diffusion || equation_type == EquationType::ConvectionDiffusion)
+  if(equation_type == EquationType::Convection or
+     equation_type == EquationType::ConvectionDiffusion)
+  {
+    print_parameter(pcout, "Numerical flux convective term", numerical_flux_convective_operator);
+  }
+
+  if(equation_type == EquationType::Diffusion or equation_type == EquationType::ConvectionDiffusion)
   {
     print_parameter(pcout, "IP factor viscous term", IP_factor);
   }
@@ -532,11 +550,11 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
 {
   pcout << std::endl << "Solver:" << std::endl;
 
-  print_parameter(pcout, "Solver", enum_to_string(solver));
+  print_parameter(pcout, "Solver", solver);
 
   solver_data.print(pcout);
 
-  print_parameter(pcout, "Preconditioner", enum_to_string(preconditioner));
+  print_parameter(pcout, "Preconditioner", preconditioner);
 
   if(preconditioner != Preconditioner::None)
   {
@@ -552,18 +570,16 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
 
   if(implement_block_diagonal_preconditioner_matrix_free)
   {
-    print_parameter(pcout, "Solver block diagonal", enum_to_string(solver_block_diagonal));
+    print_parameter(pcout, "Solver block diagonal", solver_block_diagonal);
 
-    print_parameter(pcout,
-                    "Preconditioner block diagonal",
-                    enum_to_string(preconditioner_block_diagonal));
+    print_parameter(pcout, "Preconditioner block diagonal", preconditioner_block_diagonal);
 
     solver_data_block_diagonal.print(pcout);
   }
 
   if(preconditioner == Preconditioner::Multigrid)
   {
-    print_parameter(pcout, "Multigrid operator type", enum_to_string(mg_operator_type));
+    print_parameter(pcout, "Multigrid operator type", mg_operator_type);
     multigrid_data.print(pcout);
   }
 
@@ -583,7 +599,7 @@ Parameters::print_parameters_numerical_parameters(dealii::ConditionalOStream con
 
   if(analytical_velocity_field)
   {
-    if(temporal_discretization == TemporalDiscretization::BDF &&
+    if(temporal_discretization == TemporalDiscretization::BDF and
        treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
     {
       print_parameter(pcout,

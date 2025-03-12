@@ -62,7 +62,7 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator)
+  setup(Operator const & pde_operator) final
   {
     // call setup function of base class
     Base::setup(pde_operator);
@@ -71,7 +71,7 @@ public:
     mean_velocity_calculator.reset(
       new MeanVelocityCalculator<dim, Number>(pde_operator.get_matrix_free(),
                                               pde_operator.get_dof_index_velocity(),
-                                              pde_operator.get_quad_index_velocity_linear(),
+                                              pde_operator.get_quad_index_velocity_standard(),
                                               my_pp_data.mean_velocity_data,
                                               this->mpi_comm));
 
@@ -89,7 +89,7 @@ public:
   do_postprocessing(VectorType const &     velocity,
                     VectorType const &     pressure,
                     double const           time,
-                    types::time_step const time_step_number)
+                    types::time_step const time_step_number) final
   {
     Base::do_postprocessing(velocity, pressure, time, time_step_number);
 
