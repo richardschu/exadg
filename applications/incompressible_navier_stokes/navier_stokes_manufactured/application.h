@@ -447,13 +447,13 @@ private:
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
-    this->param.time_step_size                = this->param.end_time;
+    this->param.time_step_size                = (end_time - start_time) / 100.0;
     this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
     this->param.start_with_low_order          = false; // true;
 
     // output of solver information
     this->param.solver_info_data.interval_time =
-      (this->param.end_time - this->param.start_time) / 10;
+      (this->param.end_time - this->param.start_time) / 100000.0;
 
 
     // SPATIAL DISCRETIZATION

@@ -316,10 +316,13 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
 
     if(treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
     {
-      AssertThrow(
-        nonlinear_viscous_problem() == false,
-        dealii::ExcMessage(
-          "The combination of a linearly implicit convective term and a nonlinear viscous term is currently not implemented. Choose e.g. an implicit formulation of the convective term."));
+      std::cout << "DISABLED ASSERT SINCE WE HAVE PICARD SOLVER.##+\n";
+      // AssertThrow(
+      //   nonlinear_viscous_problem() == false,
+      //   dealii::ExcMessage(
+      //     "The combination of a linearly implicit convective term and a nonlinear viscous term is
+      //     currently not implemented. Choose e.g. an implicit formulation of the convective
+      //     term."));
     }
   }
 
@@ -555,11 +558,13 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   if(viscosity_is_variable() and
      temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
   {
-    AssertThrow(treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit,
-                dealii::ExcMessage("An implicit treatment of the variable viscosity field "
-                                   "(rendering the viscous step of the dual splitting scheme "
-                                   "nonlinear regarding the unknown velocity field) is currently "
-                                   "not implemented for the dual splitting scheme."));
+    std::cout
+      << "DEACTIVATED THIS ASSERT RECOGNIZING WE ARE DOING A PICARD SCHEME FOR THE VISCOUS NONLINEARITY.##+\n";
+    // AssertThrow(treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit,
+    //             dealii::ExcMessage("An implicit treatment of the variable viscosity field "
+    //                                "(rendering the viscous step of the dual splitting scheme "
+    //                                "nonlinear regarding the unknown velocity field) is currently
+    //                                " "not implemented for the dual splitting scheme."));
   }
 }
 

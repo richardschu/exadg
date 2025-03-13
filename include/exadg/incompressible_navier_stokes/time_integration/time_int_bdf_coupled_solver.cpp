@@ -251,8 +251,12 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     }
   }
 
-  if(this->param.nonlinear_problem_has_to_be_solved())
+  if(this->param.implicit_nonlinear_convective_problem())
   {
+    // Captures the nonlinearity in the convective term with a Newton method,
+    // and the potential nonlinearity in the viscous term with a Picard scheme.
+    // If the viscous term is linear, the update of the viscosity in the Picard
+    // solver is skipped.
     VectorType rhs(sum_alphai_ui);
     pde_operator->apply_mass_operator(rhs, sum_alphai_ui);
     if(this->param.right_hand_side)
@@ -283,14 +287,14 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     // write output
     if(this->print_solver_info() and not(this->is_test))
     {
-      this->pcout << std::endl << "Solve nonlinear problem:";
+      this->pcout << std::endl << "Solve nonlinear problem (Newton/Picard):";
       print_solver_info_nonlinear(this->pcout,
                                   std::get<0>(iter),
                                   std::get<1>(iter),
                                   timer.wall_time());
     }
   }
-  else // linear problem
+  else // convective term is linear, viscous term might not be.
   {
     // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
     VectorType transport_velocity;
@@ -300,41 +304,94 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
       transport_velocity = solution_np.block(0);
     }
 
-    BlockVectorType rhs_vector;
-    pde_operator->initialize_block_vector_velocity_pressure(rhs_vector);
+    // Picard iteration to converge the nonlinear viscous term.
+    unsigned int    picard_iterations = 0;
+    unsigned int    linear_iterations = 0;
+    bool            converged         = false;
+    double          norm_0            = 1.0;
+    BlockVectorType delta_solution;
+    pde_operator->initialize_block_vector_velocity_pressure(delta_solution);
+    delta_solution = solution_np;
 
-    // calculate rhs vector for the linear problem, with contributions from the convective term for
-    // a linearly implicit formulation
-    pde_operator->rhs_linear_problem(rhs_vector, transport_velocity, this->get_next_time());
-
-    // Add the convective term to the right-hand side of the equations
-    // if the convective term is treated explicitly
-    if(this->param.convective_problem() and
-       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+    while(not converged)
     {
-      // add extrapolation of convective term to the rhs (-> minus sign!)
-      for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
-        rhs_vector.block(0).add(-this->extra.get_beta(i), this->vec_convective_term[i]);
+      // Update the viscosity.
+      if(this->param.nonlinear_viscous_problem())
+      {
+        pde_operator->update_viscosity(solution_np.block(0));
+      }
+
+      // Update the right-hand side.
+      BlockVectorType rhs_vector;
+      pde_operator->initialize_block_vector_velocity_pressure(rhs_vector);
+
+      // calculate rhs vector for the linear problem, with contributions from the convective term
+      // for a linearly implicit formulation
+      pde_operator->rhs_linear_problem(rhs_vector, transport_velocity, this->get_next_time());
+
+      // Add the convective term to the right-hand side of the equations
+      // if the convective term is treated explicitly
+      if(this->param.convective_problem() and
+         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+      {
+        // add extrapolation of convective term to the rhs (-> minus sign!)
+        for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+          rhs_vector.block(0).add(-this->extra.get_beta(i), this->vec_convective_term[i]);
+      }
+
+      // apply mass operator to sum_alphai_ui and add to rhs vector
+      pde_operator->apply_mass_operator_add(rhs_vector.block(0), sum_alphai_ui);
+
+      // Solve the linearized coupled problem.
+      linear_iterations +=
+        pde_operator->solve_linear_problem(solution_np,
+                                           rhs_vector,
+                                           transport_velocity,
+                                           update_preconditioner,
+                                           this->get_scaling_factor_time_derivative_term());
+
+      // Compute convergence criteria.
+      delta_solution -= solution_np;
+      double norm_abs = delta_solution.l2_norm();
+      norm_0          = picard_iterations == 0 ? norm_abs : norm_0;
+      double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+      if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+         norm_abs < this->param.newton_solver_data_momentum.abs_tol or
+         not this->param.nonlinear_viscous_problem())
+      {
+        converged = true;
+      }
+      else
+      {
+        AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
+                    dealii::ExcMessage(
+                      "Picard solver to resolve nonlinear viscous term did not converge."));
+        picard_iterations += 1;
+        delta_solution = solution_np;
+      }
     }
 
-    // apply mass operator to sum_alphai_ui and add to rhs vector
-    pde_operator->apply_mass_operator_add(rhs_vector.block(0), sum_alphai_ui);
-
-    unsigned int const n_iter =
-      pde_operator->solve_linear_problem(solution_np,
-                                         rhs_vector,
-                                         transport_velocity,
-                                         update_preconditioner,
-                                         this->get_scaling_factor_time_derivative_term());
-
     iterations.first += 1;
-    std::get<1>(iterations.second) += n_iter;
+    std::get<0>(iterations.second) +=
+      this->param.nonlinear_viscous_problem() ? picard_iterations : 0;
+    std::get<1>(iterations.second) += linear_iterations;
 
     // write output
     if(this->print_solver_info() and not(this->is_test))
     {
-      this->pcout << std::endl << "Solve linear problem:";
-      print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
+      if(this->param.nonlinear_viscous_problem())
+      {
+        this->pcout << std::endl << "Solve nonlinear problem (Picard):";
+        print_solver_info_nonlinear(this->pcout,
+                                    picard_iterations,
+                                    linear_iterations,
+                                    timer.wall_time());
+      }
+      else
+      {
+        this->pcout << std::endl << "Solve linear problem:";
+        print_solver_info_linear(this->pcout, linear_iterations, timer.wall_time());
+      }
     }
   }
 

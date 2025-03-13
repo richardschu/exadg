@@ -735,7 +735,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       ((this->time_step_number - 1) % this->param.update_preconditioner_momentum_every_time_steps ==
        0);
 
-    if(this->param.nonlinear_problem_has_to_be_solved())
+    if(this->param.implicit_nonlinear_convective_problem())
     {
       /*
        *  Calculate the vector that is constant when solving the nonlinear momentum equation
@@ -767,7 +767,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
                                     timer.wall_time());
       }
     }
-    else // linear problem
+    else // convective term is linear, viscous term might not be.
     {
       // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
       VectorType transport_velocity;
@@ -777,26 +777,74 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
         transport_velocity = velocity_np;
       }
 
-      /*
-       *  Calculate the right-hand side of the linear system of equations.
-       */
-      VectorType rhs(velocity_rhs);
-      rhs_viscous(rhs, velocity_rhs, transport_velocity);
+      // Picard iteration to converge the nonlinear viscous term.
+      unsigned int picard_iterations = 0;
+      unsigned int linear_iterations = 0;
+      bool         converged         = false;
+      double       norm_0            = 1.0;
+      VectorType   delta_velocity_np(velocity_np);
 
-      // solve linear system of equations
-      unsigned int const n_iter = pde_operator->solve_linear_momentum_equation(
-        velocity_np,
-        rhs,
-        transport_velocity,
-        update_preconditioner,
-        this->get_scaling_factor_time_derivative_term());
+      while(not converged)
+      {
+        // Update the viscosity.
+        if(this->param.nonlinear_viscous_problem())
+        {
+          pde_operator->update_viscosity(velocity_np);
+        }
+
+        // Calculate the right-hand side of the linear system of equations.
+        VectorType rhs(velocity_rhs);
+        rhs_viscous(rhs, velocity_rhs, transport_velocity);
+
+        // Solve the linearized problem.
+        linear_iterations += pde_operator->solve_linear_momentum_equation(
+          velocity_np,
+          rhs,
+          transport_velocity,
+          update_preconditioner,
+          this->get_scaling_factor_time_derivative_term());
+
+        // Compute convergence criteria.
+        delta_velocity_np -= velocity_np;
+        double norm_abs = delta_velocity_np.l2_norm();
+        norm_0          = picard_iterations == 0 ? norm_abs : norm_0;
+        double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+        if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+           norm_abs < this->param.newton_solver_data_momentum.abs_tol or
+           not this->param.nonlinear_viscous_problem())
+        {
+          converged = true;
+        }
+        else
+        {
+          AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
+                      dealii::ExcMessage(
+                        "Picard solver to resolve nonlinear viscous term did not converge."));
+          picard_iterations += 1;
+          delta_velocity_np = velocity_np;
+        }
+      }
+
       iterations_viscous.first += 1;
-      std::get<1>(iterations_viscous.second) += n_iter;
+      std::get<0>(iterations_viscous.second) +=
+        this->param.nonlinear_viscous_problem() ? picard_iterations : 0;
+      std::get<1>(iterations_viscous.second) += linear_iterations;
 
       if(this->print_solver_info() and not(this->is_test))
       {
-        this->pcout << std::endl << "Solve viscous step:";
-        print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
+        if(this->param.nonlinear_viscous_problem())
+        {
+          this->pcout << std::endl << "Solve viscous step (Picard):";
+          print_solver_info_nonlinear(this->pcout,
+                                      picard_iterations,
+                                      linear_iterations,
+                                      timer.wall_time());
+        }
+        else
+        {
+          this->pcout << std::endl << "Solve viscous step:";
+          print_solver_info_linear(this->pcout, linear_iterations, timer.wall_time());
+        }
       }
     }
 
@@ -835,7 +883,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType &       rhs,
       rhs.add(this->extra.get_beta(i), this->vec_convective_term[i]);
   }
 
-  if(this->param.nonlinear_problem_has_to_be_solved())
+  if(this->param.implicit_nonlinear_convective_problem())
   {
     // for a nonlinear problem, inhomogeneous contributions are taken into account when evaluating
     // the nonlinear residual
