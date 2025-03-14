@@ -782,18 +782,28 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       unsigned int linear_iterations = 0;
       bool         converged         = false;
       double       norm_0            = 1.0;
-      VectorType   delta_velocity_np(velocity_np);
+
+      VectorType residual, rhs;
+      rhs.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+
+      // Compute the initial residual and update the viscosity.
+      if(this->param.nonlinear_viscous_problem())
+      {
+        residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+        residual_rhs_viscous(rhs, velocity_rhs);
+        this->pde_operator->evaluate_linearized_residual(
+          residual,
+          velocity_np,
+          transport_velocity,
+          &rhs,
+          this->get_next_time(),
+          this->get_scaling_factor_time_derivative_term());
+        norm_0 = residual.l2_norm();
+      }
 
       while(not converged)
       {
-        // Update the viscosity.
-        if(this->param.nonlinear_viscous_problem())
-        {
-          pde_operator->update_viscosity(velocity_np);
-        }
-
         // Calculate the right-hand side of the linear system of equations.
-        VectorType rhs(velocity_rhs);
         rhs_viscous(rhs, velocity_rhs, transport_velocity);
 
         // Solve the linearized problem.
@@ -805,23 +815,38 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
           this->get_scaling_factor_time_derivative_term());
 
         // Compute convergence criteria.
-        delta_velocity_np -= velocity_np;
-        double norm_abs = delta_velocity_np.l2_norm();
-        norm_0          = picard_iterations == 0 ? norm_abs : norm_0;
-        double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
-        if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
-           norm_abs < this->param.newton_solver_data_momentum.abs_tol or
-           not this->param.nonlinear_viscous_problem())
+        if(this->param.nonlinear_viscous_problem())
         {
-          converged = true;
+          residual_rhs_viscous(rhs, velocity_rhs);
+          this->pde_operator->evaluate_linearized_residual(
+            residual,
+            velocity_np,
+            transport_velocity,
+            &rhs,
+            this->get_next_time(),
+            this->get_scaling_factor_time_derivative_term());
+
+          double norm_abs = residual.l2_norm();
+          double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+          std::cout << "norm_abs = " << norm_abs << "    "
+                    << "norm_rel = " << norm_rel << " ##+ \n";
+
+          picard_iterations += 1;
+          if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+             norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+          {
+            converged = true;
+          }
+          else
+          {
+            AssertThrow(picard_iterations <= this->param.newton_solver_data_momentum.max_iter,
+                        dealii::ExcMessage(
+                          "Picard solver to resolve nonlinear viscous term did not converge."));
+          }
         }
         else
         {
-          AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
-                      dealii::ExcMessage(
-                        "Picard solver to resolve nonlinear viscous term did not converge."));
-          picard_iterations += 1;
-          delta_velocity_np = velocity_np;
+          converged = true;
         }
       }
 
@@ -899,6 +924,27 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType &       rhs,
 
     // inhomogeneous parts of boundary face integrals of viscous operator
     pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFDualSplitting<dim, Number>::residual_rhs_viscous(
+  VectorType &       rhs,
+  VectorType const & velocity_mass_operator) const
+{
+  // Intermediate velocity contribution.
+  pde_operator->apply_mass_operator(rhs, velocity_mass_operator);
+  rhs *= this->bdf.get_gamma0() / this->get_time_step_size();
+
+  // compensate for explicit convective term taken into account in the first sub-step of the
+  // dual-splitting scheme
+  if(this->param.non_explicit_convective_problem())
+  {
+    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+    {
+      rhs.add(this->extra.get_beta(i), this->vec_convective_term[i]);
+    }
   }
 }
 
