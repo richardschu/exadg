@@ -66,8 +66,6 @@ public:
     double norm_r   = residual.l2_norm();
     double norm_r_0 = norm_r;
 
-    std::cout << "starting Newton loop ##+\n";
-
     while(norm_r > this->solver_data.abs_tol and norm_r / norm_r_0 > solver_data.rel_tol and
           newton_iterations < solver_data.max_iter)
     {
@@ -88,7 +86,6 @@ public:
       linear_solver.update_preconditioner(update_now);
 
       // solve linear problem
-      std::cout << "solving linear system in Newton ##+\n";
       unsigned int const n_iter_linear = linear_solver.solve(increment, residual);
 
       // damped Newton scheme

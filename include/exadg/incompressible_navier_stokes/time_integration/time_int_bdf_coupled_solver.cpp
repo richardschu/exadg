@@ -305,69 +305,80 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     }
 
     // Picard iteration to converge the nonlinear viscous term.
-    unsigned int    picard_iterations = 0;
-    unsigned int    linear_iterations = 0;
-    bool            converged         = false;
-    double          norm_0            = 1.0;
-    BlockVectorType delta_solution;
-    pde_operator->initialize_block_vector_velocity_pressure(delta_solution);
-    delta_solution = solution_np;
+    unsigned int picard_iterations = 0;
+    unsigned int linear_iterations = 0;
+    bool         converged         = false;
+    double       norm_0            = 1.0;
+
+    BlockVectorType residual, rhs;
+    pde_operator->initialize_block_vector_velocity_pressure(rhs);
+    pde_operator->initialize_block_vector_velocity_pressure(residual);
+
+    // Update the viscosity and compute the initial residual.
+    if(this->param.nonlinear_viscous_problem())
+    {
+      evaluate_right_hand_side(
+        rhs, true /* residual_evaluation */, solution_np, transport_velocity, sum_alphai_ui);
+
+      pde_operator->evaluate_linearized_residual(residual,
+                                                 solution_np,
+                                                 transport_velocity,
+                                                 rhs,
+                                                 this->get_next_time(),
+                                                 this->get_scaling_factor_time_derivative_term());
+
+      norm_0 = residual.l2_norm();
+    }
 
     while(not converged)
     {
-      // Update the viscosity.
-      if(this->param.nonlinear_viscous_problem())
-      {
-        pde_operator->update_viscosity(solution_np.block(0));
-      }
-
       // Update the right-hand side.
-      BlockVectorType rhs_vector;
-      pde_operator->initialize_block_vector_velocity_pressure(rhs_vector);
-
-      // calculate rhs vector for the linear problem, with contributions from the convective term
-      // for a linearly implicit formulation
-      pde_operator->rhs_linear_problem(rhs_vector, transport_velocity, this->get_next_time());
-
-      // Add the convective term to the right-hand side of the equations
-      // if the convective term is treated explicitly
-      if(this->param.convective_problem() and
-         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
-      {
-        // add extrapolation of convective term to the rhs (-> minus sign!)
-        for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
-          rhs_vector.block(0).add(-this->extra.get_beta(i), this->vec_convective_term[i]);
-      }
-
-      // apply mass operator to sum_alphai_ui and add to rhs vector
-      pde_operator->apply_mass_operator_add(rhs_vector.block(0), sum_alphai_ui);
+      evaluate_right_hand_side(
+        rhs, false /* residual_evaluation */, solution_np, transport_velocity, sum_alphai_ui);
 
       // Solve the linearized coupled problem.
       linear_iterations +=
         pde_operator->solve_linear_problem(solution_np,
-                                           rhs_vector,
+                                           rhs,
                                            transport_velocity,
                                            update_preconditioner,
                                            this->get_scaling_factor_time_derivative_term());
 
-      // Compute convergence criteria.
-      delta_solution -= solution_np;
-      double norm_abs = delta_solution.l2_norm();
-      norm_0          = picard_iterations == 0 ? norm_abs : norm_0;
-      double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
-      if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
-         norm_abs < this->param.newton_solver_data_momentum.abs_tol or
-         not this->param.nonlinear_viscous_problem())
+      if(this->param.nonlinear_viscous_problem())
       {
-        converged = true;
+        // Update the viscosity and compute the residual.
+        evaluate_right_hand_side(
+          rhs, true /* residual_evaluation */, solution_np, transport_velocity, sum_alphai_ui);
+
+        pde_operator->evaluate_linearized_residual(residual,
+                                                   solution_np,
+                                                   transport_velocity,
+                                                   rhs,
+                                                   this->get_next_time(),
+                                                   this->get_scaling_factor_time_derivative_term());
+
+        // Compute convergence criteria.
+        double norm_abs = residual.l2_norm();
+        double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+        this->pcout << "norm_abs = " << norm_abs << "    "
+                    << "norm_rel = " << norm_rel << " ##+ \n";
+
+        picard_iterations += 1;
+        if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+           norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+        {
+          converged = true;
+        }
+        else
+        {
+          AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
+                      dealii::ExcMessage(
+                        "Picard solver to resolve nonlinear viscous term did not converge."));
+        }
       }
       else
       {
-        AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
-                    dealii::ExcMessage(
-                      "Picard solver to resolve nonlinear viscous term did not converge."));
-        picard_iterations += 1;
-        delta_solution = solution_np;
+        converged = true;
       }
     }
 
@@ -438,6 +449,45 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   }
 
   this->timer_tree->insert({"Timeloop", "Coupled system"}, timer.wall_time());
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFCoupled<dim, Number>::evaluate_right_hand_side(BlockVectorType & rhs,
+                                                         bool const        residual_evaluation,
+                                                         BlockVectorType const & solution_np,
+                                                         VectorType const &      transport_velocity,
+                                                         VectorType const &      sum_alphai_ui)
+{
+  if(residual_evaluation)
+  {
+    // Update the viscosity.
+    pde_operator->update_viscosity(solution_np.block(0));
+
+    // calculate rhs vector for the linearized residual
+    pde_operator->rhs_residual_linearized_problem(rhs, this->get_next_time());
+  }
+  else
+  {
+    // calculate rhs vector for the linear problem, with contributions from the convective term
+    // for a linearly implicit formulation
+    pde_operator->rhs_linear_problem(rhs, transport_velocity, this->get_next_time());
+  }
+
+  // Add the convective term to the right-hand side of the equations
+  // if the convective term is treated explicitly
+  if(this->param.convective_problem() and
+     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  {
+    // add extrapolation of convective term to the rhs (-> minus sign!)
+    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+    {
+      rhs.block(0).add(-this->extra.get_beta(i), this->vec_convective_term[i]);
+    }
+  }
+
+  // apply mass operator to sum_alphai_ui and add to rhs vector
+  pde_operator->apply_mass_operator_add(rhs.block(0), sum_alphai_ui);
 }
 
 template<int dim, typename Number>

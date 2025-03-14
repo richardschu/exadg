@@ -313,17 +313,6 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   {
     AssertThrow(treatment_of_convective_term != TreatmentOfConvectiveTerm::Undefined,
                 dealii::ExcMessage("parameter must be defined"));
-
-    if(treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-    {
-      std::cout << "DISABLED ASSERT SINCE WE HAVE PICARD SOLVER.##+\n";
-      // AssertThrow(
-      //   nonlinear_viscous_problem() == false,
-      //   dealii::ExcMessage(
-      //     "The combination of a linearly implicit convective term and a nonlinear viscous term is
-      //     currently not implemented. Choose e.g. an implicit formulation of the convective
-      //     term."));
-    }
   }
 
   AssertThrow(calculation_of_time_step_size != TimeStepCalculation::Undefined,
@@ -551,20 +540,6 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
                 dealii::ExcMessage("Parameter must be defined."));
     AssertThrow(treatment_of_variable_viscosity != TreatmentOfVariableViscosity::Undefined,
                 dealii::ExcMessage("Parameter must be defined."));
-  }
-
-  // VARIABLE VISCOSITY MODELS
-  // TODO
-  if(viscosity_is_variable() and
-     temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
-  {
-    std::cout
-      << "DEACTIVATED THIS ASSERT RECOGNIZING WE ARE DOING A PICARD SCHEME FOR THE VISCOUS NONLINEARITY.##+\n";
-    // AssertThrow(treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit,
-    //             dealii::ExcMessage("An implicit treatment of the variable viscosity field "
-    //                                "(rendering the viscous step of the dual splitting scheme "
-    //                                "nonlinear regarding the unknown velocity field) is currently
-    //                                " "not implemented for the dual splitting scheme."));
   }
 }
 
