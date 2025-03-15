@@ -305,21 +305,30 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     }
 
     // Picard iteration to converge the nonlinear viscous term.
-    unsigned int picard_iterations = 0;
-    unsigned int linear_iterations = 0;
-    bool         converged         = false;
-    double       norm_0            = 1.0;
+    bool constexpr apply_aitken_relaxation = true;
+    unsigned int picard_iterations         = 0;
+    unsigned int linear_iterations         = 0;
+    bool         converged                 = false;
+    double       norm_0                    = 1.0;
+    double       relaxation                = 1.0;
+    double       relaxation_old            = 1.0;
 
-    BlockVectorType residual, rhs;
+    BlockVectorType rhs, residual, residual_old, delta_residual, solution_np_old;
     pde_operator->initialize_block_vector_velocity_pressure(rhs);
-    pde_operator->initialize_block_vector_velocity_pressure(residual);
 
     // Update the viscosity and compute the initial residual.
     if(this->param.nonlinear_viscous_problem())
     {
+      pde_operator->initialize_block_vector_velocity_pressure(residual);
+      if constexpr(apply_aitken_relaxation)
+      {
+        pde_operator->initialize_block_vector_velocity_pressure(residual_old);
+        pde_operator->initialize_block_vector_velocity_pressure(delta_residual);
+        pde_operator->initialize_block_vector_velocity_pressure(solution_np_old);
+      }
+
       evaluate_right_hand_side(
         rhs, true /* residual_evaluation */, solution_np, transport_velocity, sum_alphai_ui);
-
       pde_operator->evaluate_linearized_residual(residual,
                                                  solution_np,
                                                  transport_velocity,
@@ -328,6 +337,8 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
                                                  this->get_scaling_factor_time_derivative_term());
 
       norm_0 = residual.l2_norm();
+
+      residual_old = residual;
     }
 
     while(not converged)
@@ -349,7 +360,6 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
         // Update the viscosity and compute the residual.
         evaluate_right_hand_side(
           rhs, true /* residual_evaluation */, solution_np, transport_velocity, sum_alphai_ui);
-
         pde_operator->evaluate_linearized_residual(residual,
                                                    solution_np,
                                                    transport_velocity,
@@ -374,6 +384,22 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
           AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
                       dealii::ExcMessage(
                         "Picard solver to resolve nonlinear viscous term did not converge."));
+
+          // Apply relaxation
+          if constexpr(apply_aitken_relaxation)
+          {
+            delta_residual = residual;
+            delta_residual -= residual_old;
+            relaxation =
+              -relaxation_old * (residual_old * delta_residual) / delta_residual.norm_sqr();
+
+            solution_np.sadd(relaxation, 1.0 - relaxation, solution_np_old);
+
+            // Update old values for next iteration.
+            solution_np_old = solution_np;
+            residual_old    = residual;
+            relaxation_old  = relaxation;
+          }
         }
       }
       else

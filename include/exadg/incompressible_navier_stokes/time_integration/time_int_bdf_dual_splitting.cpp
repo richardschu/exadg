@@ -778,18 +778,28 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       }
 
       // Picard iteration to converge the nonlinear viscous term.
-      unsigned int picard_iterations = 0;
-      unsigned int linear_iterations = 0;
-      bool         converged         = false;
-      double       norm_0            = 1.0;
+      bool constexpr apply_aitken_relaxation = true;
+      unsigned int picard_iterations         = 0;
+      unsigned int linear_iterations         = 0;
+      bool         converged                 = false;
+      double       norm_0                    = 1.0;
+      double       relaxation                = 1.0;
+      double       relaxation_old            = 1.0;
 
-      VectorType residual, rhs;
+      VectorType rhs, residual, residual_old, delta_residual, velocity_np_old;
       rhs.reinit(velocity_rhs, false /* omit_zeroing_entries */);
 
       // Compute the initial residual and update the viscosity.
       if(this->param.nonlinear_viscous_problem())
       {
         residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+        if constexpr(apply_aitken_relaxation)
+        {
+          residual_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+          delta_residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+          velocity_np_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+        }
+
         residual_rhs_viscous(rhs, velocity_rhs);
         this->pde_operator->evaluate_linearized_residual(
           residual,
@@ -798,7 +808,10 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
           &rhs,
           this->get_next_time(),
           this->get_scaling_factor_time_derivative_term());
+
         norm_0 = residual.l2_norm();
+
+        residual_old = residual;
       }
 
       while(not converged)
@@ -814,9 +827,9 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
           update_preconditioner,
           this->get_scaling_factor_time_derivative_term());
 
-        // Compute convergence criteria.
         if(this->param.nonlinear_viscous_problem())
         {
+          // Update the viscosity and compute the residual.
           residual_rhs_viscous(rhs, velocity_rhs);
           this->pde_operator->evaluate_linearized_residual(
             residual,
@@ -826,6 +839,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
             this->get_next_time(),
             this->get_scaling_factor_time_derivative_term());
 
+          // Compute convergence criteria.
           double norm_abs = residual.l2_norm();
           double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
           this->pcout << "norm_abs = " << norm_abs << "    "
@@ -842,6 +856,22 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
             AssertThrow(picard_iterations <= this->param.newton_solver_data_momentum.max_iter,
                         dealii::ExcMessage(
                           "Picard solver to resolve nonlinear viscous term did not converge."));
+
+            // Apply relaxation
+            if constexpr(apply_aitken_relaxation)
+            {
+              delta_residual = residual;
+              delta_residual -= residual_old;
+              relaxation =
+                -relaxation_old * (residual_old * delta_residual) / delta_residual.norm_sqr();
+
+              velocity_np.sadd(relaxation, 1.0 - relaxation, velocity_np_old);
+
+              // Update old values for next iteration.
+              velocity_np_old = velocity_np;
+              residual_old    = residual;
+              relaxation_old  = relaxation;
+            }
           }
         }
         else
