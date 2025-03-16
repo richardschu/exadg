@@ -557,6 +557,16 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
       pde_operator->compute_vorticity(vorticity, velocity_extra);
 
       pde_operator->rhs_ppe_nbc_viscous_add(rhs, vorticity);
+
+      if(this->param.viscosity_is_variable())
+      {
+        // Add the viscosity gradient term.
+        this->pcout << "  adding boundary term for variable viscosity. ##+ \n";
+        VectorType viscosity_extrap;
+        pde_operator->initialize_vector_velocity_scalar(viscosity_extrap);
+        pde_operator->compute_viscosity(viscosity_extrap, velocity_extra);
+        pde_operator->rhs_ppe_nbc_variable_viscosity_add(rhs, velocity_extra, viscosity_extrap);
+      }
     }
   }
 

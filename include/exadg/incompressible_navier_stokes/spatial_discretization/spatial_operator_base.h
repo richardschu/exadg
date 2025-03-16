@@ -332,6 +332,10 @@ public:
   void
   compute_shear_rate(VectorType & dst, VectorType const & src) const;
 
+  // viscosity
+  void
+  compute_viscosity(VectorType & dst, VectorType const & src) const;
+
   // velocity_magnitude
   void
   compute_velocity_magnitude(VectorType & dst, VectorType const & src) const;
@@ -613,6 +617,7 @@ protected:
   VorticityCalculator<dim, Number>  vorticity_calculator;
   DivergenceCalculator<dim, Number> divergence_calculator;
   ShearRateCalculator<dim, Number>  shear_rate_calculator;
+  ViscosityCalculator<dim, Number>  viscosity_calculator;
   MagnitudeCalculator<dim, Number>  magnitude_calculator;
   QCriterionCalculator<dim, Number> q_criterion_calculator;
 
