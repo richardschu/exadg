@@ -134,7 +134,7 @@ evaluate_convergence_study(MPI_Comm const & mpi_comm, bool const is_test)
             }
           }
 
-          for(unsigned int i = 0; i < unique_labels.size(); ++i)
+          for(unsigned int i = 0; i < labels.size(); ++i)
           {
             convergence_table.set_scientific(labels[i] + "  ", true);
           }
