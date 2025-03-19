@@ -29,6 +29,7 @@ namespace ExaDG
 {
 namespace IncNS
 {
+
 /*
  * Manufactured solution for incompressible flow of a generalized Newtonian fluid in a hypercube.
  * (Navier-)Stokes equations, where the convective term may be disabled
@@ -146,6 +147,7 @@ public:
     /*
      * This is the kinematic traction vector t obtained via integration by
      * parts of the stress term yielding for the stress-divergence formulation
+     * *without* the pressure contribution
      *
      * t = (-p * I + 2 * nu * sym_grad(u)) * n
      *
@@ -162,14 +164,11 @@ public:
     double const cos_x  = std::cos(x);
     double const cos_y  = std::cos(y);
     double const cos_t  = std::cos(t);
-    double const cos_xy = std::cos(x * y);
 
     double const du1_dx = cos_x * cos_y * cos_t;
     double const du1_dy = -sin_x * sin_y * cos_t;
     double const du2_dx = cos_t * sin_x * sin_y;
     double const du2_dy = -cos_t * cos_x * cos_y;
-
-    double const pressure = cos_xy * cos_t;
 
     // rheological law to obtain the kinematic viscosity nu
     // nu = nu_oo + (nu_0 - nu_oo) * [kappa + (lambda*shear_rate)^a]^[(n-1)/a]
@@ -191,7 +190,7 @@ public:
 
     dealii::Tensor<1, dim> traction;
 
-    traction += grad_u * normal;
+    traction = grad_u * normal;
 
     if(formulation_viscous_term == FormulationViscousTerm::DivergenceFormulation)
     {
@@ -200,8 +199,10 @@ public:
 
     traction *= kinematic_viscosity;
 
-    traction[0] = -pressure;
-    traction[1] = -pressure;
+    // double const cos_xy = std::cos(x * y);
+    // double const pressure = cos_xy * cos_t;
+    // traction[0] = -pressure * normal_x;
+    // traction[1] = -pressure * normal_y;
 
     AssertThrow(component < 2, dealii::ExcMessage("Manufactured solution only valid for 2D."));
 
@@ -221,14 +222,10 @@ class RightHandSide : public dealii::Function<dim>
 {
 public:
   RightHandSide(bool const                            include_convective_term,
-                double const &                        normal_x,
-                double const &                        normal_y,
                 double const &                        nu_oo,
                 GeneralizedNewtonianModelData const & data)
     : dealii::Function<dim>(dim, 0.0),
       include_convective_term(include_convective_term),
-      normal_x(normal_x),
-      normal_y(normal_y),
       nu_oo(nu_oo),
       data(data)
   {
@@ -317,9 +314,9 @@ public:
     grad_nu *=
       data.lambda * (data.n - 1) * std::pow(data.lambda * shear_rate, data.a - 1.0) *
       data.viscosity_margin *
-      std::pow(data.kappa + std::pow(data.lambda * shear_rate, data.a), (data.n - 2.0) / data.a);
+      std::pow(data.kappa + std::pow(data.lambda * shear_rate, data.a), (data.n - 1.0 - data.a) / data.a);
 
-    rhs += (grad_u + transpose(grad_u)) * grad_nu;
+    rhs -= (grad_u + transpose(grad_u)) * grad_nu;
 
     AssertThrow(component < 2, dealii::ExcMessage("Manufactured solution only valid for 2D."));
 
@@ -328,8 +325,6 @@ public:
 
 private:
   bool const                    include_convective_term;
-  double const                  normal_x;
-  double const                  normal_y;
   double const                  nu_oo;
   GeneralizedNewtonianModelData data;
 };
@@ -350,71 +345,27 @@ public:
 
     prm.enter_subsection("Application");
     {
-      prm.add_parameter("IncludeConvectiveTerm",
-                        include_convective_term,
-                        "Include the nonlinear convective term.",
-                        dealii::Patterns::Bool());
-      prm.add_parameter("PureDirichletProblem",
-                        pure_dirichlet_problem,
-                        "Solve a pure Dirichlet problem.",
-                        dealii::Patterns::Bool());
-      prm.add_parameter("StartTime",
-                        start_time,
-                        "Simulation start time.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("EndTime", end_time, "Simulation end time.", dealii::Patterns::Double());
-      prm.add_parameter("IntervalStart",
-                        interval_start,
-                        "Hypercube domain start.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("IntervalEnd",
-                        interval_end,
-                        "Hypercube domain end.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("Density",
-                        density,
-                        "Incompressible model: density.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("KinematicViscosity",
-                        kinematic_viscosity,
-                        "Newtonian model: kinematic_viscosity.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("UseGeneralizedNewtonianModel",
-                        generalized_newtonian_model_data.is_active,
-                        "Use generalized Newtonian model, else Newtonian one.",
-                        dealii::Patterns::Bool());
-      prm.add_parameter("FormulationViscousTerm",
-                        formulation_viscous_term,
-                        "Use Laplace or Divergence formulation for viscous term.");
-      prm.add_parameter("TemporalDiscretization",
-                        temporal_discretization,
-                        "Temporal discretization.");
-      prm.add_parameter("TreatmentOfConvectiveTerm",
-                        treatment_of_convective_term,
-                        "Treat convective term implicit, else explicit");
-      prm.add_parameter("TreatmentOfVariableViscosity",
-                        treatment_of_variable_viscosity,
-                        "Treat the variable viscosity implicit or extrapolate in time.");
-      prm.add_parameter("GeneralizedNewtonianViscosityMargin",
-                        generalized_newtonian_model_data.viscosity_margin,
-                        "Generalized Newtonian models: viscosity margin.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("GeneralizedNewtonianKappa",
-                        generalized_newtonian_model_data.kappa,
-                        "Generalized Newtonian models: kappa.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("GeneralizedNewtonianLambda",
-                        generalized_newtonian_model_data.lambda,
-                        "Generalized Newtonian models: lambda.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("GeneralizedNewtonianA",
-                        generalized_newtonian_model_data.a,
-                        "Generalized Newtonian models: a.",
-                        dealii::Patterns::Double());
-      prm.add_parameter("GeneralizedNewtonianN",
-                        generalized_newtonian_model_data.n,
-                        "Generalized Newtonian models: n.",
-                        dealii::Patterns::Double());
+      // clang-format off
+      prm.add_parameter("IncludeConvectiveTerm",               include_convective_term,                           "Include the nonlinear convective term.",                       dealii::Patterns::Bool());
+      prm.add_parameter("PureDirichletProblem",                pure_dirichlet_problem,                            "Solve a pure Dirichlet problem.",                              dealii::Patterns::Bool());
+      prm.add_parameter("StartTime",                           start_time,                                        "Simulation start time.",                                       dealii::Patterns::Double());
+      prm.add_parameter("EndTime",                             end_time,                                          "Simulation end time.",                                         dealii::Patterns::Double());
+      prm.add_parameter("TimeStepSize",                        time_step_size,                                    "Time step size used.",                                         dealii::Patterns::Double());
+      prm.add_parameter("IntervalStart",                       interval_start,                                    "Hypercube domain start.",                                      dealii::Patterns::Double());
+      prm.add_parameter("IntervalEnd",                         interval_end,                                      "Hypercube domain end.",                                        dealii::Patterns::Double());
+      prm.add_parameter("Density",                             density,                                           "Incompressible model: density.",                               dealii::Patterns::Double());
+      prm.add_parameter("KinematicViscosity",                  kinematic_viscosity,                               "Newtonian model: kinematic_viscosity.",                        dealii::Patterns::Double());
+      prm.add_parameter("UseGeneralizedNewtonianModel",        generalized_newtonian_model_data.is_active,        "Use generalized Newtonian model, else Newtonian one.",         dealii::Patterns::Bool());
+      prm.add_parameter("FormulationViscousTerm",              formulation_viscous_term,                          "Use Laplace or Divergence formulation for viscous term.");
+      prm.add_parameter("TemporalDiscretization",              temporal_discretization,                           "Temporal discretization.");
+      prm.add_parameter("TreatmentOfConvectiveTerm",           treatment_of_convective_term,                      "Treat convective term implicit, else explicit");
+      prm.add_parameter("TreatmentOfVariableViscosity",        treatment_of_variable_viscosity,                   "Treat the variable viscosity implicit or extrapolate in time.");
+      prm.add_parameter("GeneralizedNewtonianViscosityMargin", generalized_newtonian_model_data.viscosity_margin, "Generalized Newtonian models: viscosity margin.",              dealii::Patterns::Double());
+      prm.add_parameter("GeneralizedNewtonianKappa",           generalized_newtonian_model_data.kappa,            "Generalized Newtonian models: kappa.",                         dealii::Patterns::Double());
+      prm.add_parameter("GeneralizedNewtonianLambda",          generalized_newtonian_model_data.lambda,           "Generalized Newtonian models: lambda.",                        dealii::Patterns::Double());
+      prm.add_parameter("GeneralizedNewtonianA",               generalized_newtonian_model_data.a,                "Generalized Newtonian models: a.",                             dealii::Patterns::Double());
+      prm.add_parameter("GeneralizedNewtonianN",               generalized_newtonian_model_data.n,                "Generalized Newtonian models: n.",                             dealii::Patterns::Double());
+      // clang-format on
     }
     prm.leave_subsection();
   }
@@ -447,7 +398,7 @@ private:
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
-    this->param.time_step_size                = (end_time - start_time) / 100.0;
+    this->param.time_step_size                = time_step_size;
     this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
     this->param.start_with_low_order          = false; // true;
 
@@ -485,8 +436,8 @@ private:
       this->param.adjust_pressure_level = AdjustPressureLevel::ApplyAnalyticalMeanValue;
 
     // div-div and continuity penalty terms
-    this->param.use_divergence_penalty                     = true;
-    this->param.use_continuity_penalty                     = true;
+    this->param.use_divergence_penalty                     = not true;
+    this->param.use_continuity_penalty                     = not true;
     this->param.continuity_penalty_use_boundary_data       = true;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
 
@@ -515,16 +466,16 @@ private:
     // PROJECTION METHODS
 
     // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
+    this->param.newton_solver_data_momentum = Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
 
     // pressure Poisson equation
     this->param.solver_pressure_poisson         = SolverPressurePoisson::CG;
     this->param.preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
-    this->param.solver_data_pressure_poisson    = SolverData(1000, 1.e-12, 1.e-8);
+    this->param.solver_data_pressure_poisson    = SolverData(1000, abs_tol_lin, rel_tol_lin);
 
     // projection step
     this->param.solver_projection         = SolverProjection::CG;
-    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-8);
+    this->param.solver_data_projection    = SolverData(1000, abs_tol_lin, rel_tol_lin);
     this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
 
     // HIGH-ORDER DUAL SPLITTING SCHEME
@@ -535,9 +486,9 @@ private:
 
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
     {
-      this->param.solver_momentum         = SolverMomentum::CG;
-      this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8);
-      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+      this->param.solver_momentum         = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? SolverMomentum::CG : SolverMomentum::FGMRES;
+      this->param.solver_data_momentum    = SolverData(1000, abs_tol_lin, rel_tol_lin);
+      this->param.preconditioner_momentum = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? MomentumPreconditioner::InverseMassMatrix : MomentumPreconditioner::Multigrid;
     }
 
 
@@ -552,20 +503,46 @@ private:
     {
       // linear solver
       this->param.solver_momentum                = SolverMomentum::GMRES;
-      this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, 100);
+      this->param.solver_data_momentum           = SolverData(1e4, abs_tol_lin, rel_tol_lin, 100);
       this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
       this->param.update_preconditioner_momentum = true;
     }
 
+    if(this->param.preconditioner_momentum == MomentumPreconditioner::Multigrid)
+    {
+        // clang-format off
+        this->param.preconditioner_momentum            = MomentumPreconditioner::Multigrid;
+        this->param.multigrid_data_momentum.type       = MultigridType::cphMG;
+        this->param.multigrid_data_momentum.p_sequence = PSequenceType::DecreaseByOne;
+
+        this->param.multigrid_operator_type_momentum                        = MultigridOperatorType::ReactionDiffusion;
+        this->param.multigrid_data_momentum.smoother_data.iterations        = 5;
+        this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
+        this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
+        this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
+        this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 60; // Chebyshev, default: 20
+
+        this->param.multigrid_data_momentum.coarse_problem.solver         = this->param.non_explicit_convective_problem() ? MultigridCoarseGridSolver::GMRES : MultigridCoarseGridSolver::CG;
+        this->param.multigrid_data_momentum.coarse_problem.solver_data    = SolverData(1000, abs_tol_lin, rel_tol_lin, 30);
+        this->param.multigrid_data_momentum.smoother_data.preconditioner  = PreconditionerSmoother::PointJacobi;
+        this->param.multigrid_data_momentum.coarse_problem.preconditioner = MultigridCoarseGridPreconditioner::PointJacobi;
+#ifdef DEAL_II_WITH_TRILINOS
+        this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.smoother_sweeps = 2;
+        this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.n_cycles        = 2;
+        this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.smoother_type   = "Chebyshev"; // "ILU"
+        this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.coarse_type     = "Amesos-KLU";
+#endif
+        // clang-format on
+    }
 
     // COUPLED NAVIER-STOKES SOLVER
 
     // nonlinear solver (Newton solver)
-    this->param.newton_solver_data_coupled = Newton::SolverData(100, 1.e-10, 1.e-6);
+    this->param.newton_solver_data_coupled = Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
 
     // linear solver
     this->param.solver_coupled      = SolverCoupled::FGMRES;
-    this->param.solver_data_coupled = SolverData(1e4, 1.e-12, 1.e-8, 100);
+    this->param.solver_data_coupled = SolverData(1e4, abs_tol_lin, rel_tol_lin, 100);
 
     // preconditioning linear solver
     this->param.preconditioner_coupled        = PreconditionerCoupled::BlockTriangular;
@@ -645,7 +622,7 @@ private:
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
       pair;
 
-    double const normal_x = 1.0;
+    double const normal_x = -1.0;
     double const normal_y = 0.0;
 
     for(unsigned int i = 0; i < 2 * dim; ++i)
@@ -680,17 +657,12 @@ private:
     AssertThrow(dim == 2,
                 dealii::ExcMessage("Manufactured solution for dim == 2 implemented only."));
 
-    double const normal_x = 1.0;
-    double const normal_y = 0.0;
-
     this->field_functions->initial_solution_velocity.reset(new AnalyticalSolutionVelocity<dim>());
     this->field_functions->initial_solution_pressure.reset(new AnalyticalSolutionPressure<dim>());
     this->field_functions->analytical_solution_pressure.reset(
       new AnalyticalSolutionPressure<dim>());
     this->field_functions->right_hand_side.reset(
       new RightHandSide<dim>(include_convective_term,
-                             normal_x,
-                             normal_y,
                              kinematic_viscosity,
                              generalized_newtonian_model_data));
   }
@@ -740,11 +712,12 @@ private:
   bool   pure_dirichlet_problem  = true;
   double start_time              = 0.0;
   double end_time                = 0.1;
+  double time_step_size          = 1.0e-12;
   double density                 = 1000.0;
   double kinematic_viscosity     = 5e-6;
   bool   use_turbulence_model    = false;
 
-  FormulationViscousTerm    formulation_viscous_term = FormulationViscousTerm::LaplaceFormulation;
+  FormulationViscousTerm    formulation_viscous_term = FormulationViscousTerm::DivergenceFormulation;
   TemporalDiscretization    temporal_discretization  = TemporalDiscretization::Undefined;
   TreatmentOfConvectiveTerm treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;
   TreatmentOfVariableViscosity treatment_of_variable_viscosity =
@@ -753,6 +726,11 @@ private:
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
   double                        interval_start = 0.0;
   double                        interval_end   = 0.1;
+
+  double abs_tol_lin    = 1e-12;
+  double rel_tol_lin    = 1e-6;
+  double abs_tol_newton = 1e-12;
+  double rel_tol_newton = 1e-6;
 };
 
 } // namespace IncNS

@@ -580,7 +580,7 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_variable_viscosity_add_bou
 {
   unsigned int const dof_index_velocity        = this->get_dof_index_velocity();
   unsigned int const dof_index_velocity_scalar = this->get_dof_index_velocity_scalar();
-  unsigned int const dof_index_pressure        = this->get_quad_index_pressure();
+  unsigned int const dof_index_pressure        = this->get_dof_index_pressure();
   unsigned int const quad_index                = this->get_quad_index_velocity_standard();
 
 
@@ -612,7 +612,7 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_variable_viscosity_add_bou
 
         vector grad_nu = integrator_viscosity.get_gradient(q);
 
-        scalar h = (normal * dealii::make_vectorized_array<Number>(2.0)) * (sym_grad_u * grad_nu);
+        scalar h = dealii::make_vectorized_array<Number>(2.0) * (normal * (sym_grad_u * grad_nu));
 
         integrator_pressure.submit_value(h, q);
       }
