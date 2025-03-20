@@ -29,7 +29,6 @@ namespace ExaDG
 {
 namespace IncNS
 {
-
 /*
  * Manufactured solution for incompressible flow of a generalized Newtonian fluid in a hypercube.
  * (Navier-)Stokes equations, where the convective term may be disabled
@@ -156,14 +155,14 @@ public:
      * t* := (-p * I + nu * grad(u)) * n
      */
 
-    double const t      = this->get_time();
-    double const x      = p[0];
-    double const y      = p[1];
-    double const sin_x  = std::sin(x);
-    double const sin_y  = std::sin(y);
-    double const cos_x  = std::cos(x);
-    double const cos_y  = std::cos(y);
-    double const cos_t  = std::cos(t);
+    double const t     = this->get_time();
+    double const x     = p[0];
+    double const y     = p[1];
+    double const sin_x = std::sin(x);
+    double const sin_y = std::sin(y);
+    double const cos_x = std::cos(x);
+    double const cos_y = std::cos(y);
+    double const cos_t = std::cos(t);
 
     double const du1_dx = cos_x * cos_y * cos_t;
     double const du1_dy = -sin_x * sin_y * cos_t;
@@ -311,10 +310,10 @@ public:
     dealii::Tensor<1, dim> grad_nu;
     grad_nu[0] = -2.0 * cos_t * sin_x * cos_y; // d_shear_rate_dx
     grad_nu[1] = -2.0 * cos_t * cos_x * sin_y; // d_shear_rate_dy
-    grad_nu *=
-      data.lambda * (data.n - 1) * std::pow(data.lambda * shear_rate, data.a - 1.0) *
-      data.viscosity_margin *
-      std::pow(data.kappa + std::pow(data.lambda * shear_rate, data.a), (data.n - 1.0 - data.a) / data.a);
+    grad_nu *= data.lambda * (data.n - 1) * std::pow(data.lambda * shear_rate, data.a - 1.0) *
+               data.viscosity_margin *
+               std::pow(data.kappa + std::pow(data.lambda * shear_rate, data.a),
+                        (data.n - 1.0 - data.a) / data.a);
 
     rhs -= (grad_u + transpose(grad_u)) * grad_nu;
 
@@ -436,10 +435,15 @@ private:
       this->param.adjust_pressure_level = AdjustPressureLevel::ApplyAnalyticalMeanValue;
 
     // div-div and continuity penalty terms
-    this->param.use_divergence_penalty                     = not true;
-    this->param.use_continuity_penalty                     = not true;
-    this->param.continuity_penalty_use_boundary_data       = true;
+    this->param.use_divergence_penalty                     = true;
+    this->param.divergence_penalty_factor                  = 1.0;
+    this->param.use_continuity_penalty                     = true;
+    this->param.continuity_penalty_factor                  = 1.0;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
+    this->param.continuity_penalty_use_boundary_data =
+      this->param.apply_penalty_terms_in_postprocessing_step;
+    this->param.type_penalty_parameter        = TypePenaltyParameter::ConvectiveTerm;
+    this->param.continuity_penalty_components = ContinuityPenaltyComponents::Normal;
 
     // TURBULENCE
     this->param.turbulence_model_data.is_active        = use_turbulence_model;
@@ -466,7 +470,8 @@ private:
     // PROJECTION METHODS
 
     // Newton solver
-    this->param.newton_solver_data_momentum = Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
+    this->param.newton_solver_data_momentum =
+      Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
 
     // pressure Poisson equation
     this->param.solver_pressure_poisson         = SolverPressurePoisson::CG;
@@ -486,9 +491,15 @@ private:
 
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
     {
-      this->param.solver_momentum         = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? SolverMomentum::CG : SolverMomentum::FGMRES;
-      this->param.solver_data_momentum    = SolverData(1000, abs_tol_lin, rel_tol_lin);
-      this->param.preconditioner_momentum = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? MomentumPreconditioner::InverseMassMatrix : MomentumPreconditioner::Multigrid;
+      this->param.solver_momentum =
+        treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
+          SolverMomentum::CG :
+          SolverMomentum::FGMRES;
+      this->param.solver_data_momentum = SolverData(1000, abs_tol_lin, rel_tol_lin);
+      this->param.preconditioner_momentum =
+        treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
+          MomentumPreconditioner::InverseMassMatrix :
+          MomentumPreconditioner::Multigrid;
     }
 
 
@@ -510,7 +521,7 @@ private:
 
     if(this->param.preconditioner_momentum == MomentumPreconditioner::Multigrid)
     {
-        // clang-format off
+      // clang-format off
         this->param.preconditioner_momentum            = MomentumPreconditioner::Multigrid;
         this->param.multigrid_data_momentum.type       = MultigridType::cphMG;
         this->param.multigrid_data_momentum.p_sequence = PSequenceType::DecreaseByOne;
@@ -532,13 +543,14 @@ private:
         this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.smoother_type   = "Chebyshev"; // "ILU"
         this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.coarse_type     = "Amesos-KLU";
 #endif
-        // clang-format on
+      // clang-format on
     }
 
     // COUPLED NAVIER-STOKES SOLVER
 
     // nonlinear solver (Newton solver)
-    this->param.newton_solver_data_coupled = Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
+    this->param.newton_solver_data_coupled =
+      Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
 
     // linear solver
     this->param.solver_coupled      = SolverCoupled::FGMRES;
@@ -661,10 +673,8 @@ private:
     this->field_functions->initial_solution_pressure.reset(new AnalyticalSolutionPressure<dim>());
     this->field_functions->analytical_solution_pressure.reset(
       new AnalyticalSolutionPressure<dim>());
-    this->field_functions->right_hand_side.reset(
-      new RightHandSide<dim>(include_convective_term,
-                             kinematic_viscosity,
-                             generalized_newtonian_model_data));
+    this->field_functions->right_hand_side.reset(new RightHandSide<dim>(
+      include_convective_term, kinematic_viscosity, generalized_newtonian_model_data));
   }
 
   std::shared_ptr<PostProcessorBase<dim, Number>>
@@ -717,9 +727,9 @@ private:
   double kinematic_viscosity     = 5e-6;
   bool   use_turbulence_model    = false;
 
-  FormulationViscousTerm    formulation_viscous_term = FormulationViscousTerm::DivergenceFormulation;
-  TemporalDiscretization    temporal_discretization  = TemporalDiscretization::Undefined;
-  TreatmentOfConvectiveTerm treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;
+  FormulationViscousTerm formulation_viscous_term = FormulationViscousTerm::DivergenceFormulation;
+  TemporalDiscretization temporal_discretization  = TemporalDiscretization::Undefined;
+  TreatmentOfConvectiveTerm    treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;
   TreatmentOfVariableViscosity treatment_of_variable_viscosity =
     TreatmentOfVariableViscosity::Implicit;
 
