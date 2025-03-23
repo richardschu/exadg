@@ -142,6 +142,12 @@ TimeIntBDFDualSplitting<dim, Number>::initialize_current_solution()
     this->helpers_ale->move_grid(this->get_time());
 
   pde_operator->prescribe_initial_conditions(velocity[0], pressure[0], this->get_time());
+
+  // Update the variable viscosity.
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+  {
+    pde_operator->update_viscosity(velocity[0]);
+  }
 }
 
 template<int dim, typename Number>
@@ -722,11 +728,8 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       velocity_np = velocity_viscous_last_iter;
     }
 
-    /*
-     *  update variable viscosity
-     */
-    if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
-       this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
+    // explicit viscosity update or initial guess for viscosity
+    if(this->param.viscous_problem() and this->param.viscosity_is_variable())
     {
       dealii::Timer timer_viscosity_update;
       timer_viscosity_update.restart();

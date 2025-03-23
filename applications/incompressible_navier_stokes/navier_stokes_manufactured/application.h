@@ -398,12 +398,12 @@ private:
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
     this->param.time_step_size                = time_step_size;
-    this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
+    this->param.order_time_integrator         = 3;     // 1; // 2; // 3;
     this->param.start_with_low_order          = false; // true;
 
     // output of solver information
     this->param.solver_info_data.interval_time =
-      (this->param.end_time - this->param.start_time) / 100000.0;
+      (this->param.end_time - this->param.start_time) / 100.0;
 
 
     // SPATIAL DISCRETIZATION
@@ -673,6 +673,8 @@ private:
     this->field_functions->initial_solution_pressure.reset(new AnalyticalSolutionPressure<dim>());
     this->field_functions->analytical_solution_pressure.reset(
       new AnalyticalSolutionPressure<dim>());
+    this->field_functions->analytical_solution_velocity.reset(
+      new AnalyticalSolutionVelocity<dim>());
     this->field_functions->right_hand_side.reset(new RightHandSide<dim>(
       include_convective_term, kinematic_viscosity, generalized_newtonian_model_data));
   }
@@ -737,6 +739,8 @@ private:
   double                        interval_start = 0.0;
   double                        interval_end   = 0.1;
 
+  // coarse: 12, 6
+  // fine: 16, 8
   double abs_tol_lin    = 1e-12;
   double rel_tol_lin    = 1e-6;
   double abs_tol_newton = 1e-12;

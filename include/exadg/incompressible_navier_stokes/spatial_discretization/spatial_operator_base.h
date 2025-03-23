@@ -249,6 +249,12 @@ public:
                         double const                                   time) const;
 
   /*
+   * Interpolate velocity with analytical solution and set viscosity.
+   */
+  void
+  enforce_exact_viscosity(double const & time) const;
+
+  /*
    * Interpolate analytical solution functions.
    */
   void

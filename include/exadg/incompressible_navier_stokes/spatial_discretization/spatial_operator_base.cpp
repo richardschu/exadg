@@ -1420,6 +1420,23 @@ SpatialOperatorBase<dim, Number>::evaluate_velocity_divergence_term(VectorType &
 
 template<int dim, typename Number>
 void
+SpatialOperatorBase<dim, Number>::enforce_exact_viscosity(double const & time) const
+{
+  field_functions->analytical_solution_velocity->set_time(time);
+  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeDouble;
+  VectorTypeDouble                                           velocity_double;
+  this->matrix_free->initialize_dof_vector(velocity_double, this->get_dof_index_velocity());
+  dealii::VectorTools::interpolate(*get_mapping(),
+                                   dof_handler_u,
+                                   *(field_functions->analytical_solution_velocity),
+                                   velocity_double);
+  VectorType velocity;
+  velocity = velocity_double;
+  this->update_viscosity(velocity);
+}
+
+template<int dim, typename Number>
+void
 SpatialOperatorBase<dim, Number>::update_viscosity(VectorType const & velocity) const
 {
   AssertThrow(param.viscous_problem() and param.viscosity_is_variable(),

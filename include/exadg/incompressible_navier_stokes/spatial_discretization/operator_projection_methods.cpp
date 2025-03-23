@@ -570,7 +570,7 @@ OperatorProjectionMethods<dim, Number>::evaluate_linearized_residual(
   double const &     scaling_factor_mass)
 {
   // update implicitly coupled viscosity
-  if(this->param.nonlinear_viscous_problem())
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
   {
     this->update_viscosity(src);
   }

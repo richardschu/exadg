@@ -70,6 +70,12 @@ TimeIntBDFCoupled<dim, Number>::initialize_current_solution()
   pde_operator->prescribe_initial_conditions(solution[0].block(0),
                                              solution[0].block(1),
                                              this->get_time());
+
+  // Update the variable viscosity.
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+  {
+    pde_operator->update_viscosity(solution[0].block(0));
+  }
 }
 
 template<int dim, typename Number>
@@ -176,9 +182,8 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     solution_np = solution_last_iter;
   }
 
-  // explicit viscosity update
-  if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
-     this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
+  // explicit viscosity update or initial guess for viscosity
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
   {
     dealii::Timer timer_viscosity_update;
     timer_viscosity_update.restart();
