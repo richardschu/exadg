@@ -375,15 +375,11 @@ private:
   {
     // MATHEMATICAL MODEL
     this->param.problem_type = ProblemType::Unsteady;
-    if(include_convective_term == true)
-      this->param.equation_type = EquationType::NavierStokes;
-    else
-      this->param.equation_type = EquationType::Stokes;
-
+    this->param.equation_type =
+      include_convective_term ? EquationType::NavierStokes : EquationType::Stokes;
     this->param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
-
-    this->param.formulation_viscous_term = formulation_viscous_term;
-    this->param.right_hand_side          = true;
+    this->param.formulation_viscous_term    = formulation_viscous_term;
+    this->param.right_hand_side             = true;
 
 
     // PHYSICAL QUANTITIES
@@ -396,9 +392,10 @@ private:
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
+    this->param.treatment_of_convective_term  = treatment_of_convective_term;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
     this->param.time_step_size                = time_step_size;
-    this->param.order_time_integrator         = 3;     // 1; // 2; // 3;
+    this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
     this->param.start_with_low_order          = false; // true;
 
     // output of solver information
@@ -413,7 +410,6 @@ private:
     this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
-    this->param.treatment_of_convective_term = treatment_of_convective_term;
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
       this->param.upwind_factor = 0.5;
 
@@ -741,10 +737,10 @@ private:
 
   // coarse: 12, 6
   // fine: 16, 8
-  double abs_tol_lin    = 1e-12;
-  double rel_tol_lin    = 1e-6;
-  double abs_tol_newton = 1e-12;
-  double rel_tol_newton = 1e-6;
+  static double constexpr abs_tol_lin    = 1e-12;
+  static double constexpr rel_tol_lin    = 1e-6;
+  static double constexpr abs_tol_newton = 1e-12;
+  static double constexpr rel_tol_newton = 1e-6;
 };
 
 } // namespace IncNS
