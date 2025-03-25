@@ -79,12 +79,13 @@ public:
     double const l_reg = length_domain * space_ramp_fraction;
     if(x < l_reg)
     {
-      val *= 1.0 - dealii::Utilities::fixed_power<4>(dealii::numbers::PI * x / (2.0 * l_reg));
+      val *=
+        1.0 - dealii::Utilities::fixed_power<4>(std::cos(dealii::numbers::PI * x / (2.0 * l_reg)));
     }
-    if(x > length_domain - l_reg)
+    else if(x > length_domain - l_reg)
     {
-      val *= 1.0 - dealii::Utilities::fixed_power<4>(dealii::numbers::PI * (x - length_domain) /
-                                                     (2.0 * l_reg));
+      val *= 1.0 - dealii::Utilities::fixed_power<4>(
+                     std::cos(dealii::numbers::PI * (x - length_domain) / (2.0 * l_reg)));
     }
 
     if constexpr(dim == 3)
@@ -94,12 +95,13 @@ public:
 
       if(z < l_reg)
       {
-        val *= 1.0 - dealii::Utilities::fixed_power<4>(dealii::numbers::PI * z / (2.0 * l_reg));
+        val *= 1.0 -
+               dealii::Utilities::fixed_power<4>(std::cos(dealii::numbers::PI * z / (2.0 * l_reg)));
       }
-      if(z > length_domain - l_reg)
+      else if(z > length_domain - l_reg)
       {
-        val *= 1.0 - dealii::Utilities::fixed_power<4>(dealii::numbers::PI * (z - length_domain) /
-                                                       (2.0 * l_reg));
+        val *= 1.0 - dealii::Utilities::fixed_power<4>(
+                       std::cos(dealii::numbers::PI * (z - length_domain) / (2.0 * l_reg)));
       }
     }
 
@@ -138,6 +140,7 @@ public:
       prm.add_parameter("EndTime",                             end_time,                                          "Simulation end time.",                                         dealii::Patterns::Double());
       prm.add_parameter("CFL",                                 cfl,                                               "Target maximum CFL used.",                                     dealii::Patterns::Double());      
       prm.add_parameter("TimeStepSize",                        time_step_size,                                    "Time step size used.",                                         dealii::Patterns::Double());
+      prm.add_parameter("LidVelocity",                         lid_velocity,                                      "Lid velocity enforced.",                                       dealii::Patterns::Double());
       prm.add_parameter("Density",                             density,                                           "Incompressible model: density.",                               dealii::Patterns::Double());
       prm.add_parameter("KinematicViscosity",                  kinematic_viscosity,                               "Newtonian model: kinematic_viscosity.",                        dealii::Patterns::Double());
       prm.add_parameter("UseGeneralizedNewtonianModel",        generalized_newtonian_model_data.is_active,        "Use generalized Newtonian model, else Newtonian one.",         dealii::Patterns::Bool());
@@ -185,7 +188,7 @@ private:
     this->param.calculation_of_time_step_size   = this->param.adaptive_time_stepping ?
                                                     TimeStepCalculation::CFL :
                                                     TimeStepCalculation::UserSpecified;
-    this->param.max_velocity                    = 1.0;
+    this->param.max_velocity                    = lid_velocity;
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
     this->param.cfl                             = cfl;
     this->param.time_step_size                  = time_step_size;
@@ -561,7 +564,7 @@ private:
                                               0.1 /* time_ramp_fraction */,                                              
                                               0.1 /* space_ramp_fraction */,
                                               L /* length_domain */,
-                                              1.0 /* velocity_scale */)));
+                                              lid_velocity /* velocity_scale */)));
 
     // fill boundary descriptor pressure
     this->boundary_descriptor->pressure->neumann_bc.insert(0);
@@ -593,6 +596,7 @@ private:
     pp_data.output_data.filename             = this->output_parameters.filename;
     pp_data.output_data.write_divergence     = true;
     pp_data.output_data.write_vorticity      = false;
+    pp_data.output_data.write_viscosity      = true;
     pp_data.output_data.write_streamfunction = false;
     pp_data.output_data.write_processor_id   = false;
     pp_data.output_data.degree               = this->param.degree_u;
@@ -647,6 +651,7 @@ private:
   double end_time   = 10.0;
   double cfl = 3.0;
   double time_step_size = 1e-3;
+  double lid_velocity = 1.0;
   double density = 1.0e3;
   double kinematic_viscosity = 1.0e-6;
   

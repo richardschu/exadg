@@ -5,10 +5,10 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "3",
-        "DegreeMax": "3",
-        "RefineSpaceMin": "3",
-        "RefineSpaceMax": "3"
+        "DegreeMin": "4",
+        "DegreeMax": "4",
+        "RefineSpaceMin": "6",
+        "RefineSpaceMax": "6"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
@@ -16,26 +16,27 @@
     },
     "Application": {
          "ProblemType": "Unsteady",
-         "IncludeConvectiveTerm": "false",
+         "IncludeConvectiveTerm": "true",
          "StartTime": "0.0",
          "EndTime": "10.0",
-         "CFL": "3.0",
-         "TimeStepSize": "1.0e-3",
-         "Density": "1000.0",
-         "KinematicViscosity": "1e-6",
+         "CFL": "1.0",
+         "TimeStepSize": "1.0e-2",
+         "LidVelocity": "10.0",
+         "Density": "1.0",
+         "KinematicViscosity": "1e-3",
          "UseGeneralizedNewtonianModel": "true",
          "TemporalDiscretization" : "BDFDualSplittingScheme",
          "TreatmentOfConvectiveTerm" : "Explicit",
          "TreatmentOfVariableViscosity" : "Explicit",
-         "GeneralizedNewtonianViscosityMargin": "49e-6",
+         "GeneralizedNewtonianViscosityMargin": "100e-3",
          "GeneralizedNewtonianKappa": "1.0",
-         "GeneralizedNewtonianLambda": "1.0",
+         "GeneralizedNewtonianLambda": "10.0",
          "GeneralizedNewtonianA": "2.0",
          "GeneralizedNewtonianN": "0.5"
     },
     "Output": {
         "OutputDirectory": "output/",
-        "OutputName": "cavity",
+        "OutputName": "test",
         "WriteOutput": "true"
     }
 }
