@@ -419,14 +419,14 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   // inverse mass operator
   if(param.spatial_discretization == SpatialDiscretization::L2)
   {
-    InverseMassOperatorData inverse_mass_operator_data_velocity;
+    InverseMassOperatorData<Number> inverse_mass_operator_data_velocity;
     inverse_mass_operator_data_velocity.dof_index  = get_dof_index_velocity();
     inverse_mass_operator_data_velocity.quad_index = get_quad_index_velocity_standard();
     inverse_mass_operator_data_velocity.parameters = param.inverse_mass_operator;
     inverse_mass_velocity.initialize(*matrix_free, inverse_mass_operator_data_velocity);
   }
   // inverse mass operator velocity scalar
-  InverseMassOperatorData inverse_mass_operator_data_velocity_scalar;
+  InverseMassOperatorData<Number> inverse_mass_operator_data_velocity_scalar;
   inverse_mass_operator_data_velocity_scalar.dof_index  = get_dof_index_velocity_scalar();
   inverse_mass_operator_data_velocity_scalar.quad_index = get_quad_index_velocity_standard();
   inverse_mass_operator_data_velocity_scalar.parameters = param.inverse_mass_operator;
@@ -1653,7 +1653,7 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
     }
     else if(param.preconditioner_projection == PreconditionerProjection::InverseMassMatrix)
     {
-      InverseMassOperatorData inverse_mass_operator_data;
+      InverseMassOperatorData<Number> inverse_mass_operator_data;
       inverse_mass_operator_data.dof_index  = get_dof_index_velocity();
       inverse_mass_operator_data.quad_index = get_quad_index_velocity_standard();
       inverse_mass_operator_data.parameters = param.inverse_mass_preconditioner;

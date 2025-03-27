@@ -375,8 +375,6 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
         // Compute convergence criteria.
         double norm_abs = residual.l2_norm();
         double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
-        this->pcout << "norm_abs = " << norm_abs << "    "
-                    << "norm_rel = " << norm_rel << " ##+ \n";
 
         picard_iterations += 1;
         if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or

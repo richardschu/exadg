@@ -112,6 +112,12 @@ public:
     return this->data;
   }
 
+  VariableCoefficients<dealii::VectorizedArray<Number>> const *
+  get_viscosity_coefficients() const
+  {
+    return &viscosity_coefficients;
+  }
+
   unsigned int
   get_quad_index() const
   {

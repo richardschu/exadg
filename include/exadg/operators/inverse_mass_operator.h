@@ -23,6 +23,7 @@
 #define INCLUDE_OPERATORS_INVERSEMASSMATRIX_H_
 
 // deal.II
+#include <deal.II/base/aligned_vector.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/matrix_free/operators.h>
 
@@ -30,14 +31,17 @@
 #include <exadg/matrix_free/integrators.h>
 #include <exadg/operators/inverse_mass_parameters.h>
 #include <exadg/operators/mass_operator.h>
+#include <exadg/operators/variable_coefficients.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/block_jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/jacobi_preconditioner.h>
 
 namespace ExaDG
 {
+template<typename Number>
 struct InverseMassOperatorData
 {
-  InverseMassOperatorData() : dof_index(0), quad_index(0)
+  InverseMassOperatorData()
+    : dof_index(0), quad_index(0), coefficient_is_variable(false), variable_coefficients(nullptr)
   {
   }
 
@@ -46,6 +50,9 @@ struct InverseMassOperatorData
   unsigned int quad_index;
 
   InverseMassParameters parameters;
+
+  bool                                                          coefficient_is_variable;
+  VariableCoefficients<dealii::VectorizedArray<Number>> const * variable_coefficients;
 };
 
 template<int dim, int n_components, typename Number>
@@ -71,13 +78,25 @@ public:
 
   void
   initialize(dealii::MatrixFree<dim, Number> const & matrix_free_in,
-             InverseMassOperatorData const           inverse_mass_operator_data)
+             InverseMassOperatorData<Number> const   inverse_mass_operator_data)
   {
     this->matrix_free = &matrix_free_in;
     dof_index         = inverse_mass_operator_data.dof_index;
     quad_index        = inverse_mass_operator_data.quad_index;
 
     data = inverse_mass_operator_data.parameters;
+
+    coefficient_is_variable = inverse_mass_operator_data.coefficient_is_variable;
+    variable_coefficients   = inverse_mass_operator_data.variable_coefficients;
+
+    // Variable coefficients only implemented for the the matrix-free operator.
+    AssertThrow(not coefficient_is_variable or variable_coefficients != nullptr,
+                dealii::ExcMessage("Pointer to variable coefficients not set properly."));
+    AssertThrow(
+      not coefficient_is_variable or
+        data.implementation_type == InverseMassType::MatrixfreeOperator,
+      dealii::ExcMessage(
+        "Variable coefficients only implemented for `InverseMassType::MatrixfreeOperator`."));
 
     dealii::FiniteElement<dim> const & fe = matrix_free->get_dof_handler(dof_index).get_fe();
 
@@ -229,14 +248,42 @@ private:
     Integrator                      integrator(*matrix_free, dof_index, quad_index);
     InverseMassAsMatrixFreeOperator inverse_mass(integrator);
 
-    for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+    if(coefficient_is_variable)
     {
-      integrator.reinit(cell);
-      integrator.read_dof_values(src, 0);
+      for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+      {
+        integrator.reinit(cell);
+        integrator.read_dof_values(src, 0);
 
-      inverse_mass.apply(integrator.begin_dof_values(), integrator.begin_dof_values());
+        dealii::AlignedVector<dealii::VectorizedArray<Number>> inverse_JxW_times_coefficient(
+          this->matrix_free->get_dofs_per_cell(dof_index));
+        inverse_mass.fill_inverse_JxW_values(inverse_JxW_times_coefficient);
 
-      integrator.set_dof_values(dst, 0);
+        for(unsigned int q = 0; q < integrator.n_q_points; ++q)
+        {
+          inverse_JxW_times_coefficient[q] *=
+            this->variable_coefficients->get_coefficient_cell(cell, q);
+        }
+
+        inverse_mass.apply(inverse_JxW_times_coefficient,
+                           n_components,
+                           integrator.begin_dof_values(),
+                           integrator.begin_dof_values());
+
+        integrator.set_dof_values(dst, 0);
+      }
+    }
+    else
+    {
+      for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+      {
+        integrator.reinit(cell);
+        integrator.read_dof_values(src, 0);
+
+        inverse_mass.apply(integrator.begin_dof_values(), integrator.begin_dof_values());
+
+        integrator.set_dof_values(dst, 0);
+      }
     }
   }
 
@@ -245,6 +292,10 @@ private:
   unsigned int dof_index, quad_index;
 
   InverseMassParameters data;
+
+  // Variable coefficients not owned by this class.
+  bool                                                          coefficient_is_variable;
+  VariableCoefficients<dealii::VectorizedArray<Number>> const * variable_coefficients;
 
   // This variable is only relevant if the inverse mass can not be realized as a matrix-free
   // operator. Since this class allows only L2-conforming spaces (discontinuous Galerkin method),
