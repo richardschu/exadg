@@ -153,6 +153,20 @@ public:
       prm.add_parameter("GeneralizedNewtonianLambda",          generalized_newtonian_model_data.lambda,           "Generalized Newtonian models: lambda.",                        dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianA",               generalized_newtonian_model_data.a,                "Generalized Newtonian models: a.",                             dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianN",               generalized_newtonian_model_data.n,                "Generalized Newtonian models: n.",                             dealii::Patterns::Double());
+
+      prm.add_parameter("AbsTolLin",                                   abs_tol_lin,                                     "Absolute tolerance of linear solver.",                                                          dealii::Patterns::Double());
+      prm.add_parameter("RelTolLin",                                   rel_tol_lin,                                     "Relative tolerance of linear solver.",                                                          dealii::Patterns::Double());
+      prm.add_parameter("AbsTolNewton",                                abs_tol_newton,                                  "Absolute tolerance of nonlinear solver.",                                                       dealii::Patterns::Double());
+      prm.add_parameter("RelTolNewton",                                rel_tol_newton,                                  "Relative tolerance of nonlinear solver.",                                                       dealii::Patterns::Double());
+      prm.add_parameter("AbsTolLinInNewton",                           abs_tol_lin_in_newton,                           "Absolute tolerance of linear solver within nonlinear solver",                                   dealii::Patterns::Double());
+      prm.add_parameter("RelTolLinInNewton",                           rel_tol_lin_in_newton,                           "Relative tolerance of linear solver within nonlinear solver",                                   dealii::Patterns::Double());
+      prm.add_parameter("SchurComplementPreconditioner",               schur_complement_preconditioner,                 "Schur complement approximation considered.");
+      prm.add_parameter("IterativeSolveVelocityBlock",                 iterative_solve_velocity_block,                  "Use an iterative solver for the velocity block within block preconditioner?",                   dealii::Patterns::Bool());
+      prm.add_parameter("IterativeSolvePressureBlock",                 iterative_solve_pressure_block,                  "Use an iterative solver for the pressure block within block preconditioner?",                   dealii::Patterns::Bool());
+      prm.add_parameter("AbsTolLinBlockInPreconditioner",              abs_tol_lin_block_in_preconditioner,             "Absolute solver tolerance of linear solver of block in preconditioner",                         dealii::Patterns::Double());
+      prm.add_parameter("RelTolLinBlockInPreconditioner",              rel_tol_lin_block_in_preconditioner,             "Relative solver tolerance of linear solver of block in preconditioner",                         dealii::Patterns::Double());
+      prm.add_parameter("IterationsEigenValueEstimationVelocity",      iterations_eigenvalue_estimation_velocity,       "Iterations used in the Eigenvalue estimation in Multigrid, Velocity problem.",                  dealii::Patterns::Integer());
+      prm.add_parameter("IterationsEigenValueEstimationPressureSchur", iterations_eigenvalue_estimation_pressure_schur, "Iterations used in the Eigenvalue estimation in Multigrid, Pressure Schur complement problem.", dealii::Patterns::Integer());
       // clang-format on
     }
     prm.leave_subsection();
@@ -198,8 +212,8 @@ private:
     // pseudo-timestepping for steady-state problems
     this->param.convergence_criterion_steady_problem =
       ConvergenceCriterionSteadyProblem::ResidualSteadyNavierStokes;
-    this->param.abs_tol_steady = 1.e-12;
-    this->param.rel_tol_steady = 1.e-8;
+    this->param.abs_tol_steady = abs_tol_steady;
+    this->param.rel_tol_steady = rel_tol_steady;
 
     // restart
     this->param.restart_data.write_restart       = false;
@@ -216,8 +230,8 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.grid.triangulation_type     = TriangulationType::Distributed;
-    this->param.mapping_degree              = this->param.degree_u;
-    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.mapping_degree              = 1; // this->param.degree_u;
+    this->param.mapping_degree_coarse_grids = 1; // this->param.mapping_degree;
     this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
@@ -361,7 +375,7 @@ private:
     this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
     this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
     this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
-    this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
+    this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = iterations_eigenvalue_estimation_velocity; // Chebyshev, default: 20
     this->param.multigrid_data_momentum.smoother_data.preconditioner    =
       this->param.use_cell_based_face_loops ? 
         PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
@@ -400,27 +414,33 @@ private:
       Newton::SolverData(100, abs_tol_newton, rel_tol_newton);
 
     // linear solver
-    this->param.solver_coupled = SolverCoupled::GMRES; // FGMRES;
+    this->param.solver_coupled = iterative_solve_velocity_block or iterative_solve_pressure_block ?
+                                   SolverCoupled::FGMRES :
+                                   SolverCoupled::GMRES;
     if(this->param.viscosity_is_variable())
     {
       this->param.solver_data_coupled =
-        SolverData(1e4, abs_tol_lin_in_newton, rel_tol_lin_in_newton, 1000);
+        SolverData(1500, abs_tol_lin_in_newton, rel_tol_lin_in_newton, 1000);
     }
     else
     {
-      this->param.solver_data_coupled = SolverData(1e4, abs_tol_lin, rel_tol_lin, 1000);
+      this->param.solver_data_coupled = SolverData(1500, abs_tol_lin, rel_tol_lin, 1000);
     }
 
     // preconditioning linear solver
     this->param.preconditioner_coupled = PreconditionerCoupled::BlockTriangular;
     this->param.update_preconditioner_coupled =
       this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
-    this->param.exact_inversion_of_velocity_block   = false;
-    this->param.exact_inversion_of_laplace_operator = false;
-    this->param.solver_data_velocity_block =
-      SolverData(1000, abs_tol_block_preconditioner, rel_tol_block_preconditioner, 30);
-    this->param.solver_data_pressure_block =
-      SolverData(1000, abs_tol_block_preconditioner, rel_tol_block_preconditioner, 30);
+    this->param.exact_inversion_of_velocity_block   = iterative_solve_velocity_block;
+    this->param.exact_inversion_of_laplace_operator = iterative_solve_pressure_block;
+    this->param.solver_data_velocity_block          = SolverData(1000,
+                                                        abs_tol_lin_block_in_preconditioner,
+                                                        rel_tol_lin_block_in_preconditioner,
+                                                        30);
+    this->param.solver_data_pressure_block          = SolverData(1000,
+                                                        abs_tol_lin_block_in_preconditioner,
+                                                        rel_tol_lin_block_in_preconditioner,
+                                                        30);
 
     // preconditioner velocity/momentum block
     this->param.preconditioner_velocity_block = MomentumPreconditioner::Multigrid;
@@ -437,7 +457,7 @@ private:
     this->param.multigrid_data_velocity_block.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
     this->param.multigrid_data_velocity_block.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
     this->param.multigrid_data_velocity_block.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
-    this->param.multigrid_data_velocity_block.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
+    this->param.multigrid_data_velocity_block.smoother_data.iterations_eigenvalue_estimation = iterations_eigenvalue_estimation_velocity; // Chebyshev, default: 20
     this->param.multigrid_data_velocity_block.smoother_data.preconditioner    =
       this->param.use_cell_based_face_loops ? 
         PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
@@ -462,10 +482,7 @@ private:
     // clang-format on
 
     // preconditioner Schur-complement block
-    this->param.preconditioner_pressure_block =
-      this->param.non_explicit_convective_problem() ?
-        SchurComplementPreconditioner::PressureConvectionDiffusion :
-        SchurComplementPreconditioner::CahouetChabard;
+    this->param.preconditioner_pressure_block = schur_complement_preconditioner;
 
     // clang-format off
     this->param.multigrid_data_pressure_block.type       = MultigridType::cphMG;
@@ -475,7 +492,7 @@ private:
     this->param.multigrid_data_pressure_block.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
     this->param.multigrid_data_pressure_block.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
     this->param.multigrid_data_pressure_block.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
-    this->param.multigrid_data_pressure_block.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
+    this->param.multigrid_data_pressure_block.smoother_data.iterations_eigenvalue_estimation = iterations_eigenvalue_estimation_pressure_schur; // Chebyshev, default: 20
     this->param.multigrid_data_pressure_block.smoother_data.preconditioner    =
       this->param.use_cell_based_face_loops ? 
         PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
@@ -665,18 +682,29 @@ private:
 
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
 
-  static double constexpr abs_tol_lin    = 1.0e-12;
-  static double constexpr rel_tol_lin    = 1.0e-6;
-  static double constexpr abs_tol_newton = 1.0e-12;
-  static double constexpr rel_tol_newton = 1.0e-6;
+  double abs_tol_lin    = 1.0e-12;
+  double rel_tol_lin    = 1.0e-6;
+  double abs_tol_newton = 1.0e-12;
+  double rel_tol_newton = 1.0e-6;
+  double abs_tol_lin_in_newton          = 1.0e-12;
+  double rel_tol_lin_in_newton          = 1.0e-12;
 
-  static double constexpr abs_tol_lin_in_newton          = 1.0e-12;
-  static double constexpr rel_tol_lin_in_newton          = 1.0e-12;
-  static double constexpr abs_tol_block_preconditioner   = 1.0e-12;
-  static double constexpr rel_tol_block_preconditioner   = 1.0e-6;
-  static double constexpr abs_tol_multigrid_coarse_level = 1.0e-60;
-  static double constexpr rel_tol_multigrid_coarse_level = 1.0e-60; 
+  bool iterative_solve_velocity_block = false;
+  bool iterative_solve_pressure_block = false;
+  double abs_tol_lin_block_in_preconditioner   = 1.0e-12;
+  double rel_tol_lin_block_in_preconditioner   = 1.0e-6;
 
+  unsigned int iterations_eigenvalue_estimation_velocity = 20;
+  unsigned int iterations_eigenvalue_estimation_pressure_schur = 20;
+
+  // currently inactive, since a single AMG cycle/direct solve is used on the coarse grid.
+  double abs_tol_multigrid_coarse_level = 1.0e-60;
+  double rel_tol_multigrid_coarse_level = 1.0e-60; 
+
+  double abs_tol_steady = 1.0e-12;
+  double rel_tol_steady = 1.0e-6;
+
+  SchurComplementPreconditioner schur_complement_preconditioner = SchurComplementPreconditioner::CahouetChabard;
 };
 
 } // namespace IncNS
