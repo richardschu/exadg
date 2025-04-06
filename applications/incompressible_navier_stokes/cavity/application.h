@@ -417,7 +417,7 @@ private:
     this->param.solver_coupled = iterative_solve_velocity_block or iterative_solve_pressure_block ?
                                    SolverCoupled::FGMRES :
                                    SolverCoupled::GMRES;
-    if(this->param.viscosity_is_variable())
+    if(this->param.nonlinear_viscous_problem())
     {
       this->param.solver_data_coupled =
         SolverData(1500, abs_tol_lin_in_newton, rel_tol_lin_in_newton, 1000);
