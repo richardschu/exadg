@@ -678,7 +678,7 @@ private:
   TreatmentOfVariableViscosity treatment_of_variable_viscosity =
     TreatmentOfVariableViscosity::Implicit;
 
-  MomentumPreconditioner preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+  MomentumPreconditioner preconditioner_momentum = MomentumPreconditioner::Multigrid;
 
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
 
