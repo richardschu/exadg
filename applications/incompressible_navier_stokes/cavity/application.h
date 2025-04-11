@@ -371,9 +371,9 @@ private:
 
     this->param.multigrid_operator_type_momentum                        = this->param.non_explicit_convective_problem() ? 
       MultigridOperatorType::ReactionConvectionDiffusion : MultigridOperatorType::ReactionDiffusion;
-    this->param.multigrid_data_momentum.smoother_data.iterations        = 5;
-    this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
-    this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
+    this->param.multigrid_data_momentum.smoother_data.iterations        = 1;
+    this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Jacobi; // MultigridSmoother::Jacobi
+    this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 1e-20; // Jacobi,    default: 0.8
     this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
     this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = iterations_eigenvalue_estimation_velocity; // Chebyshev, default: 20
     this->param.multigrid_data_momentum.smoother_data.preconditioner    =

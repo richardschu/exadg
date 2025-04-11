@@ -87,7 +87,6 @@ public:
     /*
      *  Smoothing
      */
-
     VectorTypeMG initial_solution_float;
     initial_solution_float = initial_solution;
     VectorTypeMG solution_after_smoothing, tmp_float;
@@ -121,7 +120,7 @@ public:
     unsigned int dof_index = underlying_operator.get_dof_index();
 
     // TODO: use scalar = false for velocity field
-    bool scalar = true;
+    bool scalar = false;
 
     if(scalar)
     {
