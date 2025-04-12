@@ -261,11 +261,12 @@ private:
     this->param.adjust_pressure_level = AdjustPressureLevel::ApplyZeroMeanValue;
 
     // div-div and continuity penalty
-    this->param.use_divergence_penalty                     = true;
-    this->param.divergence_penalty_factor                  = 1.0;
-    this->param.use_continuity_penalty                     = true;
-    this->param.continuity_penalty_factor                  = 1.0;
-    this->param.apply_penalty_terms_in_postprocessing_step = true;
+    this->param.use_divergence_penalty    = true;
+    this->param.divergence_penalty_factor = 1.0;
+    this->param.use_continuity_penalty    = true;
+    this->param.continuity_penalty_factor = 1.0;
+    this->param.apply_penalty_terms_in_postprocessing_step =
+      this->param.problem_type == ProblemType::Unsteady;
     this->param.continuity_penalty_use_boundary_data =
       this->param.apply_penalty_terms_in_postprocessing_step;
     this->param.type_penalty_parameter        = TypePenaltyParameter::ConvectiveTerm;
@@ -579,7 +580,7 @@ private:
     this->boundary_descriptor->velocity->dirichlet_bc.insert(
       pair(1, new LidVelocityRegularized<dim>(start_time,
                                               end_time,
-                                              0.1 /* time_ramp_fraction */,                                              
+                                              this->param.problem_type == ProblemType::Unsteady ? 0.1 : 0.0 /* time_ramp_fraction */,                                              
                                               0.1 /* space_ramp_fraction */,
                                               L /* length_domain */,
                                               lid_velocity /* velocity_scale */)));

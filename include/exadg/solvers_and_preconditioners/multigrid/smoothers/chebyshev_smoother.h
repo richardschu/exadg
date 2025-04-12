@@ -165,6 +165,10 @@ public:
       additional_data_point.degree              = data.degree;
       additional_data_point.eig_cg_n_iterations = data.iterations_eigenvalue_estimation;
 
+      // additional_data_point.eigenvalue_algorithm =
+      // dealii::internal::EigenvalueAlgorithm::power_iteration;
+      additional_data_point.eigenvalue_algorithm = dealii::internal::EigenvalueAlgorithm::lanczos;
+
       chebyshev_point_jacobi = std::make_shared<ChebyshevPointJacobi>();
 
       if(initialize_preconditioner)
