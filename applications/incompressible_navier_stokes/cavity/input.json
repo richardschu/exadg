@@ -18,10 +18,10 @@
         "ProblemType": "Unsteady",
         "IncludeConvectiveTerm": "true",
         "StartTime": "0.0",
-        "EndTime": "100.0e-2",
+        "EndTime": "1.0",
         "CFL": "-1.0",
         "TimeStepSize": "1.0e-2",
-        "LidVelocity": "10.0",
+        "LidVelocity": "1.0",
         "Density": "1.0",
         "KinematicViscosity": "1e-3",
         "UseGeneralizedNewtonianModel": "true",
@@ -38,7 +38,12 @@
         "AbsTolNewton": "1.0e-12",
         "RelTolNewton": "1.0e-6",
         "AbsTolLinInNewton": "1.0e-12",
-        "RelTolLinInNewton": "1.0e-6",
+        "RelTolLinInNewton": "1.0e-3",
+        "SmootherUIterations": "5",
+        "SmootherUSmoother": "Chebyshev",
+        "SmootherURelaxationFactor": "0.8",
+        "SmootherUSmoothingRange": "20.0",
+        "SmootherUPreconditioner": "PointJacobi",
         "IterationsEigenValueEstimationVelocity": "20",
         "IterationsEigenValueEstimationPressureSchur": "20",
         "SchurComplementPreconditioner": "CahouetChabard",
@@ -50,6 +55,6 @@
     "Output": {
         "OutputDirectory": "output/",
         "OutputName": "test",
-        "WriteOutput": "true"
+        "WriteOutput": "false"
     }
 }

@@ -165,6 +165,12 @@ public:
       prm.add_parameter("IterativeSolvePressureBlock",                 iterative_solve_pressure_block,                  "Use an iterative solver for the pressure block within block preconditioner?",                   dealii::Patterns::Bool());
       prm.add_parameter("AbsTolLinBlockInPreconditioner",              abs_tol_lin_block_in_preconditioner,             "Absolute solver tolerance of linear solver of block in preconditioner",                         dealii::Patterns::Double());
       prm.add_parameter("RelTolLinBlockInPreconditioner",              rel_tol_lin_block_in_preconditioner,             "Relative solver tolerance of linear solver of block in preconditioner",                         dealii::Patterns::Double());
+
+      prm.add_parameter("SmootherUIterations",                         smoother_u_iterations,                           "Number of smoother iterations used.",                                                           dealii::Patterns::Integer());
+      prm.add_parameter("SmootherUSmoother",                           smoother_u_smoother,                             "Smoother used on each MG level for pre- and postsmoothing.");
+      prm.add_parameter("SmootherURelaxationFactor",                   smoother_u_relaxation_factor,                    "Relaxation factor used in the Jacobi smoother.",                                                dealii::Patterns::Double());
+      prm.add_parameter("SmootherUSmoothingRange",                     smoother_u_smoothing_range,                      "Smoothing range used in the Chebyshev smoother.",                                               dealii::Patterns::Double());
+      prm.add_parameter("SmootherUPreconditioner",                     smoother_u_preconditioner,                       "Preconditioner for the smoother used.");
       prm.add_parameter("IterationsEigenValueEstimationVelocity",      iterations_eigenvalue_estimation_velocity,       "Iterations used in the Eigenvalue estimation in Multigrid, Velocity problem.",                  dealii::Patterns::Integer());
       prm.add_parameter("IterationsEigenValueEstimationPressureSchur", iterations_eigenvalue_estimation_pressure_schur, "Iterations used in the Eigenvalue estimation in Multigrid, Pressure Schur complement problem.", dealii::Patterns::Integer());
       // clang-format on
@@ -317,7 +323,6 @@ private:
     this->param.use_cell_based_face_loops ? 
       PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
 
-
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_pressure_poisson.coarse_problem.amg_data.amg_type = AMGType::ML;
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
@@ -371,14 +376,12 @@ private:
 
     this->param.multigrid_operator_type_momentum                        = this->param.non_explicit_convective_problem() ? 
       MultigridOperatorType::ReactionConvectionDiffusion : MultigridOperatorType::ReactionDiffusion;
-    this->param.multigrid_data_momentum.smoother_data.iterations        = 1;
-    this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Jacobi; // MultigridSmoother::Jacobi
-    this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 1e-20; // Jacobi,    default: 0.8
-    this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
+    this->param.multigrid_data_momentum.smoother_data.iterations        = smoother_u_iterations;
+    this->param.multigrid_data_momentum.smoother_data.smoother          = smoother_u_smoother;
+    this->param.multigrid_data_momentum.smoother_data.relaxation_factor = smoother_u_relaxation_factor; // Jacobi:    default: 0.8
+    this->param.multigrid_data_momentum.smoother_data.smoothing_range   = smoother_u_smoothing_range;   // Chebyshev: default: 20.0
     this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = iterations_eigenvalue_estimation_velocity; // Chebyshev, default: 20
-    this->param.multigrid_data_momentum.smoother_data.preconditioner    =
-      this->param.use_cell_based_face_loops ? 
-        PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
+    this->param.multigrid_data_momentum.smoother_data.preconditioner    = smoother_u_preconditioner;
 
     this->param.multigrid_data_momentum.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_momentum.coarse_problem.amg_data.amg_type = AMGType::ML;
@@ -453,14 +456,12 @@ private:
     this->param.multigrid_data_velocity_block.type       = MultigridType::cphMG;
     this->param.multigrid_data_velocity_block.p_sequence = PSequenceType::DecreaseByOne;
 
-    this->param.multigrid_data_velocity_block.smoother_data.iterations        = 5;
-    this->param.multigrid_data_velocity_block.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
-    this->param.multigrid_data_velocity_block.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
-    this->param.multigrid_data_velocity_block.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
+    this->param.multigrid_data_velocity_block.smoother_data.iterations        = smoother_u_iterations;
+    this->param.multigrid_data_velocity_block.smoother_data.smoother          = smoother_u_smoother;
+    this->param.multigrid_data_velocity_block.smoother_data.relaxation_factor = smoother_u_relaxation_factor; // Jacobi,    default: 0.8
+    this->param.multigrid_data_velocity_block.smoother_data.smoothing_range   = smoother_u_smoothing_range;   // Chebyshev, default: 20
     this->param.multigrid_data_velocity_block.smoother_data.iterations_eigenvalue_estimation = iterations_eigenvalue_estimation_velocity; // Chebyshev, default: 20
-    this->param.multigrid_data_velocity_block.smoother_data.preconditioner    =
-      this->param.use_cell_based_face_loops ? 
-        PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
+    this->param.multigrid_data_velocity_block.smoother_data.preconditioner    = smoother_u_preconditioner;
 
     this->param.multigrid_data_velocity_block.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_velocity_block.coarse_problem.amg_data.amg_type = AMGType::ML;
@@ -694,6 +695,11 @@ private:
   double abs_tol_lin_block_in_preconditioner   = 1.0e-12;
   double rel_tol_lin_block_in_preconditioner   = 1.0e-6;
 
+  unsigned int smoother_u_iterations = 5;
+  MultigridSmoother smoother_u_smoother = MultigridSmoother::Chebyshev;
+  double smoother_u_relaxation_factor = 0.8;
+  double smoother_u_smoothing_range = 20.0;
+  PreconditionerSmoother smoother_u_preconditioner = PreconditionerSmoother::PointJacobi;
   unsigned int iterations_eigenvalue_estimation_velocity = 20;
   unsigned int iterations_eigenvalue_estimation_pressure_schur = 20;
 
