@@ -59,11 +59,39 @@ MomentumOperator<dim, Number>::initialize(
 
   if(operator_data.viscous_problem)
   {
+    this->viscous_kernel_own_storage = true;
+
     this->viscous_kernel = std::make_shared<Operators::ViscousKernel<dim, Number>>();
     this->viscous_kernel->reinit(matrix_free,
                                  operator_data.viscous_kernel_data,
                                  operator_data.dof_index,
                                  operator_data.quad_index);
+
+    // initialize and check turbulence model data
+    if(operator_data.turbulence_model_data.is_active)
+    {
+      // TODO
+      // this->turbulence_model_own_storage.initialize(matrix_free,
+      //                                               *get_mapping(), // ##+
+      //                                               this->viscous_kernel,
+      //                                               operator_data.turbulence_model_data,
+      //                                               operator_data.dof_index);
+    }
+
+    // initialize and check generalized Newtonian model data
+    if(operator_data.generalized_newtonian_model_data.is_active)
+    {
+      this->generalized_newtonian_model_own_storage.initialize(
+        matrix_free,
+        this->viscous_kernel,
+        operator_data.generalized_newtonian_model_data,
+        operator_data.dof_index);
+    }
+
+    if(operator_data.viscous_kernel_data.viscosity_is_variable)
+    {
+      matrix_free.initialize_dof_vector(this->velocity, operator_data.dof_index);
+    }
   }
 
   if(operator_data.unsteady_problem)
@@ -102,8 +130,9 @@ MomentumOperator<dim, Number>::initialize(
   }
 
   // simply set pointers for convective and viscous kernels
-  this->convective_kernel = convective_kernel;
-  this->viscous_kernel    = viscous_kernel;
+  this->convective_kernel          = convective_kernel;
+  this->viscous_kernel             = viscous_kernel;
+  this->viscous_kernel_own_storage = false;
 
   if(operator_data.unsteady_problem)
     this->integrator_flags = this->integrator_flags | this->mass_kernel->get_integrator_flags();
@@ -135,8 +164,8 @@ MomentumOperator<dim, Number>::get_viscous_kernel_data() const
 }
 
 template<int dim, typename Number>
-dealii::LinearAlgebra::distributed::Vector<Number> const &
-MomentumOperator<dim, Number>::get_velocity() const
+typename MomentumOperator<dim, Number>::VectorType const &
+MomentumOperator<dim, Number>::get_convective_velocity() const
 {
   return convective_kernel->get_velocity();
 }
@@ -145,7 +174,7 @@ template<int dim, typename Number>
 void
 MomentumOperator<dim, Number>::set_solution_linearization(VectorType const & velocity)
 {
-  this->set_velocity_ptr(velocity);
+  this->set_convective_velocity_ptr(velocity);
 }
 
 template<int dim, typename Number>
@@ -159,7 +188,7 @@ MomentumOperator<dim, Number>::update_after_grid_motion()
 
 template<int dim, typename Number>
 void
-MomentumOperator<dim, Number>::set_velocity_copy(VectorType const & velocity) const
+MomentumOperator<dim, Number>::set_convective_velocity_copy(VectorType const & velocity) const
 {
   if(operator_data.convective_problem)
     convective_kernel->set_velocity_copy(velocity);
@@ -167,10 +196,25 @@ MomentumOperator<dim, Number>::set_velocity_copy(VectorType const & velocity) co
 
 template<int dim, typename Number>
 void
-MomentumOperator<dim, Number>::set_velocity_ptr(VectorType const & velocity) const
+MomentumOperator<dim, Number>::set_convective_velocity_ptr(VectorType const & velocity) const
 {
   if(operator_data.convective_problem)
     convective_kernel->set_velocity_ptr(velocity);
+}
+
+template<int dim, typename Number>
+void
+MomentumOperator<dim, Number>::set_velocity_copy(VectorType const & velocity) const
+{
+  if(operator_data.viscous_problem and operator_data.viscous_kernel_data.viscosity_is_variable)
+    this->velocity = velocity;
+}
+
+template<int dim, typename Number>
+typename MomentumOperator<dim, Number>::VectorType const &
+MomentumOperator<dim, Number>::get_velocity_copy() const
+{
+  return this->velocity;
 }
 
 template<int dim, typename Number>
@@ -185,6 +229,38 @@ void
 MomentumOperator<dim, Number>::set_scaling_factor_mass_operator(Number const & number)
 {
   this->scaling_factor_mass = number;
+}
+
+template<int dim, typename Number>
+void
+MomentumOperator<dim, Number>::update_viscosity(VectorType const & velocity) const
+{
+  AssertThrow(this->viscous_kernel_own_storage,
+              dealii::ExcMessage("Viscous kernel not managed by this class."));
+
+  if(operator_data.viscous_problem and operator_data.viscous_kernel_data.viscosity_is_variable)
+  {
+    // reset the viscosity stored
+    // viscosity = viscosity_newtonian_limit
+    viscous_kernel->set_constant_coefficient(operator_data.viscous_kernel_data.viscosity);
+
+    // add contribution from generalized Newtonian model
+    // viscosity += generalized_newtonian_viscosity(viscosity_newtonian_limit)
+    if(operator_data.generalized_newtonian_model_data.is_active)
+    {
+      generalized_newtonian_model_own_storage.add_viscosity(velocity);
+    }
+
+    // add contribution from turbulence model
+    // viscosity += turbulent_viscosity(viscosity)
+    // note that the apparent viscosity is used to compute the turbulent viscosity, such that the
+    // *sequence of calls matters*, i.e., we can only compute the turbulent viscosity once the
+    // laminar viscosity has been computed
+    if(operator_data.turbulence_model_data.is_active)
+    {
+      turbulence_model_own_storage.add_viscosity(velocity);
+    }
+  }
 }
 
 template<int dim, typename Number>

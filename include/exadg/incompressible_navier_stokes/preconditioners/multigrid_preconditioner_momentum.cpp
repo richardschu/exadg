@@ -121,7 +121,39 @@ MultigridPreconditioner<dim, Number>::update()
 
   if(mg_operator_type == MultigridOperatorType::ReactionConvectionDiffusion)
   {
-    VectorType const & vector_linearization = pde_operator->get_velocity();
+    VectorType const & vector_linearization = pde_operator->get_convective_velocity();
+
+    // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
+    VectorTypeMG         vector_multigrid_type_copy;
+    VectorTypeMG const * vector_multigrid_type_ptr;
+    if(std::is_same<MultigridNumber, Number>::value)
+    {
+      vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&vector_linearization);
+    }
+    else
+    {
+      vector_multigrid_type_copy = vector_linearization;
+      vector_multigrid_type_ptr  = &vector_multigrid_type_copy;
+    }
+
+    // copy velocity to finest level
+    this->get_operator(this->get_number_of_levels() - 1)
+      ->set_convective_velocity_copy(*vector_multigrid_type_ptr);
+
+    // interpolate velocity from fine to coarse level
+    this->transfer_from_fine_to_coarse_levels(
+      [&](unsigned int const fine_level, unsigned int const coarse_level) {
+        auto const & vector_fine_level = this->get_operator(fine_level)->get_convective_velocity();
+        auto vector_coarse_level = this->get_operator(coarse_level)->get_convective_velocity();
+        this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+        this->get_operator(coarse_level)->set_convective_velocity_copy(vector_coarse_level);
+      });
+  }
+
+  // Update viscous kernels
+  if(data.viscous_problem and data.viscous_kernel_data.viscosity_is_variable)
+  {
+    VectorType const & vector_linearization = pde_operator->get_velocity_copy();
 
     // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
     VectorTypeMG         vector_multigrid_type_copy;
@@ -140,20 +172,30 @@ MultigridPreconditioner<dim, Number>::update()
     this->get_operator(this->get_number_of_levels() - 1)
       ->set_velocity_copy(*vector_multigrid_type_ptr);
 
+    // update variable viscosity on finest level
+    this->get_operator(this->get_number_of_levels() - 1)
+      ->update_viscosity(*vector_multigrid_type_ptr);
+
     // interpolate velocity from fine to coarse level
     this->transfer_from_fine_to_coarse_levels(
       [&](unsigned int const fine_level, unsigned int const coarse_level) {
-        auto const & vector_fine_level   = this->get_operator(fine_level)->get_velocity();
-        auto         vector_coarse_level = this->get_operator(coarse_level)->get_velocity();
+        auto const & vector_fine_level   = this->get_operator(fine_level)->get_velocity_copy();
+        auto         vector_coarse_level = this->get_operator(coarse_level)->get_velocity_copy();
         this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+
+        // set velocity vector
         this->get_operator(coarse_level)->set_velocity_copy(vector_coarse_level);
+
+        // update variable viscosity
+        this->get_operator(coarse_level)->update_viscosity(vector_coarse_level);
       });
   }
 
   // In case the operators have been updated, we also need to update the smoothers and the coarse
   // grid solver. This is generic functionality implemented in the base class.
   if(mesh_is_moving or data.unsteady_problem or
-     (mg_operator_type == MultigridOperatorType::ReactionConvectionDiffusion) or
+     (mg_operator_type == MultigridOperatorType::ReactionConvectionDiffusion or
+      (data.viscous_problem and data.viscous_kernel_data.viscosity_is_variable)) or
      this->update_needed)
   {
     this->update_smoothers();

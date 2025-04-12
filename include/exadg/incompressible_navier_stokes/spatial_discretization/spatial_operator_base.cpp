@@ -549,6 +549,9 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   data.convective_problem = param.non_explicit_convective_problem();
   data.viscous_problem    = param.viscous_problem();
 
+  data.turbulence_model_data            = param.turbulence_model_data;
+  data.generalized_newtonian_model_data = param.generalized_newtonian_model_data;
+
   data.convective_kernel_data = convective_kernel_data;
   data.viscous_kernel_data    = viscous_kernel_data;
 
@@ -1450,7 +1453,9 @@ SpatialOperatorBase<dim, Number>::update_viscosity(VectorType const & velocity) 
   // add contribution from generalized Newtonian model
   // viscosity += generalized_newtonian_viscosity(viscosity_newtonian_limit)
   if(param.generalized_newtonian_model_data.is_active)
+  {
     generalized_newtonian_model.add_viscosity(velocity);
+  }
 
   // add contribution from turbulence model
   // viscosity += turbulent_viscosity(viscosity)
@@ -1458,7 +1463,13 @@ SpatialOperatorBase<dim, Number>::update_viscosity(VectorType const & velocity) 
   // *sequence of calls matters*, i.e., we can only compute the turbulent viscosity once the laminar
   // viscosity has been computed
   if(param.turbulence_model_data.is_active)
+  {
     turbulence_model.add_viscosity(velocity);
+  }
+
+  // When using multigrid for viscous problems, the momentum operator requires an updated velocity
+  // vector to update the viscosity whenever needed.
+  momentum_operator.set_velocity_copy(velocity);
 }
 
 template<int dim, typename Number>

@@ -24,8 +24,12 @@
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/convective_operator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/viscous_operator.h>
+#include <exadg/incompressible_navier_stokes/user_interface/viscosity_model_data.h>
 #include <exadg/operators/mass_kernel.h>
 #include <exadg/operators/operator_base.h>
+
+#include <exadg/incompressible_navier_stokes/spatial_discretization/generalized_newtonian_model.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/turbulence_model.h>
 
 namespace ExaDG
 {
@@ -42,6 +46,9 @@ struct MomentumOperatorData : public OperatorBaseData
   bool unsteady_problem;
   bool convective_problem;
   bool viscous_problem;
+
+  TurbulenceModelData           turbulence_model_data;
+  GeneralizedNewtonianModelData generalized_newtonian_model_data;
 
   Operators::ConvectiveKernelData convective_kernel_data;
   Operators::ViscousKernelData    viscous_kernel_data;
@@ -94,8 +101,8 @@ public:
   Operators::ViscousKernelData
   get_viscous_kernel_data() const;
 
-  dealii::LinearAlgebra::distributed::Vector<Number> const &
-  get_velocity() const;
+  VectorType const &
+  get_convective_velocity() const;
 
   /*
    * Interface required by Newton solver.
@@ -110,16 +117,25 @@ public:
   update_after_grid_motion();
 
   void
-  set_velocity_copy(VectorType const & velocity) const;
+  set_convective_velocity_copy(VectorType const & velocity) const;
 
   void
-  set_velocity_ptr(VectorType const & velocity) const;
+  set_convective_velocity_ptr(VectorType const & velocity) const;
+
+  void
+  set_velocity_copy(VectorType const & velocity) const;
+
+  VectorType const &
+  get_velocity_copy() const;
 
   Number
   get_scaling_factor_mass_operator() const;
 
   void
   set_scaling_factor_mass_operator(Number const & number);
+
+  void
+  update_viscosity(VectorType const & velocity) const;
 
   /*
    * Interfaces of OperatorBase.
@@ -192,6 +208,17 @@ private:
   std::shared_ptr<MassKernel<dim, Number>>                  mass_kernel;
   std::shared_ptr<Operators::ConvectiveKernel<dim, Number>> convective_kernel;
   std::shared_ptr<Operators::ViscousKernel<dim, Number>>    viscous_kernel;
+
+  // Flag signaling that the viscous_kernel is managed by this class, depends on which
+  // `initialize()` is called.
+  bool viscous_kernel_own_storage = false;
+
+  // Variable viscosity models.
+  mutable TurbulenceModel<dim, Number>           turbulence_model_own_storage;
+  mutable GeneralizedNewtonianModel<dim, Number> generalized_newtonian_model_own_storage;
+
+  // Vector to hold the velocity for the viscous operator's linearization.
+  mutable VectorType velocity;
 
   double scaling_factor_mass;
 };
