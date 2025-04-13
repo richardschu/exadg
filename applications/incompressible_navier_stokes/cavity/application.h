@@ -368,7 +368,8 @@ private:
       this->param.preconditioner_momentum = preconditioner_momentum;
       this->param.update_preconditioner_momentum =
         this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
-      this->param.update_preconditioner_momentum_every_time_steps = 1;
+      this->param.update_preconditioner_momentum_every_time_steps  = 1;
+      this->param.update_preconditioner_momentum_every_newton_iter = 1;
     }
 
     // clang-format off
@@ -435,14 +436,15 @@ private:
     this->param.preconditioner_coupled = PreconditionerCoupled::BlockTriangular;
     this->param.update_preconditioner_coupled =
       this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
-    this->param.update_preconditioner_coupled_every_time_steps = 1;
-    this->param.exact_inversion_of_velocity_block              = iterative_solve_velocity_block;
-    this->param.exact_inversion_of_laplace_operator            = iterative_solve_pressure_block;
-    this->param.solver_data_velocity_block                     = SolverData(1000,
+    this->param.update_preconditioner_coupled_every_time_steps  = 1;
+    this->param.update_preconditioner_coupled_every_newton_iter = 1;
+    this->param.exact_inversion_of_velocity_block               = iterative_solve_velocity_block;
+    this->param.exact_inversion_of_laplace_operator             = iterative_solve_pressure_block;
+    this->param.solver_data_velocity_block                      = SolverData(1000,
                                                         abs_tol_lin_block_in_preconditioner,
                                                         rel_tol_lin_block_in_preconditioner,
                                                         30);
-    this->param.solver_data_pressure_block                     = SolverData(1000,
+    this->param.solver_data_pressure_block                      = SolverData(1000,
                                                         abs_tol_lin_block_in_preconditioner,
                                                         rel_tol_lin_block_in_preconditioner,
                                                         30);
