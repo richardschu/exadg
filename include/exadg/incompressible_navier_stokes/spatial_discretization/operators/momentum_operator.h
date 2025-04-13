@@ -83,7 +83,8 @@ public:
   void
   initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
              dealii::AffineConstraints<Number> const & affine_constraints,
-             MomentumOperatorData<dim> const &         data);
+             MomentumOperatorData<dim> const &         data,
+             dealii::Mapping<dim> const &              mapping);
 
   void
   initialize(dealii::MatrixFree<dim, Number> const &                   matrix_free,

@@ -500,15 +500,13 @@ OperatorProjectionMethods<dim, Number>::solve_linear_momentum_equation(
   auto linear_iterations = this->momentum_linear_solver->solve(solution, rhs);
 
   // Check multigrid algorithm
-  {
-    typedef MultigridPreconditioner<dim, Number> MultigridMomentum;
-    std::shared_ptr<MultigridMomentum>           mg_preconditioner =
-      std::dynamic_pointer_cast<MultigridMomentum>(momentum_preconditioner);
+  // typedef MultigridPreconditioner<dim, Number> MultigridMomentum;
+  // std::shared_ptr<MultigridMomentum>           mg_preconditioner =
+  //   std::dynamic_pointer_cast<MultigridMomentum>(momentum_preconditioner);
 
-    CheckMultigrid<dim, Number, MomentumOperator<dim, Number>, MultigridMomentum> check_multigrid(
-      this->momentum_operator, mg_preconditioner, this->mpi_comm);
-    check_multigrid.check();
-  }
+  // CheckMultigrid<dim, Number, MomentumOperator<dim, Number>, MultigridMomentum> check_multigrid(
+  //   this->momentum_operator, mg_preconditioner, this->mpi_comm);
+  // check_multigrid.check();
 
   return linear_iterations;
 }

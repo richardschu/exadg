@@ -252,7 +252,8 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
 
   pde_operator_level->initialize(*this->matrix_free_objects[level],
                                  *this->constraints[level],
-                                 data);
+                                 data,
+                                 this->get_mapping(this->level_info[level].h_level()));
 
   // The operator also depends on the time. This is due to the fact that the linearized
   // convective term does not only depend on the linearized velocity field but also on Dirichlet

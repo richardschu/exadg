@@ -35,7 +35,8 @@ void
 MomentumOperator<dim, Number>::initialize(
   dealii::MatrixFree<dim, Number> const &   matrix_free,
   dealii::AffineConstraints<Number> const & affine_constraints,
-  MomentumOperatorData<dim> const &         data)
+  MomentumOperatorData<dim> const &         data,
+  dealii::Mapping<dim> const &              mapping)
 {
   operator_data = data;
 
@@ -70,12 +71,11 @@ MomentumOperator<dim, Number>::initialize(
     // initialize and check turbulence model data
     if(operator_data.turbulence_model_data.is_active)
     {
-      // TODO
-      // this->turbulence_model_own_storage.initialize(matrix_free,
-      //                                               *get_mapping(), // ##+
-      //                                               this->viscous_kernel,
-      //                                               operator_data.turbulence_model_data,
-      //                                               operator_data.dof_index);
+      this->turbulence_model_own_storage.initialize(matrix_free,
+                                                    mapping,
+                                                    this->viscous_kernel,
+                                                    operator_data.turbulence_model_data,
+                                                    operator_data.dof_index);
     }
 
     // initialize and check generalized Newtonian model data
