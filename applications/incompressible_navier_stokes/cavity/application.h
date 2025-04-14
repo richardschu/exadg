@@ -328,7 +328,7 @@ private:
     this->param.multigrid_data_pressure_poisson.coarse_problem.amg_data.amg_type = AMGType::ML;
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
     
-    this->param.multigrid_data_momentum.coarse_problem.preconditioner =
+    this->param.multigrid_data_pressure_poisson.coarse_problem.preconditioner =
     this->param.use_cell_based_face_loops ? 
       MultigridCoarseGridPreconditioner::BlockJacobi
       : MultigridCoarseGridPreconditioner::PointJacobi;
@@ -347,10 +347,43 @@ private:
     // projection step
     this->param.solver_projection         = SolverProjection::CG;
     this->param.solver_data_projection    = SolverData(1000, abs_tol_lin, rel_tol_lin);
-    this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+    this->param.preconditioner_projection = PreconditionerProjection::Multigrid;
     this->param.preconditioner_block_diagonal_projection =
       Elementwise::Preconditioner::InverseMassMatrix;
-    this->param.update_preconditioner_projection = false;
+
+    // clang-format off
+    this->param.multigrid_data_projection.type = MultigridType::cphMG;
+    this->param.multigrid_data_projection.p_sequence = PSequenceType::DecreaseByOne;
+
+    this->param.multigrid_data_projection.smoother_data.iterations        = 5;
+    this->param.multigrid_data_projection.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
+    this->param.multigrid_data_projection.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
+    this->param.multigrid_data_projection.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
+    this->param.multigrid_data_projection.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
+    this->param.multigrid_data_projection.smoother_data.preconditioner    =
+    this->param.use_cell_based_face_loops ? 
+      PreconditionerSmoother::BlockJacobi : PreconditionerSmoother::PointJacobi;
+
+    this->param.multigrid_data_projection.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
+    this->param.multigrid_data_projection.coarse_problem.amg_data.amg_type = AMGType::ML;
+    this->param.multigrid_data_projection.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
+    
+    this->param.multigrid_data_projection.coarse_problem.preconditioner =
+    this->param.use_cell_based_face_loops ? 
+      MultigridCoarseGridPreconditioner::BlockJacobi
+      : MultigridCoarseGridPreconditioner::PointJacobi;
+#ifdef DEAL_II_WITH_TRILINOS
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.smoother_sweeps       = 2;
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.n_cycles              = 1;
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.w_cycle               = false;
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.aggregation_threshold = 1e-4;
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.smoother_type         = "Chebyshev";
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.coarse_type           = "Amesos-KLU";
+    this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.output_details        = false;
+#endif
+    this->param.update_preconditioner_projection = true;
+    this->param.update_preconditioner_projection_every_time_steps  = 1;
+    // clang-format on
 
 
     // HIGH-ORDER DUAL SPLITTING SCHEME

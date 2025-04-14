@@ -98,8 +98,10 @@ MultigridPreconditionerProjection<dim, Number>::update()
 
   // we store only two vectors since the velocity is no longer needed after having updated the
   // operators
-  VectorTypeMG velocity_fine_level = *velocity_multigrid_type_ptr;
   VectorTypeMG velocity_coarse_level;
+  VectorTypeMG velocity_fine_level;
+  this->get_operator(this->get_number_of_levels() - 1)->initialize_dof_vector(velocity_fine_level);
+  velocity_fine_level = *velocity_multigrid_type_ptr;
 
   this->transfer_from_fine_to_coarse_levels(
     [&](unsigned int const fine_level, unsigned int const coarse_level) {
