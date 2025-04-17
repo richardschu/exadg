@@ -1,0 +1,62 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "3",
+        "IsTest": "false"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "2",
+        "DegreeMax": "2",
+        "RefineSpaceMin": "3",
+        "RefineSpaceMax": "3"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "0",
+        "RefineTimeMax": "0"
+    },
+    "Application": {
+        "ProblemType": "Unsteady",
+        "IncludeConvectiveTerm": "true",
+        "StartTime": "0.0",
+        "EndTime": "1.0",
+        "CFL": "-1.0",
+        "TimeStepSize": "1.0e-2",
+        "MaxInflowVelocity": "0.05",
+        "Density": "1060.0",
+        "KinematicViscosity": "1e-03",
+        "UseGeneralizedNewtonianModel": "true",
+        "TemporalDiscretization" : "BDFDualSplittingScheme",
+        "TreatmentOfConvectiveTerm" : "Explicit",
+        "TreatmentOfVariableViscosity" : "Explicit",
+        "GeneralizedNewtonianViscosityMargin": "197.04",
+        "GeneralizedNewtonianKappa": "1.0",
+        "GeneralizedNewtonianLambda": "17.42",
+        "GeneralizedNewtonianA": "0.482",
+        "GeneralizedNewtonianN": "0.361",
+        "PreconditionerMomentum": "Multigrid",
+	"PreconditionerProjection": "Multigrid",
+        "AbsTolLin": "1.0e-12",
+        "RelTolLin": "1.0e-6",
+        "AbsTolNewton": "1.0e-12",
+        "RelTolNewton": "1.0e-6",
+        "AbsTolLinInNewton": "1.0e-12",
+        "RelTolLinInNewton": "1.0e-3",
+        "SmootherUIterations": "5",
+        "SmootherUSmoother": "Chebyshev",
+        "SmootherURelaxationFactor": "0.8",
+        "SmootherUSmoothingRange": "20.0",
+        "SmootherUPreconditioner": "PointJacobi",
+        "IterationsEigenValueEstimationVelocity": "20",
+        "IterationsEigenValueEstimationPressureSchur": "20",
+        "SchurComplementPreconditioner": "CahouetChabard",
+        "IterativeSolveVelocityBlock": "false",
+        "IterativeSolvePressureBlock": "false",
+        "AbsTolLinBlockInPreconditioner": "1e-12",
+        "RelTolLinBlockInPreconditioner": "1e-12"
+    },
+    "Output": {
+        "OutputDirectory": "output/",
+        "OutputName": "polymer",
+        "WriteOutput": "true"
+    }
+}
