@@ -22,9 +22,6 @@
 #ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_BFS_H_
 #define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_BFS_H_
 
-// ExaDG
-#include <exadg/functions_and_boundary_conditions/linear_interpolation.h>
-
 // backward facing step application
 #include "include/geometry.h"
 
@@ -75,12 +72,7 @@ public:
 
     // Quadratic inflow profile over the inlet height from y = 0 to `inlet_height`.
     double const y = p[1];
-    AssertThrow(y > 0.0,
-                dealii::ExcMessage("InflowProfile expects y > 0."));
-    AssertThrow(y < inlet_height,
-                dealii::ExcMessage("InflowProfile expects y < `inlet_height`."));
-
-    val *= (y - y*y/inlet_height) * 4.0 / inlet_height;
+    val *= (y - y * y / inlet_height) * 4.0 / inlet_height;
 
     return val;
   }
@@ -105,6 +97,8 @@ public:
   void
   add_parameters(dealii::ParameterHandler & prm) final
   {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
     prm.enter_subsection("Application");
     {
       // clang-format off
@@ -129,6 +123,7 @@ public:
       prm.add_parameter("GeneralizedNewtonianA",               generalized_newtonian_model_data.a,                "Generalized Newtonian models: a.",                             dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianN",               generalized_newtonian_model_data.n,                "Generalized Newtonian models: n.",                             dealii::Patterns::Double());
 
+      prm.add_parameter("ApplyPenaltyTermsInPostprocessingStep",       apply_penalty_terms_in_postprocessing_step,      "Apply penalty terms in individual step or merge with momentum step.",                           dealii::Patterns::Bool());
       prm.add_parameter("AbsTolLin",                                   abs_tol_lin,                                     "Absolute tolerance of linear solver.",                                                          dealii::Patterns::Double());
       prm.add_parameter("RelTolLin",                                   rel_tol_lin,                                     "Relative tolerance of linear solver.",                                                          dealii::Patterns::Double());
       prm.add_parameter("AbsTolNewton",                                abs_tol_newton,                                  "Absolute tolerance of nonlinear solver.",                                                       dealii::Patterns::Double());
@@ -150,9 +145,10 @@ public:
       prm.add_parameter("IterationsEigenValueEstimationPressureSchur", iterations_eigenvalue_estimation_pressure_schur, "Iterations used in the Eigenvalue estimation in Multigrid, Pressure Schur complement problem.", dealii::Patterns::Integer());
       // clang-format on
     }
-    prm.leave_subsection();    
+    prm.leave_subsection();
   }
-  private:
+
+private:
   void
   set_parameters() final
   {
@@ -205,7 +201,7 @@ public:
     // output of solver information
     this->param.solver_info_data.interval_time_steps = 1e8;
     this->param.solver_info_data.interval_time =
-      (this->param.end_time - this->param.start_time) / 10;
+      (this->param.end_time - this->param.start_time) / 1000;
 
 
     // SPATIAL DISCRETIZATION
@@ -239,8 +235,7 @@ public:
     this->param.divergence_penalty_factor = 1.0;
     this->param.use_continuity_penalty    = true;
     this->param.continuity_penalty_factor = 1.0;
-    this->param.apply_penalty_terms_in_postprocessing_step =
-      this->param.problem_type == ProblemType::Unsteady;
+    this->param.apply_penalty_terms_in_postprocessing_step = apply_penalty_terms_in_postprocessing_step;
     this->param.continuity_penalty_use_boundary_data =
       this->param.apply_penalty_terms_in_postprocessing_step;
     this->param.type_penalty_parameter        = TypePenaltyParameter::ConvectiveTerm;
@@ -355,7 +350,7 @@ public:
     this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.coarse_type           = "Amesos-KLU";
     this->param.multigrid_data_projection.coarse_problem.amg_data.ml_data.output_details        = false;
 #endif
-    this->param.update_preconditioner_projection = preconditioner_projection == PreconditionerProjection::Multigrid;
+    this->param.update_preconditioner_projection = true;
     this->param.update_preconditioner_projection_every_time_steps = 1;
     // clang-format on
 
@@ -591,7 +586,7 @@ public:
       pair(2, new InflowProfile<dim>(start_time,
                                     end_time,
                                     this->param.problem_type == ProblemType::Unsteady ? 0.1 : 0.0 /* time_ramp_fraction */,                                              
-                                    inlet_height,
+                                    Geometry::get_inlet_height(),
                                     max_inflow_velocity /* velocity_scale */)));
     this->boundary_descriptor->pressure->neumann_bc.insert(2);
 
@@ -621,7 +616,7 @@ public:
     // write output for visualization of results
     pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
     pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 100.0;
+    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 1000.0;
     pp_data.output_data.directory            = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename             = this->output_parameters.filename;
     pp_data.output_data.write_divergence     = true;
@@ -629,6 +624,8 @@ public:
     pp_data.output_data.write_viscosity      = true;
     pp_data.output_data.write_streamfunction = false;
     pp_data.output_data.write_processor_id   = false;
+    pp_data.output_data.write_grid           = false;
+    pp_data.output_data.write_boundary_IDs   = false;
     pp_data.output_data.degree               = this->param.degree_u;
 
     std::shared_ptr<PostProcessorBase<dim, Number>> pp;
@@ -664,6 +661,7 @@ public:
   double abs_tol_lin_in_newton          = 1.0e-12;
   double rel_tol_lin_in_newton          = 1.0e-12;
 
+  bool apply_penalty_terms_in_postprocessing_step = true;
   bool iterative_solve_velocity_block = false;
   bool iterative_solve_pressure_block = false;
   double abs_tol_lin_block_in_preconditioner   = 1.0e-12;
@@ -690,6 +688,6 @@ public:
 } // namespace IncNS
 } // namespace ExaDG
 
-#include <exadg/incompressible_navier_stokes/precursor/user_interface/implement_get_application.h>
+#include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
 #endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_BFS_H_ */

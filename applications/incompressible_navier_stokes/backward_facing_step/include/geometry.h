@@ -42,13 +42,18 @@ double const WIDTH_BFS         = 2 * H;
 
 double const X1_COORDINATE_INFLOW          = -LENGTH_BFS_UP;
 double const X1_COORDINATE_OUTFLOW         = LENGTH_BFS_DOWN;
-double const X1_COORDINATE_OUTFLOW_CHANNEL = -LENGTH_BFS_UP;
 
 // mesh stretching parameters
 bool use_grid_stretching_in_y_direction = true;
 
 double const GAMMA_LOWER = 60.0;
 double const GAMMA_UPPER = 40.0;
+
+double
+get_inlet_height()
+{
+  return HEIGHT_BFS_INFLOW;
+}
 
 /*
  *  maps eta in [-H, 2*H] --> y in [-H,2*H]
@@ -151,7 +156,7 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
   // inflow part of BFS
   dealii::GridGenerator::subdivided_hyper_rectangle(
     tria_1,
-    std::vector<unsigned int>({1, 1, 1}),
+    std::vector<unsigned int>({5, 1, 1}),
     dealii::Point<dim>(-LENGTH_BFS_UP, 0.0, -WIDTH_BFS / 2.0),
     dealii::Point<dim>(0.0, HEIGHT_BFS_INFLOW, WIDTH_BFS / 2.0));
 
