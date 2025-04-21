@@ -40,8 +40,8 @@ double const HEIGHT_BFS_STEP   = 0.9423 * H;
 double const HEIGHT_BFS_INFLOW = H;
 double const WIDTH_BFS         = 2 * H;
 
-double const X1_COORDINATE_INFLOW          = -LENGTH_BFS_UP;
-double const X1_COORDINATE_OUTFLOW         = LENGTH_BFS_DOWN;
+double const X1_COORDINATE_INFLOW  = -LENGTH_BFS_UP;
+double const X1_COORDINATE_OUTFLOW = LENGTH_BFS_DOWN;
 
 // mesh stretching parameters
 bool use_grid_stretching_in_y_direction = true;
@@ -53,6 +53,12 @@ double
 get_inlet_height()
 {
   return HEIGHT_BFS_INFLOW;
+}
+
+double
+get_step_height()
+{
+  return HEIGHT_BFS_STEP;
 }
 
 /*

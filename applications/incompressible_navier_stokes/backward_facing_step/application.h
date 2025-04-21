@@ -30,18 +30,20 @@ namespace ExaDG
 namespace IncNS
 {
 template<int dim>
-class InflowProfile : public dealii::Function<dim>
+class ParabolicProfile : public dealii::Function<dim>
 {
 public:
-  InflowProfile(double const & start_time,
-                double const & end_time,
-                double const & time_ramp_fraction,
-                double const & inlet_height,
-                double const & velocity_scale)
+  ParabolicProfile(double const & start_time,
+                   double const & end_time,
+                   double const & time_ramp_fraction,
+                   double const & y_start,
+                   double const & inlet_height,
+                   double const & velocity_scale)
     : dealii::Function<dim>(dim, 0.0),
       start_time(start_time),
       end_time(end_time),
       time_ramp_fraction(time_ramp_fraction),
+      y_start(y_start),
       inlet_height(inlet_height),
       velocity_scale(velocity_scale)
   {
@@ -70,9 +72,10 @@ public:
         std::sin(dealii::numbers::PI * (t - start_time) / (2.0 * time_ramp)));
     }
 
-    // Quadratic inflow profile over the inlet height from y = 0 to `inlet_height`.
-    double const y = p[1];
-    val *= (y - y * y / inlet_height) * 4.0 / inlet_height;
+    // Quadratic inflow profile over the inlet height from y = y_start to y = y_start +
+    // inlet_height.
+    double const y_mod = p[1] - y_start;
+    val *= (y_mod - y_mod * y_mod / inlet_height) * 4.0 / inlet_height;
 
     return val;
   }
@@ -81,6 +84,7 @@ private:
   double const start_time;
   double const end_time;
   double const time_ramp_fraction;
+  double const y_start;
   double const inlet_height;
   double const velocity_scale;
 };
@@ -201,7 +205,7 @@ private:
     // output of solver information
     this->param.solver_info_data.interval_time_steps = 1e8;
     this->param.solver_info_data.interval_time =
-      (this->param.end_time - this->param.start_time) / 1000;
+      (this->param.end_time - this->param.start_time) / 100000;
 
 
     // SPATIAL DISCRETIZATION
@@ -235,10 +239,11 @@ private:
     this->param.divergence_penalty_factor = 1.0;
     this->param.use_continuity_penalty    = true;
     this->param.continuity_penalty_factor = 1.0;
-    this->param.apply_penalty_terms_in_postprocessing_step = apply_penalty_terms_in_postprocessing_step;
+    this->param.apply_penalty_terms_in_postprocessing_step =
+      apply_penalty_terms_in_postprocessing_step;
     this->param.continuity_penalty_use_boundary_data =
       this->param.apply_penalty_terms_in_postprocessing_step;
-    this->param.type_penalty_parameter        = TypePenaltyParameter::ConvectiveTerm;
+    this->param.type_penalty_parameter        = TypePenaltyParameter::ViscousAndConvectiveTerms;
     this->param.continuity_penalty_components = ContinuityPenaltyComponents::Normal;
 
     // TURBULENCE
@@ -361,18 +366,15 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
-    {
-      this->param.solver_momentum =
-        treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? SolverMomentum::CG :
-                                                                              SolverMomentum::GMRES;
-      this->param.solver_data_momentum    = SolverData(1000, abs_tol_lin, rel_tol_lin);
-      this->param.preconditioner_momentum = preconditioner_momentum;
-      this->param.update_preconditioner_momentum =
-        this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
-      this->param.update_preconditioner_momentum_every_time_steps  = 1;
-      this->param.update_preconditioner_momentum_every_newton_iter = 5;
-    }
+    this->param.solver_momentum =
+      treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? SolverMomentum::CG :
+                                                                            SolverMomentum::GMRES;
+    this->param.solver_data_momentum    = SolverData(1000, abs_tol_lin, rel_tol_lin);
+    this->param.preconditioner_momentum = preconditioner_momentum;
+    this->param.update_preconditioner_momentum =
+      this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
+    this->param.update_preconditioner_momentum_every_time_steps  = 1;
+    this->param.update_preconditioner_momentum_every_newton_iter = 5;
 
     // clang-format off
     this->param.multigrid_data_momentum.type       = MultigridType::cphMG;
@@ -412,7 +414,6 @@ private:
     // formulation
     this->param.order_pressure_extrapolation = 1;
     this->param.rotational_formulation       = true;
-
 
     // COUPLED NAVIER-STOKES SOLVER
 
@@ -582,20 +583,49 @@ private:
     this->boundary_descriptor->pressure->neumann_bc.insert(0);
 
     // inflow boundary condition at left boundary with ID=2: 
-    this->boundary_descriptor->velocity->dirichlet_bc.insert(
-      pair(2, new InflowProfile<dim>(start_time,
-                                    end_time,
-                                    this->param.problem_type == ProblemType::Unsteady ? 0.1 : 0.0 /* time_ramp_fraction */,                                              
-                                    Geometry::get_inlet_height(),
-                                    max_inflow_velocity /* velocity_scale */)));
-    this->boundary_descriptor->pressure->neumann_bc.insert(2);
+    bool constexpr dirichlet_u_in = true;
+    if constexpr(dirichlet_u_in)
+    {
+      this->boundary_descriptor->velocity->dirichlet_bc.insert(
+        pair(2, new ParabolicProfile<dim>(start_time,
+                                      end_time,
+                                      this->param.problem_type == ProblemType::Unsteady ? 0.3 : 0.0 /* time_ramp_fraction */,
+                                      0.0 /* y_start */,                                              
+                                      Geometry::get_inlet_height(),
+                                      max_inflow_velocity /* velocity_scale */)));
+      this->boundary_descriptor->pressure->neumann_bc.insert(2);
+    }
+    else
+    {
+      this->boundary_descriptor->velocity->neumann_bc.insert(
+        pair(2, new dealii::Functions::ZeroFunction<dim>(dim)));  
+      this->boundary_descriptor->pressure->dirichlet_bc.insert(
+        pair(2, new dealii::Functions::ConstantFunction<dim>(1000.0, 1)));  
+    }
 
     // outflow boundary condition at right boundary with ID=1
-    this->boundary_descriptor->velocity->neumann_bc.insert(
-      pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
-    // zero reference pressure
-    this->boundary_descriptor->pressure->dirichlet_bc.insert(
-      pair(1, new dealii::Functions::ZeroFunction<dim>(1)));
+    bool constexpr dirichlet_u_out = true;
+    if constexpr(dirichlet_u_out)
+    {
+      double const H = Geometry::get_inlet_height();
+      double const s = Geometry::get_step_height();
+      this->boundary_descriptor->velocity->dirichlet_bc.insert(
+        pair(1, new ParabolicProfile<dim>(start_time,
+                                      end_time,
+                                      this->param.problem_type == ProblemType::Unsteady ? 0.3 : 0.0 /* time_ramp_fraction */,
+                                      -s /* y_start */,                                              
+                                      H + s /* inlet_height */,
+                                      max_inflow_velocity * H / (H+s) /* velocity_scale */)));
+      this->boundary_descriptor->pressure->neumann_bc.insert(1);
+    }
+    else
+    {
+      this->boundary_descriptor->velocity->neumann_bc.insert(
+        pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
+      // zero reference pressure
+      this->boundary_descriptor->pressure->dirichlet_bc.insert(
+        pair(1, new dealii::Functions::ZeroFunction<dim>(1)));
+    }
   }
 
   void
