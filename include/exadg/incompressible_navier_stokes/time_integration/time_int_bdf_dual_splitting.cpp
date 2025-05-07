@@ -324,11 +324,29 @@ TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
   // perform the sub-steps of the dual-splitting method
   convective_step();
 
-  pressure_step();
+  bool constexpr use_original_scheme = true;
+  if(use_original_scheme)
+  {
+    pressure_step();
+    projection_step();
+    viscous_step();
+  }
+  else
+  {
+    // VectorType pressure_dummy, velocity_dummy;
+    // velocity_dummy.reinit(velocity_np, false /* omit_zeroing_entries */);
+    // pressure_dummy.reinit(pressure_np, false /* omit_zeroing_entries */);
+    // pde_operator->interpolate_analytical_solution(velocity_dummy,
+    //                                               pressure_dummy,
+    //                                               this->get_next_time());
 
-  projection_step();
+    viscous_step();
+    pressure_step();
+    projection_step();
 
-  viscous_step();
+    // pressure_np = pressure_dummy;
+    // velocity_np = velocity_dummy;
+  }
 
   if(this->param.apply_penalty_terms_in_postprocessing_step)
     penalty_step();
@@ -526,8 +544,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   }
 
   /*
-   *  II. calculate terms originating from inhomogeneous parts of boundary face integrals of Laplace
-   * operator
+   *  II. calculate terms originating from inhomogeneous parts of boundary face integrals
    */
 
   // II.1. pressure Dirichlet boundary conditions
@@ -545,37 +562,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
     acceleration, velocity_dbc_np, velocity_dbc, this->bdf, this->get_time_step_size());
   pde_operator->rhs_ppe_nbc_numerical_time_derivative_add(rhs, acceleration);
 
-  // II.4. viscous term of pressure Neumann boundary condition on Gamma_D:
-  //       extrapolate velocity, evaluate vorticity, and subsequently evaluate boundary
-  //       face integral (this is possible since pressure Neumann BC is linear in vorticity)
-  if(this->param.viscous_problem())
-  {
-    if(this->param.order_extrapolation_pressure_nbc > 0)
-    {
-      VectorType velocity_extra(velocity[0]);
-      velocity_extra = 0.0;
-      for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
-      {
-        velocity_extra.add(this->extra_pressure_nbc.get_beta(i), velocity[i]);
-      }
-
-      VectorType vorticity(velocity_extra);
-      pde_operator->compute_vorticity(vorticity, velocity_extra);
-
-      pde_operator->rhs_ppe_nbc_viscous_add(rhs, vorticity);
-
-      if(this->param.viscosity_is_variable())
-      {
-        // Add the viscosity gradient term.
-        VectorType viscosity_extrap;
-        pde_operator->initialize_vector_velocity_scalar(viscosity_extrap);
-        pde_operator->compute_viscosity(viscosity_extrap, velocity_extra);
-        pde_operator->rhs_ppe_nbc_variable_viscosity_add(rhs, velocity_extra, viscosity_extrap);
-      }
-    }
-  }
-
-  // II.5. convective term of pressure Neumann boundary condition on Gamma_D:
+  // II.4. convective term of pressure Neumann boundary condition on Gamma_D:
   //       evaluate convective term and subsequently extrapolate rhs vectors
   //       (the convective term is nonlinear!)
   if(this->param.convective_problem())
@@ -590,6 +577,63 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
         rhs.add(this->extra_pressure_nbc.get_beta(i), temp);
       }
     }
+  }
+
+  if(this->param.order_extrapolation_pressure_nbc > 0)
+  {
+    // Prepare velocity extrapolation of lower (stable) order
+    VectorType velocity_extrapolated_ppe;
+    if(this->param.viscous_problem())
+    {
+      pde_operator->initialize_vector_velocity(velocity_extrapolated_ppe);
+      for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
+      {
+        velocity_extrapolated_ppe.add(this->extra_pressure_nbc.get_beta(i), velocity[i]);
+      }
+    }
+
+    // Prepare vorticity and variable or constant viscosity vector
+    VectorType vorticity_extrapolated_ppe;
+    VectorType viscosity_extrapolated_ppe;
+    if(this->param.viscous_problem())
+    {
+      pde_operator->initialize_vector_velocity(vorticity_extrapolated_ppe);
+      pde_operator->compute_vorticity(vorticity_extrapolated_ppe, velocity_extrapolated_ppe);
+
+      pde_operator->initialize_vector_velocity_scalar(viscosity_extrapolated_ppe);
+      pde_operator->compute_viscosity(viscosity_extrapolated_ppe, velocity_extrapolated_ppe);
+    }
+
+    // II.5. viscous term of pressure Neumann boundary condition on Gamma_D:
+    //       extrapolate velocity, evaluate vorticity, and subsequently evaluate boundary
+    //       face integral (this is possible since pressure Neumann BC is linear in vorticity)
+    if(this->param.viscous_problem())
+    {
+      pde_operator->rhs_ppe_nbc_viscous_add(rhs, vorticity_extrapolated_ppe);
+
+      if(this->param.viscosity_is_variable())
+      {
+        // Add the viscosity gradient term
+        pde_operator->rhs_ppe_nbc_variable_viscosity_add(rhs,
+                                                         velocity_extrapolated_ppe,
+                                                         viscosity_extrapolated_ppe);
+      }
+
+      /*
+       * III Add divergence of the viscous and convective terms to the PPE
+       */
+
+      // III.1 Add viscous stress term for variable *and* constant viscosity
+      if(this->param.add_viscous_term_in_ppe)
+      {
+        pde_operator->rhs_ppe_viscous_term_add(rhs,
+                                               velocity_extrapolated_ppe,
+                                               viscosity_extrapolated_ppe,
+                                               vorticity_extrapolated_ppe);
+      }
+    }
+
+    // Note: the divergence of the convective and body force terms are neglected.
   }
 
   // special case: pressure level is undefined

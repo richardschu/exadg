@@ -1236,9 +1236,15 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_viscosity(VectorType & dst, VectorType const & src) const
 {
-  viscosity_calculator.compute_viscosity(dst, src);
-
-  inverse_mass_velocity_scalar.apply(dst, dst);
+  if(param.viscosity_is_variable())
+  {
+    viscosity_calculator.compute_viscosity(dst, src);
+    inverse_mass_velocity_scalar.apply(dst, dst);
+  }
+  else
+  {
+    dst = param.viscosity;
+  }
 }
 
 template<int dim, typename Number>
