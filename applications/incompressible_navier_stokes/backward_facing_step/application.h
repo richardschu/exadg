@@ -363,7 +363,7 @@ private:
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
     // formulations
-    this->param.add_viscous_term_in_ppe = true;
+    this->param.add_viscous_term_in_ppe = false;
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
