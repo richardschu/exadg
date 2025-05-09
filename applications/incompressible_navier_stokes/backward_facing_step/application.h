@@ -205,7 +205,7 @@ private:
     // output of solver information
     this->param.solver_info_data.interval_time_steps = 1e8;
     this->param.solver_info_data.interval_time =
-      (this->param.end_time - this->param.start_time) / 100000;
+      (this->param.end_time - this->param.start_time) / 50;
 
 
     // SPATIAL DISCRETIZATION
