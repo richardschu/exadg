@@ -679,10 +679,10 @@ OperatorCoupled<dim, Number>::initialize_preconditioner_pressure_block()
   else if(type == SchurComplementPreconditioner::PressureConvectionDiffusion)
   {
     // -S^{-1} = M_p^{-1} A_p (-L)^{-1}
-    AssertThrow(not this->param.viscosity_is_variable(),
-                dealii::ExcMessage(
-                  "Extension of `SchurComplementPreconditioner::PressureConvectionDiffusion` "
-                  "preconditioner to non-constant viscosity non-trivial."));
+    // AssertThrow(not this->param.viscosity_is_variable(),
+    //             dealii::ExcMessage(
+    //               "Extension of `SchurComplementPreconditioner::PressureConvectionDiffusion` "
+    //               "preconditioner to non-constant viscosity non-trivial."));
 
     // I. multigrid for negative Laplace operator (classical or compatible discretization)
     setup_multigrid_preconditioner_schur_complement();
