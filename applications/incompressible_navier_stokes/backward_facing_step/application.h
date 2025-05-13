@@ -282,7 +282,7 @@ private:
 
     // pressure Poisson equation
     this->param.solver_pressure_poisson         = SolverPressurePoisson::CG;
-    this->param.solver_data_pressure_poisson    = SolverData(1000, abs_tol_lin, rel_tol_lin);
+    this->param.solver_data_pressure_poisson    = SolverData(100, abs_tol_lin, rel_tol_lin);
     this->param.preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
 
     // clang-format off
@@ -300,7 +300,7 @@ private:
 
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_pressure_poisson.coarse_problem.amg_data.amg_type = AMGType::ML;
-    this->param.multigrid_data_pressure_poisson.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
+    this->param.multigrid_data_pressure_poisson.coarse_problem.solver_data       = SolverData(100, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
     
     this->param.multigrid_data_pressure_poisson.coarse_problem.preconditioner =
     this->param.use_cell_based_face_loops ? 
@@ -320,7 +320,7 @@ private:
 
     // projection step
     this->param.solver_projection         = SolverProjection::CG;
-    this->param.solver_data_projection    = SolverData(1000, abs_tol_lin, rel_tol_lin);
+    this->param.solver_data_projection    = SolverData(100, abs_tol_lin, rel_tol_lin);
     this->param.preconditioner_projection = preconditioner_projection;
     this->param.preconditioner_block_diagonal_projection =
       Elementwise::Preconditioner::InverseMassMatrix;
@@ -340,7 +340,7 @@ private:
 
     this->param.multigrid_data_projection.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_projection.coarse_problem.amg_data.amg_type = AMGType::ML;
-    this->param.multigrid_data_projection.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
+    this->param.multigrid_data_projection.coarse_problem.solver_data       = SolverData(100, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
     
     this->param.multigrid_data_projection.coarse_problem.preconditioner =
     this->param.use_cell_based_face_loops ? 
@@ -370,7 +370,7 @@ private:
     this->param.solver_momentum =
       treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? SolverMomentum::CG :
                                                                             SolverMomentum::GMRES;
-    this->param.solver_data_momentum    = SolverData(1000, abs_tol_lin, rel_tol_lin);
+    this->param.solver_data_momentum    = SolverData(100, abs_tol_lin, rel_tol_lin);
     this->param.preconditioner_momentum = preconditioner_momentum;
     this->param.update_preconditioner_momentum =
       this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
@@ -392,7 +392,7 @@ private:
 
     this->param.multigrid_data_momentum.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_momentum.coarse_problem.amg_data.amg_type = AMGType::ML;
-    this->param.multigrid_data_momentum.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
+    this->param.multigrid_data_momentum.coarse_problem.solver_data       = SolverData(100, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
 
     this->param.multigrid_data_momentum.coarse_problem.preconditioner =
       this->param.use_cell_based_face_loops ? 
@@ -429,11 +429,11 @@ private:
     if(this->param.nonlinear_viscous_problem())
     {
       this->param.solver_data_coupled =
-        SolverData(1500, abs_tol_lin_in_newton, rel_tol_lin_in_newton, 1000);
+        SolverData(100, abs_tol_lin_in_newton, rel_tol_lin_in_newton, 30);
     }
     else
     {
-      this->param.solver_data_coupled = SolverData(1500, abs_tol_lin, rel_tol_lin, 1000);
+      this->param.solver_data_coupled = SolverData(100, abs_tol_lin, rel_tol_lin, 30);
     }
 
     // preconditioning linear solver
@@ -444,14 +444,11 @@ private:
     this->param.update_preconditioner_coupled_every_newton_iter = 5;
     this->param.exact_inversion_of_velocity_block               = iterative_solve_velocity_block;
     this->param.exact_inversion_of_laplace_operator             = iterative_solve_pressure_block;
-    this->param.solver_data_velocity_block                      = SolverData(1000,
-                                                        abs_tol_lin_block_in_preconditioner,
-                                                        rel_tol_lin_block_in_preconditioner,
-                                                        30);
-    this->param.solver_data_pressure_block                      = SolverData(1000,
-                                                        abs_tol_lin_block_in_preconditioner,
-                                                        rel_tol_lin_block_in_preconditioner,
-                                                        30);
+
+    this->param.solver_data_velocity_block =
+      SolverData(100, abs_tol_lin_block_in_preconditioner, rel_tol_lin_block_in_preconditioner, 30);
+    this->param.solver_data_pressure_block =
+      SolverData(100, abs_tol_lin_block_in_preconditioner, rel_tol_lin_block_in_preconditioner, 30);
 
     // preconditioner velocity/momentum block
     this->param.preconditioner_velocity_block = MomentumPreconditioner::Multigrid;
@@ -473,7 +470,7 @@ private:
 
     this->param.multigrid_data_velocity_block.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_velocity_block.coarse_problem.amg_data.amg_type = AMGType::ML;
-    this->param.multigrid_data_velocity_block.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
+    this->param.multigrid_data_velocity_block.coarse_problem.solver_data       = SolverData(100, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
 
     this->param.multigrid_data_velocity_block.coarse_problem.preconditioner =
       this->param.use_cell_based_face_loops ? 
@@ -508,7 +505,7 @@ private:
 
     this->param.multigrid_data_pressure_block.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
     this->param.multigrid_data_pressure_block.coarse_problem.amg_data.amg_type = AMGType::ML;
-    this->param.multigrid_data_pressure_block.coarse_problem.solver_data       = SolverData(1000, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
+    this->param.multigrid_data_pressure_block.coarse_problem.solver_data       = SolverData(100, abs_tol_multigrid_coarse_level, rel_tol_multigrid_coarse_level, 30);
 
     this->param.multigrid_data_pressure_block.coarse_problem.preconditioner =
       this->param.use_cell_based_face_loops ? 
