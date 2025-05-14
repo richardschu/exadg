@@ -179,26 +179,26 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
     std::vector<unsigned int> n_refine_space_vec{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
     // Loop over parameter combinations, first relative tolerance match is chosen.
-    bool         match_found = false;
-    unsigned int n_dofs      = 0;
+    bool                   match_found = false;
+    unsigned long long int n_dofs      = 0;
     for(unsigned int i = 0; i < n_cells_inlet_length_vec.size(); ++i)
     {
       for(unsigned int j = 0; j < n_cells_width_vec.size(); ++j)
       {
         for(unsigned int k = 0; k < n_refine_space_vec.size(); ++k)
         {
-          unsigned int const n_cells =
+          unsigned long long int const n_cells =
             n_cells_width_vec[j] * 5 * n_cells_inlet_height * n_cells_inlet_length_vec[i];
-          unsigned int const n_cells_refined = n_cells * std::pow(2, dim * n_refine_space_vec[k]);
+          unsigned long long int const n_cells_refined =
+            n_cells * std::pow(2, dim * n_refine_space_vec[k]);
           unsigned int const n_dofs_per_cell =
             dealii::Utilities::fixed_power<dim>(degree_u + 1) * dim +
             dealii::Utilities::fixed_power<dim>(degree_u);
-
           n_dofs = n_dofs_per_cell * n_cells_refined;
 
           double constexpr rel_tol_dof_count_match = 0.05;
           double const n_dofs_difference =
-            std::abs(static_cast<int>(n_dofs) - static_cast<int>(target_dof_count));
+            std::abs(static_cast<double>(n_dofs) - static_cast<double>(target_dof_count));
           if(n_dofs_difference / static_cast<double>(target_dof_count) < rel_tol_dof_count_match)
           {
             match_found          = true;
