@@ -103,6 +103,15 @@ public:
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
+    prm.enter_subsection("SpatialResolution");
+    {
+      prm.add_parameter("TargetDoFCount",
+                        target_dof_count,
+                        "Target DoF count achieved via tuning the meshing parameters",
+                        dealii::Patterns::Double());
+    }
+    prm.leave_subsection();
+
     prm.enter_subsection("Application");
     {
       // clang-format off
@@ -550,7 +559,7 @@ private:
            "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
            "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
  
-       Geometry::create_grid(tria, global_refinements, periodic_face_pairs);
+       Geometry::create_grid(tria, static_cast<unsigned int>(target_dof_count), this->param.degree_u, global_refinements, periodic_face_pairs);
      };
  
      GridUtilities::create_triangulation_with_multigrid<dim>(grid,
@@ -671,6 +680,8 @@ private:
   double density = 1.0e3;
   double kinematic_viscosity = 1.0e-6;
   
+  double target_dof_count = 0.0;
+
   ProblemType problem_type = ProblemType::Steady;
   TemporalDiscretization temporal_discretization  = TemporalDiscretization::Undefined;
   TreatmentOfConvectiveTerm    treatment_of_convective_term = TreatmentOfConvectiveTerm::Implicit;

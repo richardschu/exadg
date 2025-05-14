@@ -151,41 +151,110 @@ public:
 template<int dim>
 void
 create_grid(dealii::Triangulation<dim> &                             triangulation,
+            unsigned int const                                       target_dof_count,
+            unsigned int const                                       degree_u,
             unsigned int const                                       n_refine_space,
             std::vector<dealii::GridTools::PeriodicFacePair<
               typename dealii::Triangulation<dim>::cell_iterator>> & periodic_faces)
 {
   AssertThrow(dim == 3, dealii::ExcMessage("NotImplemented"));
 
+  double       width_BFS            = WIDTH_BFS;
+  unsigned int n_cells_inlet_height = 1;
+  unsigned int n_cells_inlet_length = 5;
+  unsigned int n_cells_width        = 1;
+  unsigned int n_refine_space_used  = n_refine_space;
+
+  // In case a target DoF count is provided, find the best possible match within a range of the grid
+  // parameters.
+  if(target_dof_count > 0)
+  {
+    // Preferred parameters come first.
+    std::vector<unsigned int> n_cells_inlet_length_vec{5, 4, 6, 3, 7, 2, 8, 1, 9, 10};
+    std::vector<unsigned int> n_cells_width_vec(20, 0);
+    for(unsigned int i = 0; i < n_cells_width_vec.size(); ++i)
+    {
+      n_cells_width_vec[i] = i + 1;
+    }
+    std::vector<unsigned int> n_refine_space_vec{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+    // Loop over parameter combinations, first relative tolerance match is chosen.
+    bool         match_found = false;
+    unsigned int n_dofs      = 0;
+    for(unsigned int i = 0; i < n_cells_inlet_length_vec.size(); ++i)
+    {
+      for(unsigned int j = 0; j < n_cells_width_vec.size(); ++j)
+      {
+        for(unsigned int k = 0; k < n_refine_space_vec.size(); ++k)
+        {
+          unsigned int const n_cells =
+            n_cells_width_vec[j] * 5 * n_cells_inlet_height * n_cells_inlet_length_vec[i];
+          unsigned int const n_cells_refined = n_cells * std::pow(2, dim * n_refine_space_vec[k]);
+          unsigned int const n_dofs_per_cell =
+            dealii::Utilities::fixed_power<dim>(degree_u + 1) * dim +
+            dealii::Utilities::fixed_power<dim>(degree_u);
+
+          n_dofs = n_dofs_per_cell * n_cells_refined;
+
+          double constexpr rel_tol_dof_count_match = 0.05;
+          double const n_dofs_difference =
+            std::abs(static_cast<int>(n_dofs) - static_cast<int>(target_dof_count));
+          if(n_dofs_difference / static_cast<double>(target_dof_count) < rel_tol_dof_count_match)
+          {
+            match_found          = true;
+            n_cells_inlet_length = n_cells_inlet_length_vec[i];
+            n_cells_width        = n_cells_width_vec[j];
+            n_refine_space_used  = n_refine_space_vec[k];
+            break;
+          }
+        }
+        if(match_found)
+        {
+          break;
+        }
+      }
+      if(match_found)
+      {
+        break;
+      }
+    }
+
+    AssertThrow(match_found,
+                dealii::ExcMessage("Could not find a suitable match to reach target DoFs."));
+
+    // Adjust width of the step such that the width of the elements used in thickness direction is
+    // equal their height in the inlet.
+    width_BFS = static_cast<double>(n_cells_width) * HEIGHT_BFS_INFLOW /
+                static_cast<double>(n_cells_inlet_height);
+  }
+
+  // Create the three triangulations and merge them.
   dealii::Triangulation<dim> tria_1, tria_2, tria_3;
 
   // inflow part of BFS
   dealii::GridGenerator::subdivided_hyper_rectangle(
     tria_1,
-    std::vector<unsigned int>({5, 1, 1}),
-    dealii::Point<dim>(-LENGTH_BFS_UP, 0.0, -WIDTH_BFS / 2.0),
-    dealii::Point<dim>(0.0, HEIGHT_BFS_INFLOW, WIDTH_BFS / 2.0));
+    std::vector<unsigned int>({n_cells_inlet_length, n_cells_inlet_height, n_cells_width}),
+    dealii::Point<dim>(-LENGTH_BFS_UP, 0.0, -width_BFS / 2.0),
+    dealii::Point<dim>(0.0, HEIGHT_BFS_INFLOW, width_BFS / 2.0));
 
   // downstream part of BFS (upper)
-  dealii::GridGenerator::subdivided_hyper_rectangle(tria_2,
-                                                    std::vector<unsigned int>({10, 1, 1}),
-                                                    dealii::Point<dim>(0.0, 0.0, -WIDTH_BFS / 2.0),
-                                                    dealii::Point<dim>(LENGTH_BFS_DOWN,
-                                                                       HEIGHT_BFS_INFLOW,
-                                                                       WIDTH_BFS / 2.0));
+  dealii::GridGenerator::subdivided_hyper_rectangle(
+    tria_2,
+    std::vector<unsigned int>({2 * n_cells_inlet_length, n_cells_inlet_height, n_cells_width}),
+    dealii::Point<dim>(0.0, 0.0, -width_BFS / 2.0),
+    dealii::Point<dim>(LENGTH_BFS_DOWN, HEIGHT_BFS_INFLOW, width_BFS / 2.0));
 
   // downstream part of BFS (lower = step)
-  dealii::GridGenerator::subdivided_hyper_rectangle(tria_3,
-                                                    std::vector<unsigned int>({10, 1, 1}),
-                                                    dealii::Point<dim>(0.0, 0.0, -WIDTH_BFS / 2.0),
-                                                    dealii::Point<dim>(LENGTH_BFS_DOWN,
-                                                                       -HEIGHT_BFS_STEP,
-                                                                       WIDTH_BFS / 2.0));
+  dealii::GridGenerator::subdivided_hyper_rectangle(
+    tria_3,
+    std::vector<unsigned int>({2 * n_cells_inlet_length, n_cells_inlet_height, n_cells_width}),
+    dealii::Point<dim>(0.0, 0.0, -width_BFS / 2.0),
+    dealii::Point<dim>(LENGTH_BFS_DOWN, -HEIGHT_BFS_STEP, width_BFS / 2.0));
 
   dealii::Triangulation<dim> tmp1;
   dealii::GridGenerator::merge_triangulations(tria_1, tria_2, tmp1);
   dealii::GridGenerator::merge_triangulations(tmp1, tria_3, triangulation);
-
 
   // set boundary ID's
   for(auto cell : triangulation.cell_iterators())
@@ -200,9 +269,9 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
         cell->face(f)->set_boundary_id(2);
 
       // periodicity in z-direction
-      if((std::fabs(cell->face(f)->center()(2) - WIDTH_BFS / 2.0) < 1.e-12))
+      if((std::fabs(cell->face(f)->center()(2) - width_BFS / 2.0) < 1.e-12))
         cell->face(f)->set_all_boundary_ids(2 + 10);
-      if((std::fabs(cell->face(f)->center()(2) + WIDTH_BFS / 2.0) < 1.e-12))
+      if((std::fabs(cell->face(f)->center()(2) + width_BFS / 2.0) < 1.e-12))
         cell->face(f)->set_all_boundary_ids(3 + 10);
     }
   }
@@ -226,7 +295,7 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
   triangulation.add_periodicity(periodic_faces);
 
   // perform global refinements
-  triangulation.refine_global(n_refine_space);
+  triangulation.refine_global(n_refine_space_used);
 }
 
 } // namespace Geometry
