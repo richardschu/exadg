@@ -379,10 +379,11 @@ private:
     this->param.solver_momentum =
       treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ? SolverMomentum::CG :
                                                                             SolverMomentum::GMRES;
-    this->param.solver_data_momentum    = SolverData(100, abs_tol_lin, rel_tol_lin);
-    this->param.preconditioner_momentum = preconditioner_momentum;
-    this->param.update_preconditioner_momentum =
-      this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
+    this->param.solver_data_momentum           = SolverData(100, abs_tol_lin, rel_tol_lin);
+    this->param.preconditioner_momentum        = preconditioner_momentum;
+    this->param.update_preconditioner_momentum = this->param.viscosity_is_variable() or
+                                                 this->param.non_explicit_convective_problem() or
+                                                 this->param.adaptive_time_stepping;
     this->param.update_preconditioner_momentum_every_time_steps  = 1;
     this->param.update_preconditioner_momentum_every_newton_iter = 5;
 
@@ -446,9 +447,10 @@ private:
     }
 
     // preconditioning linear solver
-    this->param.preconditioner_coupled = PreconditionerCoupled::BlockTriangular;
-    this->param.update_preconditioner_coupled =
-      this->param.viscosity_is_variable() or this->param.non_explicit_convective_problem();
+    this->param.preconditioner_coupled        = PreconditionerCoupled::BlockTriangular;
+    this->param.update_preconditioner_coupled = this->param.viscosity_is_variable() or
+                                                this->param.non_explicit_convective_problem() or
+                                                this->param.adaptive_time_stepping;
     this->param.update_preconditioner_coupled_every_time_steps  = 1;
     this->param.update_preconditioner_coupled_every_newton_iter = 5;
     this->param.exact_inversion_of_velocity_block               = iterative_solve_velocity_block;
