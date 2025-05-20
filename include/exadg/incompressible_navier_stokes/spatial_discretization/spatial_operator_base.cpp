@@ -19,10 +19,8 @@
  *  ______________________________________________________________________
  */
 
-// deal.II
-#include <deal.II/numerics/vector_tools.h>
-
 // ExaDG
+#include <exadg/functions_and_boundary_conditions/interpolate.h>
 #include <exadg/grid/mapping_dof_vector.h>
 #include <exadg/incompressible_navier_stokes/preconditioners/multigrid_preconditioner_projection.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
@@ -360,11 +358,23 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
                                      field + quad_index_u_overintegration);
 
   // TODO create these quadrature rules only when needed
-  matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.degree_u + 1),
-                                     field + quad_index_u_gauss_lobatto);
-  matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.get_degree_p(param.degree_u) +
-                                                              1),
-                                     field + quad_index_p_gauss_lobatto);
+  if(param.grid.element_type == ElementType::Hypercube)
+  {
+    matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.degree_u + 1),
+                                       field + quad_index_u_nodal_points);
+    matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.get_degree_p(param.degree_u) +
+                                                                1),
+                                       field + quad_index_p_nodal_points);
+  }
+  else if(param.grid.element_type == ElementType::Simplex)
+  {
+    matrix_free_data.insert_quadrature(dealii::Quadrature<dim>(
+                                         dof_handler_u_scalar.get_fe().get_unit_support_points()),
+                                       field + quad_index_u_nodal_points);
+    matrix_free_data.insert_quadrature(dealii::Quadrature<dim>(
+                                         dof_handler_p.get_fe().get_unit_support_points()),
+                                       field + quad_index_p_nodal_points);
+  }
 }
 
 template<int dim, typename Number>
@@ -377,7 +387,7 @@ SpatialOperatorBase<dim, Number>::initialize_dirichlet_cached_bc()
     std::vector<unsigned int> quad_indices;
     quad_indices.emplace_back(get_quad_index_velocity_standard());
     quad_indices.emplace_back(get_quad_index_velocity_overintegration());
-    quad_indices.emplace_back(get_quad_index_velocity_gauss_lobatto());
+    quad_indices.emplace_back(get_quad_index_velocity_nodal_points());
 
     interface_data_dirichlet_cached = std::make_shared<ContainerInterfaceData<1, dim, double>>();
     interface_data_dirichlet_cached->setup(*matrix_free,
@@ -790,16 +800,16 @@ SpatialOperatorBase<dim, Number>::get_quad_index_velocity_overintegration() cons
 
 template<int dim, typename Number>
 unsigned int
-SpatialOperatorBase<dim, Number>::get_quad_index_velocity_gauss_lobatto() const
+SpatialOperatorBase<dim, Number>::get_quad_index_velocity_nodal_points() const
 {
-  return matrix_free_data->get_quad_index(field + quad_index_u_gauss_lobatto);
+  return matrix_free_data->get_quad_index(field + quad_index_u_nodal_points);
 }
 
 template<int dim, typename Number>
 unsigned int
-SpatialOperatorBase<dim, Number>::get_quad_index_pressure_gauss_lobatto() const
+SpatialOperatorBase<dim, Number>::get_quad_index_pressure_nodal_points() const
 {
-  return matrix_free_data->get_quad_index(field + quad_index_p_gauss_lobatto);
+  return matrix_free_data->get_quad_index(field + quad_index_p_nodal_points);
 }
 
 template<int dim, typename Number>
@@ -946,33 +956,31 @@ SpatialOperatorBase<dim, Number>::initialize_block_vector_velocity_pressure(
 
 template<int dim, typename Number>
 void
+SpatialOperatorBase<dim, Number>::interpolate_functions(
+  VectorType &                                   velocity,
+  std::shared_ptr<dealii::Function<dim>> const & f_velocity,
+  VectorType &                                   pressure,
+  std::shared_ptr<dealii::Function<dim>> const & f_pressure,
+  double const                                   time) const
+{
+  AssertThrow(f_velocity, dealii::ExcMessage("Function not set"));
+  AssertThrow(f_pressure, dealii::ExcMessage("Function not set"));
+
+  Utilities::interpolate(*get_mapping(), dof_handler_u, *f_velocity, velocity, time);
+  Utilities::interpolate(*get_mapping(), dof_handler_p, *f_pressure, pressure, time);
+}
+
+template<int dim, typename Number>
+void
 SpatialOperatorBase<dim, Number>::prescribe_initial_conditions(VectorType & velocity,
                                                                VectorType & pressure,
                                                                double const time) const
 {
-  field_functions->initial_solution_velocity->set_time(time);
-  field_functions->initial_solution_pressure->set_time(time);
-
-  // This is necessary if Number == float
-  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeDouble;
-
-  VectorTypeDouble velocity_double;
-  VectorTypeDouble pressure_double;
-  velocity_double = velocity;
-  pressure_double = pressure;
-
-  dealii::VectorTools::interpolate(*get_mapping(),
-                                   dof_handler_u,
-                                   *(field_functions->initial_solution_velocity),
-                                   velocity_double);
-
-  dealii::VectorTools::interpolate(*get_mapping(),
-                                   dof_handler_p,
-                                   *(field_functions->initial_solution_pressure),
-                                   pressure_double);
-
-  velocity = velocity_double;
-  pressure = pressure_double;
+  interpolate_functions(velocity,
+                        field_functions->initial_solution_velocity,
+                        pressure,
+                        field_functions->initial_solution_pressure,
+                        time);
 }
 
 template<int dim, typename Number>
@@ -981,34 +989,11 @@ SpatialOperatorBase<dim, Number>::interpolate_analytical_solution(VectorType & v
                                                                   VectorType & pressure,
                                                                   double const time) const
 {
-  AssertThrow(field_functions->analytical_solution_velocity,
-              dealii::ExcMessage("FieldFunctions::analytical_solution_velocity not set"));
-  AssertThrow(field_functions->analytical_solution_pressure,
-              dealii::ExcMessage("FieldFunctions::analytical_solution_pressure not set"));
-
-  field_functions->analytical_solution_velocity->set_time(time);
-  field_functions->analytical_solution_pressure->set_time(time);
-
-  // This is necessary if Number == float
-  using VectorTypeDouble = dealii::LinearAlgebra::distributed::Vector<double>;
-
-  VectorTypeDouble velocity_double;
-  VectorTypeDouble pressure_double;
-  velocity_double = velocity;
-  pressure_double = pressure;
-
-  dealii::VectorTools::interpolate(*get_mapping(),
-                                   get_dof_handler_u(),
-                                   *(field_functions->analytical_solution_velocity),
-                                   velocity_double);
-
-  dealii::VectorTools::interpolate(*get_mapping(),
-                                   get_dof_handler_p(),
-                                   *(field_functions->analytical_solution_pressure),
-                                   pressure_double);
-
-  velocity = velocity_double;
-  pressure = pressure_double;
+  interpolate_functions(velocity,
+                        field_functions->analytical_solution_velocity,
+                        pressure,
+                        field_functions->analytical_solution_pressure,
+                        time);
 }
 
 template<int dim, typename Number>
@@ -1817,7 +1802,7 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
 {
   unsigned int const dof_index_u = this->get_dof_index_velocity();
   unsigned int const dof_index_p = this->get_dof_index_pressure();
-  unsigned int const quad_index  = this->get_quad_index_velocity_gauss_lobatto();
+  unsigned int const quad_index  = this->get_quad_index_velocity_nodal_points();
 
   FaceIntegratorU integrator_u(matrix_free, true, dof_index_u, quad_index);
   FaceIntegratorP integrator_p(matrix_free, true, dof_index_p, quad_index);

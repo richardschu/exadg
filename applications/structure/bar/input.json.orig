@@ -33,7 +33,11 @@
         "CheckType": "0",
         "MappingStrength": "0.20",
         "BoundaryType": "Dirichlet",
+<<<<<<< HEAD
+        "Displacement": "20",
+=======
         "Displacement": "20.0",
+>>>>>>> master
         "Traction":	"0.0"
     },
     "Output": {

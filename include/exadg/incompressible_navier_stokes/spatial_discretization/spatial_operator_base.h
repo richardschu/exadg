@@ -169,10 +169,10 @@ protected:
   get_quad_index_velocity_overintegration() const;
 
   unsigned int
-  get_quad_index_velocity_gauss_lobatto() const;
+  get_quad_index_velocity_nodal_points() const;
 
   unsigned int
-  get_quad_index_pressure_gauss_lobatto() const;
+  get_quad_index_pressure_nodal_points() const;
 
   unsigned int
   get_quad_index_velocity_linearized() const;
@@ -237,6 +237,16 @@ public:
   prescribe_initial_conditions(VectorType & velocity,
                                VectorType & pressure,
                                double const time) const;
+
+  /*
+   * Interpolate given functions to the corresponding vectors.
+   */
+  void
+  interpolate_functions(VectorType &                                   velocity,
+                        std::shared_ptr<dealii::Function<dim>> const & f_velocity,
+                        VectorType &                                   pressure,
+                        std::shared_ptr<dealii::Function<dim>> const & f_pressure,
+                        double const                                   time) const;
 
   /*
    * Interpolate analytical solution functions.
@@ -514,8 +524,8 @@ private:
   std::string const quad_index_u                 = "velocity";
   std::string const quad_index_p                 = "pressure";
   std::string const quad_index_u_overintegration = "velocity_overintegration";
-  std::string const quad_index_u_gauss_lobatto   = "velocity_gauss_lobatto";
-  std::string const quad_index_p_gauss_lobatto   = "pressure_gauss_lobatto";
+  std::string const quad_index_u_nodal_points    = "velocity_nodal_points";
+  std::string const quad_index_p_nodal_points    = "pressure_nodal_points";
 
   std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;
   std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;

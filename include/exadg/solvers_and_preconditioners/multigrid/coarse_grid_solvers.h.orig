@@ -131,7 +131,7 @@ public:
           additional_data.preconditioner == MultigridCoarseGridPreconditioner::PointJacobi or
           additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi or
           additional_data.preconditioner == MultigridCoarseGridPreconditioner::AMG,
-        dealii::ExcMessage("Specified preconditioner for PCG coarse grid solver not implemented."));
+        dealii::ExcMessage("Specified preconditioner coarse grid solver not implemented."));
     }
   }
 
@@ -163,7 +163,20 @@ public:
 
     std::shared_ptr<Krylov::SolverBase<VectorType>> solver;
 
+<<<<<<< HEAD
     if(additional_data.solver_type == MultigridCoarseGridSolver::CG)
+=======
+      AssertThrow(preconditioner_amg != nullptr,
+                  dealii::ExcMessage("Constructed preconditioner is not of type "
+                                     "PreconditionerAMG<Operator, Number>."));
+
+      preconditioner_amg->apply_krylov_solver_with_amg_preconditioner(dst,
+                                                                      r,
+                                                                      additional_data.solver_type,
+                                                                      additional_data.solver_data);
+    }
+    else
+>>>>>>> master
     {
       Krylov::SolverDataCG solver_data;
       solver_data.max_iter             = additional_data.solver_data.max_iter;
