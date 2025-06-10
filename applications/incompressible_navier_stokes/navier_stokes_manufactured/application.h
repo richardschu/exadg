@@ -347,6 +347,7 @@ public:
       // clang-format off
       prm.add_parameter("IncludeConvectiveTerm",               include_convective_term,                           "Include the nonlinear convective term.",                       dealii::Patterns::Bool());
       prm.add_parameter("PureDirichletProblem",                pure_dirichlet_problem,                            "Solve a pure Dirichlet problem.",                              dealii::Patterns::Bool());
+      prm.add_parameter("OrderTimeIntegrator",                 order_time_integrator,                             "Order of the time integrator.",                                dealii::Patterns::Integer());
       prm.add_parameter("StartTime",                           start_time,                                        "Simulation start time.",                                       dealii::Patterns::Double());
       prm.add_parameter("EndTime",                             end_time,                                          "Simulation end time.",                                         dealii::Patterns::Double());
       prm.add_parameter("TimeStepSize",                        time_step_size,                                    "Time step size used.",                                         dealii::Patterns::Double());
@@ -395,7 +396,7 @@ private:
     this->param.treatment_of_convective_term  = treatment_of_convective_term;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
     this->param.time_step_size                = time_step_size;
-    this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
+    this->param.order_time_integrator         = order_time_integrator;
     this->param.start_with_low_order          = false; // true;
 
     // output of solver information
@@ -495,7 +496,7 @@ private:
       this->param.solver_data_momentum = SolverData(1000, abs_tol_lin, rel_tol_lin);
       this->param.preconditioner_momentum =
         treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
-          MomentumPreconditioner::InverseMassMatrix :
+          MomentumPreconditioner::Multigrid :
           MomentumPreconditioner::Multigrid;
     }
 
@@ -512,7 +513,7 @@ private:
       // linear solver
       this->param.solver_momentum                = SolverMomentum::GMRES;
       this->param.solver_data_momentum           = SolverData(1e4, abs_tol_lin, rel_tol_lin, 100);
-      this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
+      this->param.preconditioner_momentum        = MomentumPreconditioner::Multigrid;
       this->param.update_preconditioner_momentum = true;
     }
 
@@ -701,6 +702,7 @@ private:
     pp_data.error_data_u.analytical_solution.reset(new AnalyticalSolutionVelocity<dim>());
     pp_data.error_data_u.calculate_relative_errors = true; // false;
     pp_data.error_data_u.name                      = "velocity";
+    pp_data.error_data_u.directory                 = this->output_parameters.directory;
 
     // ... pressure error
     pp_data.error_data_p.write_errors_to_file               = true;
@@ -710,6 +712,7 @@ private:
     pp_data.error_data_p.analytical_solution.reset(new AnalyticalSolutionPressure<dim>());
     pp_data.error_data_p.calculate_relative_errors = true; // false;
     pp_data.error_data_p.name                      = "pressure";
+    pp_data.error_data_p.directory                 = this->output_parameters.directory;
 
     std::shared_ptr<PostProcessorBase<dim, Number>> pp;
     pp.reset(new PostProcessor<dim, Number>(pp_data, this->mpi_comm));
@@ -717,14 +720,15 @@ private:
     return pp;
   }
 
-  bool   include_convective_term = true;
-  bool   pure_dirichlet_problem  = true;
-  double start_time              = 0.0;
-  double end_time                = 0.1;
-  double time_step_size          = 1.0e-12;
-  double density                 = 1000.0;
-  double kinematic_viscosity     = 5e-6;
-  bool   use_turbulence_model    = false;
+  bool         include_convective_term = true;
+  bool         pure_dirichlet_problem  = true;
+  unsigned int order_time_integrator   = 2;
+  double       start_time              = 0.0;
+  double       end_time                = 0.1;
+  double       time_step_size          = 1.0e-12;
+  double       density                 = 1000.0;
+  double       kinematic_viscosity     = 5e-6;
+  bool         use_turbulence_model    = false;
 
   FormulationViscousTerm formulation_viscous_term = FormulationViscousTerm::DivergenceFormulation;
   TemporalDiscretization temporal_discretization  = TemporalDiscretization::Undefined;

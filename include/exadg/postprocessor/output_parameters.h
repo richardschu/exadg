@@ -34,6 +34,13 @@ struct OutputParameters
   {
   }
 
+  OutputParameters(std::string const & input_file)
+  {
+    dealii::ParameterHandler prm;
+    add_parameters(prm);
+    prm.parse_input(input_file, "", true, true);
+  }
+
   void
   add_parameters(dealii::ParameterHandler & prm, std::string const & subsection_name = "Output")
   {

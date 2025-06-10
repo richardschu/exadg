@@ -195,8 +195,9 @@ main(int argc, char ** argv)
     }
   }
 
-  // print convergence study given data in ./output/run_(...)
-  ExaDG::evaluate_convergence_study(mpi_comm, general.is_test);
+  // Compute convergence study.
+  ExaDG::OutputParameters output(input_file);
+  ExaDG::evaluate_convergence_study(mpi_comm, general.is_test, output.directory);
 
 #ifdef USE_SUB_COMMUNICATOR
   // free communicator

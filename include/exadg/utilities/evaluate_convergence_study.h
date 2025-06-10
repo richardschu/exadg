@@ -31,7 +31,9 @@ namespace ExaDG
  * `run_id` and therefore allows partial running of the convergence tests.
  */
 void
-evaluate_convergence_study(MPI_Comm const & mpi_comm, bool const is_test);
+evaluate_convergence_study(MPI_Comm const &    mpi_comm,
+                           bool const          is_test,
+                           std::string const & output_directory);
 
 } // namespace ExaDG
 

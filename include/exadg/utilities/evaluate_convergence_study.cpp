@@ -34,7 +34,9 @@
 namespace ExaDG
 {
 void
-evaluate_convergence_study(MPI_Comm const & mpi_comm, bool const is_test)
+evaluate_convergence_study(MPI_Comm const &    mpi_comm,
+                           bool const          is_test,
+                           std::string const & output_directory)
 {
   if(is_test)
   {
@@ -46,7 +48,6 @@ evaluate_convergence_study(MPI_Comm const & mpi_comm, bool const is_test)
     if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
     {
       // find data in 'output' folder
-      std::string                 output_directory = "output/";
       std::filesystem::path const fs_output_directory{output_directory};
       if(std::filesystem::exists(fs_output_directory))
       {
@@ -96,13 +97,13 @@ evaluate_convergence_study(MPI_Comm const & mpi_comm, bool const is_test)
 
         if(labels.size() == 0)
         {
-          std::cout
-            << "Could not detect any files matching \"output/run_\", no convergence table to display.";
+          std::cout << "Could not detect any files matching \"" << output_directory
+                    << "/run_\", no convergence table to display.";
         }
         else if(max_run_id == 0)
         {
-          std::cout
-            << "Detected files with run_id = 0 matching \"output/run_\", no convergence table to display.";
+          std::cout << "Detected only a single file with run_id = 0 matching \"" << output_directory
+                    << "/run_\", no convergence table to display.";
         }
         else
         {
