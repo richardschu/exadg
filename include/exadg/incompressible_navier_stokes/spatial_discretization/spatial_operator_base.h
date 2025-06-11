@@ -342,7 +342,7 @@ public:
 
   // viscosity
   void
-  compute_viscosity(VectorType & dst, VectorType const & src) const;
+  access_viscosity(VectorType & dst) const;
 
   // velocity_magnitude
   void

@@ -166,11 +166,11 @@ ViscosityCalculator<dim, Number>::initialize(
 
 template<int dim, typename Number>
 void
-ViscosityCalculator<dim, Number>::compute_viscosity(VectorType & dst, VectorType const & src) const
+ViscosityCalculator<dim, Number>::access_viscosity(VectorType & dst) const
 {
   dst = 0.0;
 
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, dst);
 }
 
 template<int dim, typename Number>
@@ -180,6 +180,7 @@ ViscosityCalculator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> cons
                                             VectorType const &                      src,
                                             Range const & cell_range) const
 {
+  // we do not need src since we just read the stored parameters, but we need to fit the interface
   (void)src;
 
   CellIntegratorScalar integrator_scalar(matrix_free, dof_index_u_scalar, quad_index);

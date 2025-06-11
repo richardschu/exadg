@@ -600,8 +600,9 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
       pde_operator->initialize_vector_velocity(vorticity_extrapolated_ppe);
       pde_operator->compute_vorticity(vorticity_extrapolated_ppe, velocity_extrapolated_ppe);
 
+      pde_operator->update_viscosity(velocity_extrapolated_ppe);
       pde_operator->initialize_vector_velocity_scalar(viscosity_extrapolated_ppe);
-      pde_operator->compute_viscosity(viscosity_extrapolated_ppe, velocity_extrapolated_ppe);
+      pde_operator->access_viscosity(viscosity_extrapolated_ppe);
     }
 
     // II.5. viscous term of pressure Neumann boundary condition on Gamma_D:
