@@ -310,7 +310,7 @@ public:
     dealii::Tensor<1, dim> grad_nu;
     grad_nu[0] = -2.0 * cos_t * sin_x * cos_y; // d_shear_rate_dx
     grad_nu[1] = -2.0 * cos_t * cos_x * sin_y; // d_shear_rate_dy
-    grad_nu *= data.lambda * (data.n - 1) * std::pow(data.lambda * shear_rate, data.a - 1.0) *
+    grad_nu *= data.lambda * (data.n - 1.0) * std::pow(data.lambda * shear_rate, data.a - 1.0) *
                data.viscosity_margin *
                std::pow(data.kappa + std::pow(data.lambda * shear_rate, data.a),
                         (data.n - 1.0 - data.a) / data.a);
@@ -483,7 +483,7 @@ private:
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
     // formulations
-    this->param.add_viscous_term_in_ppe = false;
+    this->param.add_viscous_term_in_ppe = true;
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
