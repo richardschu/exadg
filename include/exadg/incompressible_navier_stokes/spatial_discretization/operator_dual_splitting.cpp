@@ -685,59 +685,18 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_viscous_term_add(
 
     for(unsigned int q = 0; q < integrator_pressure.n_q_points; ++q)
     {
-      // // variable viscosity term
-      // dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> sym_grad_u =
-      //   integrator_velocity.get_symmetric_gradient(q);
+      // variable viscosity term
+      dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> sym_grad_u =
+        integrator_velocity.get_symmetric_gradient(q);
 
-      // vector grad_nu = integrator_viscosity.get_gradient(q);
+      vector grad_nu = integrator_viscosity.get_gradient(q);
 
-      // vector tmp = dealii::make_vectorized_array<Number>(2.0) * (sym_grad_u * grad_nu);
+      vector tmp = dealii::make_vectorized_array<Number>(2.0) * (sym_grad_u * grad_nu);
 
-      // // variable *and* constant viscosity term
-      // vector curl_curl_u = CurlCompute<dim, CellIntegratorU>::compute(integrator_vorticity, q);
+      // variable *and* constant viscosity term
+      vector curl_curl_u = CurlCompute<dim, CellIntegratorU>::compute(integrator_vorticity, q);
 
-      // tmp -= integrator_viscosity.get_value(q) * curl_curl_u;
-
-      // ##+
-      dealii::Point<dim, scalar> q_points = integrator_pressure.quadrature_point(q);
-      scalar                     x        = q_points[0];
-      scalar                     y        = q_points[1];
-      tensor                     grad_u;
-      scalar cos_t    = dealii::make_vectorized_array<Number>(std::cos(this->evaluation_time));
-      grad_u[0][0]    = +cos_t * std::cos(x) * std::cos(y);
-      grad_u[0][1]    = -cos_t * std::sin(x) * std::sin(y);
-      grad_u[1][0]    = +cos_t * std::sin(x) * std::sin(y);
-      grad_u[1][1]    = -cos_t * std::cos(x) * std::cos(y);
-      tensor grad_s_u = dealii::make_vectorized_array<Number>(0.5) * (grad_u + transpose(grad_u));
-      scalar u1_xx_is_u1_yy = -cos_t * std::sin(x) * std::cos(y);
-      scalar u2_xx_is_u2_yy = +cos_t * std::cos(x) * std::sin(y);
-      vector laplace_u;
-      laplace_u[0] = 2.0 * u1_xx_is_u1_yy;
-      laplace_u[1] = 2.0 * u2_xx_is_u2_yy;
-
-      scalar shear_rate =
-        std::sqrt(dealii::make_vectorized_array<Number>(2.0) * scalar_product(grad_s_u, grad_s_u));
-      Number a          = 2.0;
-      Number n          = 0.5;
-      Number kappa      = 1.0;
-      Number lambda     = 1.0;
-      Number eta_inf    = 5e-2;
-      Number eta_margin = 5e-2;
-      scalar nu         = dealii::make_vectorized_array<Number>(eta_inf) +
-                  eta_margin * std::pow(kappa + std::pow(shear_rate * lambda,
-                                                         dealii::make_vectorized_array<Number>(a)),
-                                        (n - 1.0) / dealii::make_vectorized_array<Number>(a));
-
-      vector grad_nu;
-      grad_nu[0] = -2.0 * cos_t * std::sin(x) * std::cos(y); // d_shear_rate_dx
-      grad_nu[1] = -2.0 * cos_t * std::cos(x) * std::sin(y); // d_shear_rate_dy
-      grad_nu *=
-        lambda * (n - 1.0) *
-        std::pow(lambda * shear_rate, dealii::make_vectorized_array<Number>(a - 1.0)) * eta_margin *
-        std::pow(kappa + std::pow(lambda * shear_rate, dealii::make_vectorized_array<Number>(a)),
-                 dealii::make_vectorized_array<Number>((n - 1.0 - a) / a));
-
-      vector tmp = 2.0 * grad_s_u * grad_nu + nu * laplace_u;
+      tmp -= integrator_viscosity.get_value(q) * curl_curl_u;
 
       integrator_pressure.submit_gradient(tmp, q);
     }
@@ -794,62 +753,20 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_viscous_term_add_face_and_boun
     {
       vector normal = integrator_pressure.get_normal_vector(q);
 
-      // // variable viscosity term
-      // dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> sym_grad_u =
-      //   integrator_velocity.get_symmetric_gradient(q);
+      // variable viscosity term
+      dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> sym_grad_u =
+        integrator_velocity.get_symmetric_gradient(q);
 
-      // vector grad_nu = integrator_viscosity.get_gradient(q);
+      vector grad_nu = integrator_viscosity.get_gradient(q);
 
-      // scalar tmp = dealii::make_vectorized_array<Number>(-2.0) * (normal * (sym_grad_u *
-      // grad_nu));
+      scalar tmp = dealii::make_vectorized_array<Number>(-2.0) * (normal * (sym_grad_u * grad_nu));
 
-      // // variable *and* constant viscosity term
-      // vector curl_curl_u = CurlCompute<dim, FaceIntegratorU>::compute(integrator_vorticity, q);
+      // variable *and* constant viscosity term
+      vector curl_curl_u = CurlCompute<dim, FaceIntegratorU>::compute(integrator_vorticity, q);
 
-      // tmp += integrator_viscosity.get_value(q) * (normal * curl_curl_u);
+      tmp += integrator_viscosity.get_value(q) * (normal * curl_curl_u);
 
-      // ##+
-      dealii::Point<dim, scalar> q_points = integrator_pressure.quadrature_point(q);
-      scalar                     x        = q_points[0];
-      scalar                     y        = q_points[1];
-      tensor                     grad_u;
-      scalar cos_t    = dealii::make_vectorized_array<Number>(std::cos(this->evaluation_time));
-      grad_u[0][0]    = +cos_t * std::cos(x) * std::cos(y);
-      grad_u[0][1]    = -cos_t * std::sin(x) * std::sin(y);
-      grad_u[1][0]    = +cos_t * std::sin(x) * std::sin(y);
-      grad_u[1][1]    = -cos_t * std::cos(x) * std::cos(y);
-      tensor grad_s_u = dealii::make_vectorized_array<Number>(0.5) * (grad_u + transpose(grad_u));
-      scalar u1_xx_is_u1_yy = -cos_t * std::sin(x) * std::cos(y);
-      scalar u2_xx_is_u2_yy = +cos_t * std::cos(x) * std::sin(y);
-      vector laplace_u;
-      laplace_u[0] = 2.0 * u1_xx_is_u1_yy;
-      laplace_u[1] = 2.0 * u2_xx_is_u2_yy;
-
-      scalar shear_rate =
-        std::sqrt(dealii::make_vectorized_array<Number>(2.0) * scalar_product(grad_s_u, grad_s_u));
-      Number a          = 2.0;
-      Number n          = 0.5;
-      Number kappa      = 1.0;
-      Number lambda     = 1.0;
-      Number eta_inf    = 5e-2;
-      Number eta_margin = 5e-2;
-      scalar nu         = dealii::make_vectorized_array<Number>(eta_inf) +
-                  eta_margin * std::pow(kappa + std::pow(shear_rate * lambda,
-                                                         dealii::make_vectorized_array<Number>(a)),
-                                        (n - 1.0) / dealii::make_vectorized_array<Number>(a));
-
-      vector grad_nu;
-      grad_nu[0] = -2.0 * cos_t * std::sin(x) * std::cos(y); // d_shear_rate_dx
-      grad_nu[1] = -2.0 * cos_t * std::cos(x) * std::sin(y); // d_shear_rate_dy
-      grad_nu *=
-        lambda * (n - 1.0) *
-        std::pow(lambda * shear_rate, dealii::make_vectorized_array<Number>(a - 1.0)) * eta_margin *
-        std::pow(kappa + std::pow(lambda * shear_rate, dealii::make_vectorized_array<Number>(a)),
-                 dealii::make_vectorized_array<Number>((n - 1.0 - a) / a));
-
-      vector tmp = 2.0 * grad_s_u * grad_nu + nu * laplace_u;
-
-      integrator_pressure.submit_value(tmp * normal, q);
+      integrator_pressure.submit_value(tmp, q);
     }
     integrator_pressure.integrate_scatter(dealii::EvaluationFlags::values, rhs_ppe);
   }
