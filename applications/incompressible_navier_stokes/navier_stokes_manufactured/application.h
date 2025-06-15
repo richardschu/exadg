@@ -115,10 +115,10 @@ public:
     double const t      = this->get_time();
     double const x      = p[0];
     double const y      = p[1];
+    double const cos_xy = std::cos(x * y);
     double const cos_t  = std::cos(t);
 
-    double const pi = dealii::numbers::PI;
-    return cos_t * std::sin(2.0*pi*x + pi*0.5) * std::sin(2.0*pi*y + pi*0.5);
+    return cos_xy * cos_t;
   }
 };
 
@@ -267,9 +267,8 @@ public:
     double const du2_dxx = cos_t * cos_x * sin_y;
     double const du2_dyy = cos_t * cos_x * sin_y;
 
-    double const pi = dealii::numbers::PI;
-    double const dp_dx = cos_t * std::sin(2.0*y*pi + pi*0.5) * std::cos(2.0*x*pi + pi*0.5) * 2.0 * pi;
-    double const dp_dy = cos_t * std::sin(2.0*x*pi + pi*0.5) * std::cos(2.0*y*pi + pi*0.5) * 2.0 * pi;
+    double const dp_dx = -sin_xy * cos_t * y;
+    double const dp_dy = -sin_xy * cos_t * x;
 
     dealii::Tensor<2, dim> grad_u;
     grad_u[0][0] = du1_dx;
