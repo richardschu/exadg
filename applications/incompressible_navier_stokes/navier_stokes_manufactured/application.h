@@ -469,7 +469,7 @@ private:
 
     // convective term
     this->param.treatment_of_convective_term = treatment_of_convective_term_implicit ?
-                                                 TreatmentOfConvectiveTerm::Implicit :
+                                                 TreatmentOfConvectiveTerm::LinearlyImplicit :
                                                  TreatmentOfConvectiveTerm::Explicit;
     if(this->param.formulation_convective_term == FormulationConvectiveTerm::DivergenceFormulation)
       this->param.upwind_factor = 0.5;
@@ -543,9 +543,40 @@ private:
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8);
-      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+      this->param.preconditioner_momentum = MomentumPreconditioner::Multigrid;
     }
 
+    // clang-format off
+    this->param.multigrid_data_momentum.type       = MultigridType::cphMG;
+    this->param.multigrid_data_momentum.p_sequence = PSequenceType::DecreaseByOne;
+
+    this->param.multigrid_operator_type_momentum                        = this->param.non_explicit_convective_problem() ? 
+      MultigridOperatorType::ReactionConvectionDiffusion : MultigridOperatorType::ReactionDiffusion;
+    this->param.multigrid_data_momentum.smoother_data.iterations        = 10;
+    this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Chebyshev;
+    this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.8; // Jacobi:    default: 0.8
+    this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20.0;   // Chebyshev: default: 20.0
+    this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
+    this->param.multigrid_data_momentum.smoother_data.preconditioner    = PreconditionerSmoother::PointJacobi;
+
+    this->param.multigrid_data_momentum.coarse_problem.solver            = MultigridCoarseGridSolver::AMG;
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.amg_type = AMGType::ML;
+    this->param.multigrid_data_momentum.coarse_problem.solver_data       = SolverData(100, 1.0e-60, 1.0e-60, 30); // inactive since we use AMG as `solver`
+
+    this->param.multigrid_data_momentum.coarse_problem.preconditioner =
+      this->param.use_cell_based_face_loops ? 
+        MultigridCoarseGridPreconditioner::BlockJacobi
+        : MultigridCoarseGridPreconditioner::PointJacobi;
+#ifdef DEAL_II_WITH_TRILINOS
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.smoother_sweeps       = 2;
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.n_cycles              = 1;
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.w_cycle               = false;
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.aggregation_threshold = 1e-4;
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.smoother_type         = "Chebyshev";
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.coarse_type           = "Amesos-KLU";
+    this->param.multigrid_data_momentum.coarse_problem.amg_data.ml_data.output_details        = false;
+#endif
+    // clang-format on
 
     // PRESSURE-CORRECTION SCHEME
 
@@ -583,7 +614,7 @@ private:
     // preconditioner velocity/momentum block
     this->param.preconditioner_velocity_block = MomentumPreconditioner::Multigrid;
 
-    if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit &&
+    if(this->param.treatment_of_convective_term != TreatmentOfConvectiveTerm::Explicit &&
        include_convective_term == true)
       this->param.multigrid_operator_type_velocity_block =
         MultigridOperatorType::ReactionConvectionDiffusion;
