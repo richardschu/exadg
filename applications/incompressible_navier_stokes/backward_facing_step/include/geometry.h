@@ -163,7 +163,7 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
   unsigned int n_cells_inlet_height = 1;
   unsigned int n_cells_inlet_length = 5;
   unsigned int n_cells_width        = 1;
-  unsigned int n_refine_space_used  = n_refine_space;
+  unsigned int n_refine_space_base  = 1;
 
   // In case a target DoF count is provided, find the best possible match within a range of the grid
   // parameters.
@@ -204,7 +204,7 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
             match_found          = true;
             n_cells_inlet_length = n_cells_inlet_length_vec[i];
             n_cells_width        = n_cells_width_vec[j];
-            n_refine_space_used  = n_refine_space_vec[k];
+            n_refine_space_base  = n_refine_space_vec[k];
             break;
           }
         }
@@ -295,7 +295,7 @@ create_grid(dealii::Triangulation<dim> &                             triangulati
   triangulation.add_periodicity(periodic_faces);
 
   // perform global refinements
-  triangulation.refine_global(n_refine_space_used);
+  triangulation.refine_global(n_refine_space_base + n_refine_space);
 }
 
 } // namespace Geometry
