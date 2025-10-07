@@ -214,11 +214,11 @@ private:
     this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Strong;
 
     // div-div and continuity penalty
-    this->param.use_divergence_penalty                     = spatial_discretization == SpatialDiscretization::L2;
-    this->param.divergence_penalty_factor                  = 1.0e1;
-    this->param.use_continuity_penalty                     = spatial_discretization == SpatialDiscretization::L2;
-    this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
-    this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
+    this->param.use_divergence_penalty        = spatial_discretization == SpatialDiscretization::L2;
+    this->param.divergence_penalty_factor     = 1.0e1;
+    this->param.use_continuity_penalty        = spatial_discretization == SpatialDiscretization::L2;
+    this->param.continuity_penalty_factor     = this->param.divergence_penalty_factor;
+    this->param.continuity_penalty_components = ContinuityPenaltyComponents::Normal;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
     this->param.continuity_penalty_use_boundary_data       = true;
 
@@ -275,7 +275,7 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    this->param.solver_momentum         = SolverMomentum::CG;
+    this->param.solver_momentum = SolverMomentum::CG;
 
     this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-3);
     this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
@@ -283,8 +283,8 @@ private:
                                             MomentumPreconditioner::PointJacobi;
 
     this->param.inverse_mass_operator.implementation_type = InverseMassType::GlobalKrylovSolver;
-    this->param.inverse_mass_operator.preconditioner = PreconditionerMass::PointJacobi;
-    this->param.inverse_mass_operator.solver_data = SolverData(1000, 1e-12, 1e-4);
+    this->param.inverse_mass_operator.preconditioner      = PreconditionerMass::PointJacobi;
+    this->param.inverse_mass_operator.solver_data         = SolverData(1000, 1e-12, 1e-4);
   }
 
   void
@@ -351,20 +351,6 @@ private:
       }
 
       tria.add_periodicity(periodic_face_pairs);
-
-      AssertThrow(
-        this->param.grid.triangulation_type != TriangulationType::FullyDistributed,
-        dealii::ExcMessage(
-          "Manifolds might not be applied correctly for TriangulationType::FullyDistributed. "
-          "Try to use another triangulation type, or try to fix these limitations in ExaDG or deal.II."));
-
-      unsigned int const manifold_id = 111;
-      tria.begin()->set_all_manifold_ids(manifold_id);
-      tria.last()->set_all_manifold_ids(manifold_id);
-
-      static const PeriodicHillManifold<dim> manifold =
-        PeriodicHillManifold<dim>(H, length, height, grid_stretch_factor);
-      tria.set_manifold(manifold_id, manifold);
 
       // Save the *coarse* triangulation for later deserialization.
       if(write_restart and this->param.grid.triangulation_type == TriangulationType::Serial)
