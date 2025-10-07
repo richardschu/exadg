@@ -518,7 +518,8 @@ private:
 //   }
 
 //   /**
-//    * This function applies the inverse mass operator. Note that this function allows identical dst,
+//    * This function applies the inverse mass operator. Note that this function allows identical
+//    dst,
 //    * src vector, i.e. the function can be called like apply(dst, dst).
 //    */
 //   unsigned int
