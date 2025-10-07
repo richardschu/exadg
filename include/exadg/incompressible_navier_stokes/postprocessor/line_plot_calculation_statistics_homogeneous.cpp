@@ -393,6 +393,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate_velocity(
                                                   dealii::update_quadrature_points |
                                                   dealii::update_gradients);
 
+  velocity.update_ghost_values();
+
   for(unsigned int p = 0; p < line.n_points; ++p)
   {
     for(typename TYPE::const_iterator cell_and_ref_point =
@@ -465,6 +467,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate_velocity(
       }
     }
   }
+
+  velocity.zero_out_ghost_values();
 
   dealii::Utilities::MPI::sum(length_local, mpi_comm, length_local);
 
