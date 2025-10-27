@@ -23,6 +23,7 @@
 #define EXADG_OPERATORS_INVERSE_MASS_PARAMETERS_H_
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
 #include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 
 namespace ExaDG
@@ -41,7 +42,8 @@ enum class PreconditionerMass
   None,
   PointJacobi,
   LumpedDiagonal,
-  BlockJacobi
+  BlockJacobi,
+  AMG
 };
 
 /**
@@ -56,7 +58,8 @@ struct InverseMassParameters
   InverseMassParameters()
     : implementation_type(InverseMassType::MatrixfreeOperator),
       preconditioner(PreconditionerMass::PointJacobi),
-      solver_data(SolverData(1000, 1e-12, 1e-12))
+      solver_data(SolverData(1000, 1e-12, 1e-12)),
+      amg_data(AMGData())
   {
   }
 
@@ -64,13 +67,16 @@ struct InverseMassParameters
   InverseMassType implementation_type;
 
   // This parameter is only relevant if the mass operator is inverted by an iterative solver with
-  // matrix-free implementation, InverseMassType::ElementwiseKrylovSolver or
-  // InverseMassType::GlobalKrylovSolver.
+  // matrix-free implementation, `InverseMassType::ElementwiseKrylovSolver` or
+  // `InverseMassType::GlobalKrylovSolver`.
   PreconditionerMass preconditioner;
 
   // solver data for iterative solver in case of implementation type
-  // InverseMassType::ElementwiseKrylovSolver or InverseMassType::GlobalKrylovSolver.
+  // `InverseMassType::ElementwiseKrylovSolver` or `InverseMassType::GlobalKrylovSolver`.
   SolverData solver_data;
+
+  // Configuration of AMG settings for `PreconditionerMass::AMG`.
+  AMGData amg_data;
 };
 
 } // namespace ExaDG
