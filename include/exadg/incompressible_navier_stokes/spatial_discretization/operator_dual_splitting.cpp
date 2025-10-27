@@ -535,9 +535,11 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_viscous_add_boundary_face(
 
       for(const unsigned int q : velocity.quadrature_point_indices())
       {
-        vector curl_u = CurlCompute<dim, CellIntegrator<dim, dim, Number>>::compute(velocity, q);
-        for(unsigned int d = 0; d < dim; ++d)
+        const auto curl_u = velocity.get_curl(q);
+        for(unsigned int d = 0; d < (dim == 2 ? 1 : dim); ++d)
           omega.begin_dof_values()[q + d * velocity.n_q_points] = curl_u[d];
+        for(unsigned int d = (dim == 2 ? 1 : dim); d < dim; ++d)
+          omega.begin_dof_values()[q + d * velocity.n_q_points] = 0;
       }
 
       omega.evaluate(dealii::EvaluationFlags::gradients);
