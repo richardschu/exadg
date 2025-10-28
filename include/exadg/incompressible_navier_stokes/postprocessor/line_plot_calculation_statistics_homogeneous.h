@@ -97,13 +97,6 @@ private:
                                    double &           pressure_local);
 
   void
-  find_points_and_weights(dealii::Point<dim> const &        point_in_ref_coord,
-                          std::vector<dealii::Point<dim>> & points,
-                          std::vector<double> &             weights,
-                          unsigned int const                averaging_direction,
-                          dealii::QGauss<1> const &         gauss_1d);
-
-  void
   do_write_output() const;
 
   mutable bool clear_files;
@@ -118,17 +111,15 @@ private:
   // Global points
   std::vector<std::vector<dealii::Point<dim>>> global_points;
 
-  // For all lines: for all points along the line: list of all relevant cells and points in ref
-  // coordinates
-  std::vector<std::vector<std::vector<
-    std::pair<typename dealii::DoFHandler<dim>::active_cell_iterator, dealii::Point<dim>>>>>
-    cells_and_ref_points_velocity;
+  // For all lines: list of all relevant cells and list of points in ref
+  // coordinates on that cell
+  using LineCellData =
+    std::vector<std::vector<std::pair<typename dealii::DoFHandler<dim>::active_cell_iterator,
+                                      std::vector<std::pair<unsigned int, dealii::Point<dim>>>>>>;
 
-  // For all lines: for all points along the line: list of all relevant cells and points in ref
-  // coordinates
-  std::vector<std::vector<std::vector<
-    std::pair<typename dealii::DoFHandler<dim>::active_cell_iterator, dealii::Point<dim>>>>>
-    cells_and_ref_points_pressure;
+  LineCellData cells_and_ref_points_velocity;
+
+  LineCellData cells_and_ref_points_pressure;
 
   // For all lines: for pressure reference point: list of all relevant cells and points in ref
   // coordinates
@@ -162,6 +153,10 @@ private:
 
   // write final output
   bool write_final_output;
+
+  // evaluator to help for efficient evaluation in velocity fields
+  dealii::FEEvaluation<dim, -1, 0, dim, Number, dealii::VectorizedArray<Number, 1>>
+    evaluator_tensor_product;
 };
 
 } // namespace IncNS
