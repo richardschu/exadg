@@ -209,6 +209,17 @@ public:
                               double const &     time,
                               double const &     scaling_factor_mass) const;
 
+  /*
+   * This function evaluates the linearized residual.
+   */
+  void
+  evaluate_linearized_residual(VectorType &       dst,
+                               VectorType const & src,
+                               VectorType const & transport_velocity,
+                               VectorType const * rhs_vector,
+                               double const &     time,
+                               double const &     scaling_factor_mass);
+
 protected:
   // Pressure Poisson equation (operator, preconditioner, solver).
   Poisson::LaplaceOperator<dim, Number, 1> laplace_operator;
