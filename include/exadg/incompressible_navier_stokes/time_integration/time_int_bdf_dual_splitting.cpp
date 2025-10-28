@@ -349,8 +349,6 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   dealii::Timer timer;
   timer.restart();
 
-  velocity_np = 0.0;
-
   // compute convective term and extrapolate convective term (if not Stokes equations)
   if(this->param.convective_problem())
   {
@@ -365,9 +363,12 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
       }
     }
 
-    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+    velocity_np.equ(-this->extra.get_beta(0), this->vec_convective_term[0]);
+    for(unsigned int i = 1; i < this->vec_convective_term.size(); ++i)
       velocity_np.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
   }
+  else
+    velocity_np = 0.0;
 
   // compute body force vector
   if(this->param.right_hand_side == true)
@@ -382,13 +383,13 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   iterations_mass.second += n_iter_mass;
 
   // calculate sum (alpha_i/dt * u_i) and add to velocity_np
-  for(unsigned int i = 0; i < velocity.size(); ++i)
+  for(unsigned int i = 0; i < velocity.size() - 1; ++i)
   {
     velocity_np.add(this->bdf.get_alpha(i) / this->get_time_step_size(), velocity[i]);
   }
-
-  // solve discrete temporal derivative term for intermediate velocity u_hat
-  velocity_np *= this->get_time_step_size() / this->bdf.get_gamma0();
+  velocity_np.sadd(this->get_time_step_size() / this->bdf.get_gamma0(),
+                   this->bdf.get_alpha(velocity.size() - 1) / this->bdf.get_gamma0(),
+                   velocity.back());
 
   if(this->print_solver_info() and not(this->is_test))
   {
