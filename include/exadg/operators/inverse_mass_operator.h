@@ -303,14 +303,16 @@ public:
   }
 
   // dst = M^-1 * src
-  void
+  unsigned int
   apply(VectorType & dst, VectorType const & src) const
   {
     if(data.implementation_type == InverseMassType::GlobalKrylovSolver)
     {
       AssertThrow(global_solver.get() != 0,
                   dealii::ExcMessage("Global mass solver has not been initialized."));
-      this->n_iter_global_last = global_solver->solve(dst, src);
+      unsigned int const n_iter = global_solver->solve(dst, src);
+      this->n_iter_global_last  = n_iter;
+      return n_iter;
     }
     else
     {
@@ -327,6 +329,7 @@ public:
                       "Cell-wise iterative/direct block-Jacobi solver has not been initialized."));
         block_jacobi_preconditioner->vmult(dst, src);
       }
+      return 0;
     }
   }
 
