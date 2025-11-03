@@ -22,6 +22,7 @@
 #include <deal.II/numerics/vector_tools_mean_value.h>
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
@@ -135,7 +136,82 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
   for(unsigned int i = 0; i < velocity_dbc.size(); ++i)
     pde_operator->initialize_vector_velocity(velocity_dbc[i]);
   pde_operator->initialize_vector_velocity(velocity_dbc_np);
+
+  // Do test
+  std::vector<unsigned int>          cell_vectorization_category;
+  const dealii::Triangulation<dim> & tria = pde_operator->get_dof_handler_u().get_triangulation();
+  if(tria.n_levels() > 2)
+  {
+    cell_vectorization_category.resize(tria.n_active_cells(),
+                                       dealii::numbers::invalid_unsigned_int);
+    unsigned int                                   next_category = 0;
+    std::array<std::vector<unsigned int>, dim + 1> next_cells;
+    std::vector<unsigned int>                      sorted_next_cells;
+    for(const auto & grandparent : tria.cell_iterators_on_level(tria.n_levels() - 3))
+      if(grandparent->has_children())
+      {
+        for(auto & entry : next_cells)
+          entry.clear();
+        for(unsigned int c0 = 0; c0 < grandparent->n_children(); ++c0)
+        {
+          const auto parent = grandparent->child(c0);
+          if(parent->has_children())
+            for(unsigned int c = 0; c < parent->n_children(); ++c)
+            {
+              const auto cell = parent->child(c);
+              Assert(cell->is_active(), ExcInternalError());
+              if(cell->is_locally_owned())
+              {
+                for(unsigned int d = 0; d < dim; ++d)
+                  if(cell->at_boundary(2 * d) ||
+                     cell->neighbor(2 * d)->subdomain_id() != cell->subdomain_id())
+                  {
+                    next_cells[d].push_back(cell->active_cell_index());
+                    goto end_loop;
+                  }
+                next_cells[dim].push_back(cell->active_cell_index());
+              }
+            end_loop:
+            {
+            }
+            }
+        }
+        sorted_next_cells.clear();
+        for(const std::vector<unsigned int> & cells : next_cells)
+          sorted_next_cells.insert(sorted_next_cells.end(), cells.begin(), cells.end());
+
+        std::array<unsigned int, dim + 1> batch_sizes;
+        unsigned int                      remainder = 0;
+        for(unsigned int d = dim; d > 0; --d)
+        {
+          const unsigned int size = next_cells[d].size() + remainder;
+          batch_sizes[d]          = size / 16 * 16;
+          remainder               = size - batch_sizes[d];
+        }
+        batch_sizes[0]        = next_cells[0].size() + remainder;
+        unsigned int position = 0;
+        for(unsigned int d = 0; d < dim + 1; ++d)
+        {
+          int my_size = batch_sizes[d];
+          while(my_size > 0)
+          {
+            for(int i = 0; i < std::min(16, my_size); ++i, ++position)
+              cell_vectorization_category[sorted_next_cells[position]] = next_category;
+            my_size -= 16;
+            ++next_category;
+          }
+        }
+        AssertDimension(position, sorted_next_cells.size());
+      }
+  }
+  RTOperator::RaviartThomasOperatorBase<dim, Number> op_rt;
+  op_rt.reinit(*pde_operator->get_mapping(),
+               pde_operator->get_dof_handler_u(),
+               pde_operator->get_constraint_u(),
+               cell_vectorization_category,
+               dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
 }
+
 
 
 template<int dim, typename Number>

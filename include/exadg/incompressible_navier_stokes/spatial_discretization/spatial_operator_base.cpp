@@ -36,6 +36,8 @@
 #include <exadg/time_integration/restart.h>
 #include <exadg/utilities/exceptions.h>
 
+#include <deal.II/dofs/dof_renumbering.h>
+
 namespace ExaDG
 {
 namespace IncNS
@@ -115,8 +117,46 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_and_constraints()
     // Periodic boundaries
     // We need to make sure the normal dofs are shared between cells on the periodic boundaries,
     // since these are continuous for HDIV.
-    dealii::IndexSet relevant_dofs = dealii::DoFTools::extract_locally_relevant_dofs(dof_handler_u);
-    constraint_u.reinit(dof_handler_u.locally_owned_dofs(), relevant_dofs);
+    constraint_u.reinit(dof_handler_u.locally_owned_dofs(),
+                        dealii::DoFTools::extract_locally_relevant_dofs(dof_handler_u));
+
+    for(auto const & face : grid->periodic_face_pairs)
+      dealii::DoFTools::make_periodicity_constraints(
+        dof_handler_u,
+        face.cell[0]->face(face.face_idx[0])->boundary_id(),
+        face.cell[1]->face(face.face_idx[1])->boundary_id(),
+        face.face_idx[0] / 2,
+        constraint_u);
+
+    // Symmetry boundaries
+    // Constraints the normal components of the velocity, where "0" as second argument indicates the
+    // first component in the dof_handler.
+    if(not(boundary_descriptor->velocity->symmetry_bc.empty()))
+    {
+      for(auto bc : boundary_descriptor->velocity->symmetry_bc)
+        dealii::VectorTools::project_boundary_values_div_conforming(
+          dof_handler_u, 0, *(bc.second), bc.first, constraint_u, *get_mapping());
+    }
+
+    // Dirichlet boundaries
+    if(not(boundary_descriptor->velocity->dirichlet_bc.empty()))
+    {
+      for(auto bc : boundary_descriptor->velocity->dirichlet_bc)
+        dealii::VectorTools::project_boundary_values_div_conforming(
+          dof_handler_u, 0, *(bc.second), bc.first, constraint_u, *get_mapping());
+    }
+
+    constraint_u.close();
+    typename dealii::MatrixFree<dim, Number>::AdditionalData mf_data;
+    mf_data.overlap_communication_computation = false;
+
+    // Renumber dofs to a more favorable numbering and build the constraints
+    // again with this new numbering
+    dealii::DoFRenumbering::matrix_free_data_locality(dof_handler_u, constraint_u, mf_data);
+
+
+    constraint_u.reinit(dof_handler_u.locally_owned_dofs(),
+                        dealii::DoFTools::extract_locally_relevant_dofs(dof_handler_u));
 
     for(auto const & face : grid->periodic_face_pairs)
       dealii::DoFTools::make_periodicity_constraints(
