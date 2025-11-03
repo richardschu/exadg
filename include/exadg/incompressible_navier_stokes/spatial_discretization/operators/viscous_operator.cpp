@@ -216,8 +216,7 @@ ViscousOperator<dim, Number>::do_boundary_integral(
     vector normal_gradient_m =
       kernel->calculate_interior_normal_gradient(q, integrator, operator_type);
 
-    vector normal_gradient_p;
-    normal_gradient_p =
+    vector normal_gradient_p =
       calculate_exterior_normal_gradient(normal_gradient_m,
                                          q,
                                          integrator,
