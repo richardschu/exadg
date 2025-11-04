@@ -25,6 +25,12 @@
 // ExaDG
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 
+namespace RTOperator
+{
+template<int dim, typename Number>
+class RaviartThomasOperatorBase;
+}
+
 namespace ExaDG
 {
 namespace IncNS
@@ -173,6 +179,13 @@ private:
   VectorType pressure_last_iter;
   VectorType velocity_projection_last_iter;
   VectorType velocity_viscous_last_iter;
+
+  std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, Number>> op_rt;
+  VectorType                                                          diagonal_mass;
+  VectorType                                                          diagonal_laplace;
+  dealii::DiagonalMatrix<VectorType>                                  preconditioner_viscous;
+  VectorType                                                          solution_rt;
+  VectorType                                                          rhs_rt;
 
   // iteration counts
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */>

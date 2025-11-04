@@ -128,6 +128,12 @@ public:
   void
   interpolate_velocity_dirichlet_bc(VectorType & dst, double const & time) const;
 
+  const Operators::ViscousKernelData &
+  get_viscous_kernel_data() const
+  {
+    return this->viscous_kernel_data;
+  }
+
 private:
   /*
    * rhs pressure Poisson equation

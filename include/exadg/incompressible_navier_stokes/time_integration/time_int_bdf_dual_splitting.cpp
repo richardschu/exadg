@@ -204,12 +204,24 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
         AssertDimension(position, sorted_next_cells.size());
       }
   }
-  RTOperator::RaviartThomasOperatorBase<dim, Number> op_rt;
-  op_rt.reinit(*pde_operator->get_mapping(),
-               pde_operator->get_dof_handler_u(),
-               pde_operator->get_constraint_u(),
-               cell_vectorization_category,
-               dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
+  op_rt = std::make_shared<RTOperator::RaviartThomasOperatorBase<dim, Number>>();
+  op_rt->reinit(*pde_operator->get_mapping(),
+                pde_operator->get_dof_handler_u(),
+                pde_operator->get_constraint_u(),
+                cell_vectorization_category,
+                dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
+
+  op_rt->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
+  op_rt->initialize_dof_vector(solution_rt);
+  op_rt->initialize_dof_vector(rhs_rt);
+
+  if constexpr(dim == 3)
+  {
+    op_rt->set_parameters(1.0, 0.0);
+    op_rt->compute_diagonal(diagonal_mass);
+    op_rt->set_parameters(0.0, 1.0);
+    op_rt->compute_diagonal(diagonal_laplace);
+  }
 }
 
 
@@ -1091,12 +1103,40 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       // res_norm << " " << res2_norm << " " << res_norm3 << " " << res_norm5;
 
       // solve linear system of equations
-      unsigned int const n_iter = pde_operator->solve_linear_momentum_equation(
-        velocity_np,
-        rhs,
-        transport_velocity,
-        update_preconditioner,
-        this->get_scaling_factor_time_derivative_term());
+      unsigned int n_iter = 0;
+      if constexpr(dim == 3)
+      {
+        const Number factor_mass = this->get_scaling_factor_time_derivative_term();
+        const Number factor_lapl = this->pde_operator->get_viscous_kernel_data().viscosity;
+        op_rt->set_parameters(this->get_scaling_factor_time_derivative_term(),
+                              pde_operator->get_viscous_kernel_data().viscosity);
+        preconditioner_viscous.get_vector().reinit(diagonal_mass, true);
+
+        const unsigned int owned_size = diagonal_mass.locally_owned_size();
+        DEAL_II_OPENMP_SIMD_PRAGMA
+        for(unsigned int i = 0; i < owned_size; ++i)
+          preconditioner_viscous.get_vector().local_element(i) =
+            1.0 / (factor_mass * diagonal_mass.local_element(i) +
+                   factor_lapl * diagonal_laplace.local_element(i));
+
+        op_rt->copy_mf_to_this_vector(rhs, rhs_rt);
+
+        dealii::ReductionControl     control(this->param.solver_data_momentum.max_iter,
+                                         this->param.solver_data_momentum.abs_tol,
+                                         this->param.solver_data_momentum.rel_tol);
+        dealii::SolverCG<VectorType> solver_cg(control);
+        solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_viscous);
+        n_iter = control.last_step();
+        op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
+      }
+      else
+        n_iter = pde_operator->solve_linear_momentum_equation(
+          velocity_np,
+          rhs,
+          transport_velocity,
+          update_preconditioner,
+          this->get_scaling_factor_time_derivative_term());
+
       iterations_viscous.first += 1;
       std::get<1>(iterations_viscous.second) += n_iter;
 
