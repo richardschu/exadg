@@ -137,7 +137,7 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
     pde_operator->initialize_vector_velocity(velocity_dbc[i]);
   pde_operator->initialize_vector_velocity(velocity_dbc_np);
 
-  // Do test
+  // do test for matrix-free operator of optimized kind
   std::vector<unsigned int>          cell_vectorization_category;
   const dealii::Triangulation<dim> & tria = pde_operator->get_dof_handler_u().get_triangulation();
   if(tria.n_levels() > 2)
@@ -219,8 +219,21 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
   {
     op_rt->set_parameters(1.0, 0.0);
     op_rt->compute_diagonal(diagonal_mass);
+
+    preconditioner_mass.get_vector().reinit(diagonal_mass, true);
+    const unsigned int local_size = diagonal_mass.locally_owned_size();
+    DEAL_II_OPENMP_SIMD_PRAGMA
+    for(unsigned int i = 0; i < local_size; ++i)
+    {
+      AssertThrow(diagonal_mass.local_element(i) > 1e-30, dealii::ExcInternalError());
+      preconditioner_mass.get_vector().local_element(i) = 1. / diagonal_mass.local_element(i);
+    }
     op_rt->set_parameters(0.0, 1.0);
     op_rt->compute_diagonal(diagonal_laplace);
+
+    solutions_convective.resize(velocity.size());
+    for(unsigned int i = 0; i < solutions_convective.size(); ++i)
+      op_rt->initialize_dof_vector(solutions_convective[i]);
   }
 }
 
@@ -430,96 +443,6 @@ TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
   evaluate_convective_term();
 }
 
-template<int dim, typename Number>
-void
-TimeIntBDFDualSplitting<dim, Number>::convective_step()
-{
-  dealii::Timer timer;
-  timer.restart();
-
-  // compute convective term and extrapolate convective term (if not Stokes equations)
-  if(this->param.convective_problem())
-  {
-    if(this->param.ale_formulation)
-    {
-      for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
-      {
-        // in a general setting, we only know the boundary conditions at time t_{n+1}
-        pde_operator->evaluate_convective_term(this->vec_convective_term[i],
-                                               velocity[i],
-                                               this->get_next_time());
-      }
-    }
-
-    velocity_np.equ(-this->extra.get_beta(0), this->vec_convective_term[0]);
-    for(unsigned int i = 1; i < this->vec_convective_term.size(); ++i)
-      velocity_np.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
-  }
-  else
-    velocity_np = 0.0;
-
-  // compute body force vector
-  if(this->param.right_hand_side == true)
-  {
-    pde_operator->evaluate_add_body_force_term(velocity_np, this->get_next_time());
-  }
-
-  // apply inverse mass operator
-  unsigned int const n_iter_mass =
-    pde_operator->apply_inverse_mass_operator(velocity_np, velocity_np);
-  iterations_mass.first += 1;
-  iterations_mass.second += n_iter_mass;
-
-  // calculate sum (alpha_i/dt * u_i) and add to velocity_np
-  for(unsigned int i = 0; i < velocity.size() - 1; ++i)
-  {
-    velocity_np.add(this->bdf.get_alpha(i) / this->get_time_step_size(), velocity[i]);
-  }
-  velocity_np.sadd(this->get_time_step_size() / this->bdf.get_gamma0(),
-                   this->bdf.get_alpha(velocity.size() - 1) / this->bdf.get_gamma0(),
-                   velocity.back());
-
-  if(this->print_solver_info() and not(this->is_test))
-  {
-    if(this->param.spatial_discretization == SpatialDiscretization::HDIV)
-    {
-      this->pcout << std::endl << "Convective step:";
-      print_solver_info_linear(this->pcout, n_iter_mass, timer.wall_time());
-    }
-    else if(this->param.spatial_discretization == SpatialDiscretization::L2)
-    {
-      this->pcout << std::endl << "Explicit convective step:";
-      print_wall_time(this->pcout, timer.wall_time());
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("Not implemented."));
-    }
-  }
-
-  this->timer_tree->insert({"Timeloop", "Convective step"}, timer.wall_time());
-}
-
-template<int dim, typename Number>
-void
-TimeIntBDFDualSplitting<dim, Number>::evaluate_convective_term()
-{
-  dealii::Timer timer;
-  timer.restart();
-
-  if(this->param.convective_problem())
-  {
-    if(this->param.ale_formulation == false) // Eulerian case
-    {
-      pde_operator->evaluate_convective_term(this->convective_term_np,
-                                             velocity_np,
-                                             this->get_next_time());
-    }
-  }
-
-  this->timer_tree->insert({"Timeloop", "Convective step"}, timer.wall_time());
-}
-
 template<typename Number>
 void
 extrapolate_vectors(std::vector<Number> const &                                             factors,
@@ -705,6 +628,119 @@ compute_least_squares_fit(OperatorType const &            op,
   //    std::cout << "i=" << i << " " << matrix(i - 1, i - 1) / matrix(0, 0) << "   ";
   //}
   extrapolate_vectors(small_vector, vectors, result);
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFDualSplitting<dim, Number>::convective_step()
+{
+  dealii::Timer timer;
+  timer.restart();
+
+  // compute convective term and extrapolate convective term (if not Stokes equations)
+  if(this->param.convective_problem())
+  {
+    if(this->param.ale_formulation)
+    {
+      for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+      {
+        // in a general setting, we only know the boundary conditions at time t_{n+1}
+        pde_operator->evaluate_convective_term(this->vec_convective_term[i],
+                                               velocity[i],
+                                               this->get_next_time());
+      }
+    }
+
+    velocity_np.equ(-this->extra.get_beta(0), this->vec_convective_term[0]);
+    for(unsigned int i = 1; i < this->vec_convective_term.size(); ++i)
+      velocity_np.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
+  }
+  else
+    velocity_np = 0.0;
+
+  // compute body force vector
+  if(this->param.right_hand_side == true)
+  {
+    pde_operator->evaluate_add_body_force_term(velocity_np, this->get_next_time());
+  }
+
+  // apply inverse mass operator
+  unsigned int n_iter_mass = 0;
+  if constexpr(dim == 3)
+  {
+    op_rt->copy_mf_to_this_vector(velocity_np, rhs_rt);
+
+    dealii::ReductionControl     control(this->param.inverse_mass_operator.solver_data.max_iter,
+                                     this->param.inverse_mass_operator.solver_data.abs_tol,
+                                     this->param.inverse_mass_operator.solver_data.rel_tol);
+    dealii::SolverCG<VectorType> solver_cg(control);
+    op_rt->set_parameters(1.0, 0.0);
+    std::vector<Number> beta(velocity.size());
+    for(unsigned int i = 0; i < velocity.size(); ++i)
+      beta[i] = this->extra.get_beta(i);
+    extrapolate_vectors(beta, solutions_convective, solution_rt);
+    solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_mass);
+    n_iter_mass = control.last_step();
+    op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
+    for(unsigned int i = solutions_convective.size() - 1; i > 0; --i)
+      solutions_convective[i].swap(solutions_convective[i - 1]);
+    solutions_convective[0].copy_locally_owned_data_from(solution_rt);
+  }
+  else
+  {
+    n_iter_mass = pde_operator->apply_inverse_mass_operator(velocity_np, velocity_np);
+  }
+  iterations_mass.first += 1;
+  iterations_mass.second += n_iter_mass;
+
+  // calculate sum (alpha_i/dt * u_i) and add to velocity_np
+  for(unsigned int i = 0; i < velocity.size() - 1; ++i)
+  {
+    velocity_np.add(this->bdf.get_alpha(i) / this->get_time_step_size(), velocity[i]);
+  }
+  velocity_np.sadd(this->get_time_step_size() / this->bdf.get_gamma0(),
+                   this->bdf.get_alpha(velocity.size() - 1) / this->bdf.get_gamma0(),
+                   velocity.back());
+
+  if(this->print_solver_info() and not(this->is_test))
+  {
+    if(this->param.spatial_discretization == SpatialDiscretization::HDIV)
+    {
+      this->pcout << std::endl << "Convective step:";
+      print_solver_info_linear(this->pcout, n_iter_mass, timer.wall_time());
+    }
+    else if(this->param.spatial_discretization == SpatialDiscretization::L2)
+    {
+      this->pcout << std::endl << "Explicit convective step:";
+      print_wall_time(this->pcout, timer.wall_time());
+    }
+    else
+    {
+      AssertThrow(false, dealii::ExcMessage("Not implemented."));
+    }
+  }
+
+  this->timer_tree->insert({"Timeloop", "Convective step"}, timer.wall_time());
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFDualSplitting<dim, Number>::evaluate_convective_term()
+{
+  dealii::Timer timer;
+  timer.restart();
+
+  if(this->param.convective_problem())
+  {
+    if(this->param.ale_formulation == false) // Eulerian case
+    {
+      pde_operator->evaluate_convective_term(this->convective_term_np,
+                                             velocity_np,
+                                             this->get_next_time());
+    }
+  }
+
+  this->timer_tree->insert({"Timeloop", "Convective step"}, timer.wall_time());
 }
 
 
@@ -1125,6 +1161,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
                                          this->param.solver_data_momentum.abs_tol,
                                          this->param.solver_data_momentum.rel_tol);
         dealii::SolverCG<VectorType> solver_cg(control);
+        op_rt->copy_mf_to_this_vector(velocity_np, solution_rt);
         solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_viscous);
         n_iter = control.last_step();
         op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);

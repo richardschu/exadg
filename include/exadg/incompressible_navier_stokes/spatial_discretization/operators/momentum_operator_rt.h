@@ -852,10 +852,11 @@ public:
     timings[1] += time.wall_time();
     time.restart();
 
-    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches + 1];
-        range < cell_loop_pre_list_index[n_cell_batches + 2];
-        ++range)
-      before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
+    if(factor_laplace != 0.)
+      for(unsigned int range = cell_loop_pre_list_index[n_cell_batches + 1];
+          range < cell_loop_pre_list_index[n_cell_batches + 2];
+          ++range)
+        before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
 
     timings[4] += time.wall_time();
     time.restart();
@@ -864,7 +865,8 @@ public:
     timings[1] += time.wall_time();
     time.restart();
 
-    if(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) > 1)
+    // only do the data exchange for face integral if we have Laplacian contribution
+    if(factor_laplace != 0. && Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) > 1)
     {
       const int n_t = shape_info.data[0].fe_degree;
       const int n_n = n_t + 1;
@@ -922,10 +924,16 @@ public:
     time.restart();
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
     {
-      for(unsigned int range = cell_loop_pre_list_index[cell];
-          range < cell_loop_pre_list_index[cell + 1];
-          ++range)
-        before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
+      if(factor_laplace != 0.)
+        for(unsigned int range = cell_loop_pre_list_index[cell];
+            range < cell_loop_pre_list_index[cell + 1];
+            ++range)
+          before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
+      else
+        for(unsigned int range = cell_loop_mass_pre_list_index[cell];
+            range < cell_loop_mass_pre_list_index[cell + 1];
+            ++range)
+          before_loop(cell_loop_mass_pre_list[range].first, cell_loop_mass_pre_list[range].second);
 
       const unsigned int degree = shape_info.data[0].fe_degree;
       if(degree == 2)
@@ -994,6 +1002,8 @@ public:
            MemoryConsumption::memory_consumption(send_data_face_index) +
            MemoryConsumption::memory_consumption(cell_loop_pre_list_index) +
            MemoryConsumption::memory_consumption(cell_loop_pre_list) +
+           MemoryConsumption::memory_consumption(cell_loop_mass_pre_list_index) +
+           MemoryConsumption::memory_consumption(cell_loop_mass_pre_list) +
            MemoryConsumption::memory_consumption(cell_loop_post_list_index) +
            MemoryConsumption::memory_consumption(cell_loop_post_list) +
            MemoryConsumption::memory_consumption(face_flux_buffer) +
@@ -1041,6 +1051,8 @@ private:
 
   std::vector<unsigned int>                          cell_loop_pre_list_index;
   std::vector<std::pair<unsigned int, unsigned int>> cell_loop_pre_list;
+  std::vector<unsigned int>                          cell_loop_mass_pre_list_index;
+  std::vector<std::pair<unsigned int, unsigned int>> cell_loop_mass_pre_list;
   std::vector<unsigned int>                          cell_loop_post_list_index;
   std::vector<std::pair<unsigned int, unsigned int>> cell_loop_post_list;
 
@@ -1079,6 +1091,8 @@ private:
     constexpr unsigned int    chunk_size = 128;
     std::vector<unsigned int> touched_first_by((n_dofs + chunk_size - 1) / chunk_size,
                                                numbers::invalid_unsigned_int);
+    std::vector<unsigned int> touched_mass_first_by((n_dofs + chunk_size - 1) / chunk_size,
+                                                    numbers::invalid_unsigned_int);
     std::vector<unsigned int> touched_last_by((n_dofs + chunk_size - 1) / chunk_size,
                                               numbers::invalid_unsigned_int);
     const unsigned int        n_cell_batches = dof_indices.size();
@@ -1128,6 +1142,8 @@ private:
             {
               if(touched_first_by[j] == numbers::invalid_unsigned_int)
                 touched_first_by[j] = cell;
+              if(touched_mass_first_by[j] == numbers::invalid_unsigned_int)
+                touched_mass_first_by[j] = cell;
               touched_last_by[j] = cell;
             }
           }
@@ -1141,6 +1157,8 @@ private:
           {
             if(touched_first_by[j] == numbers::invalid_unsigned_int)
               touched_first_by[j] = cell;
+            if(touched_mass_first_by[j] == numbers::invalid_unsigned_int)
+              touched_mass_first_by[j] = cell;
             touched_last_by[j] = cell;
           }
         }
@@ -1149,6 +1167,8 @@ private:
 
     // ensure that all indices are touched at least during the last round
     for(const auto & index : touched_first_by)
+      AssertThrow(index != numbers::invalid_unsigned_int, ExcInternalError());
+    for(const auto & index : touched_mass_first_by)
       AssertThrow(index != numbers::invalid_unsigned_int, ExcInternalError());
     for(const auto & index : touched_last_by)
       AssertThrow(index != numbers::invalid_unsigned_int, ExcInternalError());
@@ -1174,6 +1194,9 @@ private:
     for(auto it : partitioner->import_indices())
       for(unsigned int i = it.first; i < it.second; ++i)
         touched_first_by[i / chunk_size] = n_cell_batches;
+    for(auto it : partitioner->import_indices())
+      for(unsigned int i = it.first; i < it.second; ++i)
+        touched_mass_first_by[i / chunk_size] = n_cell_batches;
 
     for(const unsigned int cell_lane : send_data_cell_index)
     {
@@ -1273,6 +1296,15 @@ private:
     convert_map_to_range_list(
       n_cell_batches + 2, chunk_must_do_pre, cell_loop_pre_list_index, cell_loop_pre_list, n_dofs);
 
+    std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_mass_pre;
+    for(unsigned int i = 0; i < touched_mass_first_by.size(); ++i)
+      chunk_must_do_mass_pre[touched_mass_first_by[i]].push_back(i);
+    convert_map_to_range_list(n_cell_batches + 1,
+                              chunk_must_do_mass_pre,
+                              cell_loop_mass_pre_list_index,
+                              cell_loop_mass_pre_list,
+                              n_dofs);
+
     std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_post;
     for(unsigned int i = 0; i < touched_last_by.size(); ++i)
       chunk_must_do_post[touched_last_by[i]].push_back(i);
@@ -1291,6 +1323,14 @@ private:
              ++j)
           std::cout << "[" << cell_loop_pre_list[j].first << ","
                     << cell_loop_pre_list[j].second << ") ";
+        if (i < n_cell_batches + 1)
+          {
+        std::cout << Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) << " pre mass ";
+        for (unsigned int j = cell_loop_mass_pre_list_index[i];
+             j < cell_loop_mass_pre_list_index[i + 1];
+             ++j)
+          std::cout << "[" << cell_loop_mass_pre_list[j].first << ","
+                    << cell_loop_mass_pre_list[j].second << ") ";
         std::cout << "post ";
         for (unsigned int j = cell_loop_post_list_index[i];
              j < cell_loop_post_list_index[i + 1];
@@ -1298,6 +1338,7 @@ private:
           std::cout << "[" << cell_loop_post_list[j].first << ","
                     << cell_loop_post_list[j].second << ")";
         std::cout << std::endl;
+      }
       }
 #endif
   }

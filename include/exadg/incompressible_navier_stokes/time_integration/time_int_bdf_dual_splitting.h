@@ -184,7 +184,10 @@ private:
   VectorType                                                          diagonal_mass;
   VectorType                                                          diagonal_laplace;
   dealii::DiagonalMatrix<VectorType>                                  preconditioner_viscous;
+  dealii::DiagonalMatrix<VectorType>                                  preconditioner_mass;
   VectorType                                                          solution_rt;
+  std::vector<VectorType>                                             solutions_convective;
+  std::vector<VectorType>                                             solutions_viscous;
   VectorType                                                          rhs_rt;
 
   // iteration counts
