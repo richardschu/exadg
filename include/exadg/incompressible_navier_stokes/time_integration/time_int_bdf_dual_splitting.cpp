@@ -144,9 +144,9 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
   {
     cell_vectorization_category.resize(tria.n_active_cells(),
                                        dealii::numbers::invalid_unsigned_int);
-    unsigned int                                   next_category = 0;
-    std::array<std::vector<unsigned int>, dim + 1> next_cells;
-    std::vector<unsigned int>                      sorted_next_cells;
+    unsigned int                             next_category = 0;
+    std::array<std::vector<unsigned int>, 8> next_cells;
+    std::vector<unsigned int>                sorted_next_cells;
     for(const auto & grandparent : tria.cell_iterators_on_level(tria.n_levels() - 3))
       if(grandparent->has_children())
       {
@@ -162,46 +162,83 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
               Assert(cell->is_active(), ExcInternalError());
               if(cell->is_locally_owned())
               {
+                unsigned int boundary_type = 0;
                 for(unsigned int d = 0; d < dim; ++d)
                   if(cell->at_boundary(2 * d) ||
                      cell->neighbor(2 * d)->subdomain_id() != cell->subdomain_id())
                   {
-                    next_cells[d].push_back(cell->active_cell_index());
-                    goto end_loop;
+                    boundary_type += dealii::Utilities::pow(2, d);
                   }
-                next_cells[dim].push_back(cell->active_cell_index());
+                next_cells[boundary_type].push_back(cell->active_cell_index());
               }
-            end_loop:
-            {
-            }
             }
         }
-        sorted_next_cells.clear();
+        unsigned int n_cells = 0;
         for(const std::vector<unsigned int> & cells : next_cells)
-          sorted_next_cells.insert(sorted_next_cells.end(), cells.begin(), cells.end());
-
-        std::array<unsigned int, dim + 1> batch_sizes;
-        unsigned int                      remainder = 0;
-        for(unsigned int d = dim; d > 0; --d)
+          n_cells += cells.size();
+        sorted_next_cells.clear();
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[7].begin(),
+                                 next_cells[7].end());
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[6].begin(),
+                                 next_cells[6].end());
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[5].begin(),
+                                 next_cells[5].end());
+        unsigned int count_4 = 0, count_2 = 0, count_1 = 0;
+        while(sorted_next_cells.size() % 8 != 0 && count_4 < next_cells[4].size())
         {
-          const unsigned int size = next_cells[d].size() + remainder;
-          batch_sizes[d]          = size / 16 * 16;
-          remainder               = size - batch_sizes[d];
+          sorted_next_cells.push_back(next_cells[4][count_4]);
+          ++count_4;
         }
-        batch_sizes[0]        = next_cells[0].size() + remainder;
-        unsigned int position = 0;
-        for(unsigned int d = 0; d < dim + 1; ++d)
-        {
-          int my_size = batch_sizes[d];
-          while(my_size > 0)
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[3].begin(),
+                                 next_cells[3].end());
+        // avoid having 9 cells of one kind that spills two 8-sized lanes,
+        // so peel off one of each here
+        if(sorted_next_cells.size() % 8 != 0)
+          if(count_2 < next_cells[2].size())
           {
-            for(int i = 0; i < std::min(16, my_size); ++i, ++position)
-              cell_vectorization_category[sorted_next_cells[position]] = next_category;
-            my_size -= 16;
-            ++next_category;
+            sorted_next_cells.push_back(next_cells[2][count_2]);
+            ++count_2;
           }
+        if(sorted_next_cells.size() % 8 != 0)
+          if(count_1 < next_cells[1].size())
+          {
+            sorted_next_cells.push_back(next_cells[1][count_1]);
+            ++count_1;
+          }
+        while(sorted_next_cells.size() % 8 != 0 && count_1 < next_cells[1].size())
+        {
+          sorted_next_cells.push_back(next_cells[1][count_1]);
+          ++count_1;
         }
-        AssertDimension(position, sorted_next_cells.size());
+        while(sorted_next_cells.size() % 8 != 0 && count_2 < next_cells[2].size())
+        {
+          sorted_next_cells.push_back(next_cells[2][count_2]);
+          ++count_2;
+        }
+        // possibly move some insertions of category 0 in between to fill
+        // up and avoid further exchange steps
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[2].begin() + count_2,
+                                 next_cells[2].end());
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[4].begin() + count_4,
+                                 next_cells[4].end());
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[1].begin() + count_1,
+                                 next_cells[1].end());
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[0].begin(),
+                                 next_cells[0].end());
+        AssertThrow(sorted_next_cells.size() == n_cells,
+                    dealii::ExcDimensionMismatch(sorted_next_cells.size(), n_cells));
+
+        for(unsigned int i = 0; i < n_cells; ++next_category)
+          for(unsigned int j = 0; j < 8 && i < n_cells; ++j, ++i)
+            cell_vectorization_category[sorted_next_cells[i]] = next_category;
       }
   }
   op_rt = std::make_shared<RTOperator::RaviartThomasOperatorBase<dim, Number>>();
