@@ -219,7 +219,7 @@ public:
          const AffineConstraints<OtherNumber> & constraints,
          const std::vector<unsigned int> &      cell_vectorization_category,
          const Quadrature<1> &                  quadrature,
-         const MPI_COMM                         comm_shared = MPI_COMM_SELF)
+         const MPI_Comm                         comm_shared = MPI_COMM_SELF)
   {
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
