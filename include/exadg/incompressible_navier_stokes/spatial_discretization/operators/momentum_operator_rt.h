@@ -218,7 +218,8 @@ public:
          const DoFHandler<dim> &                dof_handler,
          const AffineConstraints<OtherNumber> & constraints,
          const std::vector<unsigned int> &      cell_vectorization_category,
-         const Quadrature<1> &                  quadrature)
+         const Quadrature<1> &                  quadrature,
+         const MPI_COMM                         comm_shared = MPI_COMM_SELF)
   {
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
@@ -705,6 +706,9 @@ public:
 
     factor_mass    = 1;
     factor_laplace = 0;
+
+    for(double & t : timings)
+      t = 0.0;
   }
 
   ~RaviartThomasOperatorBase()
@@ -712,23 +716,41 @@ public:
     if(timings[0] > 0)
     {
       const MPI_Comm comm = MPI_COMM_WORLD;
-      if(Utilities::MPI::this_mpi_process(comm) == 0)
-        std::cout << "Collected timings for " << typeid(*this).name() << " in " << timings[0]
-                  << " evaluations" << std::endl;
+      std::cout << std::defaultfloat << std::setprecision(3);
       const double total_time =
         Utilities::MPI::sum(timings[9], comm) / timings[0] / Utilities::MPI::n_mpi_processes(comm);
+      if(Utilities::MPI::this_mpi_process(comm) == 0)
+        std::cout << "Collected timings for Laplace operator <"
+                  << (std::is_same_v<Number, double> ? "double" : "float") << "> in "
+                  << static_cast<unsigned long>(timings[0])
+                  << " evaluations [t_total=" << total_time * timings[0] << "s]" << std::endl;
       print_time(timings[1] / timings[0], "Update cell ghost values", comm, total_time);
       if(Utilities::MPI::n_mpi_processes(comm) > 1)
       {
-        print_time(timings[2] / timings[0], "Recv start dg ghosts", comm, total_time);
         print_time(timings[3] / timings[0], "Pack/send data dg ghosts", comm, total_time);
         print_time(timings[5] / timings[0], "MPI_Waitall dg ghosts", comm, total_time);
         print_time(timings[4] / timings[0], "Pre-loop before ghosts", comm, total_time);
-        print_time(timings[6] / timings[0], "Post-loop after ghosts", comm, total_time);
       }
 
       print_time(timings[7] / timings[0], "Matrix-free loop", comm, total_time);
       print_time(timings[8] / timings[0], "Compress cell ghost values", comm, total_time);
+      if(Utilities::MPI::this_mpi_process(comm) == 0)
+        std::cout << std::endl;
+    }
+    if(timings[10] > 0)
+    {
+      const MPI_Comm comm       = MPI_COMM_WORLD;
+      const double   total_time = Utilities::MPI::sum(timings[14], comm) / timings[10] /
+                                Utilities::MPI::n_mpi_processes(comm);
+      if(Utilities::MPI::this_mpi_process(comm) == 0)
+        std::cout << "Collected timings for mass operator <"
+                  << (std::is_same_v<Number, double> ? "double" : "float") << "> in "
+                  << static_cast<unsigned long>(timings[10])
+                  << " evaluations [t_total=" << total_time * timings[10] << "s]" << std::endl;
+      print_time(timings[11] / timings[10], "Update cell ghost values", comm, total_time);
+
+      print_time(timings[12] / timings[10], "Matrix-free loop", comm, total_time);
+      print_time(timings[13] / timings[10], "Compress cell ghost values", comm, total_time);
       if(Utilities::MPI::this_mpi_process(comm) == 0)
         std::cout << std::endl;
     }
@@ -839,7 +861,10 @@ public:
         const std::function<void(const unsigned int, const unsigned int)> & after_loop) const
   {
     Timer total_timer;
-    timings[0] += 1;
+    if(factor_laplace != 0.)
+      timings[0] += 1;
+    else
+      timings[10] += 1;
     Timer time;
 
     const unsigned int n_cell_batches = dof_indices.size();
@@ -849,21 +874,28 @@ public:
         ++range)
       before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
 
-    src.update_ghost_values_start();
-    timings[1] += time.wall_time();
-    time.restart();
-
     if(factor_laplace != 0.)
+    {
+      src.update_ghost_values_start();
+      timings[1] += time.wall_time();
+      time.restart();
+
       for(unsigned int range = cell_loop_pre_list_index[n_cell_batches + 1];
           range < cell_loop_pre_list_index[n_cell_batches + 2];
           ++range)
         before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
 
-    timings[4] += time.wall_time();
-    time.restart();
+      timings[4] += time.wall_time();
+      time.restart();
+      src.update_ghost_values_finish();
+      timings[1] += time.wall_time();
+    }
+    else
+    {
+      src.update_ghost_values();
+      timings[11] += time.wall_time();
+    }
 
-    src.update_ghost_values_finish();
-    timings[1] += time.wall_time();
     time.restart();
 
     // only do the data exchange for face integral if we have Laplacian contribution
@@ -890,8 +922,6 @@ public:
         offset += send_data_process[p].second;
       }
       AssertDimension(offset * data_per_face, import_values.size());
-      timings[2] += time.wall_time();
-      time.restart();
 
       if(n_t == 2)
         vmult_pack_and_send_data<2>(src, requests);
@@ -962,21 +992,32 @@ public:
           ++range)
         after_loop(cell_loop_post_list[range].first, cell_loop_post_list[range].second);
     }
-    timings[7] += time.wall_time();
+
+    if(factor_laplace != 0)
+      timings[7] += time.wall_time();
+    else
+      timings[12] += time.wall_time();
+
     time.restart();
     dst.compress_start(0, VectorOperation::add);
     src.zero_out_ghost_values();
     dst.compress_finish(VectorOperation::add);
 
-    timings[8] += time.wall_time();
-    time.restart();
     for(unsigned int range = cell_loop_post_list_index[n_cell_batches];
         range < cell_loop_post_list_index[n_cell_batches + 1];
         ++range)
       after_loop(cell_loop_post_list[range].first, cell_loop_post_list[range].second);
-    timings[6] += time.wall_time();
 
-    timings[9] += total_timer.wall_time();
+    if(factor_laplace != 0)
+    {
+      timings[8] += time.wall_time();
+      timings[9] += total_timer.wall_time();
+    }
+    else
+    {
+      timings[13] += time.wall_time();
+      timings[14] += total_timer.wall_time();
+    }
   }
 
   std::size_t
@@ -1025,7 +1066,7 @@ private:
 
   std::shared_ptr<const Utilities::MPI::Partitioner> partitioner;
 
-  mutable std::array<double, 10> timings;
+  mutable std::array<double, 15> timings;
 
   Number factor_mass;
   Number factor_laplace;

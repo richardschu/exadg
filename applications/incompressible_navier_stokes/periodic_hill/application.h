@@ -118,7 +118,7 @@ public:
       prm.add_parameter("EndTime",
                         end_time_multiples,
                         "End time in multiples of flow through time.",
-                        dealii::Patterns::Integer(0.0, 1000.0));
+                        dealii::Patterns::Double(0.0, 1000.0));
       prm.add_parameter("GridStretchFactor",
                         grid_stretch_factor,
                         "Factor describing grid stretching in vertical direction.");
@@ -152,7 +152,7 @@ private:
     viscosity = inviscid ? 0.0 : bulk_velocity * H / Re;
 
     // depend on values defined in input file
-    end_time          = double(end_time_multiples) * flow_through_time;
+    end_time          = end_time_multiples * flow_through_time;
     sample_start_time = double(sample_start_time_multiples) * flow_through_time;
 
     // sample end time is equal to end time, which is read from the input file
@@ -459,7 +459,7 @@ private:
     // write output for visualization of results
     pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
     pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 50.0;
+    pp_data.output_data.time_control_data.trigger_interval = flow_through_time / 5.0;
     pp_data.output_data.directory                 = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename                  = this->output_parameters.filename;
     pp_data.output_data.write_velocity_magnitude  = false;
@@ -643,7 +643,7 @@ private:
 
   // start and end time
   double const start_time         = 0.0;
-  unsigned int end_time_multiples = 10;
+  double       end_time_multiples = 10;
   double       end_time           = double(end_time_multiples) * flow_through_time;
 
   // grid
