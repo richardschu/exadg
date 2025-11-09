@@ -81,16 +81,6 @@ private:
   do_evaluate(VectorType const & velocity, VectorType const & pressure);
 
   void
-  do_evaluate_velocity(VectorType const & velocity,
-                       Line<dim> const &  line,
-                       unsigned int const line_iterator);
-
-  void
-  do_evaluate_pressure(VectorType const & pressure,
-                       Line<dim> const &  line,
-                       unsigned int const line_iterator);
-
-  void
   average_pressure_for_given_point(VectorType const & pressure,
                                    TYPE const &       vector_cells_and_ref_points,
                                    double &           length_local,
@@ -157,6 +147,9 @@ private:
   // evaluator to help for efficient evaluation in velocity fields
   dealii::FEEvaluation<dim, -1, 0, dim, Number, dealii::VectorizedArray<Number, 1>>
     evaluator_tensor_product;
+
+  // timer results
+  double time_all;
 };
 
 } // namespace IncNS
