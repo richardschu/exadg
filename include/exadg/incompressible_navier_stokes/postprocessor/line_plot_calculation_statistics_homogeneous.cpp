@@ -599,6 +599,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
       }
     }
   }
+
+  time_all += time.wall_time();
 }
 
 template<int dim, typename Number>
