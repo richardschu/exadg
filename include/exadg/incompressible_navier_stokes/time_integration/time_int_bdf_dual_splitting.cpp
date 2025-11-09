@@ -159,7 +159,7 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
             for(unsigned int c = 0; c < parent->n_children(); ++c)
             {
               const auto cell = parent->child(c);
-              Assert(cell->is_active(), ExcInternalError());
+              Assert(cell->is_active(), dealii::ExcInternalError());
               if(cell->is_locally_owned())
               {
                 unsigned int boundary_type = 0;
@@ -1193,14 +1193,22 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
                    factor_lapl * diagonal_laplace.local_element(i));
 
         op_rt->copy_mf_to_this_vector(rhs, rhs_rt);
+        op_rt->copy_mf_to_this_vector(velocity_np, solution_rt);
+
+        const double t_prep = timer.wall_time();
+
+        dealii::Timer timer2;
 
         dealii::ReductionControl     control(this->param.solver_data_momentum.max_iter,
                                          this->param.solver_data_momentum.abs_tol,
                                          this->param.solver_data_momentum.rel_tol);
         dealii::SolverCG<VectorType> solver_cg(control);
-        op_rt->copy_mf_to_this_vector(velocity_np, solution_rt);
         solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_viscous);
         n_iter = control.last_step();
+        if(this->print_solver_info() and not(this->is_test))
+          {
+            this->pcout << std::endl << "Viscous step prepare: " << t_prep << " s, solve " << timer2.wall_time() << " s";
+          }
         op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
       }
       else
