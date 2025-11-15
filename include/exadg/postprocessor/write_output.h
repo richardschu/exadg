@@ -262,6 +262,17 @@ public:
   }
 
   void
+  write_processor_id(dealii::Triangulation<dim> const & tria)
+  {
+    if(output_data.write_processor_id)
+    {
+      dealii::Vector<float> vector(tria.n_active_cells());
+      vector = dealii::Utilities::MPI::this_mpi_process(tria.get_mpi_communicator());
+      data_out.add_data_vector(vector, "processor_id");
+    }
+  }
+
+  void
   write_pvtu(dealii::Mapping<dim> const * mapping = nullptr)
   {
     // Build patches, vectors to export must stay in scope until after this call.
@@ -279,6 +290,26 @@ public:
     unsigned int constexpr n_groups = 4;
     data_out.write_vtu_with_pvtu_record(
       output_data.directory, output_data.filename, output_counter, mpi_comm, n_groups);
+  }
+
+  void
+  write_vtu(dealii::Mapping<dim> const * mapping = nullptr)
+  {
+    // Build patches, vectors to export must stay in scope until after this call.
+    if(mapping == nullptr)
+    {
+      data_out.build_patches(output_data.degree);
+    }
+    else
+    {
+      data_out.build_patches(*mapping,
+                             output_data.degree,
+                             dealii::DataOut<dim>::curved_inner_cells);
+    }
+
+    data_out.write_vtu_in_parallel(output_data.directory + output_data.filename + "_" +
+                                     dealii::Utilities::int_to_string(output_counter, 4) + ".vtu",
+                                   mpi_comm);
   }
 
 private:

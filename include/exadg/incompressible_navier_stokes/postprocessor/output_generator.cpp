@@ -85,16 +85,6 @@ OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_
                  0,
                  mpi_comm);
     }
-
-    // processor_id
-    if(output_data.write_processor_id)
-    {
-      dealii::GridOut grid_out;
-
-      grid_out.write_mesh_per_processor_as_vtu(dof_handler_velocity->get_triangulation(),
-                                               output_data.directory + output_data.filename +
-                                                 "_processor_id");
-    }
   }
 }
 
@@ -122,9 +112,11 @@ OutputGenerator<dim, Number>::evaluate(
 
   vector_writer.write_aspect_ratio(*dof_handler_velocity, *mapping);
 
+  vector_writer.write_processor_id(dof_handler_velocity->get_triangulation());
+
   vector_writer.add_fields(additional_fields);
 
-  vector_writer.write_pvtu(&(*mapping));
+  vector_writer.write_vtu(&(*mapping));
 }
 
 template class OutputGenerator<2, float>;

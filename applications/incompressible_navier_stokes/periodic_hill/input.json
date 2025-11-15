@@ -5,10 +5,10 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "3",
-        "DegreeMax": "3",
-        "RefineSpaceMin": "2",
-        "RefineSpaceMax": "2"
+        "DegreeMin": "5",
+        "DegreeMax": "5",
+        "RefineSpaceMin": "3",
+        "RefineSpaceMax": "3"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
@@ -18,19 +18,20 @@
         "ReadRestart": "false",
         "WriteRestart": "false",
         "TemporalDiscretization": "BDFDualSplittingScheme",
-        "SpatialDiscretization": "L2",
+        "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
         "ReynoldsNumber": "5600.0",
         "EndTime": "1",
-        "GridStretchFactor": "1.6",
+        "GridStretchFactor": "2.0",
         "CalculateStatistics": "true",
         "SampleStartTime": "0",
         "SampleEveryTimeSteps": "1",
-        "PointsPerLine": "16"
+        "PointsPerLine": "400",
+        "CoarseMeshRefinements": "4,3,2"
     },
     "Output": {
-        "OutputDirectory": "output/periodic_hill/",
-        "OutputName": "16_l2_k3",
-        "WriteOutput": "false"
+        "OutputDirectory": "output/",
+        "OutputName": "rt_8_k5",
+        "WriteOutput": "true"
     }
 }

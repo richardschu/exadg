@@ -137,6 +137,9 @@ public:
                         points_per_line,
                         "Points per line in vertical direction.",
                         dealii::Patterns::Integer(1, 10000));
+      prm.add_parameter("CoarseMeshRefinements",
+                        coarse_mesh_refinements,
+                        "Number of elements in coarse mesh in x,y,z-direction.");
     }
     prm.leave_subsection();
   }
@@ -316,8 +319,10 @@ private:
         p_2[2] = width / 2.0;
 
       // use 2 cells in x-direction on coarsest grid and 1 cell in y- and z-directions
-      std::vector<unsigned int> refinements(dim, 1);
-      refinements[0] = 2;
+      std::vector<unsigned int> refinements{
+        {coarse_mesh_refinements[0], coarse_mesh_refinements[1], coarse_mesh_refinements[2]}};
+      if(dim == 2)
+        refinements.resize(2);
       dealii::GridGenerator::subdivided_hyper_rectangle(tria, refinements, p_1, p_2);
 
       AssertThrow(
@@ -330,19 +335,22 @@ private:
       // 0) make use of the fact that the mesh has only two elements
 
       // left element
-      tria.begin()->face(0)->set_all_boundary_ids(0 + 10);
-      // right element
-      tria.last()->face(1)->set_all_boundary_ids(1 + 10);
-
-      // periodicity in z-direction
-      if(dim == 3)
+      for(const auto & cell : tria.cell_iterators())
       {
-        // left element
-        tria.begin()->face(4)->set_all_boundary_ids(2 + 10);
-        tria.begin()->face(5)->set_all_boundary_ids(3 + 10);
-        // right element
-        tria.last()->face(4)->set_all_boundary_ids(2 + 10);
-        tria.last()->face(5)->set_all_boundary_ids(3 + 10);
+        if(cell->at_boundary(0))
+          cell->face(0)->set_all_boundary_ids(0 + 10);
+        if(cell->at_boundary(1))
+          cell->face(1)->set_all_boundary_ids(1 + 10);
+
+        // periodicity in z-direction
+        if(dim == 3)
+        {
+          // left element
+          if(cell->at_boundary(4))
+            cell->face(4)->set_all_boundary_ids(2 + 10);
+          if(cell->at_boundary(5))
+            cell->face(5)->set_all_boundary_ids(3 + 10);
+        }
       }
 
       dealii::GridTools::collect_periodic_faces(tria, 0 + 10, 1 + 10, 0, periodic_face_pairs);
@@ -626,10 +634,11 @@ private:
   bool   inviscid = false;
   double Re       = 5600.0; // 700, 1400, 5600, 10595, 19000
 
-  double const H      = 0.028;
-  double const width  = 4.5 * H;
-  double const length = 9.0 * H;
-  double const height = 2.036 * H;
+  double const                H      = 0.028;
+  double const                width  = 4.5 * H;
+  double const                length = 9.0 * H;
+  double const                height = 2.036 * H;
+  std::array<unsigned int, 3> coarse_mesh_refinements{{2, 1, 1}};
 
   double const bulk_velocity     = 5.6218;
   double const target_flow_rate  = bulk_velocity * width * height;
