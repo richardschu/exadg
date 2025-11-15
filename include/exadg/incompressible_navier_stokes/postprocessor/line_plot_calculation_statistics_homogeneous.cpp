@@ -181,7 +181,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                       dealii::ExcMessage("No quantities specified for line."));
 
           bool velocity_has_to_be_evaluated = false;
-          for(const std::shared_ptr<Quantity> quantity : line->quantities)
+          for(const std::shared_ptr<Quantity> & quantity : line->quantities)
           {
             if(quantity->type == QuantityType::Velocity or
                quantity->type == QuantityType::SkinFriction or
@@ -234,7 +234,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         {
           AssertThrow(line->quantities.size() > 0,
                       dealii::ExcMessage("No quantities specified for line."));
-          for(const std::shared_ptr<Quantity> quantity : line->quantities)
+          for(const std::shared_ptr<Quantity> & quantity : line->quantities)
           {
             // evaluate quantities that involve pressure
             bool found_a_point_on_this_cell = false;
@@ -267,7 +267,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
           }
 
           // cells and reference points for reference pressure (only one point for each line)
-          for(const std::shared_ptr<Quantity> quantity : line->quantities)
+          for(const std::shared_ptr<Quantity> & quantity : line->quantities)
           {
             AssertThrow(line->quantities.size() > 0,
                         dealii::ExcMessage("No quantities specified for line."));
@@ -664,12 +664,9 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
     {
       std::string filename_prefix = data.directory + line->name;
 
-      for(typename std::vector<std::shared_ptr<Quantity>>::const_iterator quantity =
-            line->quantities.begin();
-          quantity != line->quantities.end();
-          ++quantity)
+      for(const std::shared_ptr<Quantity> & quantity : line->quantities)
       {
-        if((*quantity)->type == QuantityType::Velocity)
+        if(quantity->type == QuantityType::Velocity)
         {
           std::string   filename = filename_prefix + "_velocity" + ".txt";
           std::ofstream f;
@@ -712,7 +709,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
           f.close();
         }
 
-        if((*quantity)->type == QuantityType::ReynoldsStresses)
+        if(quantity->type == QuantityType::ReynoldsStresses)
         {
           std::string   filename = filename_prefix + "_reynoldsstresses" + ".txt";
           std::ofstream f;
@@ -767,10 +764,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
           f.close();
         }
 
-        if((*quantity)->type == QuantityType::SkinFriction)
+        if(quantity->type == QuantityType::SkinFriction)
         {
           std::shared_ptr<QuantitySkinFriction<dim>> averaging_quantity =
-            std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(*quantity);
+            std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(quantity);
 
           std::string   filename = filename_prefix + "_wall_shear_stress" + ".txt";
           std::ofstream f;
@@ -810,8 +807,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
           f.close();
         }
 
-        if((*quantity)->type == QuantityType::Pressure or
-           (*quantity)->type == QuantityType::PressureCoefficient)
+        if(quantity->type == QuantityType::Pressure or
+           quantity->type == QuantityType::PressureCoefficient)
         {
           std::string   filename = filename_prefix + "_pressure" + ".txt";
           std::ofstream f;
@@ -833,7 +830,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
 
           f << std::setw(precision + 8) << std::left << "p";
 
-          if((*quantity)->type == QuantityType::PressureCoefficient)
+          if(quantity->type == QuantityType::PressureCoefficient)
             f << std::setw(precision + 8) << std::left << "p-p_ref";
 
           f << std::endl;
@@ -848,7 +845,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             f << std::setw(precision + 8) << std::left
               << pressure_global[line_iterator][p] / number_of_samples;
 
-            if((*quantity)->type == QuantityType::PressureCoefficient)
+            if(quantity->type == QuantityType::PressureCoefficient)
             {
               // p - p_ref -> C_p = (p - p_ref) / (1/2 rho u²)
               f << std::left
