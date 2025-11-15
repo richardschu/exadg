@@ -131,7 +131,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                 dealii::ExcMessage("Take the average either in x, y or z-direction"));
 
     unsigned int line_iterator = 0;
-    for(const std::shared_ptr<Line<dim>> line : data.lines)
+    for(const std::shared_ptr<Line<dim>> & line : data.lines)
     {
       // make sure that line type is correct
       std::shared_ptr<LineHomogeneousAveraging<dim>> line_hom =
@@ -175,7 +175,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       if(cell->is_locally_owned())
       {
         unsigned int line_iterator = 0;
-        for(const std::shared_ptr<Line<dim>> line : data.lines)
+        for(const std::shared_ptr<Line<dim>> & line : data.lines)
         {
           AssertThrow(line->quantities.size() > 0,
                       dealii::ExcMessage("No quantities specified for line."));
@@ -230,7 +230,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       if(cell->is_locally_owned())
       {
         unsigned int line_iterator = 0;
-        for(const std::shared_ptr<Line<dim>> line : data.lines)
+        for(const std::shared_ptr<Line<dim>> & line : data.lines)
         {
           AssertThrow(line->quantities.size() > 0,
                       dealii::ExcMessage("No quantities specified for line."));
@@ -660,7 +660,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
 
     // Iterator for lines
     unsigned int line_iterator = 0;
-    for(const std::shared_ptr<Line<dim>> line : data.lines)
+    for(const std::shared_ptr<Line<dim>> & line : data.lines)
     {
       std::string filename_prefix = data.directory + line->name;
 
