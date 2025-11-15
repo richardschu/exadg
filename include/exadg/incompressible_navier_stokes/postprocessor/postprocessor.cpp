@@ -277,6 +277,7 @@ PostProcessor<dim, Number>::initialize_derived_fields()
     };
     vorticity.recompute_solution_field = [&](VectorType & dst, VectorType const & src) {
       navier_stokes_operator->compute_vorticity(dst, src);
+      navier_stokes_operator->distribute_constraint_u(dst);
     };
 
     vorticity.reinit();
