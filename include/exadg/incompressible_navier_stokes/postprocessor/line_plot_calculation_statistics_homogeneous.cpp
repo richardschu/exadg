@@ -144,7 +144,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                   dealii::ExcMessage("All lines must use the same averaging direction."));
 
       // Resize global variables for # of points on line
-      if(dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+      if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
       {
         velocity_global[line_iterator].resize(line->n_points);
         pressure_global[line_iterator].resize(line->n_points);
@@ -181,14 +181,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                       dealii::ExcMessage("No quantities specified for line."));
 
           bool velocity_has_to_be_evaluated = false;
-          for(typename std::vector<std::shared_ptr<Quantity>>::iterator quantity =
-                line->quantities.begin();
-              quantity != line->quantities.end();
-              ++quantity)
+          for(const std::shared_ptr<Quantity> quantity : line->quantities)
           {
-            if((*quantity)->type == QuantityType::Velocity or
-               (*quantity)->type == QuantityType::SkinFriction or
-               (*quantity)->type == QuantityType::ReynoldsStresses)
+            if(quantity->type == QuantityType::Velocity or
+               quantity->type == QuantityType::SkinFriction or
+               quantity->type == QuantityType::ReynoldsStresses)
             {
               velocity_has_to_be_evaluated = true;
             }
@@ -220,6 +217,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               }
             }
           }
+          ++line_iterator;
         }
       }
     }
@@ -234,17 +232,13 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         unsigned int line_iterator = 0;
         for(const std::shared_ptr<Line<dim>> line : data.lines)
         {
-          for(typename std::vector<std::shared_ptr<Quantity>>::iterator quantity =
-                line->quantities.begin();
-              quantity != line->quantities.end();
-              ++quantity)
+          AssertThrow(line->quantities.size() > 0,
+                      dealii::ExcMessage("No quantities specified for line."));
+          for(const std::shared_ptr<Quantity> quantity : line->quantities)
           {
-            AssertThrow(line->quantities.size() > 0,
-                        dealii::ExcMessage("No quantities specified for line."));
-
             // evaluate quantities that involve pressure
             bool found_a_point_on_this_cell = false;
-            if((*quantity)->type == QuantityType::Pressure)
+            if(quantity->type == QuantityType::Pressure)
             {
               // cells and reference points for all points along a line
               for(unsigned int p = 0; p < line->n_points; ++p)
@@ -273,19 +267,16 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
           }
 
           // cells and reference points for reference pressure (only one point for each line)
-          for(typename std::vector<std::shared_ptr<Quantity>>::iterator quantity =
-                line->quantities.begin();
-              quantity != line->quantities.end();
-              ++quantity)
+          for(const std::shared_ptr<Quantity> quantity : line->quantities)
           {
             AssertThrow(line->quantities.size() > 0,
                         dealii::ExcMessage("No quantities specified for line."));
 
             // evaluate quantities that involve pressure
-            if((*quantity)->type == QuantityType::PressureCoefficient)
+            if(quantity->type == QuantityType::PressureCoefficient)
             {
               std::shared_ptr<QuantityPressureCoefficient<dim>> quantity_ref_pressure =
-                std::dynamic_pointer_cast<QuantityPressureCoefficient<dim>>(*quantity);
+                std::dynamic_pointer_cast<QuantityPressureCoefficient<dim>>(quantity);
 
               // First, we move the line to the position of the current cell (vertex 0) in
               // averaging direction and check whether this new point is inside the current cell
@@ -558,7 +549,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
       // to sum the contributions of every single processor.
       if(quantity->type == QuantityType::Velocity)
       {
-        mpi_sum_at_root(&velocity_local[line][0][0], velocity_local.size() * dim, mpi_comm);
+        mpi_sum_at_root(&velocity_local[line][0][0], velocity_local[line].size() * dim, mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
           for(unsigned int p = 0; p < data.lines[line]->n_points; ++p)
@@ -569,7 +560,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
       else if(quantity->type == QuantityType::ReynoldsStresses)
       {
         mpi_sum_at_root(&reynolds_local[line][0][0][0],
-                        reynolds_local.size() * dim * dim,
+                        reynolds_local[line].size() * dim * dim,
                         mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
