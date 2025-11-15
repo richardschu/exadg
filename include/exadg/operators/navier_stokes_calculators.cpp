@@ -220,7 +220,7 @@ template<int dim, typename Number>
 void
 VorticityCalculator<dim, Number>::compute_vorticity(VectorType & dst, VectorType const & src) const
 {
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, src, true);
 }
 
 template<int dim, typename Number>
@@ -255,7 +255,7 @@ VorticityCalculator<dim, Number>::cell_loop(
     }
 
     integrator.integrate(dealii::EvaluationFlags::values);
-    integrator.set_dof_values(dst);
+    integrator.distribute_local_to_global(dst);
   }
 }
 
