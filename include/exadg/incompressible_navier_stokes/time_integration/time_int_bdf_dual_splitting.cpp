@@ -45,7 +45,8 @@ TimeIntBDFDualSplitting<dim, Number>::TimeIntBDFDualSplitting(
   : Base(operator_in, helpers_ale_in, postprocessor_in, param_in, mpi_comm_in, is_test_in),
     pde_operator(operator_in),
     velocity(this->order),
-    pressure(this->order),
+    pressure(4),
+    pressure_matvec(4),
     velocity_dbc(this->order),
     iterations_pressure({0, 0}),
     iterations_projection({0, 0}),
@@ -130,6 +131,8 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
   // pressure
   for(unsigned int i = 0; i < pressure.size(); ++i)
     pde_operator->initialize_vector_pressure(pressure[i]);
+  for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
+    pde_operator->initialize_vector_pressure(pressure_matvec[i]);
   pde_operator->initialize_vector_pressure(pressure_np);
 
   // velocity_dbc
@@ -480,9 +483,9 @@ TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
   evaluate_convective_term();
 }
 
-template<typename Number>
+template<typename Number, typename Number2>
 void
-extrapolate_vectors(std::vector<Number> const &                                             factors,
+extrapolate_vectors(std::vector<Number2> const &                                            factors,
                     std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
                     dealii::LinearAlgebra::distributed::Vector<Number> &                    result)
 {
@@ -514,6 +517,22 @@ extrapolate_vectors(std::vector<Number> const &                                 
     DEAL_II_OPENMP_SIMD_PRAGMA
     for(unsigned int i = 0; i < locally_owned_size; ++i)
       res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i];
+  }
+  else if(factors.size() == 4)
+  {
+    Number const * vec_0  = vectors[0].begin();
+    Number const * vec_1  = vectors[1].begin();
+    Number const * vec_2  = vectors[2].begin();
+    Number const * vec_3  = vectors[3].begin();
+    Number *       res    = result.begin();
+    Number const   beta_0 = factors[0];
+    Number const   beta_1 = factors[1];
+    Number const   beta_2 = factors[2];
+    Number const   beta_3 = factors[3];
+
+    DEAL_II_OPENMP_SIMD_PRAGMA
+    for(unsigned int i = 0; i < locally_owned_size; ++i)
+      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
   }
   else
     for(unsigned int i = 0; i < locally_owned_size; ++i)
@@ -656,15 +675,191 @@ compute_least_squares_fit(OperatorType const &            op,
       sum -= small_vector[j] * matrix(j, s);
     small_vector[s] = sum / matrix(s, s);
   }
-  // if(dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  // if(dealii::Utilities::MPI::this_mpi_process(vectors[0].get_mpi_communicator()) == 0)
   //{
-  //  std::cout << "e ";
+  //  std::cout << "extrapolate " << std::defaultfloat << std::setprecision(3) << result.size()
+  //            << ": ";
   //  for(const double a : small_vector)
   //    std::cout << a << " ";
-  //  if (i > 0)
+  //  if(i > 0)
   //    std::cout << "i=" << i << " " << matrix(i - 1, i - 1) / matrix(0, 0) << "   ";
   //}
   extrapolate_vectors(small_vector, vectors, result);
+}
+
+template<typename VectorType>
+double
+compute_least_squares_fit(std::vector<VectorType> const & vectors_matvec,
+                          VectorType const &              rhs,
+                          std::vector<VectorType> const & vectors,
+                          VectorType &                    result)
+{
+  AssertDimension(vectors.size(), vectors_matvec.size());
+  const unsigned int n_vectors = vectors.size();
+  using Number                 = typename VectorType::value_type;
+  dealii::FullMatrix<double> matrix(n_vectors, n_vectors);
+  std::vector<double>        small_vector(n_vectors);
+
+  // Solve the normal equations for the minimization problem
+  // min_{alpha_i} | sum(alpha_i A x_i) - b |
+  // for which we compute the matrix (A x_i)^T (A x_j) and rhs (A x_i)^T b
+  AssertThrow(vectors.size() <= 5, dealii::ExcNotImplemented());
+  std::array<const Number *, 5> vec_ptrs = {};
+  for(unsigned int j = 0; j < n_vectors; ++j)
+    vec_ptrs[j] = vectors_matvec[j].begin();
+  Number const * rhs_ptr = rhs.begin();
+
+  unsigned int constexpr n_lanes    = dealii::VectorizedArray<double>::size();
+  unsigned int constexpr n_lanes_4  = 4 * n_lanes;
+  unsigned int const regular_size_4 = (vectors[0].locally_owned_size()) / n_lanes_4 * n_lanes_4;
+  unsigned int const regular_size   = (vectors[0].locally_owned_size()) / n_lanes * n_lanes;
+
+  // compute inner products in normal equations (all at once)
+  dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
+
+  unsigned int k = 0;
+  for(; k < regular_size_4; k += n_lanes_4)
+  {
+    for(unsigned int i = 0; i < n_vectors; ++i)
+    {
+      dealii::VectorizedArray<double> v_k_0, v_k_1, v_k_2, v_k_3;
+      v_k_0.load(vec_ptrs[i] + k);
+      v_k_1.load(vec_ptrs[i] + k + n_lanes);
+      v_k_2.load(vec_ptrs[i] + k + 2 * n_lanes);
+      v_k_3.load(vec_ptrs[i] + k + 3 * n_lanes);
+      for(unsigned int j = 0; j < i; ++j)
+      {
+        dealii::VectorizedArray<double> v_j_k, tmp0;
+        v_j_k.load(vec_ptrs[j] + k);
+        tmp0 = v_k_0 * v_j_k;
+        v_j_k.load(vec_ptrs[j] + k + n_lanes);
+        tmp0 += v_k_1 * v_j_k;
+        v_j_k.load(vec_ptrs[j] + k + 2 * n_lanes);
+        tmp0 += v_k_2 * v_j_k;
+        v_j_k.load(vec_ptrs[j] + k + 3 * n_lanes);
+        tmp0 += v_k_3 * v_j_k;
+        local_sums[i][j] += tmp0;
+      }
+      local_sums[i][i] += v_k_0 * v_k_0 + v_k_1 * v_k_1 + v_k_2 * v_k_2 + v_k_3 * v_k_3;
+
+      dealii::VectorizedArray<double> rhs_k, tmp0, tmp1;
+      rhs_k.load(rhs_ptr + k);
+      tmp0 = rhs_k * v_k_0;
+      tmp1 = rhs_k * rhs_k;
+      rhs_k.load(rhs_ptr + k + n_lanes);
+      tmp0 += rhs_k * v_k_1;
+      tmp1 += rhs_k * rhs_k;
+      rhs_k.load(rhs_ptr + k + 2 * n_lanes);
+      tmp0 += rhs_k * v_k_2;
+      tmp1 += rhs_k * rhs_k;
+      rhs_k.load(rhs_ptr + k + 3 * n_lanes);
+      tmp0 += rhs_k * v_k_3;
+      tmp1 += rhs_k * rhs_k;
+      local_sums[i][i + 1] += tmp0;
+      if(i == 0)
+        local_sums[0][5] += tmp1;
+    }
+  }
+  for(; k < regular_size; k += n_lanes)
+  {
+    dealii::VectorizedArray<double> rhs_k;
+    for(unsigned int i = 0; i < n_vectors; ++i)
+    {
+      dealii::VectorizedArray<double> v_k;
+      v_k.load(vec_ptrs[i] + k);
+      for(unsigned int j = 0; j < i; ++j)
+      {
+        dealii::VectorizedArray<double> v_j_k;
+        v_j_k.load(vec_ptrs[j] + k);
+        local_sums[i][j] += v_k * v_j_k;
+      }
+      local_sums[i][i] += v_k * v_k;
+      rhs_k.load(rhs_ptr + k);
+      local_sums[i][i + 1] += v_k * rhs_k;
+    }
+    local_sums[0][5] += rhs_k * rhs_k;
+  }
+  for(; k < vectors[0].locally_owned_size(); ++k)
+  {
+    for(unsigned int i = 0; i < n_vectors; ++i)
+    {
+      for(unsigned int j = 0; j <= i; ++j)
+        local_sums[i][j][k - regular_size] += vec_ptrs[i][k] * vec_ptrs[j][k];
+      local_sums[i][i + 1][k - regular_size] += vec_ptrs[i][k] * rhs_ptr[k];
+    }
+    local_sums[0][5][k - regular_size] += rhs_ptr[k] * rhs_ptr[k];
+  }
+  std::array<double, 21> scalar_sums;
+  unsigned int           count = 0;
+  for(unsigned int i = 0; i < n_vectors; ++i)
+    for(unsigned int j = 0; j < i + 2; ++j, ++count)
+      scalar_sums[count] = local_sums[i][j].sum();
+  scalar_sums[count] = local_sums[0][5].sum();
+
+  dealii::Utilities::MPI::sum(dealii::ArrayView<double const>(scalar_sums.data(), count + 1),
+                              vectors[0].get_mpi_communicator(),
+                              dealii::ArrayView<double>(scalar_sums.data(), count + 1));
+
+  // This algorithm performs a Cholesky (LDLT) factorization of
+  // which eventually gives the linear combination sum (alpha_i x_i)
+  // minimizing the residual among the given search vectors
+  unsigned int i = 0;
+  for(unsigned int c = 0; i < n_vectors; ++i, ++c)
+  {
+    for(unsigned int j = 0; j <= i; ++j, ++c)
+      matrix(i, j) = scalar_sums[c];
+
+    // update row in Cholesky factorization associated to matrix of normal
+    // equations using the diagonal entry D
+    for(unsigned int j = 0; j < i; ++j)
+    {
+      double const inv_entry = matrix(i, j) / matrix(j, j);
+      for(unsigned int k = j + 1; k <= i; ++k)
+        matrix(i, k) -= matrix(k, j) * inv_entry;
+    }
+    if(matrix(i, i) < 1e-12 * matrix(0, 0) or matrix(0, 0) < 1e-30)
+      break;
+
+    // update for the right hand side (forward substitution)
+    small_vector[i] = scalar_sums[c];
+    for(unsigned int j = 0; j < i; ++j)
+      small_vector[i] -= matrix(i, j) / matrix(j, j) * small_vector[j];
+  }
+
+  // backward substitution of Cholesky factorization
+  for(unsigned int s = i; s < small_vector.size(); ++s)
+    small_vector[s] = 0.;
+  for(int s = i - 1; s >= 0; --s)
+  {
+    double sum = small_vector[s];
+    for(unsigned int j = s + 1; j < i; ++j)
+      sum -= small_vector[j] * matrix(j, s);
+    small_vector[s] = sum / matrix(s, s);
+  }
+
+  // compute residual norm of resulting minimization problem
+  double residual_norm_sqr = scalar_sums[count];
+  for(unsigned int i = 0, c = 0; i < n_vectors; ++i, c += 2)
+  {
+    for(unsigned int j = 0; j < i; ++j, ++c)
+      residual_norm_sqr += 2. * scalar_sums[c] * small_vector[i] * small_vector[j];
+    residual_norm_sqr += scalar_sums[c] * small_vector[i] * small_vector[i];
+    residual_norm_sqr -= 2 * scalar_sums[c + 1] * small_vector[i];
+  }
+
+  // if(dealii::Utilities::MPI::this_mpi_process(vectors[0].get_mpi_communicator()) == 0)
+  //{
+  //  std::cout << "extrapolate " << std::defaultfloat << std::setprecision(3) << result.size()
+  //            << ": ";
+  //  for(const double a : small_vector)
+  //    std::cout << a << " ";
+  //  if(i > 0)
+  //    std::cout << "i=" << i << " " << matrix(i - 1, i - 1) / matrix(0, 0) << " "
+  //              << std::sqrt(residual_norm_sqr) << "   ";
+  //}
+  extrapolate_vectors(small_vector, vectors, result);
+
+  return std::sqrt(std::abs(residual_norm_sqr));
 }
 
 template<int dim, typename Number>
@@ -796,7 +991,8 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // extrapolate old solution to get a good initial estimate for the solver
   if(this->use_extrapolation)
   {
-    compute_least_squares_fit(pde_operator->laplace_operator, pressure, rhs, pressure_np);
+    pde_operator->laplace_operator.vmult(pressure_matvec[0], pressure[0]);
+    compute_least_squares_fit(pressure_matvec, rhs, pressure, pressure_np);
   }
   else
   {
@@ -827,9 +1023,8 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
 
   // pde_operator->apply_laplace_operator(tmp, pressure_np);
   // const double res_norm4 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-  // this->pcout << "Residual norms pressure:   " << std::setprecision(6) << rhs_norm << " " <<
-  // res_norm << " " << res2_norm
-  //            << " " << res_norm4 << " (" << n_iter << ")" << std::endl;
+  // this->pcout << "Residual norms:   " << std::setprecision(3) << rhs_norm << " " << res_norm << " "
+  //             << res2_norm << " " << res_norm4 << " (" << n_iter << ")" << std::endl;
 
   // special case: pressure level is undefined
   // Adjust the pressure level in order to allow a calculation of the pressure error.
@@ -1206,9 +1401,11 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
         solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_viscous);
         n_iter = control.last_step();
         if(this->print_solver_info() and not(this->is_test))
-          {
-            this->pcout << std::endl << "Viscous step prepare: " << t_prep << " s, solve " << timer2.wall_time() << " s";
-          }
+        {
+          this->pcout << std::endl
+                      << "Viscous step prepare: " << t_prep << " s, solve " << timer2.wall_time()
+                      << " s";
+        }
         op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
       }
       else
@@ -1378,6 +1575,8 @@ TimeIntBDFDualSplitting<dim, Number>::prepare_vectors_for_next_timestep()
 
   push_back(pressure);
   pressure[0].swap(pressure_np);
+
+  push_back(pressure_matvec);
 
   // We also have to care about the history of velocity Dirichlet boundary conditions.
   // Note that velocity_dbc_np has already been updated.
