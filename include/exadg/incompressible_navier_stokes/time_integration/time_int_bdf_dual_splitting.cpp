@@ -687,8 +687,10 @@ compute_least_squares_fit(OperatorType const &            op,
   extrapolate_vectors(small_vector, vectors, result);
 }
 
+// Compute a least squares fit and return the norm of the right-hand side as
+// well as the achieved residual
 template<typename VectorType>
-double
+std::pair<double, double>
 compute_least_squares_fit(std::vector<VectorType> const & vectors_matvec,
                           VectorType const &              rhs,
                           std::vector<VectorType> const & vectors,
@@ -859,7 +861,7 @@ compute_least_squares_fit(std::vector<VectorType> const & vectors_matvec,
   //}
   extrapolate_vectors(small_vector, vectors, result);
 
-  return std::sqrt(std::abs(residual_norm_sqr));
+  return std::make_pair(std::sqrt(scalar_sums[count]), std::sqrt(std::abs(residual_norm_sqr)));
 }
 
 template<int dim, typename Number>
@@ -989,10 +991,11 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   rhs_pressure(rhs);
 
   // extrapolate old solution to get a good initial estimate for the solver
+  std::pair<double, double> extrapolate_accuracy(0., 0.);
   if(this->use_extrapolation)
   {
     pde_operator->laplace_operator.vmult(pressure_matvec[0], pressure[0]);
-    compute_least_squares_fit(pressure_matvec, rhs, pressure, pressure_np);
+    extrapolate_accuracy = compute_least_squares_fit(pressure_matvec, rhs, pressure, pressure_np);
   }
   else
   {
@@ -1023,7 +1026,8 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
 
   // pde_operator->apply_laplace_operator(tmp, pressure_np);
   // const double res_norm4 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-  // this->pcout << "Residual norms:   " << std::setprecision(3) << rhs_norm << " " << res_norm << " "
+  // this->pcout << "Residual norms:   " << std::setprecision(3) << rhs_norm << " " << res_norm << "
+  // "
   //             << res2_norm << " " << res_norm4 << " (" << n_iter << ")" << std::endl;
 
   // special case: pressure level is undefined
@@ -1037,7 +1041,9 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // write output
   if(this->print_solver_info() and not(this->is_test))
   {
-    this->pcout << std::endl << "Solve pressure step:";
+    this->pcout << std::endl
+                << "Solve pressure step (projection reduced residual from "
+                << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second << "):";
     print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
   }
 
