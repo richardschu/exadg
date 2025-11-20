@@ -31,6 +31,12 @@ template<int dim, typename Number>
 class RaviartThomasOperatorBase;
 }
 
+namespace LaplaceOperator
+{
+template<int dim, typename Number>
+class LaplaceOperatorDG;
+}
+
 namespace ExaDG
 {
 namespace IncNS
@@ -182,6 +188,7 @@ private:
   VectorType velocity_viscous_last_iter;
 
   std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, Number>> op_rt;
+  std::shared_ptr<LaplaceOperator::LaplaceOperatorDG<dim, Number>>    laplace_op;
   VectorType                                                          diagonal_mass;
   VectorType                                                          diagonal_laplace;
   dealii::DiagonalMatrix<VectorType>                                  preconditioner_viscous;

@@ -22,6 +22,7 @@
 #include <deal.II/numerics/vector_tools_mean_value.h>
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/laplace_operator_extruded.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
@@ -275,6 +276,16 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
     for(unsigned int i = 0; i < solutions_convective.size(); ++i)
       op_rt->initialize_dof_vector(solutions_convective[i]);
   }
+
+
+  laplace_op = std::make_shared<LaplaceOperator::LaplaceOperatorDG<dim, Number>>();
+  laplace_op->reinit(*pde_operator->get_mapping(),
+                     pde_operator->get_dof_handler_p(),
+                     pde_operator->get_constraint_p(),
+                     cell_vectorization_category,
+                     dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1));
+  laplace_op->set_penalty_parameters(
+    pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 }
 
 
@@ -989,6 +1000,32 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // compute right-hand-side vector
   VectorType rhs(pressure_np);
   rhs_pressure(rhs);
+
+  if(this->print_solver_info() and not(this->is_test))
+  {
+    VectorType vec1, vec2;
+    laplace_op->initialize_dof_vector(vec1);
+    laplace_op->initialize_dof_vector(vec2);
+    vec1.copy_locally_owned_data_from(rhs);
+    for (unsigned int t = 0; t < 2; ++t)
+      {
+        dealii::Timer timer2;
+        for(unsigned int i = 0; i < 20; ++i)
+          laplace_op->vmult(vec2, vec1);
+        std::cout << std::defaultfloat << std::setprecision(4);
+        RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(), "Mat-vec DG optim [MDoF/s]", vec1.get_mpi_communicator());
+      }
+    for (unsigned int t = 0; t < 2; ++t)
+      {
+        dealii::Timer timer2;
+        for(unsigned int i = 0; i < 20; ++i)
+          pde_operator->laplace_operator.vmult(pressure_np, rhs);
+        RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(), "Mat-vec DG basic [MDoF/s]", vec1.get_mpi_communicator());
+      }
+    this->pcout << "Norm vec2: " << vec2.l2_norm() << " " << pressure_np.l2_norm() << " ";
+    pressure_np -= vec2;
+    this->pcout << " diff " << pressure_np.l2_norm() << std::endl;
+  }
 
   // extrapolate old solution to get a good initial estimate for the solver
   std::pair<double, double> extrapolate_accuracy(0., 0.);

@@ -19,9 +19,14 @@
  *  ______________________________________________________________________
  */
 
+#pragma once
 
+#include <deal.II/base/floating_point_comparator.h>
+#include <deal.II/base/memory_space_data.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/fe.h>
+#include <deal.II/fe/fe_nothing.h>
+#include <deal.II/fe/fe_values.h>
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tensor_product_kernels.h>
@@ -47,6 +52,44 @@ print_time(const double        time,
     if(total_time > 0)
       std::cout << " " << data.avg * 100. / total_time << "%";
     std::cout << std::endl;
+  }
+}
+
+// function to convert from a map, with keys associated to the buckets by
+// which we sliced the index space, length chunk_size_zero_vector, and
+// values equal to the slice index which are touched by the respective
+// partition, to a "vectors-of-vectors" like data structure. Rather than
+// using the vectors, we set up a sparsity-pattern like structure where
+// one index specifies the start index (range_list_index), and the other
+// the actual ranges (range_list).
+void
+convert_map_to_range_list(const unsigned int                                        n_partitions,
+                          const unsigned int                                        chunk_size,
+                          const std::map<unsigned int, std::vector<unsigned int>> & ranges_in,
+                          std::vector<unsigned int> &                          range_list_index,
+                          std::vector<std::pair<unsigned int, unsigned int>> & range_list,
+                          const unsigned int                                   max_size)
+{
+  range_list_index.resize(n_partitions + 1);
+  range_list_index[0] = 0;
+  range_list.clear();
+  for(unsigned int partition = 0; partition < n_partitions; ++partition)
+  {
+    auto it = ranges_in.find(partition);
+    if(it != ranges_in.end())
+    {
+      for(unsigned int i = 0; i < it->second.size(); ++i)
+      {
+        const unsigned int first_i = i;
+        while(i + 1 < it->second.size() && it->second[i + 1] == it->second[i] + 1)
+          ++i;
+        range_list.emplace_back(std::min(it->second[first_i] * chunk_size, max_size),
+                                std::min((it->second[i] + 1) * chunk_size, max_size));
+      }
+      range_list_index[partition + 1] = range_list.size();
+    }
+    else
+      range_list_index[partition + 1] = range_list_index[partition];
   }
 }
 
@@ -204,6 +247,96 @@ using namespace dealii;
 
 
 
+namespace mpi_shared_memory
+{
+template<typename Number>
+void
+allocate_shared_recv_data(MemorySpace::MemorySpaceData<Number, MemorySpace::Host> & data,
+                          const unsigned int                                        expected_size,
+                          const MPI_Comm communicator_shared)
+{
+  const unsigned int n_shared_ranks = Utilities::MPI::n_mpi_processes(communicator_shared);
+  const unsigned int rank_shared    = Utilities::MPI::this_mpi_process(communicator_shared);
+
+  MPI_Win  mpi_window;
+  Number * data_this;
+
+  std::vector<Number *> others(n_shared_ranks);
+
+  MPI_Info info;
+  int      ierr = MPI_Info_create(&info);
+  AssertThrowMPI(ierr);
+
+  ierr = MPI_Info_set(info, "alloc_shared_noncontig", "true");
+  AssertThrowMPI(ierr);
+
+  const std::size_t align_by = 64;
+
+  std::size_t allocated_bytes =
+    ((expected_size * sizeof(Number) + align_by) / sizeof(Number)) * sizeof(Number);
+
+  ierr = MPI_Win_allocate_shared(
+    allocated_bytes, sizeof(Number), info, communicator_shared, &data_this, &mpi_window);
+  AssertThrowMPI(ierr);
+
+  for(unsigned int i = 0; i < n_shared_ranks; ++i)
+  {
+    int        disp_unit;
+    MPI_Aint   segment_size;
+    const auto ierr = MPI_Win_shared_query(mpi_window, i, &segment_size, &disp_unit, &others[i]);
+    AssertDimension(disp_unit, sizeof(Number));
+    AssertThrowMPI(ierr);
+  }
+
+  Number * ptr_unaligned = others[rank_shared];
+  Number * ptr_aligned   = ptr_unaligned;
+
+  AssertThrow(std::align(align_by,
+                         expected_size * sizeof(Number),
+                         reinterpret_cast<void *&>(ptr_aligned),
+                         allocated_bytes) != nullptr,
+              dealii::ExcNotImplemented());
+
+  unsigned int              n_align_local = ptr_aligned - ptr_unaligned;
+  std::vector<unsigned int> n_align_sm(n_shared_ranks);
+
+  ierr = MPI_Allgather(
+    &n_align_local, 1, MPI_UNSIGNED, n_align_sm.data(), 1, MPI_UNSIGNED, communicator_shared);
+  AssertThrowMPI(ierr);
+
+  for(unsigned int i = 0; i < n_shared_ranks; ++i)
+    others[i] += n_align_sm[i];
+
+  std::vector<unsigned int> allocated_sizes(n_shared_ranks);
+
+  ierr = MPI_Allgather(
+    &expected_size, 1, MPI_UNSIGNED, allocated_sizes.data(), 1, MPI_UNSIGNED, communicator_shared);
+  AssertThrowMPI(ierr);
+
+  data.values_sm.resize(n_shared_ranks);
+  for(unsigned int i = 0; i < n_shared_ranks; ++i)
+    data.values_sm[i] = ArrayView<const Number>(others[i], allocated_sizes[i]);
+
+  data.values = Kokkos::View<Number *, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
+    ptr_aligned, expected_size);
+
+  // Kokkos will not free the memory because the memory is
+  // unmanaged. Instead we use a shared pointer to take care of
+  // that.
+  data.values_sm_ptr = {ptr_aligned,
+                        [mpi_window](Number *) mutable
+                        {
+                          // note: we are creating here a copy of
+                          // the window other approaches led to
+                          // segmentation faults
+                          const auto ierr = MPI_Win_free(&mpi_window);
+                          AssertThrowMPI(ierr);
+                        }};
+}
+} // namespace mpi_shared_memory
+
+
+
 template<int dim, typename Number = double>
 class RaviartThomasOperatorBase : public EnableObserverPointer
 {
@@ -219,7 +352,7 @@ public:
          const AffineConstraints<OtherNumber> & constraints,
          const std::vector<unsigned int> &      cell_vectorization_category,
          const Quadrature<1> &                  quadrature,
-         const MPI_Comm                         comm_shared = MPI_COMM_SELF)
+         const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
@@ -440,7 +573,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -461,7 +595,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -568,7 +703,8 @@ public:
             face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
     }
 
-    QGauss<dim - 1>         face_quadrature(n_q_points_1d);
+    QGauss<1>               quadrature_1d(n_q_points_1d);
+    Quadrature<dim - 1>     face_quadrature(quadrature_1d);
     std::vector<Point<dim>> points(face_quadrature.size());
     for(unsigned int i = 0; i < face_quadrature.size(); ++i)
       for(unsigned int d = 0; d < 2; ++d)
@@ -693,8 +829,8 @@ public:
     for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
       for(unsigned int lane = 0; lane < n_lanes; ++lane)
         if(lane >= matrix_free.n_active_entries_per_cell_batch(cell))
-          cell_level_index[cell][lane] = {numbers::invalid_unsigned_int,
-                                          numbers::invalid_unsigned_int};
+          cell_level_index[cell][lane] = {
+            {numbers::invalid_unsigned_int, numbers::invalid_unsigned_int}};
         else
         {
           const auto iter                 = matrix_free.get_cell_iterator(cell, lane);
@@ -704,8 +840,7 @@ public:
 
     detect_dependencies_of_face_integrals();
 
-    factor_mass    = 1;
-    factor_laplace = 0;
+    set_parameters(0., 1.0);
 
     for(double & t : timings)
       t = 0.0;
@@ -715,12 +850,12 @@ public:
   {
     if(timings[0] > 0)
     {
-      const MPI_Comm comm = MPI_COMM_WORLD;
+      const MPI_Comm comm = dof_handler->get_mpi_communicator();
       std::cout << std::defaultfloat << std::setprecision(3);
       const double total_time =
         Utilities::MPI::sum(timings[9], comm) / timings[0] / Utilities::MPI::n_mpi_processes(comm);
       if(Utilities::MPI::this_mpi_process(comm) == 0)
-        std::cout << "Collected timings for Laplace operator <"
+        std::cout << "Collected timings for RT Laplace operator <"
                   << (std::is_same_v<Number, double> ? "double" : "float") << "> in "
                   << static_cast<unsigned long>(timings[0])
                   << " evaluations [t_total=" << total_time * timings[0] << "s]" << std::endl;
@@ -814,9 +949,10 @@ public:
   void
   set_penalty_parameters(const Number additional_factor)
   {
-    const Number factor = ExaDG::IP::get_penalty_factor<dim>(dof_handler->get_fe().degree,
-                                                             ExaDG::ElementType::Hypercube,
-                                                             additional_factor);
+    // Same as in ExaDG::IP::get_penalty_factor<dim> but split off to test
+    // this function independently of ExaDG
+    const Number factor =
+      additional_factor * Utilities::fixed_power<2>(dof_handler->get_fe().degree + 1.0);
     this->penalty_parameters.resize(dof_indices.size());
     const unsigned int n_q_points_1d = shape_info.data[0].n_q_points_1d;
     for(unsigned int cell = 0; cell < dof_indices.size(); ++cell)
@@ -1296,52 +1432,21 @@ private:
                  MPI_COMM_WORLD);
     }
 
-    // lambda to convert from a map, with keys associated to the buckets by
-    // which we sliced the index space, length chunk_size_zero_vector, and
-    // values equal to the slice index which are touched by the respective
-    // partition, to a "vectors-of-vectors" like data structure. Rather than
-    // using the vectors, we set up a sparsity-pattern like structure where
-    // one index specifies the start index (range_list_index), and the other
-    // the actual ranges (range_list).
-    auto convert_map_to_range_list =
-      [=](const unsigned int                                        n_partitions,
-          const std::map<unsigned int, std::vector<unsigned int>> & ranges_in,
-          std::vector<unsigned int> &                               range_list_index,
-          std::vector<std::pair<unsigned int, unsigned int>> &      range_list,
-          const unsigned int                                        max_size) {
-        range_list_index.resize(n_partitions + 1);
-        range_list_index[0] = 0;
-        range_list.clear();
-        for(unsigned int partition = 0; partition < n_partitions; ++partition)
-        {
-          auto it = ranges_in.find(partition);
-          if(it != ranges_in.end())
-          {
-            for(unsigned int i = 0; i < it->second.size(); ++i)
-            {
-              const unsigned int first_i = i;
-              while(i + 1 < it->second.size() && it->second[i + 1] == it->second[i] + 1)
-                ++i;
-              range_list.emplace_back(std::min(it->second[first_i] * chunk_size, max_size),
-                                      std::min((it->second[i] + 1) * chunk_size, max_size));
-            }
-            range_list_index[partition + 1] = range_list.size();
-          }
-          else
-            range_list_index[partition + 1] = range_list_index[partition];
-        }
-      };
-
     std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_pre;
     for(unsigned int i = 0; i < touched_first_by.size(); ++i)
       chunk_must_do_pre[touched_first_by[i]].push_back(i);
-    convert_map_to_range_list(
-      n_cell_batches + 2, chunk_must_do_pre, cell_loop_pre_list_index, cell_loop_pre_list, n_dofs);
+    convert_map_to_range_list(n_cell_batches + 2,
+                              chunk_size,
+                              chunk_must_do_pre,
+                              cell_loop_pre_list_index,
+                              cell_loop_pre_list,
+                              n_dofs);
 
     std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_mass_pre;
     for(unsigned int i = 0; i < touched_mass_first_by.size(); ++i)
       chunk_must_do_mass_pre[touched_mass_first_by[i]].push_back(i);
     convert_map_to_range_list(n_cell_batches + 1,
+                              chunk_size,
                               chunk_must_do_mass_pre,
                               cell_loop_mass_pre_list_index,
                               cell_loop_mass_pre_list,
@@ -1351,6 +1456,7 @@ private:
     for(unsigned int i = 0; i < touched_last_by.size(); ++i)
       chunk_must_do_post[touched_last_by[i]].push_back(i);
     convert_map_to_range_list(n_cell_batches + 1,
+                              chunk_size,
                               chunk_must_do_post,
                               cell_loop_post_list_index,
                               cell_loop_post_list,
@@ -2548,7 +2654,7 @@ private:
       if(factor_laplace != 0)
         compute_cell_lapl<n_q_points_1d>(shape_data, cell, quad_values, out_values);
       else
-        compute_cell_mass<n_q_points_1d>(shape_data, cell, quad_values, out_values);
+        compute_cell_mass<n_q_points_1d>(cell, quad_values, out_values);
 
       // Face integrals if Laplace factor is positive
       if(factor_laplace != 0.)
@@ -2608,7 +2714,7 @@ private:
           if(factor_laplace != 0)
             compute_cell_lapl<n_q_points_1d>(shape_data, cell, quad_values, out_values);
           else
-            compute_cell_mass<n_q_points_1d>(shape_data, cell, quad_values, out_values);
+            compute_cell_mass<n_q_points_1d>(cell, quad_values, out_values);
 
           if(factor_laplace != 0.)
             for(unsigned int f = 0; f < 2 * dim; ++f)
@@ -2660,7 +2766,7 @@ private:
   compute_cell_lapl(
     const std::vector<internal::MatrixFreeFunctions::UnivariateShapeData<Number>> & shape_data,
     const unsigned int                                                              cell,
-    VectorizedArray<Number> *                                                       quad_values,
+    const VectorizedArray<Number> *                                                 quad_values,
     VectorizedArray<Number> * out_values) const
   {
     constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
@@ -2837,8 +2943,8 @@ private:
             const unsigned int            iy         = dim * (qz * nn + qy * nn * nn + qx);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[q * dim],
-                                                    quad_values[q * dim + 1],
-                                                    quad_values[q * dim + 2]};
+                                                        quad_values[q * dim + 1],
+                                                        quad_values[q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], grad_y[iy + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], grad_y[iy + 1], grad_z[iz + 1]},
@@ -2993,11 +3099,9 @@ private:
 
   template<int n_q_points_1d>
   void
-  compute_cell_mass(
-    const std::vector<internal::MatrixFreeFunctions::UnivariateShapeData<Number>> & shape_data,
-    const unsigned int                                                              cell,
-    VectorizedArray<Number> *                                                       quad_values,
-    VectorizedArray<Number> * out_values) const
+  compute_cell_mass(const unsigned int        cell,
+                    VectorizedArray<Number> * quad_values,
+                    VectorizedArray<Number> * out_values) const
   {
     constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
 
@@ -3006,6 +3110,7 @@ private:
       shifted_data_indices[v] = mapping_data_index[cell][v] * 4;
 
     const Number factor_mass = this->factor_mass;
+    const Number h_z_inverse = this->h_z_inverse;
 
     constexpr unsigned int nn = n_q_points_1d;
 
@@ -3795,7 +3900,8 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position) {
+          const auto add_entry = [&](const unsigned int position)
+          {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 
