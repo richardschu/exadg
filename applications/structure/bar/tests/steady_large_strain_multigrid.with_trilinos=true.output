@@ -53,7 +53,7 @@ Newton:
 Linear solver:
   Solver:                                    FGMRES
   Maximum number of iterations:              1000
-  Absolute solver tolerance:                 1.0000e-12
+  Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-08
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
@@ -87,6 +87,12 @@ Continuous Galerkin finite element discretization:
   degree of 1D polynomials:                  4
   number of dofs per cell:                   375
   number of dofs (total):                    2187
+
+Discontinuous Galerkin finite element discretization of scalar field:
+
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   125
+  number of dofs (total):                    1000
 
 ... done!
 
