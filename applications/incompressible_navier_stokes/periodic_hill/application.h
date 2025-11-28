@@ -296,13 +296,13 @@ private:
               std::shared_ptr<dealii::Mapping<dim>> &           mapping,
               std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
-                                                 std::vector<dealii::GridTools::PeriodicFacePair<
-                                                   typename dealii::Triangulation<
-                                                     dim>::cell_iterator>> & periodic_face_pairs,
-                                                 unsigned int const          global_refinements,
-                                                 std::vector<unsigned int> const &
-                                                   vector_local_refinements) {
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements)
+    {
       (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
@@ -378,7 +378,6 @@ private:
                                                             {} /* no local refinements */);
 
     // mappings
-    PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
     AssertThrow(get_element_type(*grid.triangulation) == ElementType::Hypercube,
                 dealii::ExcMessage("Only implemented for hypercube elements."));
 
@@ -394,39 +393,43 @@ private:
 
     const auto mapping_q_cache =
       std::make_shared<dealii::MappingQCache<dim>>(this->param.mapping_degree);
-    mapping_q_cache->initialize(*grid.triangulation,
-                                [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-                                  -> std::vector<dealii::Point<dim>> {
-                                  fe_values.reinit(cell);
+    mapping_q_cache->initialize(
+      *grid.triangulation,
+      [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
+        -> std::vector<dealii::Point<dim>>
+      {
+        PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
+        fe_values.reinit(cell);
 
-                                  std::vector<dealii::Point<dim>> points_moved(
-                                    fe_values.n_quadrature_points);
-                                  for(unsigned int i = 0; i < fe_values.n_quadrature_points; ++i)
-                                  {
-                                    // need to adjust for hierarchic numbering of
-                                    // dealii::MappingQCache
-                                    points_moved[i] =
-                                      manifold.push_forward(fe_values.quadrature_point(
-                                        hierarchic_to_lexicographic_numbering[i]));
-                                  }
+        std::vector<dealii::Point<dim>> points_moved(fe_values.n_quadrature_points);
+        for(unsigned int i = 0; i < fe_values.n_quadrature_points; ++i)
+        {
+          // need to adjust for hierarchic numbering of
+          // dealii::MappingQCache
+          points_moved[i] = manifold.push_forward(
+            fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
+        }
 
-                                  return points_moved;
-                                });
+        return points_moved;
+      });
 
+    grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
+      -> std::vector<dealii::Point<dim>>
+    {
+      PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
+      std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
+      for(unsigned int i = 0; i < cell->n_vertices(); ++i)
+      {
+        // need to adjust for hierarchic numbering of
+        // dealii::MappingQCache
+        points_moved[i] = manifold.push_forward(cell->vertex(i));
+      }
+
+      return points_moved;
+    };
     const auto mapping_coarse = std::make_shared<dealii::MappingQCache<dim>>(1);
-    mapping_coarse->initialize(*grid.triangulation,
-                               [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-                                 -> std::vector<dealii::Point<dim>> {
-                                 std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
-                                 for(unsigned int i = 0; i < cell->n_vertices(); ++i)
-                                 {
-                                   // need to adjust for hierarchic numbering of
-                                   // dealii::MappingQCache
-                                   points_moved[i] = manifold.push_forward(cell->vertex(i));
-                                 }
+    mapping_coarse->initialize(*grid.triangulation, grid.mapping_function);
 
-                                 return points_moved;
-                               });
     mapping = mapping_q_cache;
     multigrid_mappings =
       std::make_shared<MultigridMappings<dim, Number>>(mapping_q_cache, mapping_coarse);

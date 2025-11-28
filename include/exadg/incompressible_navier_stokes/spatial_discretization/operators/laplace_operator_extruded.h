@@ -40,11 +40,1304 @@ using namespace dealii;
 
 
 
+namespace Extruded
+{
+template<int dim, typename Number>
+struct MappingInfo
+{
+  static constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+
+  void
+  reinit(const Mapping<dim> &            mapping,
+         const Quadrature<1> &           quadrature_1d,
+         const MatrixFree<dim, Number> & matrix_free)
+  {
+    const DoFHandler<dim> &         dof_handler = matrix_free.get_dof_handler();
+    FloatingPointComparator<double> comparator(dof_handler.get_triangulation().begin()->diameter() *
+                                               1e-10);
+    std::map<Point<2>, std::array<int, 3>, FloatingPointComparator<double>> unique_cells(
+      comparator);
+
+    std::vector<unsigned int> geometry_index(dof_handler.get_triangulation().n_active_cells(),
+                                             numbers::invalid_unsigned_int);
+    // collect possible compression of Jacobian data due to extrusion in z
+    // direction by checking the position of the first cell vertex in the xy
+    // plane. First check locally owned cells in exactly the order matrix-free
+    // loops visit them, then for ghosts to get the complete face data also in
+    // parallel computations
+    for(unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
+      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(c); ++v)
+      {
+        const auto cell     = matrix_free.get_cell_iterator(c, v);
+        const auto vertices = mapping.get_vertices(cell);
+        Point<2>   p(vertices[0][0], vertices[0][1]);
+        const auto position = unique_cells.find(p);
+        if(position == unique_cells.end())
+        {
+          geometry_index[cell->active_cell_index()] = unique_cells.size();
+          unique_cells.insert(std::make_pair(
+            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
+        }
+        else
+          geometry_index[cell->active_cell_index()] = position->second[0];
+      }
+    for(const auto & cell : dof_handler.active_cell_iterators())
+      if(cell->is_ghost())
+      {
+        const auto vertices = mapping.get_vertices(cell);
+        Point<2>   p(vertices[0][0], vertices[0][1]);
+        const auto position = unique_cells.find(p);
+        if(position == unique_cells.end())
+        {
+          geometry_index[cell->active_cell_index()] = unique_cells.size();
+          unique_cells.insert(std::make_pair(
+            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
+        }
+        else
+          geometry_index[cell->active_cell_index()] = position->second[0];
+      }
+
+    const unsigned int n_q_points_1d = quadrature_1d.size();
+    const unsigned int n_q_points_2d = Utilities::pow(n_q_points_1d, 2);
+    mapping_data_index.resize(matrix_free.n_cell_batches());
+    face_mapping_data_index.resize(matrix_free.n_cell_batches());
+    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
+    {
+      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
+      {
+        const auto dcell            = matrix_free.get_cell_iterator(cell, v);
+        mapping_data_index[cell][v] = geometry_index[dcell->active_cell_index()] * n_q_points_2d;
+        for(unsigned int f = 0; f < 4; ++f)
+        {
+          face_mapping_data_index[cell][f][0][v] =
+            (geometry_index[dcell->active_cell_index()] * 4 + f) * n_q_points_1d;
+          const bool at_boundary           = dcell->at_boundary(f);
+          const bool has_periodic_neighbor = at_boundary && dcell->has_periodic_neighbor(f);
+          if(at_boundary == false || has_periodic_neighbor)
+          {
+            const auto neighbor =
+              has_periodic_neighbor ? dcell->periodic_neighbor(f) : dcell->neighbor(f);
+            const unsigned int neighbor_face_idx = has_periodic_neighbor ?
+                                                     dcell->periodic_neighbor_face_no(f) :
+                                                     dcell->neighbor_face_no(f);
+            face_mapping_data_index[cell][f][1][v] =
+              (geometry_index[neighbor->active_cell_index()] * 4 + neighbor_face_idx) *
+              n_q_points_1d;
+          }
+          else
+            face_mapping_data_index[cell][f][1][v] = face_mapping_data_index[cell][f][0][v];
+        }
+      }
+      for(unsigned int v = matrix_free.n_active_entries_per_cell_batch(cell); v < n_lanes; ++v)
+        for(unsigned int f = 0; f < 4; ++f)
+          for(unsigned int s = 0; s < 2; ++s)
+            face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
+    }
+
+    Quadrature<dim - 1>     face_quadrature(quadrature_1d);
+    Quadrature<2>           quadrature_2d(quadrature_1d);
+    std::vector<Point<dim>> points(quadrature_2d.size());
+    for(unsigned int i = 0; i < quadrature_2d.size(); ++i)
+      for(unsigned int d = 0; d < 2; ++d)
+        points[i][d] = quadrature_2d.point(i)[d];
+
+    FE_Nothing<dim>   dummy_fe;
+    FEValues<dim>     fe_values(mapping, dummy_fe, Quadrature<dim>(points), update_jacobians);
+    FEFaceValues<dim> fe_face_values(mapping,
+                                     dummy_fe,
+                                     face_quadrature,
+                                     update_jacobians | update_JxW_values | update_normal_vectors);
+
+    jacobians_xy.resize(n_q_points_2d * unique_cells.size());
+    cell_JxW_xy.resize(n_q_points_2d * unique_cells.size());
+    face_jxn_xy.resize(4 * n_q_points_1d * unique_cells.size());
+    face_JxW_xy.resize(4 * n_q_points_1d * unique_cells.size());
+
+    ip_penalty_factors.resize(unique_cells.size());
+    for(const auto & [_, index] : unique_cells)
+    {
+      const typename Triangulation<dim>::cell_iterator cell(&dof_handler.get_triangulation(),
+                                                            index[1],
+                                                            index[2]);
+      fe_values.reinit(cell);
+      AssertDimension(geometry_index[cell->active_cell_index()], index[0]);
+      double cell_volume = 0;
+      for(unsigned int q = 0; q < n_q_points_2d; ++q)
+      {
+        const DerivativeForm<1, dim, dim> jacobian = fe_values.jacobian(q);
+        cell_volume += jacobian.determinant() * face_quadrature.weight(q);
+        const DerivativeForm<1, dim, dim> inv_jacobian = jacobian.covariant_form();
+        const unsigned int                data_idx     = index[0] * n_q_points_2d + q;
+        cell_JxW_xy[data_idx] =
+          (jacobian[0][0] * jacobian[1][1] - jacobian[0][1] * jacobian[1][0]) *
+          face_quadrature.weight(q);
+        if(dim == 3)
+        {
+          h_z         = jacobian[2][2];
+          h_z_inverse = 1. / h_z;
+        }
+        for(unsigned int d = 0; d < 2; ++d)
+          for(unsigned int e = 0; e < 2; ++e)
+            jacobians_xy[data_idx][d][e] = inv_jacobian[d][e];
+      }
+
+      double surface_area = 0;
+      for(unsigned int face = 0; face < 4; ++face)
+      {
+        fe_face_values.reinit(cell, face);
+        double face_factor =
+          (cell->at_boundary(face) && !cell->has_periodic_neighbor(face)) ? 1. : 0.5;
+        for(unsigned int q = 0; q < face_quadrature.size(); ++q)
+          surface_area += face_factor * fe_face_values.JxW(q);
+
+        for(unsigned int qx = 0; qx < n_q_points_1d; ++qx)
+        {
+          // take switched coordinates xz on y faces into account
+          const unsigned int q        = (face < 2 || dim == 2) ? qx : qx * n_q_points_1d;
+          const unsigned int data_idx = (index[0] * 4 + face) * n_q_points_1d + qx;
+          const auto         jac      = fe_face_values.jacobian(q);
+          const auto         inv_jac  = jac.covariant_form();
+          for(unsigned int d = 0; d < 2; ++d)
+            face_jxn_xy[data_idx][d] = inv_jac[0][d] * fe_face_values.normal_vector(q)[0] +
+                                       inv_jac[1][d] * fe_face_values.normal_vector(q)[1];
+          face_JxW_xy[data_idx] = std::sqrt(jac[0][1 - face / 2] * jac[0][1 - face / 2] +
+                                            jac[1][1 - face / 2] * jac[1][1 - face / 2]) *
+                                  quadrature_1d.weight(qx);
+        }
+      }
+      // take the two faces in z direction into account; they are always in
+      // periodic direction so do not check for boundary
+      if(dim == 3)
+        surface_area += 2 * 0.5 * cell_volume / h_z;
+
+      ip_penalty_factors[index[0]] = surface_area / cell_volume;
+    }
+    quad_weights_h_z.resize(n_q_points_1d);
+    QGauss<1> quad(n_q_points_1d);
+    for(unsigned int q = 0; q < quad.size(); ++q)
+      quad_weights_h_z[q] = quad.weight(q) * h_z;
+  }
+
+  std::size_t
+  memory_consumption() const
+  {
+    return MemoryConsumption::memory_consumption(mapping_data_index) +
+           MemoryConsumption::memory_consumption(jacobians_xy) +
+           MemoryConsumption::memory_consumption(cell_JxW_xy) +
+           MemoryConsumption::memory_consumption(face_mapping_data_index) +
+           MemoryConsumption::memory_consumption(face_jxn_xy) +
+           MemoryConsumption::memory_consumption(face_JxW_xy) +
+           MemoryConsumption::memory_consumption(quad_weights_h_z) +
+           MemoryConsumption::memory_consumption(ip_penalty_factors);
+  }
+
+  Number                                            h_z;
+  Number                                            h_z_inverse;
+  std::vector<std::array<unsigned int, n_lanes>>    mapping_data_index;
+  AlignedVector<Tensor<2, 2, Number>>               jacobians_xy;
+  AlignedVector<Number>                             cell_JxW_xy;
+  std::vector<ndarray<unsigned int, 4, 2, n_lanes>> face_mapping_data_index;
+  AlignedVector<Tensor<1, 2, Number>>               face_jxn_xy;
+  AlignedVector<Number>                             face_JxW_xy;
+  std::vector<Number>                               quad_weights_h_z;
+  std::vector<Number>                               ip_penalty_factors;
+};
+
+
+template<int n_q_points_1d, int dim, typename Number>
+void
+compute_cell_lapl(const internal::MatrixFreeFunctions::UnivariateShapeData<Number> & shape_data,
+                  const MappingInfo<dim, Number> &                                   mapping_info,
+                  const unsigned int                                                 cell,
+                  const Number                                                       factor_mass,
+                  const Number                                                       factor_lapl,
+                  const VectorizedArray<Number> *                                    quad_values,
+                  VectorizedArray<Number> *                                          out_values)
+{
+  constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
+  constexpr unsigned int n_q_points    = Utilities::pow(n_q_points_1d, dim);
+  constexpr unsigned int n_lanes       = VectorizedArray<Number>::size();
+
+  VectorizedArray<Number> grad_y[n_q_points];
+  VectorizedArray<Number> grad_x[Utilities::pow(n_q_points_1d, dim - 1)];
+  VectorizedArray<Number> grad_z[n_q_points_1d];
+
+  std::array<unsigned int, n_lanes> shifted_data_indices;
+  for(unsigned int v = 0; v < n_lanes; ++v)
+    shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
+
+  const Number h_z_inverse = mapping_info.h_z_inverse;
+
+  constexpr unsigned int nn         = n_q_points_1d;
+  const Number *         shape_grad = shape_data.shape_gradients_collocation_eo.data();
+  for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
+    for(unsigned int i0 = 0; i0 < nn; ++i0)
+      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                            internal::EvaluatorQuantity::gradient,
+                                            nn,
+                                            nn,
+                                            nn,
+                                            Utilities::pow(nn, dim - 1),
+                                            true,
+                                            false>(shape_grad,
+                                                   quad_values + (i1 * n_q_points_2d + i0),
+                                                   grad_y + (i1 * nn + i0));
+
+  for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
+  {
+    for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
+      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                            internal::EvaluatorQuantity::gradient,
+                                            nn,
+                                            nn,
+                                            1,
+                                            (dim == 3 ? nn : 1),
+                                            true,
+                                            false>(shape_grad,
+                                                   quad_values + (qy * nn + i0 * n_q_points_2d),
+                                                   grad_x + i0);
+
+    for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
+    {
+      Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy;
+      vectorized_load_and_transpose(4,
+                                    &mapping_info.jacobians_xy[q1][0][0],
+                                    shifted_data_indices.data(),
+                                    &inv_jac_xy[0][0]);
+      VectorizedArray<Number> JxW_xy;
+      JxW_xy.gather(&mapping_info.cell_JxW_xy[q1], mapping_info.mapping_data_index[cell].data());
+
+      if constexpr(dim == 2)
+      {
+        const VectorizedArray<Number> val     = quad_values[q1];
+        const VectorizedArray<Number> grad[2] = {grad_x[qx], grad_y[q1]};
+
+        VectorizedArray<Number> grad_real[dim];
+        for(unsigned int d = 0; d < dim; ++d)
+          grad_real[d] = inv_jac_xy[d][0] * grad[0] + inv_jac_xy[d][1] * grad[1];
+
+        for(unsigned int e = 0; e < dim; ++e)
+        {
+          grad_real[e] *= JxW_xy * factor_lapl;
+        }
+
+        grad_x[qx]     = inv_jac_xy[0][0] * grad_real[0] + inv_jac_xy[1][0] * grad_real[1];
+        grad_y[q1]     = inv_jac_xy[0][1] * grad_real[0] + inv_jac_xy[1][1] * grad_real[1];
+        out_values[q1] = val * (JxW_xy * factor_mass);
+      }
+      else // now to dim == 3
+      {
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              nn * nn,
+                                              1,
+                                              true,
+                                              false>(shape_grad, quad_values + q1, grad_z);
+
+        for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
+        {
+          const VectorizedArray<Number> val     = quad_values[q];
+          const VectorizedArray<Number> grad[3] = {grad_x[qz + qx * nn],
+                                                   grad_y[qz * nn + qy * nn * nn + qx],
+                                                   grad_z[qz]};
+
+          VectorizedArray<Number> grad_real[dim];
+          for(unsigned int d = 0; d < 2; ++d)
+            grad_real[d] = inv_jac_xy[d][0] * grad[0] + inv_jac_xy[d][1] * grad[1];
+          grad_real[2] = h_z_inverse * grad[2];
+
+          const Number                  weight_h_z   = mapping_info.quad_weights_h_z[qz];
+          const VectorizedArray<Number> factor_deriv = (JxW_xy * factor_lapl) * weight_h_z;
+          const VectorizedArray<Number> factor_ma    = (JxW_xy * factor_mass) * weight_h_z;
+
+          out_values[q] = val * factor_ma;
+          for(unsigned int e = 0; e < dim; ++e)
+          {
+            grad_real[e] *= factor_deriv;
+          }
+
+          grad_x[qz + qx * nn] = inv_jac_xy[0][0] * grad_real[0] + inv_jac_xy[1][0] * grad_real[1];
+          grad_y[qz * nn + qy * nn * nn + qx] =
+            inv_jac_xy[0][1] * grad_real[0] + inv_jac_xy[1][1] * grad_real[1];
+          grad_z[qz] = h_z_inverse * grad_real[2];
+        }
+
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              1,
+                                              nn * nn,
+                                              false,
+                                              true>(shape_grad, grad_z, out_values + q1);
+      }
+    }
+
+    for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
+      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                            internal::EvaluatorQuantity::gradient,
+                                            nn,
+                                            nn,
+                                            (dim == 3 ? nn : 1),
+                                            1,
+                                            false,
+                                            true>(shape_grad,
+                                                  grad_x + i0,
+                                                  out_values + qy * nn + i0 * n_q_points_2d);
+  }
+
+  for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
+    for(unsigned int i0 = 0; i0 < nn; ++i0)
+      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                            internal::EvaluatorQuantity::gradient,
+                                            nn,
+                                            nn,
+                                            Utilities::pow(nn, dim - 1),
+                                            nn,
+                                            false,
+                                            true>(shape_grad,
+                                                  grad_y + i1 * nn + i0,
+                                                  out_values + i1 * n_q_points_2d + i0);
+}
+
+} // namespace Extruded
+
+
+
+template<int dim, typename Number = double>
+class LaplaceOperatorFE : public EnableObserverPointer
+{
+public:
+  using VectorType = LinearAlgebra::distributed::Vector<Number>;
+
+  LaplaceOperatorFE() = default;
+
+  template<typename OtherNumber>
+  void
+  reinit(const Mapping<dim> &                   mapping,
+         const DoFHandler<dim> &                dof_handler,
+         const AffineConstraints<OtherNumber> & constraints,
+         const std::vector<unsigned int> &      cell_vectorization_category,
+         const Quadrature<1> &                  quadrature,
+         const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
+  {
+    this->dof_handler                                   = &dof_handler;
+    const FiniteElement<dim> &                       fe = dof_handler.get_fe();
+    typename MatrixFree<dim, Number>::AdditionalData mf_data;
+    mf_data.cell_vectorization_category          = cell_vectorization_category;
+    mf_data.cell_vectorization_categories_strict = true;
+    mf_data.overlap_communication_computation    = false;
+    mf_data.initialize_mapping                   = true;
+    matrix_free.reinit(mapping, dof_handler, constraints, quadrature, mf_data);
+
+    const unsigned int fe_degree = fe.degree;
+    compressed_dof_indices.clear();
+    constexpr unsigned int n_lanes                   = VectorizedArray<Number>::size();
+    const unsigned int     stored_dofs_per_direction = fe_degree == 1 ? 2 : 3;
+    compressed_dof_indices.resize(Utilities::pow(stored_dofs_per_direction, dim) * n_lanes *
+                                    matrix_free.n_cell_batches(),
+                                  numbers::invalid_unsigned_int);
+    all_indices_unconstrained.clear();
+    all_indices_unconstrained.resize(Utilities::pow(stored_dofs_per_direction, dim) *
+                                       matrix_free.n_cell_batches(),
+                                     1);
+
+    std::vector<types::global_dof_index> dof_indices(fe.dofs_per_cell);
+    std::vector<unsigned int> renumber_lex = FETools::hierarchic_to_lexicographic_numbering<dim>(2);
+    for(auto & i : renumber_lex)
+      i *= n_lanes;
+
+    for(unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
+    {
+      for(unsigned int l = 0; l < matrix_free.n_active_entries_per_cell_batch(c); ++l)
+      {
+        matrix_free.get_cell_iterator(c, l)->get_dof_indices(dof_indices);
+        const unsigned int n_components = matrix_free.get_dof_handler().get_fe().n_components();
+        const Utilities::MPI::Partitioner & part = *matrix_free.get_dof_info().vector_partitioner;
+        for(types::global_dof_index & i : dof_indices)
+        {
+          const auto line = constraints.get_constraint_entries(i);
+          if(line != nullptr && line->size() == 1 && (*line)[0].second == Number(1.0))
+            i = (*line)[0].first;
+        }
+        // Low degree -> just pick the stored dofs
+        if(fe_degree == 1)
+        {
+          const std::size_t offset = Utilities::pow(2, dim) * (n_lanes * c) + l;
+          for(unsigned int i = 0; i < GeometryInfo<dim>::vertices_per_cell; ++i)
+          {
+            for(unsigned int c = 0; c < n_components; ++c)
+              AssertThrow(dof_indices[i * n_components + c] == dof_indices[i * n_components] + c,
+                          ExcMessage("Expected contiguous numbering"));
+            compressed_dof_indices[offset + i * n_lanes] =
+              part.global_to_local(dof_indices[i * n_components]);
+          }
+        }
+        else
+        {
+          // Else store the compressed form with 3^dim dofs per cell
+          const std::size_t offset = Utilities::pow(3, dim) * (n_lanes * c) + l;
+          unsigned int      cc = 0, cf = 0;
+          for(unsigned int i = 0; i < GeometryInfo<dim>::vertices_per_cell;
+              ++i, ++cc, cf += n_components)
+          {
+            if(!constraints.is_constrained(dof_indices[cf]))
+              compressed_dof_indices[offset + renumber_lex[cc]] =
+                part.global_to_local(dof_indices[cf]);
+            for(unsigned int c = 0; c < n_components; ++c)
+              AssertThrow(dof_indices[cf + c] == dof_indices[cf] + c,
+                          ExcMessage("Expected contiguous numbering"));
+          }
+
+          for(unsigned int line = 0; line < GeometryInfo<dim>::lines_per_cell; ++line)
+          {
+            const unsigned int size = fe_degree - 1;
+            if(!constraints.is_constrained(dof_indices[cf]))
+            {
+              for(unsigned int i = 0; i < size; ++i)
+                for(unsigned int c = 0; c < n_components; ++c)
+                  AssertThrow(dof_indices[cf + c * size + i] ==
+                                dof_indices[cf] + i * n_components + c,
+                              ExcMessage("Expected contiguous numbering"));
+              compressed_dof_indices[offset + renumber_lex[cc]] =
+                part.global_to_local(dof_indices[cf]);
+            }
+            ++cc;
+            cf += size * n_components;
+          }
+          for(unsigned int quad = 0; quad < GeometryInfo<dim>::quads_per_cell; ++quad)
+          {
+            const unsigned int size = (fe_degree - 1) * (fe_degree - 1);
+            if(!constraints.is_constrained(dof_indices[cf]))
+            {
+              // switch order x-z for y faces in 3D to lexicographic layout
+              if(dim == 3 && (quad == 2 || quad == 3))
+                for(unsigned int i1 = 0, i = 0; i1 < fe_degree - 1; ++i1)
+                  for(unsigned int i0 = 0; i0 < fe_degree - 1; ++i0, ++i)
+                    for(unsigned int c = 0; c < n_components; ++c)
+                    {
+                      AssertThrow(dof_indices[cf + c * size + i0 * (fe_degree - 1) + i1] ==
+                                    dof_indices[cf] + i * n_components + c,
+                                  ExcMessage("Expected contiguous numbering"));
+                    }
+              else
+                for(unsigned int i = 0; i < size; ++i)
+                  for(unsigned int c = 0; c < n_components; ++c)
+                    AssertThrow(dof_indices[cf + c * size + i] ==
+                                  dof_indices[cf] + i * n_components + c,
+                                ExcMessage("Expected contiguous numbering"));
+              compressed_dof_indices[offset + renumber_lex[cc]] =
+                part.global_to_local(dof_indices[cf]);
+            }
+            ++cc;
+            cf += size * n_components;
+          }
+          for(unsigned int hex = 0; hex < GeometryInfo<dim>::hexes_per_cell; ++hex)
+          {
+            const unsigned int size = (fe_degree - 1) * (fe_degree - 1) * (fe_degree - 1);
+            if(!constraints.is_constrained(dof_indices[cf]))
+            {
+              for(unsigned int i = 0; i < size; ++i)
+                for(unsigned int c = 0; c < n_components; ++c)
+                  AssertThrow(dof_indices[cf + c * size + i] ==
+                                dof_indices[cf] + i * n_components + c,
+                              ExcMessage("Expected contiguous numbering"));
+              compressed_dof_indices[offset + renumber_lex[cc]] =
+                part.global_to_local(dof_indices[cf]);
+            }
+            ++cc;
+            cf += size * n_components;
+          }
+          AssertThrow(cc == Utilities::pow(3, dim),
+                      ExcMessage("Expected 3^dim dofs, got " + std::to_string(cc)));
+          AssertThrow(cf == dof_indices.size(),
+                      ExcMessage("Expected (fe_degree+1)^dim dofs, got " + std::to_string(cf)));
+        }
+      }
+
+      for(unsigned int i = 0; i < Utilities::pow<unsigned int>(stored_dofs_per_direction, dim); ++i)
+        for(unsigned int v = 0; v < n_lanes; ++v)
+          if(compressed_dof_indices[Utilities::pow<unsigned int>(stored_dofs_per_direction, dim) *
+                                      (n_lanes * c) +
+                                    i * n_lanes + v] == numbers::invalid_unsigned_int)
+            all_indices_unconstrained[Utilities::pow(stored_dofs_per_direction, dim) * c + i] = 0;
+    }
+
+    mapping_info.reinit(mapping, quadrature, matrix_free);
+
+    factor_laplace = 1.0;
+    factor_mass    = 0.0;
+  }
+
+  void
+  initialize_dof_vector(VectorType & vec) const
+  {
+    matrix_free.initialize_dof_vector(vec);
+  }
+
+  void
+  vmult(VectorType & dst, const VectorType & src) const
+  {
+    matrix_free.cell_loop(&LaplaceOperatorFE::local_apply, this, dst, src, true);
+    for(unsigned int i : matrix_free.get_constrained_dofs(0))
+      dst.local_element(i) = src.local_element(i);
+  }
+
+  void
+  vmult(
+    VectorType &                                                        dst,
+    const VectorType &                                                  src,
+    const std::function<void(const unsigned int, const unsigned int)> & operation_before_loop,
+    const std::function<void(const unsigned int, const unsigned int)> & operation_after_loop) const
+  {
+    matrix_free.cell_loop(
+      &LaplaceOperatorFE::local_apply, this, dst, src, operation_before_loop, operation_after_loop);
+  }
+
+  types::global_dof_index
+  m() const
+  {
+    return matrix_free.get_dof_handler().n_dofs();
+  }
+
+  Number
+  el(const types::global_dof_index, const types::global_dof_index) const
+  {
+    AssertThrow(false, ExcNotImplemented());
+    return 0;
+  }
+
+  const MatrixFree<dim, Number> &
+  get_matrix_free() const
+  {
+    return matrix_free;
+  }
+
+  void
+  compute_inverse_diagonal(VectorType & vector) const
+  {
+    matrix_free.initialize_dof_vector(vector);
+    unsigned int dummy = 0;
+    matrix_free.cell_loop(&LaplaceOperatorFE::local_compute_diagonal, this, vector, dummy);
+    for(unsigned int i : matrix_free.get_constrained_dofs(0))
+      vector.local_element(i) = 1;
+    for(Number & a : vector)
+    {
+      AssertThrow(a > 0,
+                  ExcInternalError(
+                    "Error FE degree " + std::to_string(dof_handler->get_fe().degree) + " size " +
+                    std::to_string(dof_handler->n_dofs()) + " a = " + std::to_string(a)));
+      a = Number(1.) / a;
+    }
+  }
+
+  template<int degree>
+  void
+  distribute_local_to_global(const unsigned int        cell,
+                             VectorizedArray<Number> * dof_values,
+                             VectorType &              dst) const
+  {
+    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+    if(degree <= 2)
+    {
+      constexpr unsigned int dofs_per_cell = Utilities::pow(degree + 1, dim);
+      const unsigned int *   dof_indices =
+        compressed_dof_indices.data() + cell * dofs_per_cell * n_lanes;
+      const unsigned char * unconstrained = all_indices_unconstrained.data() + cell * dofs_per_cell;
+      for(unsigned int i = 0; i < dofs_per_cell; ++i)
+        if(unconstrained[i])
+          for(unsigned int v = 0; v < n_lanes; ++v)
+            dst.local_element(dof_indices[i * n_lanes + v]) += dof_values[i][v];
+        else
+        {
+          for(unsigned int v = 0; v < n_lanes; ++v)
+            if(dof_indices[i * n_lanes + v] != numbers::invalid_unsigned_int)
+              dst.local_element(dof_indices[i * n_lanes + v]) += dof_values[i][v];
+        }
+    }
+    else
+      distribute_local_to_global_compressed<degree, degree + 1, 1>(
+        dst, compressed_dof_indices, all_indices_unconstrained, cell, {}, true, dof_values);
+  }
+
+private:
+  void
+  local_apply(const MatrixFree<dim, Number> &               data,
+              VectorType &                                  dst,
+              const VectorType &                            src,
+              const std::pair<unsigned int, unsigned int> & cell_range) const
+  {
+    const unsigned int degree = data.get_shape_info().data[0].fe_degree;
+    for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+    {
+      if(degree == 1)
+        do_cell_operation<1, true>(cell, src, dst);
+      else if(degree == 2)
+        do_cell_operation<2, true>(cell, src, dst);
+      else if(degree == 3)
+        do_cell_operation<3, true>(cell, src, dst);
+      else if(degree == 4)
+        do_cell_operation<4, true>(cell, src, dst);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_cell_operation<5, true>(cell, src, dst);
+      else if(degree == 6)
+        do_cell_operation<6, true>(cell, src, dst);
+      else if(degree == 7)
+        do_cell_operation<7, true>(cell, src, dst);
+      else if(degree == 8)
+        do_cell_operation<8, true>(cell, src, dst);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+  }
+
+  void
+  local_compute_diagonal(const MatrixFree<dim, Number> & data,
+                         VectorType &                    dst,
+                         const unsigned int &,
+                         const std::pair<unsigned int, unsigned int> & cell_range) const
+  {
+    const unsigned int degree = data.get_shape_info().data[0].fe_degree;
+    for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+    {
+      if(degree == 1)
+        do_cell_operation<1, false>(cell, dst, dst);
+      else if(degree == 2)
+        do_cell_operation<2, false>(cell, dst, dst);
+      else if(degree == 3)
+        do_cell_operation<3, false>(cell, dst, dst);
+      else if(degree == 4)
+        do_cell_operation<4, false>(cell, dst, dst);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_cell_operation<5, false>(cell, dst, dst);
+      else if(degree == 6)
+        do_cell_operation<6, false>(cell, dst, dst);
+      else if(degree == 7)
+        do_cell_operation<7, false>(cell, dst, dst);
+      else if(degree == 8)
+        do_cell_operation<8, false>(cell, dst, dst);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+  }
+
+  template<int degree, bool evaluate_operator>
+  void
+  do_cell_operation(const unsigned int cell_index, const VectorType & src, VectorType & dst) const
+  {
+    constexpr unsigned int  n_q_points_1d = degree + 1;
+    constexpr unsigned int  n_q_points    = Utilities::pow(n_q_points_1d, dim);
+    VectorizedArray<Number> quad_values[n_q_points];
+    constexpr unsigned int  n_lanes = VectorizedArray<Number>::size();
+
+    const internal::MatrixFreeFunctions::UnivariateShapeData<Number> & shape_data =
+      matrix_free.get_shape_info().data[0];
+    if(evaluate_operator)
+    {
+      if(degree <= 2)
+      {
+        const unsigned int * dof_indices =
+          compressed_dof_indices.data() + cell_index * Utilities::pow(degree + 1, dim) * n_lanes;
+        const unsigned char * unconstrained =
+          all_indices_unconstrained.data() + cell_index * Utilities::pow(degree + 1, dim);
+        for(unsigned int i = 0; i < n_q_points; ++i)
+          if(unconstrained[i])
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              quad_values[i][v] = src.local_element(dof_indices[i * n_lanes + v]);
+          else
+          {
+            quad_values[i] = VectorizedArray<Number>();
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              if(dof_indices[i * n_lanes + v] != numbers::invalid_unsigned_int)
+                quad_values[i][v] = src.local_element(dof_indices[i * n_lanes + v]);
+          }
+
+        dealii::internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
+                                                      dealii::internal::EvaluatorQuantity::value,
+                                                      dim,
+                                                      degree + 1,
+                                                      degree + 1>::do_forward(1,
+                                                                              shape_data
+                                                                                .shape_values_eo,
+                                                                              quad_values,
+                                                                              quad_values);
+      }
+      else
+        read_dof_values_compressed<degree, n_q_points_1d, 1>(src,
+                                                             compressed_dof_indices,
+                                                             all_indices_unconstrained,
+                                                             cell_index,
+                                                             shape_data.shape_values_eo,
+                                                             false,
+                                                             quad_values);
+
+      if(factor_laplace != 0)
+        Extruded::compute_cell_lapl<n_q_points_1d>(shape_data,
+                                                   mapping_info,
+                                                   cell_index,
+                                                   factor_mass,
+                                                   factor_laplace,
+                                                   quad_values,
+                                                   quad_values);
+      else
+        AssertThrow(false, ExcNotImplemented());
+
+      if(degree <= 2)
+      {
+        dealii::internal::FEEvaluationImplBasisChange<
+          dealii::internal::evaluate_evenodd,
+          dealii::internal::EvaluatorQuantity::value,
+          dim,
+          degree + 1,
+          degree + 1>::do_backward(1, shape_data.shape_values_eo, false, quad_values, quad_values);
+        const unsigned int * dof_indices =
+          compressed_dof_indices.data() + cell_index * Utilities::pow(degree + 1, dim) * n_lanes;
+        const unsigned char * unconstrained =
+          all_indices_unconstrained.data() + cell_index * Utilities::pow(degree + 1, dim);
+        for(unsigned int i = 0; i < n_q_points; ++i)
+          if(unconstrained[i])
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              dst.local_element(dof_indices[i * n_lanes + v]) += quad_values[i][v];
+          else
+          {
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              if(dof_indices[i * n_lanes + v] != numbers::invalid_unsigned_int)
+                dst.local_element(dof_indices[i * n_lanes + v]) += quad_values[i][v];
+          }
+      }
+      else
+        distribute_local_to_global_compressed<degree, n_q_points_1d, 1>(dst,
+                                                                        compressed_dof_indices,
+                                                                        all_indices_unconstrained,
+                                                                        cell_index,
+                                                                        shape_data.shape_values_eo,
+                                                                        false,
+                                                                        quad_values);
+    }
+    else
+    {
+      VectorizedArray<Number> diag_values[n_q_points];
+      for(unsigned int i = 0; i < n_q_points; ++i)
+      {
+        std::array<unsigned int, dim> tensor_i;
+        constexpr unsigned int        nn = degree + 1;
+        if(dim == 2)
+        {
+          tensor_i[0] = i % nn;
+          tensor_i[1] = i / nn;
+        }
+        else if(dim == 3)
+        {
+          tensor_i[0] = i % nn;
+          tensor_i[1] = (i / nn) % nn;
+          tensor_i[2] = i / (nn * nn);
+        }
+        for(unsigned int q2 = 0, q = 0; q2 < (dim > 2 ? n_q_points_1d : 1); ++q2)
+          for(unsigned int q1 = 0; q1 < (dim > 1 ? n_q_points_1d : 1); ++q1)
+            for(unsigned int q0 = 0; q0 < n_q_points_1d; ++q0, ++q)
+              quad_values[q] =
+                ((dim == 3 ? shape_data.shape_values[tensor_i[2] * nn + q2] : Number(1.0)) *
+                 shape_data.shape_values[tensor_i[1] * nn + q1]) *
+                shape_data.shape_values[tensor_i[0] * nn + q0];
+
+        if(factor_laplace != 0)
+          Extruded::compute_cell_lapl<n_q_points_1d>(shape_data,
+                                                     mapping_info,
+                                                     cell_index,
+                                                     factor_mass,
+                                                     factor_laplace,
+                                                     quad_values,
+                                                     quad_values);
+
+        VectorizedArray<Number> sum = 0;
+        for(unsigned int q2 = 0, q = 0; q2 < (dim > 2 ? n_q_points_1d : 1); ++q2)
+          for(unsigned int q1 = 0; q1 < (dim > 1 ? n_q_points_1d : 1); ++q1)
+          {
+            VectorizedArray<Number> inner_sum = {};
+            for(unsigned int q0 = 0; q0 < n_q_points_1d; ++q0, ++q)
+              inner_sum += shape_data.shape_values[tensor_i[0] * nn + q0] * quad_values[q];
+            sum += ((dim == 3 ? shape_data.shape_values[tensor_i[2] * nn + q2] : Number(1.0)) *
+                    shape_data.shape_values[tensor_i[1] * nn + q1]) *
+                   inner_sum;
+          }
+
+        // write diagonal entry to global vector
+        diag_values[i] = sum;
+      }
+      distribute_local_to_global<degree>(cell_index, diag_values, dst);
+    }
+  }
+
+  template<int fe_degree, int n_q_points_1d, int n_components>
+  void
+  read_dof_values_compressed(const VectorType &                    vec_in,
+                             const std::vector<unsigned int> &     compressed_indices,
+                             const std::vector<unsigned char> &    all_indices_unconstrained,
+                             const unsigned int                    cell_no,
+                             const dealii::AlignedVector<Number> & shape_values_eo,
+                             const bool                            is_collocation,
+                             VectorizedArray<Number> *             dof_values) const
+  {
+    VectorType & vec = const_cast<VectorType &>(vec_in);
+    AssertIndexRange(cell_no * dealii::Utilities::pow(3, dim) * VectorizedArray<Number>::size(),
+                     compressed_indices.size());
+    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+    const unsigned int *   cell_indices =
+      compressed_indices.data() + cell_no * n_lanes * dealii::Utilities::pow(3, dim);
+    const unsigned char * cell_unconstrained =
+      all_indices_unconstrained.data() + cell_no * dealii::Utilities::pow(3, dim);
+    constexpr unsigned int dofs_per_comp = dealii::Utilities::pow(n_q_points_1d, dim);
+    dealii::internal::VectorReader<Number, VectorizedArray<Number>> reader;
+
+    for(unsigned int i2 = 0, compressed_i2 = 0, offset_i2 = 0;
+        i2 < (dim == 3 ? (fe_degree + 1) : 1);
+        ++i2)
+    {
+      bool all_unconstrained = true;
+      for(unsigned int i = 0; i < 9; ++i)
+        if(cell_unconstrained[9 * compressed_i2 + i] == 0)
+          all_unconstrained = false;
+      if(n_components == 1 && fe_degree < 8 && all_unconstrained)
+      {
+        const unsigned int *   indices       = cell_indices + 9 * n_lanes * compressed_i2;
+        constexpr unsigned int dofs_per_line = (fe_degree - 1);
+        // first line
+        reader.process_dof_gather(indices,
+                                  vec,
+                                  offset_i2,
+                                  vec.begin() + offset_i2,
+                                  dof_values[0],
+                                  std::integral_constant<bool, true>());
+        indices += n_lanes;
+        dealii::vectorized_load_and_transpose(dofs_per_line,
+                                              vec.begin() + offset_i2 * dofs_per_line,
+                                              indices,
+                                              dof_values + 1);
+        indices += n_lanes;
+        reader.process_dof_gather(indices,
+                                  vec,
+                                  offset_i2,
+                                  vec.begin() + offset_i2,
+                                  dof_values[fe_degree],
+                                  std::integral_constant<bool, true>());
+        indices += n_lanes;
+
+        // inner part
+        VectorizedArray<Number> tmp[fe_degree > 1 ? (fe_degree - 1) * (fe_degree - 1) : 1];
+        dealii::vectorized_load_and_transpose(
+          dofs_per_line, vec.begin() + offset_i2 * (fe_degree - 1) * n_components, indices, tmp);
+        for(unsigned int i0 = 0; i0 < dofs_per_line; ++i0)
+          dof_values[(fe_degree + 1) * (i0 + 1)] = tmp[i0];
+        indices += n_lanes;
+
+        constexpr unsigned int dofs_per_quad = (fe_degree - 1) * (fe_degree - 1);
+        dealii::vectorized_load_and_transpose(dofs_per_quad,
+                                              vec.begin() + offset_i2 * dofs_per_quad,
+                                              indices,
+                                              tmp);
+        for(unsigned int i1 = 0; i1 < dofs_per_line; ++i1)
+          for(unsigned int i0 = 0; i0 < dofs_per_line; ++i0)
+            dof_values[(i1 + 1) * (fe_degree + 1) + i0 + 1] = tmp[i1 * dofs_per_line + i0];
+        indices += n_lanes;
+
+        dealii::vectorized_load_and_transpose(dofs_per_line,
+                                              vec.begin() + offset_i2 * dofs_per_line,
+                                              indices,
+                                              tmp);
+        for(unsigned int i0 = 0; i0 < dofs_per_line; ++i0)
+          dof_values[(fe_degree + 1) * (i0 + 1) + fe_degree] = tmp[i0];
+        indices += n_lanes;
+
+        // last line
+        constexpr unsigned int i = fe_degree * (fe_degree + 1);
+        reader.process_dof_gather(indices,
+                                  vec,
+                                  offset_i2,
+                                  vec.begin() + offset_i2,
+                                  dof_values[i],
+                                  std::integral_constant<bool, true>());
+        indices += n_lanes;
+        dealii::vectorized_load_and_transpose(dofs_per_line,
+                                              vec.begin() + offset_i2 * dofs_per_line,
+                                              indices,
+                                              dof_values + i + 1);
+        indices += n_lanes;
+        reader.process_dof_gather(indices,
+                                  vec,
+                                  offset_i2,
+                                  vec.begin() + offset_i2,
+                                  dof_values[i + fe_degree],
+                                  std::integral_constant<bool, true>());
+        indices += n_lanes;
+      }
+      else
+        for(unsigned int i1 = 0, i = 0, compressed_i1 = 0, offset_i1 = 0;
+            i1 < (dim > 1 ? (fe_degree + 1) : 1);
+            ++i1)
+        {
+          const unsigned int offset =
+            (compressed_i1 == 1 ? fe_degree - 1 : 1) * offset_i2 + offset_i1;
+          const unsigned int * indices =
+            cell_indices + 3 * n_lanes * (compressed_i2 * 3 + compressed_i1);
+          const unsigned char * unconstrained =
+            cell_unconstrained + 3 * (compressed_i2 * 3 + compressed_i1);
+
+          // left end point
+          if(unconstrained[0])
+            for(unsigned int c = 0; c < n_components; ++c)
+              reader.process_dof_gather(indices,
+                                        vec,
+                                        offset * n_components + c,
+                                        vec.begin() + offset * n_components + c,
+                                        dof_values[i + c * dofs_per_comp],
+                                        std::integral_constant<bool, true>());
+          else
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              for(unsigned int c = 0; c < n_components; ++c)
+                dof_values[i + c * dofs_per_comp][v] =
+                  (indices[v] == dealii::numbers::invalid_unsigned_int) ?
+                    0. :
+                    vec.local_element(indices[v] + offset * n_components + c);
+          ++i;
+          indices += n_lanes;
+
+          // interior points of line
+          if(unconstrained[1])
+          {
+            constexpr unsigned int  dofs_per_line = (fe_degree - 1) * n_components;
+            VectorizedArray<Number> tmp[fe_degree > 1 ? dofs_per_line : 1];
+            dealii::vectorized_load_and_transpose(dofs_per_line,
+                                                  vec.begin() + offset * dofs_per_line,
+                                                  indices,
+                                                  tmp);
+            for(unsigned int i0 = 0; i0 < fe_degree - 1; ++i0, ++i)
+              for(unsigned int c = 0; c < n_components; ++c)
+                dof_values[i + c * dofs_per_comp] = tmp[i0 * n_components + c];
+          }
+          else
+            for(unsigned int i0 = 0; i0 < fe_degree - 1; ++i0, ++i)
+              for(unsigned int v = 0; v < n_lanes; ++v)
+                if(indices[v] != dealii::numbers::invalid_unsigned_int)
+                  for(unsigned int c = 0; c < n_components; ++c)
+                    dof_values[i + c * dofs_per_comp][v] = vec.local_element(
+                      indices[v] + (offset * (fe_degree - 1) + i0) * n_components + c);
+                else
+                  for(unsigned int c = 0; c < n_components; ++c)
+                    dof_values[i + c * dofs_per_comp][v] = 0.;
+          indices += n_lanes;
+
+          // right end point
+          if(unconstrained[2])
+            for(unsigned int c = 0; c < n_components; ++c)
+              reader.process_dof_gather(indices,
+                                        vec,
+                                        offset * n_components + c,
+                                        vec.begin() + offset * n_components + c,
+                                        dof_values[i + c * dofs_per_comp],
+                                        std::integral_constant<bool, true>());
+          else
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              for(unsigned int c = 0; c < n_components; ++c)
+                dof_values[i + c * dofs_per_comp][v] =
+                  (indices[v] == dealii::numbers::invalid_unsigned_int) ?
+                    0. :
+                    vec.local_element(indices[v] + offset * n_components + c);
+          ++i;
+
+          if(i1 == 0 || i1 == fe_degree - 1)
+          {
+            ++compressed_i1;
+            offset_i1 = 0;
+          }
+          else
+            ++offset_i1;
+        }
+      if(!is_collocation)
+        for(unsigned int c = 0; c < n_components; ++c)
+          dealii::internal::FEEvaluationImplBasisChange<
+            dealii::internal::evaluate_evenodd,
+            dealii::internal::EvaluatorQuantity::value,
+            2,
+            fe_degree + 1,
+            n_q_points_1d>::do_forward(1,
+                                       shape_values_eo,
+                                       dof_values + c * dofs_per_comp,
+                                       dof_values + c * dofs_per_comp);
+
+      if(i2 == 0 || i2 == fe_degree - 1)
+      {
+        ++compressed_i2;
+        offset_i2 = 0;
+      }
+      else
+        ++offset_i2;
+
+      dof_values += n_q_points_1d * n_q_points_1d;
+    }
+
+    dof_values -= dofs_per_comp;
+    if(dim == 3 && !is_collocation)
+      for(unsigned int c = 0; c < n_components; ++c)
+        for(unsigned int q1 = 0; q1 < n_q_points_1d * n_q_points_1d; ++q1)
+          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                internal::EvaluatorQuantity::value,
+                                                fe_degree + 1,
+                                                n_q_points_1d,
+                                                n_q_points_1d * n_q_points_1d,
+                                                n_q_points_1d * n_q_points_1d,
+                                                true,
+                                                false>(shape_values_eo.data(),
+                                                       dof_values + q1 + c * dofs_per_comp,
+                                                       dof_values + q1 + c * dofs_per_comp);
+  }
+
+  template<int fe_degree, int n_q_points_1d, int n_components>
+  void
+  distribute_local_to_global_compressed(
+    VectorType &                          vec,
+    const std::vector<unsigned int> &     compressed_indices,
+    const std::vector<unsigned char> &    all_indices_unconstrained,
+    const unsigned int                    cell_no,
+    const dealii::AlignedVector<Number> & shape_values_eo,
+    const bool                            is_collocation,
+    VectorizedArray<Number> *             dof_values) const
+  {
+    AssertIndexRange(cell_no * dealii::Utilities::pow(3, dim) * VectorizedArray<Number>::size(),
+                     compressed_indices.size());
+    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+    const unsigned int *   cell_indices =
+      compressed_indices.data() + cell_no * n_lanes * dealii::Utilities::pow(3, dim);
+    const unsigned char * cell_unconstrained =
+      all_indices_unconstrained.data() + cell_no * dealii::Utilities::pow(3, dim);
+    constexpr unsigned int dofs_per_comp = dealii::Utilities::pow(n_q_points_1d, dim);
+    dealii::internal::VectorDistributorLocalToGlobal<Number, VectorizedArray<Number>> distributor;
+
+    if(dim == 3 && !is_collocation)
+      for(unsigned int c = 0; c < n_components; ++c)
+        for(unsigned int q1 = 0; q1 < n_q_points_1d * n_q_points_1d; ++q1)
+          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                internal::EvaluatorQuantity::value,
+                                                fe_degree + 1,
+                                                n_q_points_1d,
+                                                n_q_points_1d * n_q_points_1d,
+                                                n_q_points_1d * n_q_points_1d,
+                                                false,
+                                                false>(shape_values_eo.data(),
+                                                       dof_values + q1 + c * dofs_per_comp,
+                                                       dof_values + q1 + c * dofs_per_comp);
+
+    for(unsigned int i2 = 0, compressed_i2 = 0, offset_i2 = 0;
+        i2 < (dim == 3 ? (fe_degree + 1) : 1);
+        ++i2)
+    {
+      if(!is_collocation)
+        for(unsigned int c = 0; c < n_components; ++c)
+          dealii::internal::FEEvaluationImplBasisChange<
+            dealii::internal::evaluate_evenodd,
+            dealii::internal::EvaluatorQuantity::value,
+            2,
+            fe_degree + 1,
+            n_q_points_1d>::do_backward(1,
+                                        shape_values_eo,
+                                        false,
+                                        dof_values + c * dofs_per_comp,
+                                        dof_values + c * dofs_per_comp);
+      bool all_unconstrained = true;
+      for(unsigned int i = 0; i < 9; ++i)
+        if(cell_unconstrained[9 * compressed_i2 + i] == 0)
+          all_unconstrained = false;
+      if(n_components == 1 && fe_degree < 8 && all_unconstrained)
+      {
+        const unsigned int *   indices       = cell_indices + 9 * n_lanes * compressed_i2;
+        constexpr unsigned int dofs_per_line = fe_degree - 1;
+        // first line
+        distributor.process_dof_gather(indices,
+                                       vec,
+                                       offset_i2,
+                                       vec.begin() + offset_i2,
+                                       dof_values[0],
+                                       std::integral_constant<bool, true>());
+        indices += n_lanes;
+        dealii::vectorized_transpose_and_store(
+          true, dofs_per_line, dof_values + 1, indices, vec.begin() + offset_i2 * dofs_per_line);
+        indices += n_lanes;
+        distributor.process_dof_gather(indices,
+                                       vec,
+                                       offset_i2,
+                                       vec.begin() + offset_i2,
+                                       dof_values[fe_degree],
+                                       std::integral_constant<bool, true>());
+        indices += n_lanes;
+
+        // inner part
+        constexpr unsigned int  dofs_per_quad = (fe_degree - 1) * (fe_degree - 1);
+        VectorizedArray<Number> tmp[fe_degree > 1 ? dofs_per_quad : 1];
+        for(unsigned int i0 = 0; i0 < dofs_per_line; ++i0)
+          tmp[i0] = dof_values[(fe_degree + 1) * (i0 + 1)];
+        dealii::vectorized_transpose_and_store(
+          true, dofs_per_line, tmp, indices, vec.begin() + offset_i2 * dofs_per_line);
+        indices += n_lanes;
+
+        for(unsigned int i1 = 0; i1 < dofs_per_line; ++i1)
+          for(unsigned int i0 = 0; i0 < dofs_per_line; ++i0)
+            tmp[i1 * dofs_per_line + i0] = dof_values[(i1 + 1) * (fe_degree + 1) + i0 + 1];
+        dealii::vectorized_transpose_and_store(
+          true, dofs_per_quad, tmp, indices, vec.begin() + offset_i2 * dofs_per_quad);
+        indices += n_lanes;
+
+        for(unsigned int i0 = 0; i0 < dofs_per_line; ++i0)
+          tmp[i0] = dof_values[(fe_degree + 1) * (i0 + 1) + fe_degree];
+        dealii::vectorized_transpose_and_store(true,
+                                               dofs_per_line,
+                                               tmp,
+                                               indices,
+                                               vec.begin() +
+                                                 offset_i2 * (fe_degree - 1) * n_components);
+        indices += n_lanes;
+
+        // last line
+        constexpr unsigned int i = fe_degree * (fe_degree + 1);
+        distributor.process_dof_gather(indices,
+                                       vec,
+                                       offset_i2,
+                                       vec.begin() + offset_i2,
+                                       dof_values[i],
+                                       std::integral_constant<bool, true>());
+        indices += n_lanes;
+        dealii::vectorized_transpose_and_store(true,
+                                               dofs_per_line,
+                                               dof_values + i + 1,
+                                               indices,
+                                               vec.begin() + offset_i2 * dofs_per_line);
+        indices += n_lanes;
+        distributor.process_dof_gather(indices,
+                                       vec,
+                                       offset_i2,
+                                       vec.begin() + offset_i2,
+                                       dof_values[i + fe_degree],
+                                       std::integral_constant<bool, true>());
+        indices += n_lanes;
+      }
+      else
+        for(unsigned int i1 = 0, i = 0, compressed_i1 = 0, offset_i1 = 0;
+            i1 < (dim > 1 ? (fe_degree + 1) : 1);
+            ++i1)
+        {
+          const unsigned int offset =
+            (compressed_i1 == 1 ? fe_degree - 1 : 1) * offset_i2 + offset_i1;
+          const unsigned int * indices =
+            cell_indices + 3 * n_lanes * (compressed_i2 * 3 + compressed_i1);
+          const unsigned char * unconstrained =
+            cell_unconstrained + 3 * (compressed_i2 * 3 + compressed_i1);
+
+          // left end point
+          if(unconstrained[0])
+            for(unsigned int c = 0; c < n_components; ++c)
+              distributor.process_dof_gather(indices,
+                                             vec,
+                                             offset * n_components + c,
+                                             vec.begin() + offset * n_components + c,
+                                             dof_values[i + c * dofs_per_comp],
+                                             std::integral_constant<bool, true>());
+          else
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              for(unsigned int c = 0; c < n_components; ++c)
+                if(indices[v] != dealii::numbers::invalid_unsigned_int)
+                  vec.local_element(indices[v] + offset * n_components + c) +=
+                    dof_values[i + c * dofs_per_comp][v];
+          ++i;
+          indices += n_lanes;
+
+          // interior points of line
+          if(unconstrained[1])
+          {
+            VectorizedArray<Number> tmp[fe_degree > 1 ? (fe_degree - 1) * n_components : 1];
+            for(unsigned int i0 = 0; i0 < fe_degree - 1; ++i0, ++i)
+              for(unsigned int c = 0; c < n_components; ++c)
+                tmp[i0 * n_components + c] = dof_values[i + c * dofs_per_comp];
+
+            constexpr unsigned int n_regular = (fe_degree - 1) * n_components / 4 * 4;
+            dealii::vectorized_transpose_and_store(
+              true, n_regular, tmp, indices, vec.begin() + offset * (fe_degree - 1) * n_components);
+            for(unsigned int i0 = n_regular; i0 < (fe_degree - 1) * n_components; ++i0)
+              distributor.process_dof_gather(indices,
+                                             vec,
+                                             offset * (fe_degree - 1) * n_components + i0,
+                                             vec.begin() + offset * (fe_degree - 1) * n_components +
+                                               i0,
+                                             tmp[i0],
+                                             std::integral_constant<bool, true>());
+          }
+          else
+            for(unsigned int i0 = 0; i0 < fe_degree - 1; ++i0, ++i)
+              for(unsigned int v = 0; v < n_lanes; ++v)
+                if(indices[v] != dealii::numbers::invalid_unsigned_int)
+                  for(unsigned int c = 0; c < n_components; ++c)
+                    vec.local_element(indices[v] + (offset * (fe_degree - 1) + i0) * n_components +
+                                      c) += dof_values[i + c * dofs_per_comp][v];
+          indices += n_lanes;
+
+          // right end point
+          if(unconstrained[2])
+            for(unsigned int c = 0; c < n_components; ++c)
+              distributor.process_dof_gather(indices,
+                                             vec,
+                                             offset * n_components + c,
+                                             vec.begin() + offset * n_components + c,
+                                             dof_values[i + c * dofs_per_comp],
+                                             std::integral_constant<bool, true>());
+          else
+            for(unsigned int v = 0; v < n_lanes; ++v)
+              for(unsigned int c = 0; c < n_components; ++c)
+                if(indices[v] != dealii::numbers::invalid_unsigned_int)
+                  vec.local_element(indices[v] + offset * n_components + c) +=
+                    dof_values[i + c * dofs_per_comp][v];
+          ++i;
+
+          if(i1 == 0 || i1 == fe_degree - 1)
+          {
+            ++compressed_i1;
+            offset_i1 = 0;
+          }
+          else
+            ++offset_i1;
+        }
+      if(i2 == 0 || i2 == fe_degree - 1)
+      {
+        ++compressed_i2;
+        offset_i2 = 0;
+      }
+      else
+        ++offset_i2;
+      dof_values += n_q_points_1d * n_q_points_1d;
+    }
+  }
+
+  ObserverPointer<const DoFHandler<dim>> dof_handler;
+  MatrixFree<dim, Number>                matrix_free;
+  std::vector<unsigned int>              compressed_dof_indices;
+  std::vector<unsigned char>             all_indices_unconstrained;
+
+  Extruded::MappingInfo<dim, Number> mapping_info;
+
+  Number factor_laplace;
+  Number factor_mass;
+};
+
+
+
 template<int dim, typename Number = double>
 class LaplaceOperatorDG : public EnableObserverPointer
 {
 public:
-  using VectorType = LinearAlgebra::distributed::Vector<Number>;
+  static constexpr unsigned int dimension = dim;
+  using VectorType                        = LinearAlgebra::distributed::Vector<Number>;
 
   LaplaceOperatorDG() = default;
 
@@ -59,12 +1352,11 @@ public:
   {
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
-    MatrixFree<dim, Number>                          matrix_free;
     typename MatrixFree<dim, Number>::AdditionalData mf_data;
     mf_data.cell_vectorization_category          = cell_vectorization_category;
     mf_data.cell_vectorization_categories_strict = true;
     mf_data.overlap_communication_computation    = false;
-    mf_data.initialize_mapping                   = false;
+    mf_data.initialize_mapping                   = true;
     matrix_free.reinit(MappingQ1<dim>(), dof_handler, constraints, quadrature, mf_data);
     {
       std::array<unsigned int, n_lanes> default_dof_indices;
@@ -78,8 +1370,7 @@ public:
           matrix_free.get_dof_info()
             .dof_indices_contiguous[internal::MatrixFreeFunctions::DoFInfo::dof_access_cell]
                                    [cell * n_lanes + v];
-    partitioner = std::make_shared<Utilities::MPI::Partitioner>(dof_handler.locally_owned_dofs(),
-                                                                dof_handler.get_mpi_communicator());
+    partitioner = matrix_free.get_dof_info().vector_partitioner;
 
     {
       ndarray<unsigned int, 2 * dim, n_lanes> default_argument;
@@ -204,178 +1495,15 @@ public:
       export_values.resize_fast(send_data_cell_index.size() * data_per_face);
     }
 
+    mapping_info.reinit(mapping, quadrature, matrix_free);
+
     compute_vector_access_pattern();
 
-    FloatingPointComparator<double> comparator(dof_handler.get_triangulation().begin()->diameter() *
-                                               1e-10);
-    std::map<Point<2>, std::array<int, 3>, FloatingPointComparator<double>> unique_cells(
-      comparator);
-
-    std::vector<unsigned int> geometry_index(dof_handler.get_triangulation().n_active_cells(),
-                                             numbers::invalid_unsigned_int);
-    // collect possible compression of Jacobian data due to extrusion in z
-    // direction by checking the position of the first cell vertex in the xy
-    // plane. First check locally owned cells in exactly the order matrix-free
-    // loops visit them, then for ghosts to get the complete face data also in
-    // parallel computations
-    for(unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
-      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(c); ++v)
-      {
-        const auto cell     = matrix_free.get_cell_iterator(c, v);
-        const auto vertices = mapping.get_vertices(cell);
-        Point<2>   p(vertices[0][0], vertices[0][1]);
-        const auto position = unique_cells.find(p);
-        if(position == unique_cells.end())
-        {
-          geometry_index[cell->active_cell_index()] = unique_cells.size();
-          unique_cells.insert(std::make_pair(
-            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
-        }
-        else
-          geometry_index[cell->active_cell_index()] = position->second[0];
-      }
-    for(const auto & cell : dof_handler.active_cell_iterators())
-      if(cell->is_ghost())
-      {
-        const auto vertices = mapping.get_vertices(cell);
-        Point<2>   p(vertices[0][0], vertices[0][1]);
-        const auto position = unique_cells.find(p);
-        if(position == unique_cells.end())
-        {
-          geometry_index[cell->active_cell_index()] = unique_cells.size();
-          unique_cells.insert(std::make_pair(
-            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
-        }
-        else
-          geometry_index[cell->active_cell_index()] = position->second[0];
-      }
-
-    const unsigned int n_q_points_1d = matrix_free.get_shape_info().data[0].n_q_points_1d;
-    const unsigned int n_q_points_2d = Utilities::pow(n_q_points_1d, 2);
-    mapping_data_index.resize(matrix_free.n_cell_batches());
-    face_mapping_data_index.resize(matrix_free.n_cell_batches());
-    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
     {
-      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
-      {
-        const auto dcell            = matrix_free.get_cell_iterator(cell, v);
-        mapping_data_index[cell][v] = geometry_index[dcell->active_cell_index()] * n_q_points_2d;
-        for(unsigned int f = 0; f < 4; ++f)
-        {
-          face_mapping_data_index[cell][f][0][v] =
-            (geometry_index[dcell->active_cell_index()] * 4 + f) * n_q_points_1d;
-          const bool at_boundary           = dcell->at_boundary(f);
-          const bool has_periodic_neighbor = at_boundary && dcell->has_periodic_neighbor(f);
-          if(at_boundary == false || has_periodic_neighbor)
-          {
-            const auto neighbor =
-              has_periodic_neighbor ? dcell->periodic_neighbor(f) : dcell->neighbor(f);
-            const unsigned int neighbor_face_idx = has_periodic_neighbor ?
-                                                     dcell->periodic_neighbor_face_no(f) :
-                                                     dcell->neighbor_face_no(f);
-            face_mapping_data_index[cell][f][1][v] =
-              (geometry_index[neighbor->active_cell_index()] * 4 + neighbor_face_idx) *
-              n_q_points_1d;
-          }
-          else
-            face_mapping_data_index[cell][f][1][v] = face_mapping_data_index[cell][f][0][v];
-        }
-      }
-      for(unsigned int v = matrix_free.n_active_entries_per_cell_batch(cell); v < n_lanes; ++v)
-        for(unsigned int f = 0; f < 4; ++f)
-          for(unsigned int s = 0; s < 2; ++s)
-            face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
-    }
-
-    QGauss<1>               quadrature_1d(n_q_points_1d);
-    Quadrature<dim - 1>     face_quadrature(quadrature_1d);
-    std::vector<Point<dim>> points(face_quadrature.size());
-    for(unsigned int i = 0; i < face_quadrature.size(); ++i)
-      for(unsigned int d = 0; d < 2; ++d)
-        points[i][d] = face_quadrature.point(i)[d];
-
-    FE_Nothing<dim>   dummy_fe;
-    FEValues<dim>     fe_values(mapping, dummy_fe, Quadrature<dim>(points), update_jacobians);
-    FEFaceValues<dim> fe_face_values(mapping,
-                                     dummy_fe,
-                                     face_quadrature,
-                                     update_jacobians | update_JxW_values | update_normal_vectors);
-
-    jacobians_xy.resize(n_q_points_2d * unique_cells.size());
-    cell_JxW_xy.resize(n_q_points_2d * unique_cells.size());
-    face_jxn_xy.resize(4 * n_q_points_1d * unique_cells.size());
-    face_JxW_xy.resize(4 * n_q_points_1d * unique_cells.size());
-
-    ip_penalty_factors.resize(unique_cells.size());
-    for(const auto & [_, index] : unique_cells)
-    {
-      const typename Triangulation<dim>::cell_iterator cell(&dof_handler.get_triangulation(),
-                                                            index[1],
-                                                            index[2]);
-      fe_values.reinit(cell);
-      AssertDimension(geometry_index[cell->active_cell_index()], index[0]);
-      double cell_volume = 0;
-      for(unsigned int q = 0; q < n_q_points_2d; ++q)
-      {
-        const DerivativeForm<1, dim, dim> jacobian = fe_values.jacobian(q);
-        cell_volume += jacobian.determinant() * face_quadrature.weight(q);
-        const DerivativeForm<1, dim, dim> inv_jacobian = jacobian.covariant_form();
-        const unsigned int                data_idx     = index[0] * n_q_points_2d + q;
-        cell_JxW_xy[data_idx] =
-          (jacobian[0][0] * jacobian[1][1] - jacobian[0][1] * jacobian[1][0]) *
-          face_quadrature.weight(q);
-        if(dim == 3)
-        {
-          h_z         = jacobian[2][2];
-          h_z_inverse = 1. / h_z;
-        }
-        for(unsigned int d = 0; d < 2; ++d)
-          for(unsigned int e = 0; e < 2; ++e)
-            jacobians_xy[data_idx][d][e] = inv_jacobian[d][e];
-      }
-
-      double surface_area = 0;
-      for(unsigned int face = 0; face < 4; ++face)
-      {
-        fe_face_values.reinit(cell, face);
-        double face_factor =
-          (cell->at_boundary(face) && !cell->has_periodic_neighbor(face)) ? 1. : 0.5;
-        for(unsigned int q = 0; q < face_quadrature.size(); ++q)
-          surface_area += face_factor * fe_face_values.JxW(q);
-
-        for(unsigned int qx = 0; qx < n_q_points_1d; ++qx)
-        {
-          // take switched coordinates xz on y faces into account
-          const unsigned int q        = (face < 2 || dim == 2) ? qx : qx * n_q_points_1d;
-          const unsigned int data_idx = (index[0] * 4 + face) * n_q_points_1d + qx;
-          const auto         jac      = fe_face_values.jacobian(q);
-          const auto         inv_jac  = jac.covariant_form();
-          for(unsigned int d = 0; d < 2; ++d)
-            face_jxn_xy[data_idx][d] = inv_jac[0][d] * fe_face_values.normal_vector(q)[0] +
-                                       inv_jac[1][d] * fe_face_values.normal_vector(q)[1];
-          face_JxW_xy[data_idx] = std::sqrt(jac[0][1 - face / 2] * jac[0][1 - face / 2] +
-                                            jac[1][1 - face / 2] * jac[1][1 - face / 2]) *
-                                  quadrature_1d.weight(qx);
-        }
-      }
-      // take the two faces in z direction into account; they are always in
-      // periodic direction so do not check for boundary
-      if(dim == 3)
-        surface_area += 2 * 0.5 * cell_volume / h_z;
-
-      ip_penalty_factors[index[0]] = surface_area / cell_volume;
-    }
-
-    {
-      quad_weights_h_z.resize(n_q_points_1d);
-      QGauss<1> quad(n_q_points_1d);
-      for(unsigned int q = 0; q < quad.size(); ++q)
-        quad_weights_h_z[q] = quad.weight(q) * h_z;
-
       std::vector<Polynomials::Polynomial<double>> basis =
-        Polynomials::generate_complete_Lagrange_basis(quad.get_points());
-      interpolate_quad_to_boundary[0].resize(n_q_points_1d);
-      interpolate_quad_to_boundary[1].resize(n_q_points_1d);
+        Polynomials::generate_complete_Lagrange_basis(quadrature.get_points());
+      interpolate_quad_to_boundary[0].resize(quadrature.size());
+      interpolate_quad_to_boundary[1].resize(quadrature.size());
       std::vector<double> val_and_der(2);
       for(unsigned int i = 0; i < basis.size(); ++i)
       {
@@ -456,6 +1584,18 @@ public:
     }
   }
 
+  const DoFHandler<dim> &
+  get_dof_handler() const
+  {
+    return *dof_handler;
+  }
+
+  const MatrixFree<dim, Number> &
+  get_matrix_free() const
+  {
+    return matrix_free;
+  }
+
   void
   initialize_dof_vector(VectorType & vec) const
   {
@@ -484,13 +1624,20 @@ public:
   }
 
   void
-  compute_diagonal(VectorType & dst) const
+  compute_inverse_diagonal(VectorType & dst) const
   {
     initialize_dof_vector(dst);
     const unsigned int n_cell_batches = dof_indices.size();
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
       diagonal_operation(cell, dst);
-    dst.compress(VectorOperation::add);
+    for(Number & a : dst)
+    {
+      AssertThrow(a > 0,
+                  ExcInternalError("Error DG degree " +
+                                   std::to_string(dof_handler->get_fe().degree) + " size " +
+                                   std::to_string(dof_handler->n_dofs())));
+      a = Number(1.0) / a;
+    }
   }
 
   void
@@ -507,19 +1654,23 @@ public:
       {
         for(unsigned int face = 0; face < 4; ++face)
         {
-          const unsigned int idx = face_mapping_data_index[cell][face][0][v] / n_q_points_1d / 4;
-          AssertThrow(idx < ip_penalty_factors.size(),
-                      ExcIndexRange(0, ip_penalty_factors.size(), idx));
+          const unsigned int idx =
+            mapping_info.face_mapping_data_index[cell][face][0][v] / n_q_points_1d / 4;
+          AssertThrow(idx < mapping_info.ip_penalty_factors.size(),
+                      ExcIndexRange(idx, 0, mapping_info.ip_penalty_factors.size()));
           const unsigned int neigh_idx =
-            face_mapping_data_index[cell][face][1][v] / n_q_points_1d / 4;
-          AssertThrow(neigh_idx < ip_penalty_factors.size(),
-                      ExcIndexRange(0, ip_penalty_factors.size(), neigh_idx));
+            mapping_info.face_mapping_data_index[cell][face][1][v] / n_q_points_1d / 4;
+          AssertThrow(neigh_idx < mapping_info.ip_penalty_factors.size(),
+                      ExcIndexRange(neigh_idx, 0, mapping_info.ip_penalty_factors.size()));
           this->penalty_parameters[cell][face][v] =
-            std::max(ip_penalty_factors[idx], ip_penalty_factors[neigh_idx]) * factor;
+            std::max(mapping_info.ip_penalty_factors[idx],
+                     mapping_info.ip_penalty_factors[neigh_idx]) *
+            factor;
         }
         for(unsigned int face = 4; face < 2 * dim; ++face)
           this->penalty_parameters[cell][face][v] =
-            ip_penalty_factors[mapping_data_index[cell][v] / Utilities::pow(n_q_points_1d, 2)] *
+            mapping_info.ip_penalty_factors[mapping_info.mapping_data_index[cell][v] /
+                                            Utilities::pow(n_q_points_1d, 2)] *
             factor;
       }
   }
@@ -674,6 +1825,123 @@ public:
     }
   }
 
+  void
+  vmult_residual_and_restrict_to_fe(const VectorType &                     rhs,
+                                    const VectorType &                     solution,
+                                    const LaplaceOperatorFE<dim, Number> & fe_operator,
+                                    VectorType &                           dst) const
+  {
+    Timer total_timer;
+    if(factor_laplace != 0.)
+      timings[0] += 1;
+    else
+      timings[10] += 1;
+    Timer time;
+
+    dst = 0;
+
+    const unsigned int n_cell_batches = dof_indices.size();
+
+    time.restart();
+
+    // only do the data exchange for face integral if we have Laplacian contribution
+    if(factor_laplace != 0. && Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) > 1)
+    {
+      const int nn = shape_info.data[0].fe_degree + 1;
+
+      // data: everything projected to face, 2 because of values and derivatives
+      const int data_per_face = 2 * Utilities::pow(nn, dim - 1);
+
+      std::vector<MPI_Request> requests(2 * send_data_process.size());
+      unsigned int             offset = 0;
+      for(unsigned int p = 0; p < send_data_process.size(); ++p)
+      {
+        MPI_Irecv(&import_values[offset * data_per_face],
+                  send_data_process[p].second * data_per_face * sizeof(Number),
+                  MPI_BYTE,
+                  send_data_process[p].first,
+                  send_data_process[p].first + 47,
+                  solution.get_mpi_communicator(),
+                  &requests[p]);
+        offset += send_data_process[p].second;
+      }
+      AssertDimension(offset * data_per_face, import_values.size());
+
+      if(nn == 2)
+        vmult_pack_and_send_data<2>(solution, requests);
+      else if(nn == 3)
+        vmult_pack_and_send_data<3>(solution, requests);
+      else if(nn == 4)
+        vmult_pack_and_send_data<4>(solution, requests);
+#ifndef DEBUG
+      else if(nn == 5)
+        vmult_pack_and_send_data<5>(solution, requests);
+      else if(nn == 6)
+        vmult_pack_and_send_data<6>(solution, requests);
+      else if(nn == 7)
+        vmult_pack_and_send_data<7>(solution, requests);
+      else if(nn == 8)
+        vmult_pack_and_send_data<8>(solution, requests);
+      else if(nn == 9)
+        vmult_pack_and_send_data<9>(solution, requests);
+#endif
+      else
+        AssertThrow(false, ExcNotImplemented());
+
+      timings[3] += time.wall_time();
+
+      time.restart();
+      if(!requests.empty())
+        MPI_Waitall(requests.size(), &requests[0], MPI_STATUSES_IGNORE);
+      timings[5] += time.wall_time();
+    }
+
+    time.restart();
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 1)
+        do_residual_operation<1>(cell, rhs, solution, fe_operator, dst);
+      else if(degree == 2)
+        do_residual_operation<2>(cell, rhs, solution, fe_operator, dst);
+      else if(degree == 3)
+        do_residual_operation<3>(cell, rhs, solution, fe_operator, dst);
+      else if(degree == 4)
+        do_residual_operation<4>(cell, rhs, solution, fe_operator, dst);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_residual_operation<5>(cell, rhs, solution, fe_operator, dst);
+      else if(degree == 6)
+        do_residual_operation<6>(cell, rhs, solution, fe_operator, dst);
+      else if(degree == 7)
+        do_residual_operation<7>(cell, rhs, solution, fe_operator, dst);
+      else if(degree == 8)
+        do_residual_operation<8>(cell, rhs, solution, fe_operator, dst);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+
+    if(factor_laplace != 0)
+      timings[7] += time.wall_time();
+    else
+      timings[12] += time.wall_time();
+
+    time.restart();
+    dst.compress(VectorOperation::add);
+
+    if(factor_laplace != 0)
+    {
+      timings[8] += time.wall_time();
+      timings[9] += total_timer.wall_time();
+    }
+    else
+    {
+      timings[13] += time.wall_time();
+      timings[14] += total_timer.wall_time();
+    }
+  }
+
   std::size_t
   memory_consumption() const
   {
@@ -683,13 +1951,7 @@ public:
            MemoryConsumption::memory_consumption(import_values) +
            MemoryConsumption::memory_consumption(export_values) +
            MemoryConsumption::memory_consumption(all_owned_faces) +
-           MemoryConsumption::memory_consumption(mapping_data_index) +
-           MemoryConsumption::memory_consumption(jacobians_xy) +
-           MemoryConsumption::memory_consumption(cell_JxW_xy) +
-           MemoryConsumption::memory_consumption(face_mapping_data_index) +
-           MemoryConsumption::memory_consumption(face_jxn_xy) +
-           MemoryConsumption::memory_consumption(face_JxW_xy) +
-           MemoryConsumption::memory_consumption(quad_weights_h_z) +
+           mapping_info.memory_consumption() +
            MemoryConsumption::memory_consumption(interpolate_quad_to_boundary) +
            MemoryConsumption::memory_consumption(send_data_process) +
            MemoryConsumption::memory_consumption(send_data_cell_index) +
@@ -706,40 +1968,32 @@ public:
   }
 
 private:
-  static constexpr unsigned int                    n_lanes = VectorizedArray<Number>::size();
-  ObserverPointer<const DoFHandler<dim>>           dof_handler;
-  internal::MatrixFreeFunctions::ShapeInfo<Number> shape_info;
-  std::vector<std::array<unsigned int, n_lanes>>   dof_indices;
+  static constexpr unsigned int          n_lanes = VectorizedArray<Number>::size();
+  ObserverPointer<const DoFHandler<dim>> dof_handler;
+  MatrixFree<dim, Number>                matrix_free;
+
+  internal::MatrixFreeFunctions::ShapeInfo<Number>  shape_info;
+  std::array<std::vector<std::array<Number, 2>>, 2> interpolate_quad_to_boundary;
+
+  std::shared_ptr<const Utilities::MPI::Partitioner>           partitioner;
+  std::vector<std::array<unsigned int, n_lanes>>               dof_indices;
   std::vector<dealii::ndarray<unsigned int, 2 * dim, n_lanes>> neighbor_cells;
   std::vector<dealii::ndarray<unsigned int, 2 * dim, n_lanes>> mpi_exchange_data_on_faces;
   mutable AlignedVector<Number>                                import_values;
   mutable AlignedVector<Number>                                export_values;
   Table<2, unsigned char>                                      all_owned_faces;
+  std::vector<std::pair<unsigned int, unsigned int>>           send_data_process;
+  std::vector<unsigned int>                                    send_data_cell_index;
+  std::vector<unsigned char>                                   send_data_face_index;
 
-  std::shared_ptr<const Utilities::MPI::Partitioner> partitioner;
+  Extruded::MappingInfo<dim, Number> mapping_info;
 
   mutable std::array<double, 15> timings;
 
   Number factor_mass;
   Number factor_laplace;
 
-  Number                                            h_z;
-  Number                                            h_z_inverse;
-  std::vector<std::array<unsigned int, n_lanes>>    mapping_data_index;
-  AlignedVector<Tensor<2, 2, Number>>               jacobians_xy;
-  AlignedVector<Number>                             cell_JxW_xy;
-  std::vector<ndarray<unsigned int, 4, 2, n_lanes>> face_mapping_data_index;
-  AlignedVector<Tensor<1, 2, Number>>               face_jxn_xy;
-  AlignedVector<Number>                             face_JxW_xy;
-  std::vector<Number>                               quad_weights_h_z;
-  std::array<std::vector<std::array<Number, 2>>, 2> interpolate_quad_to_boundary;
-
-  std::vector<Number>                                         ip_penalty_factors;
   AlignedVector<std::array<VectorizedArray<Number>, 2 * dim>> penalty_parameters;
-
-  std::vector<std::pair<unsigned int, unsigned int>> send_data_process;
-  std::vector<unsigned int>                          send_data_cell_index;
-  std::vector<unsigned char>                         send_data_face_index;
 
   std::vector<unsigned int>                          cell_loop_pre_list_index;
   std::vector<std::pair<unsigned int, unsigned int>> cell_loop_pre_list;
@@ -1253,6 +2507,48 @@ private:
       AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
   }
 
+  template<int degree>
+  void
+  do_residual_operation(const unsigned int                     cell,
+                        const VectorType &                     rhs,
+                        const VectorType &                     solution,
+                        const LaplaceOperatorFE<dim, Number> & fe_operator,
+                        VectorType &                           dst) const
+  {
+    constexpr unsigned int dofs_per_cell = Utilities::pow(degree + 1, dim);
+    constexpr unsigned int n_q_points_1d = degree + 1;
+    constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
+    const auto &           shape_data    = shape_info.data[0];
+
+    VectorizedArray<Number> quad_values[n_points], out_values[n_points];
+    read_cell_values<degree + 1, n_q_points_1d>(solution.begin(), dof_indices[cell], quad_values);
+
+    if(factor_laplace != 0)
+      Extruded::compute_cell_lapl<n_q_points_1d>(
+        shape_data, mapping_info, cell, factor_mass, factor_laplace, quad_values, out_values);
+    else
+      AssertThrow(false, ExcNotImplemented("Pure mass case not implemented yet"));
+
+    // Face integrals if Laplace factor is positive
+    if(factor_laplace != 0.)
+      for(unsigned int f = 0; f < 2 * dim; ++f)
+        compute_face<degree, true>(shape_data, solution, cell, f, quad_values, out_values);
+
+    dealii::internal::FEEvaluationImplBasisChange<
+      dealii::internal::evaluate_evenodd,
+      dealii::internal::EvaluatorQuantity::value,
+      dim,
+      degree + 1,
+      n_q_points_1d>::do_backward(1, shape_data.shape_values_eo, false, out_values, out_values);
+    vectorized_load_and_transpose(dofs_per_cell,
+                                  rhs.begin(),
+                                  dof_indices[cell].data(),
+                                  quad_values);
+    for(unsigned int i = 0; i < dofs_per_cell; ++i)
+      quad_values[i] -= out_values[i];
+    fe_operator.template distribute_local_to_global<degree>(cell, quad_values, dst);
+  }
+
   template<int degree, bool compute_exterior>
   void
   do_cell_operation(const unsigned int cell, const VectorType & src, VectorType & dst) const
@@ -1268,7 +2564,8 @@ private:
       read_cell_values<degree + 1, n_q_points_1d>(src.begin(), dof_indices[cell], quad_values);
 
       if(factor_laplace != 0)
-        compute_cell_lapl<n_q_points_1d>(shape_data, cell, quad_values, out_values);
+        Extruded::compute_cell_lapl<n_q_points_1d>(
+          shape_data, mapping_info, cell, factor_mass, factor_laplace, quad_values, out_values);
       else
         AssertThrow(false, ExcNotImplemented("Pure mass case not implemented yet"));
 
@@ -1309,7 +2606,8 @@ private:
                 shape_data.shape_values[tensor_i[0] * nn + q0];
 
         if(factor_laplace != 0)
-          compute_cell_lapl<n_q_points_1d>(shape_data, cell, quad_values, out_values);
+          Extruded::compute_cell_lapl<n_q_points_1d>(
+            shape_data, mapping_info, cell, factor_mass, factor_laplace, quad_values, out_values);
 
         if(factor_laplace != 0.)
           for(unsigned int f = 0; f < 2 * dim; ++f)
@@ -1319,11 +2617,11 @@ private:
         for(unsigned int q2 = 0, q = 0; q2 < (dim > 2 ? n_q_points_1d : 1); ++q2)
           for(unsigned int q1 = 0; q1 < (dim > 1 ? n_q_points_1d : 1); ++q1)
           {
-            VectorizedArray<Number> inner_sum = {};
-            for(unsigned int q0 = 0; q0 < n_q_points_1d; ++q0)
-              inner_sum += shape_data.shape_values[tensor_i[0] * nn + q0] * quad_values[q];
-            sum += ((dim == 3 ? shape_data.shape_values[tensor_i[2]] : Number(1.0)) *
-                    shape_data.shape_values[tensor_i[1]]) *
+            VectorizedArray<Number> inner_sum = 0;
+            for(unsigned int q0 = 0; q0 < n_q_points_1d; ++q0, ++q)
+              inner_sum += shape_data.shape_values[tensor_i[0] * nn + q0] * out_values[q];
+            sum += ((dim == 3 ? shape_data.shape_values[tensor_i[2] * nn + q2] : Number(1.0)) *
+                    shape_data.shape_values[tensor_i[1] * nn + q1]) *
                    inner_sum;
           }
 
@@ -1332,162 +2630,6 @@ private:
           dst.local_element(dof_indices[cell][v] + i) = sum[v];
       }
     }
-  }
-
-  template<int n_q_points_1d>
-  void
-  compute_cell_lapl(const internal::MatrixFreeFunctions::UnivariateShapeData<Number> & shape_data,
-                    const unsigned int                                                 cell,
-                    const VectorizedArray<Number> *                                    quad_values,
-                    VectorizedArray<Number> * out_values) const
-  {
-    constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
-    constexpr unsigned int n_q_points    = Utilities::pow(n_q_points_1d, dim);
-
-    VectorizedArray<Number> grad_y[n_q_points];
-    VectorizedArray<Number> grad_x[Utilities::pow(n_q_points_1d, dim - 1)];
-    VectorizedArray<Number> grad_z[n_q_points_1d];
-
-    std::array<unsigned int, n_lanes> shifted_data_indices;
-    for(unsigned int v = 0; v < n_lanes; ++v)
-      shifted_data_indices[v] = mapping_data_index[cell][v] * 4;
-
-    const Number factor_mass = this->factor_mass;
-    const Number factor_lapl = this->factor_laplace;
-
-    constexpr unsigned int nn         = n_q_points_1d;
-    const Number *         shape_grad = shape_data.shape_gradients_collocation_eo.data();
-    for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
-      for(unsigned int i0 = 0; i0 < nn; ++i0)
-        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                              internal::EvaluatorQuantity::gradient,
-                                              nn,
-                                              nn,
-                                              nn,
-                                              Utilities::pow(nn, dim - 1),
-                                              true,
-                                              false>(shape_grad,
-                                                     quad_values + (i1 * n_q_points_2d + i0),
-                                                     grad_y + (i1 * nn + i0));
-
-    for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
-    {
-      for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
-        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                              internal::EvaluatorQuantity::gradient,
-                                              nn,
-                                              nn,
-                                              1,
-                                              (dim == 3 ? nn : 1),
-                                              true,
-                                              false>(shape_grad,
-                                                     quad_values + (qy * nn + i0 * n_q_points_2d),
-                                                     grad_x + i0);
-
-      for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
-      {
-        Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy;
-        vectorized_load_and_transpose(4,
-                                      &jacobians_xy[q1][0][0],
-                                      shifted_data_indices.data(),
-                                      &inv_jac_xy[0][0]);
-        VectorizedArray<Number> JxW_xy;
-        JxW_xy.gather(&cell_JxW_xy[q1], mapping_data_index[cell].data());
-
-        if constexpr(dim == 2)
-        {
-          const VectorizedArray<Number> val     = quad_values[q1];
-          const VectorizedArray<Number> grad[2] = {grad_x[qx], grad_y[q1]};
-
-          VectorizedArray<Number> grad_real[dim];
-          for(unsigned int d = 0; d < dim; ++d)
-            grad_real[d] = inv_jac_xy[d][0] * grad[0] + inv_jac_xy[d][1] * grad[1];
-
-          for(unsigned int e = 0; e < dim; ++e)
-          {
-            grad_real[e] *= JxW_xy * factor_lapl;
-          }
-
-          grad_x[qx]     = inv_jac_xy[0][0] * grad_real[0] + inv_jac_xy[1][0] * grad_real[1];
-          grad_y[q1]     = inv_jac_xy[0][1] * grad_real[0] + inv_jac_xy[1][1] * grad_real[1];
-          out_values[q1] = val * (JxW_xy * factor_mass);
-        }
-        else // now to dim == 3
-        {
-          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                                internal::EvaluatorQuantity::gradient,
-                                                nn,
-                                                nn,
-                                                nn * nn,
-                                                1,
-                                                true,
-                                                false>(shape_grad, quad_values + q1, grad_z);
-
-          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
-          {
-            const VectorizedArray<Number> val     = quad_values[q];
-            const VectorizedArray<Number> grad[3] = {grad_x[qz + qx * nn],
-                                                     grad_y[qz * nn + qy * nn * nn + qx],
-                                                     grad_z[qz]};
-
-            VectorizedArray<Number> grad_real[dim];
-            for(unsigned int d = 0; d < 2; ++d)
-              grad_real[d] = inv_jac_xy[d][0] * grad[0] + inv_jac_xy[d][1] * grad[1];
-            grad_real[2] = h_z_inverse * grad[2];
-
-            const Number                  weight_h_z   = quad_weights_h_z[qz];
-            const VectorizedArray<Number> factor_deriv = (JxW_xy * factor_lapl) * weight_h_z;
-            const VectorizedArray<Number> factor_ma    = (JxW_xy * factor_mass) * weight_h_z;
-
-            out_values[q] = val * factor_ma;
-            for(unsigned int e = 0; e < dim; ++e)
-            {
-              grad_real[e] *= factor_deriv;
-            }
-
-            grad_x[qz + qx * nn] =
-              inv_jac_xy[0][0] * grad_real[0] + inv_jac_xy[1][0] * grad_real[1];
-            grad_y[qz * nn + qy * nn * nn + qx] =
-              inv_jac_xy[0][1] * grad_real[0] + inv_jac_xy[1][1] * grad_real[1];
-            grad_z[qz] = h_z_inverse * grad_real[2];
-          }
-
-          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                                internal::EvaluatorQuantity::gradient,
-                                                nn,
-                                                nn,
-                                                1,
-                                                nn * nn,
-                                                false,
-                                                true>(shape_grad, grad_z, out_values + q1);
-        }
-      }
-
-      for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
-        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                              internal::EvaluatorQuantity::gradient,
-                                              nn,
-                                              nn,
-                                              (dim == 3 ? nn : 1),
-                                              1,
-                                              false,
-                                              true>(shape_grad,
-                                                    grad_x + i0,
-                                                    out_values + qy * nn + i0 * n_q_points_2d);
-    }
-
-    for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
-      for(unsigned int i0 = 0; i0 < nn; ++i0)
-        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                              internal::EvaluatorQuantity::gradient,
-                                              nn,
-                                              nn,
-                                              Utilities::pow(nn, dim - 1),
-                                              nn,
-                                              false,
-                                              true>(shape_grad,
-                                                    grad_y + i1 * nn + i0,
-                                                    out_values + i1 * n_q_points_2d + i0);
   }
 
   template<int degree, bool compute_exterior>
@@ -1634,7 +2776,7 @@ private:
                                                          grads_face[side] + second);
       }
 
-    const Number                  h_z_inverse = this->h_z_inverse;
+    const Number                  h_z_inverse = mapping_info.h_z_inverse;
     const VectorizedArray<Number> sigmaF      = penalty_parameters[cell][f] * factor_lapl;
 
     if(face_direction < 2)
@@ -1643,9 +2785,9 @@ private:
       std::array<unsigned int, n_lanes> shifted_data_indices_neigh;
       for(unsigned int v = 0; v < n_lanes; ++v)
       {
-        const unsigned int idx          = face_mapping_data_index[cell][f][0][v];
+        const unsigned int idx          = mapping_info.face_mapping_data_index[cell][f][0][v];
         shifted_data_indices[v]         = idx * 2;
-        const unsigned int neighbor_idx = face_mapping_data_index[cell][f][1][v];
+        const unsigned int neighbor_idx = mapping_info.face_mapping_data_index[cell][f][1][v];
         shifted_data_indices_neigh[v]   = neighbor_idx * 2;
       }
 
@@ -1653,16 +2795,17 @@ private:
       {
         Tensor<1, 2, VectorizedArray<Number>> jac_x_normal[2];
         vectorized_load_and_transpose(2,
-                                      &face_jxn_xy[q1][0],
+                                      &mapping_info.face_jxn_xy[q1][0],
                                       shifted_data_indices.data(),
                                       &jac_x_normal[0][0]);
         vectorized_load_and_transpose(2,
-                                      &face_jxn_xy[q1][0],
+                                      &mapping_info.face_jxn_xy[q1][0],
                                       shifted_data_indices_neigh.data(),
                                       &jac_x_normal[1][0]);
 
         VectorizedArray<Number> JxW_xy;
-        JxW_xy.gather(face_JxW_xy.data() + q1, face_mapping_data_index[cell][f][0].data());
+        JxW_xy.gather(mapping_info.face_JxW_xy.data() + q1,
+                      mapping_info.face_mapping_data_index[cell][f][0].data());
 
         for(unsigned int qz = 0, q = q1; qz < n_q_points_1d; ++qz, q += n_q_points_1d)
         {
@@ -1678,14 +2821,20 @@ private:
               jac_x_normal[s][0] * grad[s][0] + jac_x_normal[s][1] * grad[s][1];
           }
 
-          if(compute_exterior)
+          if(!compute_exterior)
+          {
+            val[1]                = 0;
+            normal_derivatives[1] = 0;
+          }
           {
             val[1] = boundary_mask * val[0] + (Number(1.0) - std::abs(boundary_mask)) * val[1];
             normal_derivatives[1] = boundary_mask * normal_derivatives[0] +
                                     (Number(1.0) - std::abs(boundary_mask)) * normal_derivatives[1];
           }
 
-          const VectorizedArray<Number> integrate_factor = JxW_xy * quad_weights_h_z[qz];
+
+          const VectorizedArray<Number> integrate_factor =
+            JxW_xy * mapping_info.quad_weights_h_z[qz];
 
           // physical terms
           const VectorizedArray<Number> effective_factor =
@@ -1714,22 +2863,26 @@ private:
     {
       const Number normal_sign = (f % 2) ? 1 : -1;
 
-      std::array<unsigned int, n_lanes> shifted_data_indices;
-      for(unsigned int v = 0; v < n_lanes; ++v)
-        shifted_data_indices[v] = mapping_data_index[cell][v] * 4;
-
       for(unsigned int q = 0; q < n_q_points_2d; ++q)
       {
         VectorizedArray<Number> JxW_xy;
-        JxW_xy.gather(&cell_JxW_xy[q], mapping_data_index[cell].data());
+        JxW_xy.gather(&mapping_info.cell_JxW_xy[q], mapping_info.mapping_data_index[cell].data());
 
-        const VectorizedArray<Number> val[2]  = {values_face[0][q], values_face[1][q]};
+        VectorizedArray<Number>       val[2]  = {values_face[0][q], values_face[1][q]};
         const VectorizedArray<Number> grad[2] = {grads_face[0][q * dim + 2],
                                                  grads_face[1][q * dim + 2]};
 
         VectorizedArray<Number> normal_derivatives[2];
         for(unsigned int s = 0; s < (compute_exterior ? 2 : 1); ++s)
           normal_derivatives[s] = (h_z_inverse * normal_sign) * grad[s];
+
+        if(!compute_exterior)
+        {
+          val[1]                = 0;
+          normal_derivatives[1] = 0;
+        }
+
+        // assume no boundary in z direction
 
         // physical terms
         const VectorizedArray<Number> effective_factor =
@@ -1921,7 +3074,8 @@ private:
 
     face_flux_buffer_index.resize(dof_indices.size());
     all_left_face_fluxes_from_buffer.resize(dof_indices.size());
-    const unsigned int n_data_per_face = Utilities::pow(quad_weights_h_z.size(), dim - 1) * 2;
+    const unsigned int n_data_per_face =
+      Utilities::pow(mapping_info.quad_weights_h_z.size(), dim - 1) * 2;
 
     constexpr unsigned int     long_range_start = 16;
     std::vector<std::uint64_t> face_storage(1);

@@ -19,11 +19,13 @@
  *  ______________________________________________________________________
  */
 
+#include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/numerics/vector_tools_mean_value.h>
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/laplace_operator_extruded.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
+#include <exadg/incompressible_navier_stokes/time_integration/poisson_solver.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
 #include <exadg/time_integration/push_back_vectors.h>
@@ -241,7 +243,7 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
                     dealii::ExcDimensionMismatch(sorted_next_cells.size(), n_cells));
 
         for(unsigned int i = 0; i < n_cells; ++next_category)
-          for(unsigned int j = 0; j < 8 && i < n_cells; ++j, ++i)
+          for(unsigned int j = 0; j < 16 && i < n_cells; ++j, ++i)
             cell_vectorization_category[sorted_next_cells[i]] = next_category;
       }
   }
@@ -285,6 +287,13 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
                      cell_vectorization_category,
                      dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1));
   laplace_op->set_penalty_parameters(
+    pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
+
+  poisson_preconditioner = std::make_shared<LaplaceOperator::PoissonPreconditionerMG<dim, float>>(
+    *pde_operator->get_mapping(),
+    pde_operator->get_dof_handler_p(),
+    cell_vectorization_category,
+    pde_operator->get_grid().mapping_function,
     pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 }
 
@@ -915,9 +924,10 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   {
     op_rt->copy_mf_to_this_vector(velocity_np, rhs_rt);
 
-    dealii::ReductionControl     control(this->param.inverse_mass_operator.solver_data.max_iter,
+    dealii::ReductionControl control(this->param.inverse_mass_operator.solver_data.max_iter,
                                      this->param.inverse_mass_operator.solver_data.abs_tol,
                                      this->param.inverse_mass_operator.solver_data.rel_tol);
+
     dealii::SolverCG<VectorType> solver_cg(control);
     op_rt->set_parameters(1.0, 0.0);
     std::vector<Number> beta(velocity.size());
@@ -1001,37 +1011,44 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   VectorType rhs(pressure_np);
   rhs_pressure(rhs);
 
+  if (false)
+    {
+  VectorType vec1, vec2;
+  laplace_op->initialize_dof_vector(vec1);
+  laplace_op->initialize_dof_vector(vec2);
   if(this->print_solver_info() and not(this->is_test))
   {
-    VectorType vec1, vec2;
-    laplace_op->initialize_dof_vector(vec1);
-    laplace_op->initialize_dof_vector(vec2);
     vec1.copy_locally_owned_data_from(rhs);
-    for (unsigned int t = 0; t < 2; ++t)
-      {
-        dealii::Timer timer2;
-        for(unsigned int i = 0; i < 20; ++i)
-          laplace_op->vmult(vec2, vec1);
-        std::cout << std::defaultfloat << std::setprecision(4);
-        RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(), "Mat-vec DG optim [MDoF/s]", vec1.get_mpi_communicator());
-      }
-    for (unsigned int t = 0; t < 2; ++t)
-      {
-        dealii::Timer timer2;
-        for(unsigned int i = 0; i < 20; ++i)
-          pde_operator->laplace_operator.vmult(pressure_np, rhs);
-        RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(), "Mat-vec DG basic [MDoF/s]", vec1.get_mpi_communicator());
-      }
+    for(unsigned int t = 0; t < 2; ++t)
+    {
+      dealii::Timer timer2;
+      for(unsigned int i = 0; i < 20; ++i)
+        laplace_op->vmult(vec2, vec1);
+      std::cout << std::defaultfloat << std::setprecision(4);
+      RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(),
+                             "Mat-vec DG optim [MDoF/s]",
+                             vec1.get_mpi_communicator());
+    }
+    for(unsigned int t = 0; t < 2; ++t)
+    {
+      dealii::Timer timer2;
+      for(unsigned int i = 0; i < 20; ++i)
+        pde_operator->laplace_operator.vmult(pressure_np, rhs);
+      RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(),
+                             "Mat-vec DG basic [MDoF/s]",
+                             vec1.get_mpi_communicator());
+    }
     this->pcout << "Norm vec2: " << vec2.l2_norm() << " " << pressure_np.l2_norm() << " ";
     pressure_np -= vec2;
     this->pcout << " diff " << pressure_np.l2_norm() << std::endl;
   }
+    }
 
   // extrapolate old solution to get a good initial estimate for the solver
   std::pair<double, double> extrapolate_accuracy(0., 0.);
   if(this->use_extrapolation)
   {
-    pde_operator->laplace_operator.vmult(pressure_matvec[0], pressure[0]);
+    laplace_op->vmult(pressure_matvec[0], pressure[0]);
     extrapolate_accuracy = compute_least_squares_fit(pressure_matvec, rhs, pressure, pressure_np);
   }
   else
@@ -1056,8 +1073,20 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // pde_operator->apply_laplace_operator(tmp, pressure[0]);
   // const double res2_norm = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
 
-
-  unsigned int const n_iter = pde_operator->solve_pressure(pressure_np, rhs, update_preconditioner);
+  unsigned int n_iter = 0;
+  if(false)
+  {
+    n_iter = pde_operator->solve_pressure(pressure_np, rhs, update_preconditioner);
+  }
+  else
+  {
+    dealii::ReductionControl     control(this->param.solver_data_pressure_poisson.max_iter,
+                                     this->param.solver_data_pressure_poisson.abs_tol,
+                                     this->param.solver_data_pressure_poisson.rel_tol);
+    dealii::SolverCG<VectorType> solver(control);
+    solver.solve(*laplace_op, pressure_np, rhs, *poisson_preconditioner);
+    n_iter = control.last_step();
+  }
   iterations_pressure.first += 1;
   iterations_pressure.second += n_iter;
 

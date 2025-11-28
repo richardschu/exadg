@@ -161,6 +161,12 @@ public:
   unsigned int
   get_quad_index_pressure() const;
 
+  Grid<dim> const &
+  get_grid() const
+  {
+    return *grid;
+  }
+
 protected:
   unsigned int
   get_dof_index_velocity_scalar() const;

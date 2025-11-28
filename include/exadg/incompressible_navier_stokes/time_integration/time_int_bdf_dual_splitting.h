@@ -35,7 +35,11 @@ namespace LaplaceOperator
 {
 template<int dim, typename Number>
 class LaplaceOperatorDG;
-}
+template<int dim, typename Number>
+class LaplaceOperatorFE;
+template<int dim, typename Number>
+class PoissonPreconditionerMG;
+} // namespace LaplaceOperator
 
 namespace ExaDG
 {
@@ -187,16 +191,17 @@ private:
   VectorType velocity_projection_last_iter;
   VectorType velocity_viscous_last_iter;
 
-  std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, Number>> op_rt;
-  std::shared_ptr<LaplaceOperator::LaplaceOperatorDG<dim, Number>>    laplace_op;
-  VectorType                                                          diagonal_mass;
-  VectorType                                                          diagonal_laplace;
-  dealii::DiagonalMatrix<VectorType>                                  preconditioner_viscous;
-  dealii::DiagonalMatrix<VectorType>                                  preconditioner_mass;
-  VectorType                                                          solution_rt;
-  std::vector<VectorType>                                             solutions_convective;
-  std::vector<VectorType>                                             solutions_viscous;
-  VectorType                                                          rhs_rt;
+  std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, Number>>   op_rt;
+  std::shared_ptr<LaplaceOperator::LaplaceOperatorDG<dim, Number>>      laplace_op;
+  std::shared_ptr<LaplaceOperator::PoissonPreconditionerMG<dim, float>> poisson_preconditioner;
+  VectorType                                                            diagonal_mass;
+  VectorType                                                            diagonal_laplace;
+  dealii::DiagonalMatrix<VectorType>                                    preconditioner_viscous;
+  dealii::DiagonalMatrix<VectorType>                                    preconditioner_mass;
+  VectorType                                                            solution_rt;
+  std::vector<VectorType>                                               solutions_convective;
+  std::vector<VectorType>                                               solutions_viscous;
+  VectorType                                                            rhs_rt;
 
   // iteration counts
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */>
