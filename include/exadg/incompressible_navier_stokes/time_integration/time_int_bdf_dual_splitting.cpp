@@ -180,19 +180,23 @@ TimeIntBDFDualSplitting<dim, Number>::initialize_velocity_dbc()
     this->helpers_ale->move_grid(this->get_time());
     this->helpers_ale->update_pde_operator_after_grid_motion();
   }
-  pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[0], this->get_time());
-  // ... and previous times if start_with_low_order == false
-  if(this->start_with_low_order == false)
+
+  if(this->param.spatial_discretization == SpatialDiscretization::L2)
   {
-    for(unsigned int i = 1; i < velocity_dbc.size(); ++i)
+    pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[0], this->get_time());
+    // ... and previous times if start_with_low_order == false
+    if(this->start_with_low_order == false)
     {
-      double const time = this->get_time() - double(i) * this->get_time_step_size();
-      if(this->param.ale_formulation)
+      for(unsigned int i = 1; i < velocity_dbc.size(); ++i)
       {
-        this->helpers_ale->move_grid(time);
-        this->helpers_ale->update_pde_operator_after_grid_motion();
+        double const time = this->get_time() - double(i) * this->get_time_step_size();
+        if(this->param.ale_formulation)
+        {
+          this->helpers_ale->move_grid(time);
+          this->helpers_ale->update_pde_operator_after_grid_motion();
+        }
+        pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[i], time);
       }
-      pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[i], time);
     }
   }
 }
@@ -359,8 +363,6 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   dealii::Timer timer;
   timer.restart();
 
-  velocity_np = 0.0;
-
   // compute convective term and extrapolate convective term (if not Stokes equations)
   if(this->param.convective_problem())
   {
@@ -375,9 +377,15 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
       }
     }
 
-    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+    velocity_np.equ(-this->extra.get_beta(0), this->vec_convective_term[0]);
+    for(unsigned int i = 1; i < this->vec_convective_term.size(); ++i)
       velocity_np.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
   }
+  else
+  {
+    velocity_np = 0.0;
+  }
+
 
   // compute body force vector
   if(this->param.right_hand_side == true)
@@ -391,14 +399,20 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   iterations_mass.first += 1;
   iterations_mass.second += n_iter_mass;
 
-  // calculate sum (alpha_i/dt * u_i) and add to velocity_np
-  for(unsigned int i = 0; i < velocity.size(); ++i)
+  // calculate sum (alpha_i/dt * u_i) and add to velocity_np, last addition is merged with scaling
+  // below
+  for(unsigned int i = 0; i < velocity.size() - 1; ++i)
   {
     velocity_np.add(this->bdf.get_alpha(i) / this->get_time_step_size(), velocity[i]);
   }
 
-  // solve discrete temporal derivative term for intermediate velocity u_hat
-  velocity_np *= this->get_time_step_size() / this->bdf.get_gamma0();
+  // solve discrete temporal derivative term for intermediate velocity u_hat, merged with last
+  // addition from above
+  velocity_np.sadd(this->get_time_step_size() / this->bdf.get_gamma0(),
+                   this->bdf.get_alpha(velocity.size() - 1) / this->bdf.get_gamma0(),
+                   velocity.back());
+
+  pde_operator->distribute_constraint_u(velocity_np); // ##+
 
   if(this->print_solver_info() and not(this->is_test))
   {
@@ -540,7 +554,8 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   }
 
   /*
-   *  II. calculate terms originating from inhomogeneous parts of boundary face integrals
+   *  II. calculate terms originating from inhomogeneous parts of boundary face integrals of Laplace
+   * operator
    */
 
   // II.1. pressure Dirichlet boundary conditions
@@ -702,7 +717,7 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
     }
   }
 
-  this->timer_tree->insert({"Timeloop", "Pojection step"}, timer.wall_time());
+  this->timer_tree->insert({"Timeloop", "Projection step"}, timer.wall_time());
 }
 
 template<int dim, typename Number>
@@ -738,8 +753,8 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     // Extrapolate old solution to get a good initial estimate for the solver.
     if(this->use_extrapolation)
     {
-      velocity_np = 0;
-      for(unsigned int i = 0; i < velocity.size(); ++i)
+      velocity_np.equ(this->extra.get_beta(0), velocity[0]);
+      for(unsigned int i = 1; i < velocity.size(); ++i)
         velocity_np.add(this->extra.get_beta(i), velocity[i]);
     }
     else
