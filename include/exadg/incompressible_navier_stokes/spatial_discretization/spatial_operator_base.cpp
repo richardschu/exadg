@@ -143,15 +143,9 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_and_constraints()
     // Dirichlet boundaries
     if(not(boundary_descriptor->velocity->dirichlet_bc.empty()))
     {
-      AssertThrow(
-        false,
-        dealii::ExcMessage(
-          "Dirichlet BCs are not properly implemented for HDIV. The normal component of the velocity field needs to be strongly applied."));
-      // We would like to do something similar to above. Probably would work with the same function
-      // i.e dealii::VectorTools::project_boundary_values_div_conforming(). Otherwise one might want
-      // to look into: dealii::VectorTools::interpolate_boundary_values
-      // dealii::VectorTools::project_boundary_values
-      // dealii::DoFTools::make_zero_boundary_constraints
+      for(auto bc : boundary_descriptor->velocity->dirichlet_bc)
+        dealii::VectorTools::project_boundary_values_div_conforming(
+          dof_handler_u, 0, *(bc.second), bc.first, constraint_u, *get_mapping());
     }
   }
 
@@ -2095,10 +2089,47 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
 
 template<int dim, typename Number>
 void
-SpatialOperatorBase<dim, Number>::distribute_constraint_u(VectorType & velocity) const
+SpatialOperatorBase<dim, Number>::distribute_constraint_u(VectorType & velocity/*, double const time*/) const
 {
   if(param.spatial_discretization == SpatialDiscretization::HDIV)
   {
+
+//     // Periodic boundaries
+//     // We need to make sure the normal dofs are shared between cells on the periodic boundaries,
+//     // since these are continuous for HDIV.
+//     dealii::IndexSet relevant_dofs = dealii::DoFTools::extract_locally_relevant_dofs(dof_handler_u);
+//     constraint_u.reinit(dof_handler_u.locally_owned_dofs(), relevant_dofs);
+
+//     for(auto const & face : grid->periodic_face_pairs)
+//       dealii::DoFTools::make_periodicity_constraints(
+//         dof_handler_u,
+//         face.cell[0]->face(face.face_idx[0])->boundary_id(),
+//         face.cell[1]->face(face.face_idx[1])->boundary_id(),
+//         face.face_idx[0] / 2,
+//         constraint_u);
+
+//     // Symmetry boundaries
+//     // Constraints the normal components of the velocity, where "0" as second argument indicates the
+//     // first component in the dof_handler.
+//     if(not(boundary_descriptor->velocity->symmetry_bc.empty()))
+//     {
+//       for(auto bc : boundary_descriptor->velocity->symmetry_bc)
+//         dealii::VectorTools::project_boundary_values_div_conforming(
+//           dof_handler_u, 0, *(bc.second), bc.first, constraint_u, *get_mapping());
+//     }
+
+//     // Dirichlet boundaries
+//     if(not(boundary_descriptor->velocity->dirichlet_bc.empty()))
+//     {
+//       for(auto bc : boundary_descriptor->velocity->dirichlet_bc)
+//       {
+// //        bc.second->set_time(time);
+
+//         dealii::VectorTools::project_boundary_values_div_conforming(
+//           dof_handler_u, 0, *(bc.second), bc.first, constraint_u, *get_mapping());
+//       }
+//     }
+
     constraint_u.distribute(velocity);
   }
   else if(param.spatial_discretization == SpatialDiscretization::L2)

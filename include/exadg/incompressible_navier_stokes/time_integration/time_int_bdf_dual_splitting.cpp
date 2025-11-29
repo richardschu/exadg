@@ -327,7 +327,10 @@ void
 TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
 {
   // pre-computations
-  pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc_np, this->get_next_time());
+  if(this->param.spatial_discretization == SpatialDiscretization::L2)
+    pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc_np, this->get_next_time());
+  // else if(this->param.spatial_discretization == SpatialDiscretization::L2)
+  //   pde_operator->distribute_constraint_u(velocity_dbc_np, this->get_next_time());
 
   // perform the sub-steps of the dual-splitting method
   if(this->update_velocity)
