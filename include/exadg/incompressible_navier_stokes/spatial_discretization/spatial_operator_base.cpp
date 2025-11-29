@@ -143,6 +143,7 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_and_constraints()
     // Dirichlet boundaries
     if(not(boundary_descriptor->velocity->dirichlet_bc.empty()))
     {
+      AssertThrow(false, dealii::ExcMessage("these have to constant, lets rather enforce these weakly ..?"));
       for(auto bc : boundary_descriptor->velocity->dirichlet_bc)
         dealii::VectorTools::project_boundary_values_div_conforming(
           dof_handler_u, 0, *(bc.second), bc.first, constraint_u, *get_mapping());
