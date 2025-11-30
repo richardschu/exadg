@@ -196,7 +196,7 @@ public:
       smoother_data.preconditioner = std::make_shared<SmootherPreconditionerType>();
       mg_matrices[level].compute_inverse_diagonal(smoother_data.preconditioner->get_vector());
       smoother_data.smoothing_range = 20.;
-      smoother_data.degree          = 3;
+      smoother_data.degree          = 4;
 
       // manually compute the eigenvalue estimate for Chebyshev because we
       // need to be careful with the constrained indices
@@ -242,7 +242,7 @@ public:
       smoother_data_dg.preconditioner = std::make_shared<SmootherPreconditionerType>();
       dg_matrix.compute_inverse_diagonal(smoother_data_dg.preconditioner->get_vector());
       smoother_data_dg.smoothing_range = 20.;
-      smoother_data_dg.degree          = 3;
+      smoother_data_dg.degree          = 4;
 
       // manually compute the eigenvalue estimate for Chebyshev because of
       // mean values
@@ -268,7 +268,12 @@ public:
       mg_smoother_dg.initialize(dg_matrix, smoother_data_dg);
     }
     auto transfer = std::make_unique<dealii::MGTwoLevelTransfer<dim, VectorType>>();
-    transfer->reinit(dg_matrix.get_matrix_free(), 0, mg_matrices[max_level].get_matrix_free(), 0);
+    transfer->reinit(dof_handler,
+                     dof_handler_hierarchy[max_level],
+                     empty_constraints,
+                     level_constraints[max_level]);
+    transfer->enable_inplace_operations_if_possible(mg_matrices[max_level].get_matrix_free().get_dof_info().vector_partitioner,
+                                                    dg_matrix.get_matrix_free().get_dof_info().vector_partitioner);
 
     mg_transfers[max_level] = std::move(transfer);
 
@@ -286,7 +291,7 @@ public:
         for (const auto time : array)
           all_time += time;
       std::cout << "Collected multigrid timings in " << count_times << " evaluations [t_total="
-                << all_time << "s" << std::endl;
+                << all_time << "s]" << std::endl;
       std::cout << "Level   smooth      residual    restrict    prolongate" << std::endl;
       for(unsigned int i = 0; i < timings.size(); ++i)
       {

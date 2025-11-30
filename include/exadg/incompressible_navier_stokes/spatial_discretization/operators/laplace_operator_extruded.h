@@ -429,7 +429,7 @@ public:
     mf_data.cell_vectorization_category          = cell_vectorization_category;
     mf_data.cell_vectorization_categories_strict = true;
     mf_data.overlap_communication_computation    = false;
-    mf_data.initialize_mapping                   = true;
+    mf_data.initialize_mapping                   = false;
     matrix_free.reinit(mapping, dof_handler, constraints, quadrature, mf_data);
 
     const unsigned int fe_degree = fe.degree;
@@ -1356,7 +1356,7 @@ public:
     mf_data.cell_vectorization_category          = cell_vectorization_category;
     mf_data.cell_vectorization_categories_strict = true;
     mf_data.overlap_communication_computation    = false;
-    mf_data.initialize_mapping                   = true;
+    mf_data.initialize_mapping                   = false;
     matrix_free.reinit(MappingQ1<dim>(), dof_handler, constraints, quadrature, mf_data);
     {
       std::array<unsigned int, n_lanes> default_dof_indices;
