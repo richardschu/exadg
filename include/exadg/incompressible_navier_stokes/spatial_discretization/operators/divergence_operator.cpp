@@ -317,12 +317,12 @@ DivergenceOperator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> const
   for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
   {
     pressure.reinit(cell);
-
     velocity.reinit(cell);
 
     if(data.integration_by_parts == true and
        data.formulation == FormulationVelocityDivergenceTerm::Weak)
     {
+      // std::cout << "but this one is used, no?\n"; // yes
       velocity.gather_evaluate(src, dealii::EvaluationFlags::values);
 
       do_cell_integral_weak(pressure, velocity);
@@ -349,6 +349,8 @@ DivergenceOperator<dim, Number>::face_loop(dealii::MatrixFree<dim, Number> const
 {
   if(data.integration_by_parts == true)
   {
+    // this we run on the boundary
+    // std::cout << "this is the used bdry integral\n"; YES
     FaceIntegratorU velocity_m(matrix_free, true, data.dof_index_velocity, data.quad_index);
     FaceIntegratorU velocity_p(matrix_free, false, data.dof_index_velocity, data.quad_index);
 
@@ -382,6 +384,7 @@ DivergenceOperator<dim, Number>::boundary_face_loop_hom_operator(
   VectorType const &                      src,
   Range const &                           face_range) const
 {
+  std::cout << "this will not be used since we do not have dirihlet or neumann boundaries.##++\n";
   if(data.integration_by_parts == true)
   {
     FaceIntegratorU velocity(matrix_free, true, data.dof_index_velocity, data.quad_index);

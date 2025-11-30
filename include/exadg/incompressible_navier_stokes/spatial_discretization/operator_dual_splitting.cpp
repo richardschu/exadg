@@ -272,6 +272,8 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_numerical_time_derivative_
   VectorType const &                      acceleration,
   Range const &                           face_range) const
 {
+  std::cout << "does not contribute ##+\n";
+
   unsigned int dof_index_velocity  = this->get_dof_index_velocity();
   unsigned int dof_index_pressure  = this->get_dof_index_pressure();
   unsigned int quad_index_velocity = this->get_quad_index_velocity_standard();
@@ -343,7 +345,7 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_body_force_term_add_bounda
 {
   unsigned int dof_index_pressure  = this->get_dof_index_pressure();
   unsigned int quad_index_pressure = this->get_quad_index_pressure();
-
+std::cout << "does not contribute ##+\n";
   FaceIntegratorP integrator(data, true, dof_index_pressure, quad_index_pressure);
 
   for(unsigned int face = face_range.first; face < face_range.second; face++)
@@ -409,6 +411,8 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_convective_add_boundary_fa
   VectorType const &                      src,
   Range const &                           face_range) const
 {
+
+  std::cout << "does not contribute ##+\n";
   unsigned int const dof_index_velocity = this->get_dof_index_velocity();
   unsigned int const dof_index_pressure = this->get_dof_index_pressure();
   unsigned int const quad_index         = this->get_quad_index_velocity_overintegration();
@@ -504,6 +508,9 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_viscous_add_boundary_face(
   VectorType const &                      src,
   Range const &                           face_range) const
 {
+
+  std::cout << "does not contribute ##+\n";
+  
   unsigned int const dof_index_velocity = this->get_dof_index_velocity();
   unsigned int const dof_index_pressure = this->get_dof_index_pressure();
   unsigned int const quad_index         = this->get_quad_index_velocity_standard();

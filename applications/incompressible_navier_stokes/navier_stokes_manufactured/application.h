@@ -431,9 +431,9 @@ private:
     this->param.gradp_formulation         = FormulationPressureGradientTerm::Weak;
 
     // divergence term
-    this->param.divu_integrated_by_parts = true;
-    this->param.divu_use_boundary_data   = true;
-    this->param.divu_formulation         = FormulationVelocityDivergenceTerm::Weak;
+    this->param.divu_integrated_by_parts = true; // needed for stability in the small time step limit!
+    this->param.divu_use_boundary_data   = false; // not needed, but spares us some code section -> disable for now
+    this->param.divu_formulation         = FormulationVelocityDivergenceTerm::Weak; // does not matter?
 
     // pressure level is undefined
     if(boundary_condition == BoundaryCondition::PureDirichlet or boundary_condition == BoundaryCondition::Periodic)
