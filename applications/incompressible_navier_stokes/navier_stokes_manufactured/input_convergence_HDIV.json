@@ -1,0 +1,47 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "2",
+        "IsTest": "false"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "15",
+        "DegreeMax": "15",
+        "RefineSpaceMin": "2",
+        "RefineSpaceMax": "2"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "3",
+        "RefineTimeMax": "3"
+    },
+    "Application": {
+        "TriangulationType": "Distributed",
+        "SpatialDiscretization": "HDIV",
+        "MoveGrid": "false",
+        "ReadRestart": "false",
+        "WriteRestart": "false",
+        "IncludeConvectiveTerm": "false",
+        "BoundaryCondition": "Periodic",
+        "StartTime": "0.0",
+        "EndTime": "1.0",
+        "IntervalStart": "-3.14159265358979323846",
+        "IntervalEnd": "3.14159265358979323846",
+        "Density": "1000.0",
+        "KinematicViscosity": "0.0",
+        "UseGeneralizedNewtonianModel": "false",
+        "FormulationViscousTerm" : "DivergenceFormulation",
+        "TemporalDiscretization" : "BDFDualSplitting",
+        "TreatmentOfConvectiveTerm" : "LinearlyImplicit",
+        "TreatmentOfVariableViscosity" : "Explicit",
+        "GeneralizedNewtonianViscosityMargin": "0.0",
+        "GeneralizedNewtonianKappa": "1.0",
+        "GeneralizedNewtonianLambda": "1.0",
+        "GeneralizedNewtonianA": "2.0",
+        "GeneralizedNewtonianN": "0.5"
+    },
+    "Output": {
+        "OutputDirectory": "output_convergence_HDIV/",
+        "OutputName": "test",
+        "WriteOutput": "true"
+    }
+}
