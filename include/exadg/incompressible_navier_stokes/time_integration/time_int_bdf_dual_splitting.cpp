@@ -475,28 +475,23 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
     pde_operator->evaluate_add_body_force_term(velocity_np, this->get_next_time());
   }
 
-  // scale convective and body force terms with dt/gamma0
-  velocity_np *= this->get_time_step_size() / this->bdf.get_gamma0();
-  
-  // calculate scaled time derivative contribution
-  // dt/gamma0 * sum (alpha_i/dt * u_i)
-  // =
-  // sum (alpha_i/gamma0 * u_i)
-  // and add into temporary vector
-  VectorType tmp;
-  tmp.reinit(velocity_np, false /* omit_zeroing_entries */);
-  for(unsigned int i = 0; i < velocity.size(); ++i)
-  {
-    tmp.add(this->bdf.get_alpha(i) / this->bdf.get_gamma0(), velocity[i]);
-  }
-
-  pde_operator->apply_mass_operator_add(velocity_np, tmp);
-
+  // solve for a combined variable
+  // xi := gamma0/dt * u_hat - sum( alpha_i/dt * u_i )
   // apply inverse mass operator
   unsigned int const n_iter_mass =
     pde_operator->apply_inverse_mass_operator(velocity_np, velocity_np);
   iterations_mass.first += 1;
   iterations_mass.second += n_iter_mass;
+
+  // recover gamma0/dt * u_hat from xi by adding
+  // sum (alpha_i/dt * u_i)
+  for(unsigned int i = 0; i < velocity.size(); ++i)
+  {
+    velocity_np.add(this->bdf.get_alpha(i) / this->get_time_step_size(), velocity[i]);
+  }
+
+  // compute intermediate velocity u_hat by scaling
+  velocity_np *= this->get_time_step_size() / this->bdf.get_gamma0();
 
   if(this->print_solver_info() and not(this->is_test))
   {

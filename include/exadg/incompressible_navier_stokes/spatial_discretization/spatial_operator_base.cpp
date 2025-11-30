@@ -408,7 +408,7 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
                                    inverse_mass_operator_data_velocity,
                                    param.spatial_discretization == SpatialDiscretization::L2 ?
                                      nullptr :
-                                     nullptr); // &constraint_u);
+                                     &constraint_u);
 
   // inverse mass operator velocity scalar
   InverseMassOperatorData<Number> inverse_mass_operator_data_velocity_scalar;

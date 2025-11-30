@@ -86,6 +86,7 @@ MassOperator<dim, n_components, Number>::do_cell_integral(IntegratorCell & integ
 {
   if(operator_data.coefficient_is_variable)
   {
+    std::cout << "this path is not used \n";
     if(operator_data.consider_inverse_coefficient)
     {
       // Consider a mass matrix of the form (u_h , v_h / c)_Omega
