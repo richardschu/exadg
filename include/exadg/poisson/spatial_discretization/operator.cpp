@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -237,14 +237,15 @@ Operator<dim, n_components, Number>::setup_operators()
 
     laplace_operator_data.quad_index_gauss_lobatto = get_quad_index_gauss_lobatto();
   }
-  laplace_operator_data.bc                     = boundary_descriptor;
-  laplace_operator_data.use_cell_based_loops   = param.enable_cell_based_face_loops;
-  laplace_operator_data.kernel_data.IP_factor  = param.IP_factor;
-  laplace_operator_data.use_matrix_based_vmult = param.use_matrix_based_implementation;
-  laplace_operator_data.sparse_matrix_type     = param.sparse_matrix_type;
-  laplace_operator.initialize(*matrix_free, affine_constraints, laplace_operator_data);
-
-  laplace_operator.assemble_matrix_if_necessary();
+  laplace_operator_data.bc                              = boundary_descriptor;
+  laplace_operator_data.use_cell_based_loops            = param.enable_cell_based_face_loops;
+  laplace_operator_data.kernel_data.IP_factor           = param.IP_factor;
+  laplace_operator_data.use_matrix_based_operator_level = param.use_matrix_based_operator;
+  laplace_operator_data.sparse_matrix_type              = param.sparse_matrix_type;
+  laplace_operator.initialize(*matrix_free,
+                              affine_constraints,
+                              laplace_operator_data,
+                              true /* assemble_matrix */);
 
   // rhs operator
   if(param.right_hand_side)
@@ -491,7 +492,7 @@ Operator<dim, n_components, Number>::solve(VectorType &       sol,
   if(param.spatial_discretization == SpatialDiscretization::CG)
   {
     laplace_operator.set_time(time);
-    laplace_operator.set_inhomogeneous_boundary_values(sol);
+    laplace_operator.set_inhomogeneous_constrained_values(sol);
   }
 
   return n_iterations;

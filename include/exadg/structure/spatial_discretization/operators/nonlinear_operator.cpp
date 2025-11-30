@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -29,13 +29,8 @@ namespace Structure
 {
 template<int dim, typename Number>
 void
-NonLinearOperator<dim, Number>::initialize(
-  dealii::MatrixFree<dim, Number> const &   matrix_free,
-  dealii::AffineConstraints<Number> const & affine_constraints,
-  OperatorData<dim> const &                 data)
+NonLinearOperator<dim, Number>::initialize_derived()
 {
-  Base::initialize(matrix_free, affine_constraints, data);
-
   integrator_lin = std::make_shared<IntegratorCell>(*this->matrix_free,
                                                     this->operator_data.dof_index_inhomogeneous,
                                                     this->operator_data.quad_index);
@@ -90,7 +85,7 @@ NonLinearOperator<dim, Number>::set_solution_linearization(VectorType const & ve
     displacement_lin = vector;
     displacement_lin.update_ghost_values();
 
-    this->assemble_matrix_if_necessary();
+    this->assemble_matrix_if_matrix_based();
   }
 }
 
@@ -255,7 +250,7 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     tensor const F = get_F<dim, Number>(Grad_d);
 
     // 2nd Piola-Kirchhoff stresses
-    tensor const S =
+    symmetric_tensor const S =
       material->second_piola_kirchhoff_stress(Grad_d, integrator.get_current_cell_index(), q);
 
     // 1st Piola-Kirchhoff stresses P = F * S
@@ -331,7 +326,7 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
     tensor const F_lin = get_F<dim, Number>(Grad_d_lin);
 
     // 2nd Piola-Kirchhoff stresses
-    tensor const S_lin =
+    symmetric_tensor const S_lin =
       material->second_piola_kirchhoff_stress(Grad_d_lin, integrator.get_current_cell_index(), q);
 
     // directional derivative of 1st Piola-Kirchhoff stresses P

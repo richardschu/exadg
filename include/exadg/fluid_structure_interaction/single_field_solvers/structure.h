@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -70,6 +70,10 @@ SolverStructure<dim, Number>::setup(
   // setup application
   application->setup(grid, mapping, multigrid_mappings);
 
+  // initialize postprocessor, i.e., get user parameters
+  postprocessor                 = application->create_postprocessor();
+  bool const setup_scalar_field = postprocessor->requires_scalar_field();
+
   // setup spatial operator
   pde_operator =
     std::make_shared<Structure::Operator<dim, Number>>(grid,
@@ -80,6 +84,7 @@ SolverStructure<dim, Number>::setup(
                                                        application->get_material_descriptor(),
                                                        application->get_parameters(),
                                                        "elasticity",
+                                                       setup_scalar_field,
                                                        mpi_comm);
 
   // initialize matrix_free
@@ -95,9 +100,8 @@ SolverStructure<dim, Number>::setup(
 
   pde_operator->setup(matrix_free, matrix_free_data);
 
-  // initialize postprocessor
-  postprocessor = application->create_postprocessor();
-  postprocessor->setup(pde_operator->get_dof_handler(), *mapping);
+  // set up postprocessor
+  postprocessor->setup(*pde_operator);
 
   // initialize time integrator
   time_integrator = std::make_shared<Structure::TimeIntGenAlpha<dim, Number>>(

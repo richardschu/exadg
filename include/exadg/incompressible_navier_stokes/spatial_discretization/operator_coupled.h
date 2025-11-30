@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -290,6 +290,23 @@ public:
                               VectorType const *      rhs_vector,
                               double const &          time,
                               double const &          scaling_factor_mass) const;
+
+  /*
+   * This function computes the rhs of the linearized problem residual
+   */
+  void
+  rhs_residual_linearized_problem(BlockVectorType & dst, double const & time) const;
+
+  /*
+   * This function evaluates the linearized residual.
+   */
+  void
+  evaluate_linearized_residual(BlockVectorType &       dst,
+                               BlockVectorType const & src,
+                               VectorType const &      transport_velocity,
+                               BlockVectorType const & rhs_vector,
+                               double const &          time,
+                               double const &          scaling_factor_mass);
 
   /*
    * This function evaluates the nonlinear residual of the steady Navier-Stokes equations.

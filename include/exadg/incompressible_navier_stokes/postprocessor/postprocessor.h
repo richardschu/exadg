@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -97,7 +97,7 @@ private:
 
   dealii::ObserverPointer<NavierStokesOperator const> navier_stokes_operator;
 
-  // DoF vectors for derived quantities
+  // Fields for derived quantities
   SolutionField<dim, Number> vorticity;
   SolutionField<dim, Number> divergence;
   SolutionField<dim, Number> shear_rate;

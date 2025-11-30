@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
+#include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_consistent_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
@@ -55,13 +56,21 @@ create_time_integrator(std::shared_ptr<SpatialOperatorBase<dim, Number>> pde_ope
     time_integrator = std::make_shared<IncNS::TimeIntBDFCoupled<dim, Number>>(
       operator_coupled, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
   }
-  else if(parameters.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  else if(parameters.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
     std::shared_ptr<OperatorDualSplitting<dim, Number>> operator_dual_splitting =
       std::dynamic_pointer_cast<OperatorDualSplitting<dim, Number>>(pde_operator);
 
     time_integrator = std::make_shared<IncNS::TimeIntBDFDualSplitting<dim, Number>>(
       operator_dual_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
+  }
+  else if(parameters.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+  {
+    std::shared_ptr<OperatorConsistentSplitting<dim, Number>> operator_consistent_splitting =
+      std::dynamic_pointer_cast<OperatorConsistentSplitting<dim, Number>>(pde_operator);
+
+    time_integrator = std::make_shared<IncNS::TimeIntBDFConsistentSplitting<dim, Number>>(
+      operator_consistent_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
   }
   else if(parameters.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
   {

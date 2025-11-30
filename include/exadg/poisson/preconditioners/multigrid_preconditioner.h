@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -79,7 +79,9 @@ private:
                         unsigned int const                     dealii_triangulation_level) final;
 
   std::shared_ptr<MGOperatorBase>
-  initialize_operator(unsigned int const level) final;
+  initialize_operator(unsigned int const level,
+                      bool const         use_matrix_based_operator_level,
+                      bool const         assemble_matrix) final;
 
   std::shared_ptr<Laplace>
   get_operator(unsigned int level);

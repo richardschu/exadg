@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -36,7 +36,7 @@ LinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) const
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
   {
     // Cauchy stresses, only valid for linear elasticity
-    tensor const sigma =
+    symmetric_tensor const sigma =
       material->second_piola_kirchhoff_stress(integrator.get_gradient(q),
                                               integrator.get_current_cell_index(),
                                               q);

@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -125,6 +125,7 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
       application->get_material_descriptor_ale_elasticity(),
       application->get_parameters_ale_elasticity(),
       "ale_elasticity",
+      false /* setup_scalar_field */,
       mpi_comm);
   }
   else

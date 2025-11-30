@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -58,7 +58,7 @@ struct InverseMassParameters
   InverseMassParameters()
     : implementation_type(InverseMassType::MatrixfreeOperator),
       preconditioner(PreconditionerMass::PointJacobi),
-      solver_data(SolverData(1000, 1e-12, 1e-12)),
+      solver_data(SolverData()),
       amg_data(AMGData())
   {
   }

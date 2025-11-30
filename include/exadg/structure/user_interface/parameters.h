@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -121,6 +121,9 @@ public:
   // the direction of the traction vector does not change by this pull-back operation.
   bool pull_back_traction;
 
+  // Material model considered
+  MaterialType material_type;
+
   /**************************************************************************************/
   /*                                                                                    */
   /*                                 PHYSICAL QUANTITIES                                */
@@ -186,9 +189,12 @@ public:
   unsigned int degree;
 
   // use a matrix-based implementation of linear(ized) operators
-  bool use_matrix_based_implementation;
+  // Note that this parameter only decides about the implementation of the operator in the Krylov
+  // solver. The decision whether a matrix-based or a matrix-free implementation within multigrid is
+  // considered is separate.
+  bool use_matrix_based_operator;
 
-  // this parameter is only relevant if use_matrix_based_implementation == true
+  // this parameter is only relevant if use_matrix_based_operator == true
   SparseMatrixType sparse_matrix_type;
 
   /**************************************************************************************/

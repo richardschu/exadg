@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -333,8 +333,8 @@ public:
   set_temperature(VectorType const & temperature);
 
   /*
-   * Computation of derived quantities which is needed for postprocessing but some of them are also
-   * needed, e.g., for special splitting-type time integration schemes.
+   * Computation of derived quantities needed for postprocessing but some of them are also needed,
+   * e.g., for special splitting-type time integration schemes.
    */
 
   // vorticity
@@ -367,7 +367,7 @@ public:
 
   // get the current visosity field as vector
   void
-  access_viscosity(VectorType & dst, VectorType const & src) const;
+  access_viscosity(VectorType & dst) const;
 
   /*
    * Operators.
@@ -618,12 +618,12 @@ protected:
 
   // Elementwise solver/preconditioner used in case that only the divergence penalty term is used
   // and the system of equations is block-diagonal.
-  typedef Elementwise::OperatorBase<dim, Number, ProjOperator> ELEMENTWISE_PROJ_OPERATOR;
-  std::shared_ptr<ELEMENTWISE_PROJ_OPERATOR>                   elementwise_projection_operator;
+  typedef Elementwise::OperatorBase<dim, Number, ProjOperator> ElementwiseProjOperator;
+  std::shared_ptr<ElementwiseProjOperator>                     elementwise_projection_operator;
 
   typedef Elementwise::PreconditionerBase<dealii::VectorizedArray<Number>>
-                                              ELEMENTWISE_PRECONDITIONER;
-  std::shared_ptr<ELEMENTWISE_PRECONDITIONER> elementwise_preconditioner_projection;
+                                                 ElementwisePreconditionerBase;
+  std::shared_ptr<ElementwisePreconditionerBase> elementwise_preconditioner_projection;
 
   // global solver/preconditioner to be used if the continuity penalty term is applied.
   std::shared_ptr<Krylov::SolverBase<VectorType>> projection_solver;

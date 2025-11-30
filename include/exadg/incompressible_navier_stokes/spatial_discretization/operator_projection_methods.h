@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -204,6 +204,17 @@ public:
                                     double const &     time,
                                     bool const &       update_preconditioner,
                                     double const &     scaling_factor_mass);
+
+  /*
+   * This function evaluates the linearized residual.
+   */
+  void
+  evaluate_linearized_residual(VectorType &       dst,
+                               VectorType const & src,
+                               VectorType const & transport_velocity,
+                               VectorType const * rhs_vector,
+                               double const &     time,
+                               double const &     scaling_factor_mass);
 
   /*
    * This function evaluates the nonlinear residual.

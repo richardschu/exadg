@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -24,9 +24,9 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_pressure_correction.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
-#include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/time_integration/vector_handling.h>
 #include <exadg/utilities/print_solver_results.h>
 
 namespace ExaDG
@@ -153,6 +153,12 @@ TimeIntBDFPressureCorrection<dim, Number>::initialize_current_solution()
     this->helpers_ale->move_grid(this->get_time());
 
   pde_operator->prescribe_initial_conditions(velocity[0], pressure[0], this->get_time());
+
+  // Update the variable viscosity.
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+  {
+    pde_operator->update_viscosity(velocity[0]);
+  }
 }
 
 template<int dim, typename Number>
@@ -321,19 +327,35 @@ void
 TimeIntBDFPressureCorrection<dim, Number>::do_timestep_solve()
 {
   // perform the sub-steps of the pressure-correction scheme
-
-  momentum_step();
+  if(this->update_velocity)
+  {
+    momentum_step();
+  }
 
   VectorType pressure_increment;
-  pressure_increment.reinit(pressure_np, false /* init with zero */);
+  if(this->update_pressure)
+  {
+    pressure_increment.reinit(pressure_np, false /* omit_zeroing_entries */);
+    pressure_step(pressure_increment);
+  }
+  else
+  {
+    AssertThrow(this->store_solution and pressure_increment_last_iter.size() > 0,
+                dealii::ExcMessage("Previous pressure step required to "
+                                   "use `pressure_increment_last_iter`."));
+    pressure_increment = pressure_increment_last_iter;
+  }
 
-  pressure_step(pressure_increment);
+  if(this->update_velocity)
+  {
+    projection_step(pressure_increment);
+  }
 
-  projection_step(pressure_increment);
-
-  // evaluate convective term once the final solution at time
-  // t_{n+1} is known
-  evaluate_convective_term();
+  // evaluate convective term once the final solution at time t_{n+1} is known
+  if(this->update_velocity)
+  {
+    evaluate_convective_term();
+  }
 }
 
 template<int dim, typename Number>
@@ -360,11 +382,8 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
       velocity_np = velocity_momentum_last_iter;
     }
 
-    /*
-     *  update variable viscosity
-     */
-    if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
-       this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
+    // explicit viscosity update or initial guess for viscosity
+    if(this->param.viscous_problem() and this->param.viscosity_is_variable())
     {
       dealii::Timer timer_viscosity_update;
       timer_viscosity_update.restart();
@@ -886,16 +905,16 @@ TimeIntBDFPressureCorrection<dim, Number>::prepare_vectors_for_next_timestep()
 {
   Base::prepare_vectors_for_next_timestep();
 
-  push_back(velocity);
+  swap_back_one_step(velocity);
   velocity[0].swap(velocity_np);
 
-  push_back(pressure);
+  swap_back_one_step(pressure);
   pressure[0].swap(pressure_np);
 
   // We also have to care about the history of pressure Dirichlet boundary conditions.
   if(extra_pressure_gradient.get_order() > 0)
   {
-    push_back(pressure_dbc);
+    swap_back_one_step(pressure_dbc);
 
     // no need to move the mesh here since we still have the mesh Omega_{n+1} at this point!
     pde_operator->interpolate_pressure_dirichlet_bc(pressure_dbc[0], this->get_next_time());

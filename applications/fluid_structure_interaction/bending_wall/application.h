@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -29,9 +29,9 @@ double const U_X_MAX         = 1.0;
 double const FLUID_VISCOSITY = 0.01;
 double const FLUID_DENSITY   = 0.01;
 
-double const DENSITY_STRUCTURE       = 1.0;
-double const POISSON_RATIO_STRUCTURE = 0.3;
-double const E_STRUCTURE             = 80.0; // 20.0; // TODO
+double const DENSITY_STRUCTURE        = 1.0;
+double const POISSONS_RATIO_STRUCTURE = 0.3;
+double const YOUNGS_MODULUS_STRUCTURE = 80.0; // 20.0; // TODO
 
 double const L_F = 3.0;
 double const B_F = 1.0;
@@ -154,7 +154,7 @@ private:
     // TEMPORAL DISCRETIZATION
     param.solver_type = SolverType::Unsteady;
     param.temporal_discretization =
-      TemporalDiscretization::BDFPressureCorrection; // BDFDualSplittingScheme;
+      TemporalDiscretization::BDFPressureCorrection; // BDFDualSplitting;
     param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Implicit; // Explicit;
     param.order_time_integrator           = 2;
     param.start_with_low_order            = true;
@@ -234,7 +234,7 @@ private:
       param.order_time_integrator <= 2 ? param.order_time_integrator : 2;
     param.formulation_convective_term_bc = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
@@ -729,12 +729,14 @@ private:
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
-    double const                           E       = 1.0;
-    double const                           poisson = 0.3;
-    std::shared_ptr<dealii::Function<dim>> E_function;
-    E_function.reset(new SpatiallyVaryingE<dim>());
+    double const                           youngs_modulus = 1.0;
+    double const                           poissons_ratio = 0.3;
+    std::shared_ptr<dealii::Function<dim>> youngs_modulus_function;
+    youngs_modulus_function.reset(new SpatiallyVaryingE<dim>());
     material_descriptor->insert(
-      Pair(0, new StVenantKirchhoffData<dim>(type, E, poisson, two_dim_type, E_function)));
+      Pair(0,
+           new StVenantKirchhoffData<dim>(
+             type, youngs_modulus, poissons_ratio, two_dim_type, youngs_modulus_function)));
   }
 
   void
@@ -910,8 +912,11 @@ private:
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
-    material_descriptor->insert(Pair(
-      0, new StVenantKirchhoffData<dim>(type, E_STRUCTURE, POISSON_RATIO_STRUCTURE, two_dim_type)));
+    material_descriptor->insert(Pair(0,
+                                     new StVenantKirchhoffData<dim>(type,
+                                                                    YOUNGS_MODULUS_STRUCTURE,
+                                                                    POISSONS_RATIO_STRUCTURE,
+                                                                    two_dim_type)));
   }
 
   void

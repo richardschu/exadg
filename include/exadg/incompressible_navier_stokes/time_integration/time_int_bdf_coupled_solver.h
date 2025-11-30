@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -95,6 +95,13 @@ private:
 
   double
   evaluate_residual();
+
+  void
+  evaluate_right_hand_side(BlockVectorType &       rhs,
+                           bool const              residual_evaluation,
+                           BlockVectorType const & solution_np,
+                           VectorType const &      transport_velocity,
+                           VectorType const &      sum_alphai_ui);
 
   void
   penalty_step();

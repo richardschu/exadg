@@ -27,6 +27,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -51,7 +52,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -69,6 +70,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -145,6 +147,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -169,7 +172,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -187,6 +190,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -263,6 +267,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -287,7 +292,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -305,6 +310,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -381,6 +387,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -405,7 +412,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -423,6 +430,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -499,6 +507,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -523,7 +532,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -541,6 +550,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -617,6 +627,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -641,7 +652,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -659,6 +670,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -735,6 +747,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -759,7 +772,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -777,6 +790,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -853,6 +867,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -877,7 +892,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -895,6 +910,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -971,6 +987,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
+  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -995,7 +1012,7 @@ Spatial Discretization:
   Mapping degree:                            1
   Mapping degree coarse grids:               1
   Polynomial degree:                         3
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -1013,6 +1030,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5

@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -107,7 +107,7 @@ ContinuityPenaltyOperator<dim, Number>::rhs_add(VectorType & dst,
                     tmp,
                     false /*zero_dst_vector = false*/);
 
-  // multiply by -1.0 since the boundary face integrals have to be shifted to the right hand side
+  // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);
 }
 

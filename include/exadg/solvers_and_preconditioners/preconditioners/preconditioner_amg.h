@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -132,7 +132,7 @@ get_ML_parameter_list(dealii::TrilinosWrappers::PreconditionAMG::AdditionalData 
   // smaller than `coarse: max size` are constructed.
   parameter_list.set("coarse: max size", 2000);
 
-  // This extends the settings in deal::PreconditionAMG::AdditionalData::set_parameters().
+  // This extends the settings in `dealii::PreconditionAMG::AdditionalData::set_parameters()`.
   parameter_list.set("repartition: enable", 1);
   parameter_list.set("repartition: max min ratio", 1.3);
   parameter_list.set("repartition: min per proc", 300);
@@ -246,14 +246,23 @@ public:
                   dealii::ExcMessage(
                     "Neither `constant_modes` nor `constant_modes_values` were provided. "
                     "AMG setup requires near null space basis vectors."));
-      ml_data.constant_modes_values = constant_modes_values;
+
+      // Attach constant modes only if they have contributions on this processor subdomain.
+      if(constant_modes_values.size() > 0 and constant_modes_values[0].size() > 0)
+      {
+        ml_data.constant_modes_values = constant_modes_values;
+      }
     }
     else
     {
-      ml_data.constant_modes = constant_modes;
+      // Attach constant modes only if they have contributions on this processor subdomain.
+      if(constant_modes.size() > 0 and constant_modes[0].size() > 0)
+      {
+        ml_data.constant_modes = constant_modes;
+      }
     }
 
-    // Add near null space basis vectors to Teuchos::ParameterList.
+    // Add near null space basis vectors to `Teuchos::ParameterList`.
     // `ptr_distributed_modes` must stay alive for amg.initialize()
     std::unique_ptr<Epetra_MultiVector> ptr_operator_modes;
     ml_data.set_operator_null_space(parameter_list,

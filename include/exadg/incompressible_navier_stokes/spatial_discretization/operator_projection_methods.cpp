@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -96,7 +96,7 @@ OperatorProjectionMethods<dim, Number>::initialize_laplace_operator()
   laplace_operator_data.quad_index = this->get_quad_index_pressure();
 
   /*
-   * In case no Dirichlet boundary conditions as prescribed for the pressure, the pressure Poisson
+   * In case no Dirichlet boundary conditions are prescribed for the pressure, the pressure Poisson
    * equation is singular (i.e. vectors describing a constant pressure state form the nullspace
    * of the discrete pressure Poisson operator). To solve the pressure Poisson equation in that
    * case, a Krylov subspace projection is applied during the solution of the linear system of
@@ -114,25 +114,31 @@ OperatorProjectionMethods<dim, Number>::initialize_laplace_operator()
    *
    *  p0^T * A * p = (A^T * p0)^T * p = 0 != p0 * rhs (since A is symmetric).
    */
-  if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+     this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
+     this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
   {
-    // the Krylov subspace projection is needed for the dual splitting scheme since the linear
-    // system of equations is not consistent for this splitting method (due to the boundary
-    // conditions).
+    /*
+     * For the dual splitting and the consistent splitting scheme, a Krylov subspace projection is
+     * needed since the linear system of equations is not consistent for these methods due to the
+     * boundary conditions.
+     *
+     * One can show that the linear system of equations of the pressure Poisson equation is
+     * consistent in case of the pressure-correction scheme if the velocity Dirichlet BC is
+     * consistent. So there should be no need to solve a transformed linear system of equations. In
+     * theory, the Krylov subspace projection should not be necessary as the linear system of
+     * equations is consistent. However, we observed convergence issues for some test cases using
+     * specific parameters. Hence, to increase robustness, we also solve a transformed linear system
+     * of equations in case of the pressure-correction scheme.
+     */
     laplace_operator_data.operator_is_singular = this->is_pressure_level_undefined();
   }
-  else if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
+  else
   {
-    // One can show that the linear system of equations of the pressure Poisson equation is
-    // consistent in case of the pressure-correction scheme if the velocity Dirichlet BC is
-    // consistent. So there should be no need to solve a transformed linear system of equations.
-    //    laplace_operator_data.operator_is_singular = false;
-
-    // In principle, it works (since the linear system of equations is consistent)
-    // but we detected no convergence for some test cases and specific parameters.
-    // Hence, for reasons of robustness we also solve a transformed linear system of equations
-    // in case of the pressure-correction scheme.
-    laplace_operator_data.operator_is_singular = this->is_pressure_level_undefined();
+    AssertThrow(false,
+                dealii::ExcMessage(
+                  "Unknown time integration scheme. "
+                  "Consider Krylov subspace projection for the Laplace operator."));
   }
 
   laplace_operator_data.bc                   = this->boundary_descriptor_laplace;
@@ -144,7 +150,8 @@ OperatorProjectionMethods<dim, Number>::initialize_laplace_operator()
 
   laplace_operator.initialize(this->get_matrix_free(),
                               this->get_constraint_p(),
-                              laplace_operator_data);
+                              laplace_operator_data,
+                              true /* assemble_matrix */);
 }
 
 template<int dim, typename Number>
@@ -556,6 +563,51 @@ OperatorProjectionMethods<dim, Number>::evaluate_nonlinear_residual(
   if(this->param.implicit_nonlinear_convective_problem())
   {
     this->convective_operator.evaluate_nonlinear_operator_add(dst, src, time);
+  }
+
+  // viscous term
+  this->viscous_operator.set_time(time);
+  this->viscous_operator.evaluate_add(dst, src);
+
+  // rhs vector
+  dst.add(-1.0, *rhs_vector);
+}
+
+template<int dim, typename Number>
+void
+OperatorProjectionMethods<dim, Number>::evaluate_linearized_residual(
+  VectorType &       dst,
+  VectorType const & src,
+  VectorType const & transport_velocity,
+  VectorType const * rhs_vector,
+  double const &     time,
+  double const &     scaling_factor_mass)
+{
+  // update implicitly coupled viscosity
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+  {
+    this->update_viscosity(src);
+  }
+
+  this->mass_operator.apply_scale(dst, scaling_factor_mass, src);
+
+  // convective term
+  if(this->param.convective_problem())
+  {
+    if(this->param.solver_type == SolverType::Steady or
+       (this->param.solver_type == SolverType::Unsteady and
+        (this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)))
+    {
+      AssertThrow(false, dealii::ExcMessage("This should never be called."));
+      this->convective_operator.evaluate_nonlinear_operator_add(dst, src, time);
+    }
+    else if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      this->convective_operator.set_velocity_ptr(transport_velocity);
+      this->convective_operator.apply_add(dst, src);
+      this->convective_operator.rhs_add(dst);
+    }
+    // The explicit convective term is contained in rhs_vector.
   }
 
   // viscous term

@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -94,7 +94,9 @@ public:
   ale_update();
 
   void
-  advance_one_timestep_partitioned_solve(bool const use_extrapolation);
+  advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+                                         bool const update_velocity,
+                                         bool const update_pressure);
 
   virtual void
   print_iterations() const = 0;
@@ -146,6 +148,8 @@ protected:
   // required for strongly-coupled partitioned iteration
   bool use_extrapolation;
   bool store_solution;
+  bool update_velocity;
+  bool update_pressure;
 
   // This object allows to access utility functions needed for ALE
   std::shared_ptr<HelpersALE<dim, Number> const> helpers_ale;

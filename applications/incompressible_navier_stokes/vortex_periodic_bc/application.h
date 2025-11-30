@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -186,7 +186,7 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
@@ -256,7 +256,6 @@ private:
                                                  unsigned int const          global_refinements,
                                                  std::vector<unsigned int> const &
                                                    vector_local_refinements) {
-      (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
       AssertThrow(
@@ -286,6 +285,9 @@ private:
                           right,
                           mesh_type == MeshType::Curvilinear,
                           deformation);
+
+      if(global_refinements > 0)
+        tria.refine_global(global_refinements);
     };
 
     GridUtilities::create_triangulation_with_multigrid<dim>(grid,

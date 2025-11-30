@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -263,10 +263,6 @@ Parameters::check() const
     AssertThrow(not ale_formulation,
                 dealii::ExcMessage("Combination of adaptive mesh refinement "
                                    "and ALE formulation not implemented."));
-
-    AssertThrow(temporal_discretization == TemporalDiscretization::BDF,
-                dealii::ExcMessage("Adaptive mesh refinement only implemented"
-                                   "for implicit time integration."));
 
     AssertThrow(grid.element_type == ElementType::Hypercube,
                 dealii::ExcMessage("Adaptive mesh refinement is currently "

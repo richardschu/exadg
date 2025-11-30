@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -30,9 +30,9 @@ namespace ExaDG
 double const FLUID_VISCOSITY = 3.0e-6;
 double const FLUID_DENSITY   = 1.0e3;
 
-double const DENSITY_STRUCTURE       = 1.2e3;
-double const POISSON_RATIO_STRUCTURE = 0.3;
-double const E_STRUCTURE             = 3.0e5;
+double const DENSITY_STRUCTURE        = 1.2e3;
+double const POISSONS_RATIO_STRUCTURE = 0.3;
+double const YOUNGS_MODULUS_STRUCTURE = 3.0e5;
 
 double const R_INNER = 0.5e-2;
 double const R_OUTER = 0.6e-2;
@@ -99,6 +99,22 @@ public:
   {
   }
 
+  void
+  add_parameters(dealii::ParameterHandler & prm) final
+  {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
+    // clang format off
+    prm.enter_subsection("Fluid");
+    prm.add_parameter("TemporalDiscretization",
+                      temporal_discretization,
+                      "Temporal discretization of Navier-Stokes equations.",
+                      Patterns::Enum<IncNS::TemporalDiscretization>(),
+                      false);
+    prm.leave_subsection();
+    // clang format on
+  }
+
 private:
   void
   set_parameters() final
@@ -128,7 +144,7 @@ private:
 
     // TEMPORAL DISCRETIZATION
     param.solver_type                     = SolverType::Unsteady;
-    param.temporal_discretization         = TemporalDiscretization::BDFDualSplittingScheme;
+    param.temporal_discretization         = temporal_discretization;
     param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
     param.order_time_integrator           = 2;
     param.start_with_low_order            = true;
@@ -210,7 +226,7 @@ private:
       param.order_time_integrator <= 2 ? param.order_time_integrator : 2;
     param.formulation_convective_term_bc = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
@@ -605,10 +621,10 @@ private:
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
-    double const E       = 1.0;
-    double const poisson = 0.3;
+    double const youngs_modulus = 1.0;
+    double const poissons_ratio = 0.3;
     material_descriptor->insert(
-      Pair(0, new StVenantKirchhoffData<dim>(type, E, poisson, two_dim_type)));
+      Pair(0, new StVenantKirchhoffData<dim>(type, youngs_modulus, poissons_ratio, two_dim_type)));
   }
 
   void
@@ -621,6 +637,9 @@ private:
     field_functions->initial_displacement.reset(new dealii::Functions::ZeroFunction<dim>(dim));
     field_functions->initial_velocity.reset(new dealii::Functions::ZeroFunction<dim>(dim));
   }
+
+  IncNS::TemporalDiscretization temporal_discretization =
+    IncNS::TemporalDiscretization::BDFDualSplitting;
 };
 } // namespace FluidFSI
 
@@ -820,8 +839,11 @@ private:
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
-    material_descriptor->insert(Pair(
-      0, new StVenantKirchhoffData<dim>(type, E_STRUCTURE, POISSON_RATIO_STRUCTURE, two_dim_type)));
+    material_descriptor->insert(Pair(0,
+                                     new StVenantKirchhoffData<dim>(type,
+                                                                    YOUNGS_MODULUS_STRUCTURE,
+                                                                    POISSONS_RATIO_STRUCTURE,
+                                                                    two_dim_type)));
   }
 
   void

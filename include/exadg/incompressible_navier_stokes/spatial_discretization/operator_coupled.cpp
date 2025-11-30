@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -334,6 +334,85 @@ OperatorCoupled<dim, Number>::evaluate_nonlinear_residual(BlockVectorType &     
   // with respect to pressure gradient term and velocity divergence term
   // scale by scaling_factor_continuity
   dst.block(1) *= -scaling_factor_continuity;
+}
+
+template<int dim, typename Number>
+void
+OperatorCoupled<dim, Number>::evaluate_linearized_residual(BlockVectorType &       dst,
+                                                           BlockVectorType const & src,
+                                                           VectorType const & transport_velocity,
+                                                           BlockVectorType const & rhs_vector,
+                                                           double const &          time,
+                                                           double const & scaling_factor_mass)
+{
+  // viscosity has to be updated before calling this function.
+
+  // velocity-block
+
+  if(this->unsteady_problem_has_to_be_solved())
+    this->mass_operator.apply_scale(dst.block(0), scaling_factor_mass, src.block(0));
+  else
+    dst.block(0) = 0.0;
+
+  if(this->param.convective_problem())
+  {
+    if(this->param.solver_type == SolverType::Steady or
+       (this->param.solver_type == SolverType::Unsteady and
+        (this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)))
+    {
+      AssertThrow(false, dealii::ExcMessage("This should never be called."));
+      this->convective_operator.evaluate_nonlinear_operator_add(dst.block(0), src.block(0), time);
+    }
+    else if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      this->convective_operator.set_velocity_ptr(transport_velocity);
+      this->convective_operator.apply_add(dst.block(0), src.block(0));
+      this->convective_operator.rhs_add(dst.block(0));
+    }
+    // The explicit convective term is contained in rhs_vector.
+  }
+
+  if(this->param.viscous_problem())
+  {
+    this->viscous_operator.set_time(time);
+    this->viscous_operator.evaluate_add(dst.block(0), src.block(0));
+  }
+
+  // Divergence and continuity penalty operators
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false)
+  {
+    this->projection_operator->apply_add(dst.block(0), src.block(0));
+  }
+
+  // gradient operator scaled by scaling_factor_continuity
+  this->gradient_operator.evaluate(temp_vector, src.block(1), time);
+  dst.block(0).add(scaling_factor_continuity, temp_vector);
+
+  // constant right-hand side vector (body force, sum_alphai_ui and explicit convective terms)
+  dst.block(0).add(-1.0, rhs_vector.block(0));
+
+  // pressure-block
+
+  this->divergence_operator.evaluate(dst.block(1), src.block(0), time);
+  // multiply by -1.0 since we use a formulation with symmetric saddle point matrix
+  // with respect to pressure gradient term and velocity divergence term
+  // scale by scaling_factor_continuity
+  dst.block(1) *= -scaling_factor_continuity;
+
+  dst.block(1).add(-1.0, rhs_vector.block(1));
+}
+
+template<int dim, typename Number>
+void
+OperatorCoupled<dim, Number>::rhs_residual_linearized_problem(BlockVectorType & dst,
+                                                              double const &    time) const
+{
+  dst = 0.0;
+
+  if(this->param.right_hand_side == true)
+  {
+    this->rhs_operator.evaluate(dst.block(0), time);
+  }
 }
 
 template<int dim, typename Number>
@@ -675,7 +754,8 @@ OperatorCoupled<dim, Number>::setup_iterative_solver_schur_complement()
   laplace_operator = std::make_shared<Poisson::LaplaceOperator<dim, Number, 1>>();
   laplace_operator->initialize(this->get_matrix_free(),
                                this->get_constraint_p(),
-                               laplace_operator_data);
+                               laplace_operator_data,
+                               true /* assemble_matrix */);
 
   solver_pressure_block =
     std::make_shared<Krylov::SolverCG<Poisson::LaplaceOperator<dim, Number, 1>,

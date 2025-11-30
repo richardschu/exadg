@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -108,6 +108,9 @@ private:
 
   void
   print_parameters_dual_splitting(dealii::ConditionalOStream const & pcout) const;
+
+  void
+  print_parameters_consistent_splitting(dealii::ConditionalOStream const & pcout) const;
 
   void
   print_parameters_pressure_correction(dealii::ConditionalOStream const & pcout) const;
@@ -613,6 +616,20 @@ public:
   // As a default parameter, FormulationConvectiveTerm::ConvectiveFormulation is
   // used (exploiting that div(u)=0 holds in the continuous case).
   FormulationConvectiveTerm formulation_convective_term_bc;
+
+  /**************************************************************************************/
+  /*                                                                                    */
+  /*                        CONSISTENT SPLITTING SCHEME                                 */
+  /*                                                                                    */
+  /**************************************************************************************/
+
+  // FORMULATIONS
+
+  // order of extrapolation of viscous term and convective term in the pressure righthandside
+  unsigned int order_extrapolation_pressure_rhs;
+
+  // use of Leray projection
+  bool apply_leray_projection;
 
   /**************************************************************************************/
   /*                                                                                    */

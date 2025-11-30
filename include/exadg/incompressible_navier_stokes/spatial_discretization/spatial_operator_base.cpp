@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -89,19 +89,24 @@ void
 SpatialOperatorBase<dim, Number>::initialize_dof_handler_and_constraints()
 {
   fe_p = create_finite_element<dim>(param.grid.element_type,
-                                    true,
-                                    1,
+                                    true /* is_dg */,
+                                    1 /* n_components */,
                                     param.get_degree_p(param.degree_u));
 
-  fe_u_scalar = create_finite_element<dim>(param.grid.element_type, true, 1, param.degree_u);
+  fe_u_scalar = create_finite_element<dim>(param.grid.element_type,
+                                           true /* is_dg */,
+                                           1 /* n_components */,
+                                           param.degree_u);
 
   fe_u = setup_fe_u(param.spatial_discretization, param.grid.element_type, param.degree_u);
 
   if((param.restart_data.consider_mapping_write and param.restart_data.write_restart) or
      (param.restart_data.consider_mapping_read_source and param.restarted_simulation))
   {
-    fe_mapping =
-      create_finite_element<dim>(param.grid.element_type, true, dim, param.mapping_degree);
+    fe_mapping          = create_finite_element<dim>(param.grid.element_type,
+                                            true /* is_dg */,
+                                            dim /* n_components */,
+                                            param.mapping_degree);
     dof_handler_mapping = std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
     dof_handler_mapping->distribute_dofs(*fe_mapping);
   }
@@ -206,11 +211,6 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_and_constraints()
   }
   print_parameter(pcout, "number of dofs per cell", fe_u->n_dofs_per_cell());
   print_parameter(pcout, "number of dofs (total)", dof_handler_u.n_dofs());
-  if(param.spatial_discretization == SpatialDiscretization::HDIV)
-  {
-    pcout << "NOTE. Continuity constraints in case of periodic boundary conditions " << std::endl
-          << "      are not taken into account regarding the number of total DoFs." << std::endl;
-  }
 
   pcout << "Pressure:" << std::endl;
   print_parameter(pcout, "degree of 1D polynomials", param.get_degree_p(param.degree_u));
@@ -436,6 +436,10 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   inverse_mass_operator_data_velocity.dof_index  = get_dof_index_velocity();
   inverse_mass_operator_data_velocity.quad_index = get_quad_index_velocity_standard();
   inverse_mass_operator_data_velocity.parameters = param.inverse_mass_operator;
+  // avoid invalid settings for HDIV, preserving settings if admissible
+  if(param.spatial_discretization == SpatialDiscretization::HDIV)
+    inverse_mass_operator_data_velocity.parameters.implementation_type =
+      InverseMassType::GlobalKrylovSolver;
   inverse_mass_velocity.initialize(*matrix_free,
                                    inverse_mass_operator_data_velocity,
                                    param.spatial_discretization == SpatialDiscretization::L2 ?
@@ -447,6 +451,7 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   inverse_mass_operator_data_velocity_scalar.dof_index  = get_dof_index_velocity_scalar();
   inverse_mass_operator_data_velocity_scalar.quad_index = get_quad_index_velocity_standard();
   inverse_mass_operator_data_velocity_scalar.parameters = param.inverse_mass_operator;
+  // always use optimal inverse mass type for velocity scalar
   inverse_mass_operator_data_velocity_scalar.parameters.implementation_type =
     inverse_mass_operator_data_velocity_scalar.get_optimal_inverse_mass_type(
       matrix_free->get_dof_handler(get_dof_index_velocity_scalar()).get_fe());
@@ -1001,6 +1006,7 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
   deserialization_parameters.mapping_degree         = param.mapping_degree;
   deserialization_parameters.consider_mapping_write = param.restart_data.consider_mapping_write;
   deserialization_parameters.triangulation_type     = param.grid.triangulation_type;
+  deserialization_parameters.spatial_discretization = param.spatial_discretization;
   write_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
   // Attach vectors to triangulation and serialize.
@@ -1054,8 +1060,11 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
                checkpoint_element_type,
                deserialization_parameters.degree_u);
 
-  std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_p = create_finite_element<dim>(
-    checkpoint_element_type, true, 1, deserialization_parameters.degree_p);
+  std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_p =
+    create_finite_element<dim>(checkpoint_element_type,
+                               true /* is_dg */,
+                               1 /* n_components */,
+                               deserialization_parameters.degree_p);
 
   checkpoint_dof_handler_u.distribute_dofs(*checkpoint_fe_u);
   checkpoint_dof_handler_p.distribute_dofs(*checkpoint_fe_p);
@@ -1120,8 +1129,8 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
       dealii::DoFHandler<dim> checkpoint_dof_handler_mapping(*checkpoint_triangulation);
       std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_mapping =
         create_finite_element<dim>(checkpoint_element_type,
-                                   true,
-                                   dim,
+                                   true /* is_dg */,
+                                   dim /* n_components */,
                                    deserialization_parameters.mapping_degree);
       checkpoint_dof_handler_mapping.distribute_dofs(*checkpoint_fe_mapping);
 
@@ -1209,7 +1218,7 @@ SpatialOperatorBase<dim, Number>::setup_fe_u(SpatialDiscretization const spatial
   std::shared_ptr<dealii::FiniteElement<dim>> fe;
   if(spatial_discretization == SpatialDiscretization::L2)
   {
-    fe = create_finite_element<dim>(element_type, true, dim, degree);
+    fe = create_finite_element<dim>(element_type, true /* is_dg */, dim /* n_components */, degree);
   }
   else if(spatial_discretization == SpatialDiscretization::HDIV)
   {
@@ -1417,7 +1426,7 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_vorticity(VectorType & dst, VectorType const & src) const
 {
-  vorticity_calculator.compute_vorticity(dst, src);
+  vorticity_calculator.compute_projection_rhs(dst, src);
   this->apply_inverse_mass_operator(dst, dst);
 }
 
@@ -1425,8 +1434,7 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_divergence(VectorType & dst, VectorType const & src) const
 {
-  divergence_calculator.compute_divergence(dst, src);
-
+  divergence_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1434,18 +1442,17 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_shear_rate(VectorType & dst, VectorType const & src) const
 {
-  shear_rate_calculator.compute_shear_rate(dst, src);
-
+  shear_rate_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
 template<int dim, typename Number>
 void
-SpatialOperatorBase<dim, Number>::access_viscosity(VectorType & dst, VectorType const & src) const
+SpatialOperatorBase<dim, Number>::access_viscosity(VectorType & dst) const
 {
   if(param.viscosity_is_variable())
   {
-    viscosity_calculator.access_viscosity(dst, src);
+    viscosity_calculator.compute_projection_rhs(dst);
     inverse_mass_velocity_scalar.apply(dst, dst);
   }
   else
@@ -1459,8 +1466,7 @@ void
 SpatialOperatorBase<dim, Number>::compute_velocity_magnitude(VectorType &       dst,
                                                              VectorType const & src) const
 {
-  magnitude_calculator.compute(dst, src);
-
+  magnitude_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1469,8 +1475,7 @@ void
 SpatialOperatorBase<dim, Number>::compute_vorticity_magnitude(VectorType &       dst,
                                                               VectorType const & src) const
 {
-  magnitude_calculator.compute(dst, src);
-
+  magnitude_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1531,7 +1536,10 @@ SpatialOperatorBase<dim, Number>::compute_streamfunction(VectorType &       dst,
   typedef Poisson::LaplaceOperator<dim, Number, 1> Laplace;
   Laplace                                          laplace_operator;
   dealii::AffineConstraints<Number>                constraint_dummy;
-  laplace_operator.initialize(*matrix_free, constraint_dummy, laplace_operator_data);
+  laplace_operator.initialize(*matrix_free,
+                              constraint_dummy,
+                              laplace_operator_data,
+                              true /* assemble_matrix */);
 
   // setup preconditioner
   std::shared_ptr<PreconditionerBase<Number>> preconditioner;
@@ -1574,8 +1582,7 @@ void
 SpatialOperatorBase<dim, Number>::compute_q_criterion(VectorType &       dst,
                                                       VectorType const & src) const
 {
-  q_criterion_calculator.compute(dst, src);
-
+  q_criterion_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1584,7 +1591,8 @@ unsigned int
 SpatialOperatorBase<dim, Number>::apply_inverse_mass_operator(VectorType &       dst,
                                                               VectorType const & src) const
 {
-  return inverse_mass_velocity.apply(dst, src);
+  inverse_mass_velocity.apply(dst, src);
+  return inverse_mass_velocity.get_n_iter_global_last();
 }
 
 template<int dim, typename Number>
@@ -1760,35 +1768,39 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
   {
     // elementwise operator
     elementwise_projection_operator =
-      std::make_shared<ELEMENTWISE_PROJ_OPERATOR>(*projection_operator);
+      std::make_shared<ElementwiseProjOperator>(*projection_operator);
 
     // elementwise preconditioner
     if(param.preconditioner_projection == PreconditionerProjection::None)
     {
-      typedef Elementwise::PreconditionerIdentity<dealii::VectorizedArray<Number>> IDENTITY;
+      typedef Elementwise::PreconditionerIdentity<dealii::VectorizedArray<Number>>
+        ElementwiseIdentityPreconditioner;
 
-      elementwise_preconditioner_projection =
-        std::make_shared<IDENTITY>(elementwise_projection_operator->get_problem_size());
+      elementwise_preconditioner_projection = std::make_shared<ElementwiseIdentityPreconditioner>(
+        elementwise_projection_operator->get_problem_size());
     }
     else if(param.preconditioner_projection == PreconditionerProjection::InverseMassMatrix)
     {
-      typedef Elementwise::InverseMassPreconditioner<dim, dim, Number> INVERSE_MASS;
+      typedef Elementwise::InverseMassPreconditioner<dim, dim, Number>
+        ElementwiseInverseMassPreconditioner;
 
       elementwise_preconditioner_projection =
-        std::make_shared<INVERSE_MASS>(projection_operator->get_matrix_free(),
-                                       projection_operator->get_dof_index(),
-                                       projection_operator->get_quad_index());
+        std::make_shared<ElementwiseInverseMassPreconditioner>(
+          projection_operator->get_matrix_free(),
+          projection_operator->get_dof_index(),
+          projection_operator->get_quad_index());
     }
     else if(param.preconditioner_projection == PreconditionerProjection::PointJacobi)
     {
-      typedef Elementwise::JacobiPreconditioner<dim, dim, Number, ProjOperator> JACOBI;
+      typedef Elementwise::JacobiPreconditioner<dim, dim, Number, ProjOperator>
+        ElementwiseJacobiPreconditioner;
 
       elementwise_preconditioner_projection =
-        std::make_shared<JACOBI>(projection_operator->get_matrix_free(),
-                                 projection_operator->get_dof_index(),
-                                 projection_operator->get_quad_index(),
-                                 *projection_operator,
-                                 false);
+        std::make_shared<ElementwiseJacobiPreconditioner>(projection_operator->get_matrix_free(),
+                                                          projection_operator->get_dof_index(),
+                                                          projection_operator->get_quad_index(),
+                                                          *projection_operator,
+                                                          false);
     }
     else
     {
@@ -1803,15 +1815,14 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
       projection_solver_data.solver_data.abs_tol = param.solver_data_projection.abs_tol;
       projection_solver_data.solver_data.rel_tol = param.solver_data_projection.rel_tol;
 
-      typedef Elementwise::PreconditionerBase<dealii::VectorizedArray<Number>> PROJ_PRECONDITIONER;
-
       typedef Elementwise::
-        IterativeSolver<dim, dim, Number, ELEMENTWISE_PROJ_OPERATOR, PROJ_PRECONDITIONER>
-          PROJ_SOLVER;
+        IterativeSolver<dim, dim, Number, ElementwiseProjOperator, ElementwisePreconditionerBase>
+          ElementwiseSolver;
 
-      projection_solver = std::make_shared<PROJ_SOLVER>(
-        *std::dynamic_pointer_cast<ELEMENTWISE_PROJ_OPERATOR>(elementwise_projection_operator),
-        *std::dynamic_pointer_cast<PROJ_PRECONDITIONER>(elementwise_preconditioner_projection),
+      projection_solver = std::make_shared<ElementwiseSolver>(
+        *std::dynamic_pointer_cast<ElementwiseProjOperator>(elementwise_projection_operator),
+        *std::dynamic_pointer_cast<ElementwisePreconditionerBase>(
+          elementwise_preconditioner_projection),
         projection_solver_data);
     }
     else

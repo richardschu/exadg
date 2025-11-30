@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -23,9 +23,9 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
-#include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/time_integration/vector_handling.h>
 
 namespace ExaDG
 {
@@ -55,6 +55,8 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     vec_convective_term(this->order),
     use_extrapolation(true),
     store_solution(false),
+    update_velocity(true),
+    update_pressure(true),
     helpers_ale(helpers_ale_in),
     postprocessor(postprocessor_in),
     vec_grid_coordinates(param_in.order_time_integrator)
@@ -62,7 +64,7 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
   needs_vector_convective_term =
     this->param.convective_problem() and
     (this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit or
-     this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme);
+     this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting);
 }
 
 template<int dim, typename Number>
@@ -139,14 +141,14 @@ TimeIntBDF<dim, Number>::prepare_vectors_for_next_timestep()
   {
     if(this->param.ale_formulation == false)
     {
-      push_back(this->vec_convective_term);
+      swap_back_one_step(this->vec_convective_term);
       vec_convective_term[0].swap(convective_term_np);
     }
   }
 
   if(param.ale_formulation)
   {
-    push_back(vec_grid_coordinates);
+    swap_back_one_step(vec_grid_coordinates);
     vec_grid_coordinates[0].swap(grid_coordinates_np);
   }
 }
@@ -172,10 +174,32 @@ TimeIntBDF<dim, Number>::ale_update()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation)
+TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+                                                                bool const update_velocity,
+                                                                bool const update_pressure)
 {
   this->use_extrapolation = use_extrapolation;
   this->store_solution    = true;
+  this->update_velocity   = update_velocity;
+  this->update_pressure   = update_pressure;
+
+  if(this->param.temporal_discretization == TemporalDiscretization::BDFCoupledSolution)
+  {
+    AssertThrow(this->update_velocity and this->update_pressure,
+                dealii::ExcMessage("TemporalDiscretization::BDFCoupledSolution cannot "
+                                   "recover velocity and pressure independently."));
+  }
+  else if(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+  {
+    AssertThrow(
+      not(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting and
+          this->store_solution),
+      dealii::ExcMessage("Storing the previous solution in a partitioned scheme is not"
+                         "supported for TemporalDiscretization::BDFConsistentSplitting."));
+  }
+
+  AssertThrow(this->update_velocity or this->update_pressure,
+              dealii::ExcMessage("No update from fluid time stepper requested."));
 
   Base::advance_one_timestep_solve();
 }
@@ -576,13 +600,13 @@ TimeIntBDF<dim, Number>::postprocessing() const
   }
 
   // We need to distribute the dofs before computing the error since
-  // dealii::VectorTools::integrate_difference() does not take constraints into account
-  // like MatrixFree does, hence reading the wrong values. distribute_constraint_u()
-  // updates the constrained values for the velocity.
+  // `dealii::VectorTools::integrate_difference()` does not take constraints into account like
+  // `dealii::MatrixFree` does, hence reading the wrong values. `distribute_constraint_u()` updates
+  // the constrained values for the velocity.
   operator_base->distribute_constraint_u(const_cast<VectorType &>(get_velocity(0)));
 
-  bool const standard = true;
-  if(standard)
+  bool constexpr postprocess_solution_else_error = true;
+  if(postprocess_solution_else_error)
   {
     postprocessor->do_postprocessing(get_velocity(0),
                                      get_pressure(0),

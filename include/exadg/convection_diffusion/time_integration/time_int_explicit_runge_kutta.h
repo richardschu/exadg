@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -68,7 +68,19 @@ public:
   void
   extrapolate_solution(VectorType & vector);
 
+  VectorType const &
+  get_solution_np() const;
+
+  void
+  prepare_coarsening_and_refinement() final;
+
+  void
+  interpolate_after_coarsening_and_refinement() final;
+
 private:
+  std::shared_ptr<std::vector<VectorType *>>
+  get_vectors();
+
   void
   initialize_vectors() final;
 

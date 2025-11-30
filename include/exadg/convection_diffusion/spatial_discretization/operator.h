@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -223,10 +223,10 @@ public:
    * Prepare and interpolation in adaptive mesh refinement.
    */
   void
-  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors);
+  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors) override;
 
   void
-  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors);
+  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors) override;
 
   /*
    * This function solves the linear system of equations in case of implicit time integration or

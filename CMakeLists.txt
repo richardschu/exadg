@@ -1,5 +1,5 @@
 #########################################################################
-# 
+#
 #                 #######               ######  #######
 #                 ##                    ##   ## ##
 #                 #####   ##  ## #####  ##   ## ## ####
@@ -21,7 +21,7 @@
 #  GNU General Public License for more details.
 #
 #  You should have received a copy of the GNU General Public License
-#  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 #########################################################################
 
@@ -64,6 +64,7 @@ CONFIGURE_FILE(
 
 # Set the source files to be compiled
 SET(TARGET_SRC
+     include/exadg/utilities/evaluate_convergence_study.cpp
      include/exadg/utilities/timer_tree.cpp
      include/exadg/utilities/print_general_infos.cpp
      include/exadg/time_integration/bdf_constants.cpp
@@ -93,8 +94,10 @@ SET(TARGET_SRC
      include/exadg/postprocessor/statistics_manager.cpp
      include/exadg/operators/operator_base.cpp
      include/exadg/operators/mass_operator.cpp
+     include/exadg/operators/inverse_mass_operator.cpp
      include/exadg/operators/rhs_operator.cpp
      include/exadg/operators/navier_stokes_calculators.cpp
+     include/exadg/operators/structure_calculators.cpp
      # Poisson equation
      include/exadg/poisson/user_interface/parameters.cpp
      include/exadg/poisson/spatial_discretization/operator.cpp
@@ -133,6 +136,7 @@ SET(TARGET_SRC
      include/exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_projection_methods.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.cpp
+     include/exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_pressure_correction.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/calculators/streamfunction_calculator_rhs_operator.cpp
@@ -143,6 +147,8 @@ SET(TARGET_SRC
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.cpp
+     include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting_extruded.cpp
+     include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_consistent_splitting.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.cpp
      include/exadg/incompressible_navier_stokes/time_integration/driver_steady_problems.cpp
      include/exadg/incompressible_navier_stokes/postprocessor/output_generator.cpp
@@ -172,6 +178,7 @@ SET(TARGET_SRC
      # elasticity
      include/exadg/structure/user_interface/parameters.cpp
      include/exadg/structure/material/library/st_venant_kirchhoff.cpp
+     include/exadg/structure/material/library/incompressible_neo_hookean.cpp
      include/exadg/structure/spatial_discretization/operators/elasticity_operator_base.cpp
      include/exadg/structure/spatial_discretization/operators/nonlinear_operator.cpp
      include/exadg/structure/spatial_discretization/operators/linear_operator.cpp

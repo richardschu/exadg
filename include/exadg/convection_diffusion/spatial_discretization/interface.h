@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -109,6 +109,15 @@ public:
   // needed for time step calculation
   virtual double
   calculate_time_step_diffusion() const = 0;
+
+  /*
+   * Prepare and interpolation in adaptive mesh refinement.
+   */
+  virtual void
+  prepare_coarsening_and_refinement(std::vector<VectorType *> & vectors) = 0;
+
+  virtual void
+  interpolate_after_coarsening_and_refinement(std::vector<VectorType *> & vectors) = 0;
 };
 } // namespace Interface
 

@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -171,7 +171,9 @@ public:
         coupling_structure_to_fluid();
 
         // solve fluid problem
-        fluid->time_integrator->advance_one_timestep_partitioned_solve(is_new_time_window);
+        fluid->time_integrator->advance_one_timestep_partitioned_solve(is_new_time_window,
+                                                                       true /* update_velocity */,
+                                                                       true /* update_pressure */);
 
         // compute and send stress to solid
         coupling_fluid_to_structure();

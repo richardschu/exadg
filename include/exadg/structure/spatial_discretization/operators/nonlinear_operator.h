@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -43,19 +43,19 @@ private:
 
   typedef std::pair<unsigned int, unsigned int> Range;
 
-  typedef dealii::VectorizedArray<Number>                         scalar;
-  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> vector;
-  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> tensor;
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
 
-public:
+private:
   /**
    * Initialize function.
    */
   void
-  initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
-             dealii::AffineConstraints<Number> const & affine_constraints,
-             OperatorData<dim> const &                 data) override;
+  initialize_derived() override;
 
+public:
   /**
    * Evaluates the non-linear operator.
    *

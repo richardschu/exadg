@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -125,7 +125,7 @@ do_set_parameters(Parameters & param, bool const is_precursor = false)
   // TEMPORAL DISCRETIZATION
   param.solver_type = SolverType::Unsteady;
 
-  //  param.temporal_discretization = TemporalDiscretization::BDFDualSplittingScheme;
+  //  param.temporal_discretization = TemporalDiscretization::BDFDualSplitting;
   //  param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
   //  param.calculation_of_time_step_size = TimeStepCalculation::CFL;
   //  param.adaptive_time_stepping = true;
@@ -200,7 +200,7 @@ do_set_parameters(Parameters & param, bool const is_precursor = false)
   param.order_extrapolation_pressure_nbc =
     param.order_time_integrator <= 2 ? param.order_time_integrator : 2;
 
-  if(param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  if(param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
     param.solver_momentum         = SolverMomentum::CG;
     param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-3);
@@ -410,7 +410,7 @@ public:
     pp_data_fda.mean_velocity_data.directory = this->output_parameters.directory;
     pp_data_fda.mean_velocity_data.filename  = filename_flowrate;
     dealii::Tensor<1, dim, double> direction;
-    direction[2]                                 = 1.0;
+    direction[dim - 1]                           = 1.0;
     pp_data_fda.mean_velocity_data.direction     = direction;
     pp_data_fda.mean_velocity_data.write_to_file = true;
 
@@ -670,7 +670,7 @@ public:
     radial_profile_z12->n_points_circumferential = n_points_line_circumferential;
 
     dealii::Tensor<1, dim, double> normal;
-    normal[2]                         = 1.0;
+    normal[dim - 1]                   = 1.0;
     radial_profile_z1->normal_vector  = normal;
     radial_profile_z2->normal_vector  = normal;
     radial_profile_z3->normal_vector  = normal;

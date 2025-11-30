@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -45,7 +45,7 @@ struct DeserializationParameters
       mapping_degree(dealii::numbers::invalid_unsigned_int),
       consider_mapping_write(false),
       triangulation_type(TriangulationType::Serial),
-      spatial_discretization(IncNS::SpatialDiscretization::L2)
+      spatial_discretization(IncNS::SpatialDiscretization::Undefined)
   {
   }
 

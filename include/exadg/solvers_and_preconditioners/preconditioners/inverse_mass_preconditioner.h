@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -56,16 +56,6 @@ public:
   vmult(VectorType & dst, VectorType const & src) const final
   {
     inverse_mass_operator.apply(dst, src);
-  }
-
-  void
-  vmult(
-    VectorType &                                                        dst,
-    VectorType const &                                                  src,
-    const std::function<void(const unsigned int, const unsigned int)> & before_loop,
-    const std::function<void(const unsigned int, const unsigned int)> & after_loop) const override
-  {
-    inverse_mass_operator.apply(dst, src, before_loop, after_loop);
   }
 
   void

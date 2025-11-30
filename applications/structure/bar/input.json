@@ -19,6 +19,7 @@
         "Height": "10.0",
         "Width": "10.0",
         "ProblemType": "QuasiStatic",
+        "MaterialType": "StVenantKirchhoff",
         "LargeDeformation": "true",
         "Preconditioner": "Multigrid",
         "WeakDamping": "0.0",
@@ -26,7 +27,10 @@
         "VolumeForce": "1.0",
         "BoundaryType": "Dirichlet",
         "Displacement": "20.0",
-        "Traction":	"0.0"
+        "Traction":	"0.0",
+        "AdaptiveRefinement": "true",
+        "UseMatrixBasedOperator": "false",
+        "MinDegreeMatrixFree": "1"
     },
     "Output": {
         "OutputDirectory": "output/bar/",

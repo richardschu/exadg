@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -132,6 +132,15 @@ OperatorBase<dim, Number, n_components>::get_dof_index() const
 
 template<int dim, typename Number, int n_components>
 unsigned int
+OperatorBase<dim, Number, n_components>::get_dof_index_inhomogeneous() const
+{
+  AssertThrow(data.dof_index_inhomogeneous != dealii::numbers::invalid_unsigned_int,
+              dealii::ExcMessage("dof_index_inhomogeneous is uninitialized."));
+  return this->data.dof_index_inhomogeneous;
+}
+
+template<int dim, typename Number, int n_components>
+unsigned int
 OperatorBase<dim, Number, n_components>::get_quad_index() const
 {
   return this->data.quad_index;
@@ -148,10 +157,14 @@ template<int dim, typename Number, int n_components>
 void
 OperatorBase<dim, Number, n_components>::vmult(VectorType & dst, VectorType const & src) const
 {
-  if(this->data.use_matrix_based_vmult)
+  if(this->data.use_matrix_based_operator_level)
+  {
     this->apply_matrix_based(dst, src);
+  }
   else
+  {
     this->apply(dst, src);
+  }
 }
 
 template<int dim, typename Number, int n_components>
@@ -171,10 +184,14 @@ template<int dim, typename Number, int n_components>
 void
 OperatorBase<dim, Number, n_components>::vmult_add(VectorType & dst, VectorType const & src) const
 {
-  if(this->data.use_matrix_based_vmult)
+  if(this->data.use_matrix_based_operator_level)
+  {
     this->apply_matrix_based_add(dst, src);
+  }
   else
+  {
     this->apply_add(dst, src);
+  }
 }
 
 template<int dim, typename Number, int n_components>
@@ -329,9 +346,9 @@ OperatorBase<dim, Number, n_components>::apply_add(VectorType & dst, VectorType 
 
 template<int dim, typename Number, int n_components>
 void
-OperatorBase<dim, Number, n_components>::assemble_matrix_if_necessary() const
+OperatorBase<dim, Number, n_components>::assemble_matrix_if_matrix_based() const
 {
-  if(this->data.use_matrix_based_vmult)
+  if(this->data.use_matrix_based_operator_level)
   {
     // initialize matrix
     if(not(system_matrix_based_been_initialized))
@@ -504,7 +521,7 @@ OperatorBase<dim, Number, n_components>::rhs_add(VectorType & rhs) const
                         tmp,
                         tmp);
 
-      // multiply by -1.0 since the boundary face integrals have to be shifted to the right hand
+      // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand
       // side
       rhs.add(-1.0, tmp);
     }
@@ -515,9 +532,9 @@ OperatorBase<dim, Number, n_components>::rhs_add(VectorType & rhs) const
     src_tmp.reinit(rhs, false);
     dst_tmp.reinit(rhs, false);
 
-    // Set constrained degrees of freedom according to inhomogeneous Dirichlet boundary conditions.
-    //  The rest of the vector remains unchanged.
-    set_inhomogeneous_boundary_values(src_tmp);
+    // Set constrained degrees of freedom according to inhomogeneous Dirichlet boundary conditions,
+    // hanging node and periodicity constraints. The rest of the vector remains unchanged.
+    set_inhomogeneous_constrained_values(src_tmp);
 
     // Since src_tmp = 0 apart from inhomogeneous boundary data, the function evaluate_add() only
     // computes the inhomogeneous part of the operator.
@@ -725,30 +742,36 @@ void
 OperatorBase<dim, Number, n_components>::initialize_block_diagonal_preconditioner_matrix_free(
   bool const initialize) const
 {
-  elementwise_operator = std::make_shared<ELEMENTWISE_OPERATOR>(*this);
+  elementwise_operator = std::make_shared<ElementwiseOperator>(*this);
 
   if(data.preconditioner_block_diagonal == Elementwise::Preconditioner::None)
   {
-    typedef Elementwise::PreconditionerIdentity<dealii::VectorizedArray<Number>> IDENTITY;
+    typedef Elementwise::PreconditionerIdentity<dealii::VectorizedArray<Number>>
+      ElementwiseIdentityPreconditioner;
 
     IntegratorCell integrator =
       IntegratorCell(*this->matrix_free, this->data.dof_index, this->data.quad_index);
 
-    elementwise_preconditioner = std::make_shared<IDENTITY>(integrator.dofs_per_cell);
+    elementwise_preconditioner =
+      std::make_shared<ElementwiseIdentityPreconditioner>(integrator.dofs_per_cell);
   }
   else if(data.preconditioner_block_diagonal == Elementwise::Preconditioner::PointJacobi)
   {
-    typedef Elementwise::JacobiPreconditioner<dim, n_components, Number, This> POINT_JACOBI;
+    typedef Elementwise::JacobiPreconditioner<dim, n_components, Number, This>
+      ElementwiseJacobiPreconditioner;
 
-    elementwise_preconditioner = std::make_shared<POINT_JACOBI>(
+    elementwise_preconditioner = std::make_shared<ElementwiseJacobiPreconditioner>(
       get_matrix_free(), get_dof_index(), get_quad_index(), *this, initialize);
   }
   else if(data.preconditioner_block_diagonal == Elementwise::Preconditioner::InverseMassMatrix)
   {
-    typedef Elementwise::InverseMassPreconditioner<dim, n_components, Number> INVERSE_MASS;
+    typedef Elementwise::InverseMassPreconditioner<dim, n_components, Number>
+      ElementwiseInverseMassPreconditioner;
 
     elementwise_preconditioner =
-      std::make_shared<INVERSE_MASS>(get_matrix_free(), get_dof_index(), get_quad_index());
+      std::make_shared<ElementwiseInverseMassPreconditioner>(get_matrix_free(),
+                                                             get_dof_index(),
+                                                             get_quad_index());
   }
   else
   {
@@ -759,9 +782,9 @@ OperatorBase<dim, Number, n_components>::initialize_block_diagonal_preconditione
   iterative_solver_data.solver_type = data.solver_block_diagonal;
   iterative_solver_data.solver_data = data.solver_data_block_diagonal;
 
-  elementwise_solver = std::make_shared<ELEMENTWISE_SOLVER>(
-    *std::dynamic_pointer_cast<ELEMENTWISE_OPERATOR>(elementwise_operator),
-    *std::dynamic_pointer_cast<ELEMENTWISE_PRECONDITIONER>(elementwise_preconditioner),
+  elementwise_solver = std::make_shared<ElementwiseSolver>(
+    *std::dynamic_pointer_cast<ElementwiseOperator>(elementwise_operator),
+    *std::dynamic_pointer_cast<ElementwisePreconditionerBase>(elementwise_preconditioner),
     iterative_solver_data);
 }
 
@@ -1020,6 +1043,18 @@ OperatorBase<dim, Number, n_components>::internal_calculate_system_matrix(
 
   // communicate overlapping matrix parts
   system_matrix.compress(dealii::VectorOperation::add);
+
+  // set diagonal entries of constrained DoFs to 1.0
+  dealii::DoFHandler<dim> const & dof_handler =
+    this->matrix_free->get_dof_handler(this->data.dof_index);
+  for(auto const & line : this->constraint->get_lines())
+  {
+    if(dof_handler.locally_owned_dofs().is_element(line.index))
+    {
+      system_matrix.set(line.index, line.index, 1.0);
+    }
+  }
+  system_matrix.compress(dealii::VectorOperation::insert);
 }
 
 template<int dim, typename Number, int n_components>
@@ -1035,13 +1070,15 @@ OperatorBase<dim, Number, n_components>::get_constant_modes(
 
   if(dof_handler.has_level_dofs())
   {
+    // Extract coarse level constant modes.
     constant_modes =
-      dealii::DoFTools::extract_level_constant_modes(0,
+      dealii::DoFTools::extract_level_constant_modes(this->matrix_free->get_mg_level(),
                                                      dof_handler,
                                                      dealii::ComponentMask(n_components, true));
   }
   else
   {
+    // Extract finest level constant modes.
     constant_modes =
       dealii::DoFTools::extract_constant_modes(dof_handler,
                                                dealii::ComponentMask(n_components, true));
@@ -1165,7 +1202,7 @@ OperatorBase<dim, Number, n_components>::do_boundary_integral_continuous(
 
 template<int dim, typename Number, int n_components>
 void
-OperatorBase<dim, Number, n_components>::set_inhomogeneous_boundary_values(
+OperatorBase<dim, Number, n_components>::set_inhomogeneous_constrained_values(
   VectorType & solution) const
 {
   (void)solution;
@@ -1173,7 +1210,7 @@ OperatorBase<dim, Number, n_components>::set_inhomogeneous_boundary_values(
   AssertThrow(
     false,
     dealii::ExcMessage(
-      "OperatorBase::set_inhomogeneous_boundary_values() has to be overridden by derived class!"));
+      "OperatorBase::set_inhomogeneous_constrained_values() has to be overridden by derived class!"));
 }
 
 template<int dim, typename Number, int n_components>

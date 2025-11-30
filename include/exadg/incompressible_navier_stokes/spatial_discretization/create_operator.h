@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -23,6 +23,7 @@
 #define EXADG_INCOMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_CREATE_OPERATOR_H_
 
 // ExaDG
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_pressure_correction.h>
@@ -60,7 +61,7 @@ create_operator(std::shared_ptr<Grid<dim> const>                      grid,
                                                                   field,
                                                                   mpi_comm);
   }
-  else if(parameters.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  else if(parameters.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
     pde_operator = std::make_shared<OperatorDualSplitting<dim, Number>>(grid,
                                                                         mapping,
@@ -70,6 +71,17 @@ create_operator(std::shared_ptr<Grid<dim> const>                      grid,
                                                                         parameters,
                                                                         field,
                                                                         mpi_comm);
+  }
+  else if(parameters.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+  {
+    pde_operator = std::make_shared<OperatorConsistentSplitting<dim, Number>>(grid,
+                                                                              mapping,
+                                                                              multigrid_mappings,
+                                                                              boundary_descriptor,
+                                                                              field_functions,
+                                                                              parameters,
+                                                                              field,
+                                                                              mpi_comm);
   }
   else if(parameters.temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
           // we can not instantiate the base class and instantiate an arbitrary deriving

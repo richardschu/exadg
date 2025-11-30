@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -258,8 +258,8 @@ private:
 
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                  = SolverType::Unsteady;
-    this->param.temporal_discretization      = TemporalDiscretization::BDFDualSplittingScheme;
-    this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
+    this->param.temporal_discretization      = TemporalDiscretization::BDFConsistentSplitting;
+    this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::LinearlyImplicit;
     this->param.order_time_integrator        = 2;
     this->param.start_with_low_order         = false;
     this->param.adaptive_time_stepping       = false;
@@ -348,7 +348,7 @@ private:
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
     this->param.formulation_convective_term_bc = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
       if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
       {
@@ -369,6 +369,9 @@ private:
       this->param.update_preconditioner_momentum                 = false;
     }
 
+    // CONSISTENT SPLITTING SCHEME
+    this->param.order_extrapolation_pressure_rhs = 2;
+    this->param.apply_leray_projection           = true;
 
     // PRESSURE-CORRECTION SCHEME
 

@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -62,7 +62,7 @@ struct OperatorBaseData
     : dof_index(0),
       dof_index_inhomogeneous(dealii::numbers::invalid_unsigned_int),
       quad_index(0),
-      use_matrix_based_vmult(false),
+      use_matrix_based_operator_level(false),
       sparse_matrix_type(SparseMatrixType::Undefined),
       operator_is_singular(false),
       use_cell_based_loops(false),
@@ -83,8 +83,8 @@ struct OperatorBaseData
   unsigned int quad_index;
 
   // this parameter can be used to use sparse matrices for the vmult() operation. The default
-  // case is to use a matrix-free implementation, i.e. use_matrix_based_vmult = false.
-  bool use_matrix_based_vmult;
+  // case is to use a matrix-free implementation, i.e. use_matrix_based_operator_level = false.
+  bool use_matrix_based_operator_level;
 
   SparseMatrixType sparse_matrix_type;
 
@@ -160,6 +160,9 @@ public:
   get_dof_index() const;
 
   unsigned int
+  get_dof_index_inhomogeneous() const;
+
+  unsigned int
   get_quad_index() const;
 
   /*
@@ -207,7 +210,7 @@ public:
    * function.
    */
   virtual void
-  set_inhomogeneous_boundary_values(VectorType & solution) const;
+  set_inhomogeneous_constrained_values(VectorType & solution) const;
 
   void
   set_constrained_dofs_to_zero(VectorType & vector) const;
@@ -285,11 +288,11 @@ public:
   apply_add(VectorType & dst, VectorType const & src) const;
 
   void
-  assemble_matrix_if_necessary() const;
+  assemble_matrix_if_matrix_based() const;
 
   /*
-   * Matrix-based version of the apply function. This function is used if use_matrix_based_vmult =
-   * true.
+   * Matrix-based version of the apply function. This function is used if
+   * use_matrix_based_operator_level = true.
    */
   void
   apply_matrix_based(VectorType & dst, VectorType const & src) const;
@@ -309,8 +312,8 @@ public:
    * 'virtual' to provide the opportunity to override and assert these functions in derived classes.
    *
    * For continuous Galerkin discretizations, this function calls internally the member function
-   * set_inhomogeneous_boundary_values(). Hence, prior to calling this function, one needs to call
-   * set_time() for a correct evaluation in case of time-dependent problems.
+   * set_inhomogeneous_constrained_values(). Hence, prior to calling this function, one needs to
+   * call set_time() for a correct evaluation in case of time-dependent problems.
    *
    * This function sets the dst vector to zero, and afterwards calls rhs_add().
    */
@@ -332,9 +335,10 @@ public:
    * and assert these functions in derived classes.
    *
    * Unlike the function rhs(), this function does not internally call the function
-   * set_inhomogeneous_boundary_values() prior to evaluation. Hence, one needs to explicitly call
-   * the function set_inhomogeneous_boundary_values() in case of continuous Galerkin discretizations
-   * with inhomogeneous Dirichlet boundary conditions before calling the present function.
+   * set_inhomogeneous_constrained_values() prior to evaluation. Hence, one needs to explicitly call
+   * the function set_inhomogeneous_constrained_values() in case of continuous Galerkin
+   * discretizations with inhomogeneous Dirichlet boundary conditions before calling the present
+   * function.
    */
   virtual void
   evaluate(VectorType & dst, VectorType const & src) const;
@@ -500,16 +504,16 @@ protected:
   /*
    * Block Jacobi preconditioner/smoother: matrix-free version with elementwise iterative solver
    */
-  typedef Elementwise::OperatorBase<dim, Number, This> ELEMENTWISE_OPERATOR;
+  typedef Elementwise::OperatorBase<dim, Number, This> ElementwiseOperator;
   typedef Elementwise::PreconditionerBase<dealii::VectorizedArray<Number>>
-    ELEMENTWISE_PRECONDITIONER;
+    ElementwisePreconditionerBase;
   typedef Elementwise::
-    IterativeSolver<dim, n_components, Number, ELEMENTWISE_OPERATOR, ELEMENTWISE_PRECONDITIONER>
-      ELEMENTWISE_SOLVER;
+    IterativeSolver<dim, n_components, Number, ElementwiseOperator, ElementwisePreconditionerBase>
+      ElementwiseSolver;
 
-  mutable std::shared_ptr<ELEMENTWISE_OPERATOR>       elementwise_operator;
-  mutable std::shared_ptr<ELEMENTWISE_PRECONDITIONER> elementwise_preconditioner;
-  mutable std::shared_ptr<ELEMENTWISE_SOLVER>         elementwise_solver;
+  mutable std::shared_ptr<ElementwiseOperator>           elementwise_operator;
+  mutable std::shared_ptr<ElementwisePreconditionerBase> elementwise_preconditioner;
+  mutable std::shared_ptr<ElementwiseSolver>             elementwise_solver;
 
 private:
   virtual void
