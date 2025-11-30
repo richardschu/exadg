@@ -15,22 +15,18 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
-#include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/numerics/vector_tools_mean_value.h>
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/laplace_operator_extruded.h>
-#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
-#include <exadg/incompressible_navier_stokes/time_integration/poisson_solver.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
-#include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/time_integration/vector_handling.h>
 #include <exadg/utilities/print_solver_results.h>
 
 namespace ExaDG
@@ -142,161 +138,7 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
   for(unsigned int i = 0; i < velocity_dbc.size(); ++i)
     pde_operator->initialize_vector_velocity(velocity_dbc[i]);
   pde_operator->initialize_vector_velocity(velocity_dbc_np);
-
-  // do test for matrix-free operator of optimized kind
-  std::vector<unsigned int>          cell_vectorization_category;
-  const dealii::Triangulation<dim> & tria = pde_operator->get_dof_handler_u().get_triangulation();
-  if(tria.n_levels() > 2)
-  {
-    cell_vectorization_category.resize(tria.n_active_cells(),
-                                       dealii::numbers::invalid_unsigned_int);
-    unsigned int                             next_category = 0;
-    std::array<std::vector<unsigned int>, 8> next_cells;
-    std::vector<unsigned int>                sorted_next_cells;
-    for(const auto & grandparent : tria.cell_iterators_on_level(tria.n_levels() - 3))
-      if(grandparent->has_children())
-      {
-        for(auto & entry : next_cells)
-          entry.clear();
-        for(unsigned int c0 = 0; c0 < grandparent->n_children(); ++c0)
-        {
-          const auto parent = grandparent->child(c0);
-          if(parent->has_children())
-            for(unsigned int c = 0; c < parent->n_children(); ++c)
-            {
-              const auto cell = parent->child(c);
-              Assert(cell->is_active(), dealii::ExcInternalError());
-              if(cell->is_locally_owned())
-              {
-                unsigned int boundary_type = 0;
-                for(unsigned int d = 0; d < dim; ++d)
-                  if(cell->at_boundary(2 * d) ||
-                     cell->neighbor(2 * d)->subdomain_id() != cell->subdomain_id())
-                  {
-                    boundary_type += dealii::Utilities::pow(2, d);
-                  }
-                next_cells[boundary_type].push_back(cell->active_cell_index());
-              }
-            }
-        }
-        unsigned int n_cells = 0;
-        for(const std::vector<unsigned int> & cells : next_cells)
-          n_cells += cells.size();
-        sorted_next_cells.clear();
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[7].begin(),
-                                 next_cells[7].end());
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[6].begin(),
-                                 next_cells[6].end());
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[5].begin(),
-                                 next_cells[5].end());
-        unsigned int count_4 = 0, count_2 = 0, count_1 = 0;
-        while(sorted_next_cells.size() % 8 != 0 && count_4 < next_cells[4].size())
-        {
-          sorted_next_cells.push_back(next_cells[4][count_4]);
-          ++count_4;
-        }
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[3].begin(),
-                                 next_cells[3].end());
-        // avoid having 9 cells of one kind that spills two 8-sized lanes,
-        // so peel off one of each here
-        if(sorted_next_cells.size() % 8 != 0)
-          if(count_2 < next_cells[2].size())
-          {
-            sorted_next_cells.push_back(next_cells[2][count_2]);
-            ++count_2;
-          }
-        if(sorted_next_cells.size() % 8 != 0)
-          if(count_1 < next_cells[1].size())
-          {
-            sorted_next_cells.push_back(next_cells[1][count_1]);
-            ++count_1;
-          }
-        while(sorted_next_cells.size() % 8 != 0 && count_1 < next_cells[1].size())
-        {
-          sorted_next_cells.push_back(next_cells[1][count_1]);
-          ++count_1;
-        }
-        while(sorted_next_cells.size() % 8 != 0 && count_2 < next_cells[2].size())
-        {
-          sorted_next_cells.push_back(next_cells[2][count_2]);
-          ++count_2;
-        }
-        // possibly move some insertions of category 0 in between to fill
-        // up and avoid further exchange steps
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[2].begin() + count_2,
-                                 next_cells[2].end());
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[4].begin() + count_4,
-                                 next_cells[4].end());
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[1].begin() + count_1,
-                                 next_cells[1].end());
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[0].begin(),
-                                 next_cells[0].end());
-        AssertThrow(sorted_next_cells.size() == n_cells,
-                    dealii::ExcDimensionMismatch(sorted_next_cells.size(), n_cells));
-
-        for(unsigned int i = 0; i < n_cells; ++next_category)
-          for(unsigned int j = 0; j < 16 && i < n_cells; ++j, ++i)
-            cell_vectorization_category[sorted_next_cells[i]] = next_category;
-      }
-  }
-  op_rt = std::make_shared<RTOperator::RaviartThomasOperatorBase<dim, Number>>();
-  op_rt->reinit(*pde_operator->get_mapping(),
-                pde_operator->get_dof_handler_u(),
-                pde_operator->get_constraint_u(),
-                cell_vectorization_category,
-                dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
-
-  op_rt->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
-  op_rt->initialize_dof_vector(solution_rt);
-  op_rt->initialize_dof_vector(rhs_rt);
-
-  if constexpr(dim == 3)
-  {
-    op_rt->set_parameters(1.0, 0.0);
-    op_rt->compute_diagonal(diagonal_mass);
-
-    preconditioner_mass.get_vector().reinit(diagonal_mass, true);
-    const unsigned int local_size = diagonal_mass.locally_owned_size();
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < local_size; ++i)
-    {
-      AssertThrow(diagonal_mass.local_element(i) > 1e-30, dealii::ExcInternalError());
-      preconditioner_mass.get_vector().local_element(i) = 1. / diagonal_mass.local_element(i);
-    }
-    op_rt->set_parameters(0.0, 1.0);
-    op_rt->compute_diagonal(diagonal_laplace);
-
-    solutions_convective.resize(velocity.size());
-    for(unsigned int i = 0; i < solutions_convective.size(); ++i)
-      op_rt->initialize_dof_vector(solutions_convective[i]);
-  }
-
-
-  laplace_op = std::make_shared<LaplaceOperator::LaplaceOperatorDG<dim, Number>>();
-  laplace_op->reinit(*pde_operator->get_mapping(),
-                     pde_operator->get_dof_handler_p(),
-                     pde_operator->get_constraint_p(),
-                     cell_vectorization_category,
-                     dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1));
-  laplace_op->set_penalty_parameters(
-    pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
-
-  poisson_preconditioner = std::make_shared<LaplaceOperator::PoissonPreconditionerMG<dim, float>>(
-    *pde_operator->get_mapping(),
-    pde_operator->get_dof_handler_p(),
-    cell_vectorization_category,
-    pde_operator->get_grid().mapping_function,
-    pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 }
-
 
 
 template<int dim, typename Number>
@@ -307,6 +149,12 @@ TimeIntBDFDualSplitting<dim, Number>::initialize_current_solution()
     this->helpers_ale->move_grid(this->get_time());
 
   pde_operator->prescribe_initial_conditions(velocity[0], pressure[0], this->get_time());
+
+  // Update the variable viscosity.
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+  {
+    pde_operator->update_viscosity(velocity[0]);
+  }
 }
 
 template<int dim, typename Number>
@@ -335,22 +183,19 @@ TimeIntBDFDualSplitting<dim, Number>::initialize_velocity_dbc()
     this->helpers_ale->move_grid(this->get_time());
     this->helpers_ale->update_pde_operator_after_grid_motion();
   }
-  if(this->param.spatial_discretization == SpatialDiscretization::L2)
+  pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[0], this->get_time());
+  // ... and previous times if start_with_low_order == false
+  if(this->start_with_low_order == false)
   {
-    pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[0], this->get_time());
-    // ... and previous times if start_with_low_order == false
-    if(this->start_with_low_order == false)
+    for(unsigned int i = 1; i < velocity_dbc.size(); ++i)
     {
-      for(unsigned int i = 1; i < velocity_dbc.size(); ++i)
+      double const time = this->get_time() - double(i) * this->get_time_step_size();
+      if(this->param.ale_formulation)
       {
-        double const time = this->get_time() - double(i) * this->get_time_step_size();
-        if(this->param.ale_formulation)
-        {
-          this->helpers_ale->move_grid(time);
-          this->helpers_ale->update_pde_operator_after_grid_motion();
-        }
-        pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[i], time);
+        this->helpers_ale->move_grid(time);
+        this->helpers_ale->update_pde_operator_after_grid_motion();
       }
+      pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[i], time);
     }
   }
 }
@@ -481,407 +326,33 @@ void
 TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
 {
   // pre-computations
-  if(this->param.spatial_discretization == SpatialDiscretization::L2)
-    pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc_np, this->get_next_time());
+  pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc_np, this->get_next_time());
 
   // perform the sub-steps of the dual-splitting method
-  convective_step();
+  if(this->update_velocity)
+  {
+    convective_step();
+  }
 
-  pressure_step();
+  if(this->update_pressure)
+  {
+    pressure_step();
+  }
 
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
-     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
+  if(this->update_velocity)
+  {
     projection_step();
 
-  viscous_step();
+    viscous_step();
 
-  if(this->param.apply_penalty_terms_in_postprocessing_step)
-    penalty_step();
-
-  // evaluate convective term once the final solution at time
-  // t_{n+1} is known
-  evaluate_convective_term();
-}
-
-template<typename Number, typename Number2>
-void
-extrapolate_vectors(std::vector<Number2> const &                                            factors,
-                    std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
-                    dealii::LinearAlgebra::distributed::Vector<Number> &                    result)
-{
-  unsigned int const locally_owned_size = result.locally_owned_size();
-  if(factors.size() == 1)
-    result.equ(factors[0], vectors[0]);
-  else if(factors.size() == 2)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number *       res    = result.begin();
-    Number const   beta_0 = factors[0];
-    Number const   beta_1 = factors[1];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i];
-  }
-  else if(factors.size() == 3)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number const * vec_2  = vectors[2].begin();
-    Number *       res    = result.begin();
-    Number const   beta_0 = factors[0];
-    Number const   beta_1 = factors[1];
-    Number const   beta_2 = factors[2];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i];
-  }
-  else if(factors.size() == 4)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number const * vec_2  = vectors[2].begin();
-    Number const * vec_3  = vectors[3].begin();
-    Number *       res    = result.begin();
-    Number const   beta_0 = factors[0];
-    Number const   beta_1 = factors[1];
-    Number const   beta_2 = factors[2];
-    Number const   beta_3 = factors[3];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
-  }
-  else
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
+    if(this->param.apply_penalty_terms_in_postprocessing_step)
     {
-      Number entry = factors[0] * vectors[0].local_element(i);
-      for(unsigned int j = 1; j < factors.size(); ++j)
-        entry += factors[j] * vectors[j].local_element(i);
-      result.local_element(i) = entry;
+      penalty_step();
     }
-}
 
-
-
-template<typename OperatorType, typename VectorType>
-void
-compute_least_squares_fit(OperatorType const &            op,
-                          std::vector<VectorType> const & vectors,
-                          VectorType const &              rhs,
-                          VectorType &                    result)
-{
-  using Number = typename VectorType::value_type;
-  std::vector<VectorType>    tmp(vectors.size());
-  dealii::FullMatrix<double> matrix(vectors.size(), vectors.size());
-  std::vector<Number>        small_vector(vectors.size());
-
-  // This algorithm performs a Cholesky (LDLT) factorization of the normal
-  // equations for the minimization problem
-  // min_{alpha_i} | sum(alpha_i A x_i) - b |
-  // which eventually gives the linear combination sum (alpha_i x_i)
-  // minimizing the residual among the given search vectors
-  unsigned int i = 0;
-  for(; i < vectors.size(); ++i)
-  {
-    tmp[i].reinit(vectors[0], true);
-    op.vmult(tmp[i], vectors[i]);
-
-    std::array<Number *, 11> vec_ptrs = {};
-    for(unsigned int j = 0; j <= i; ++j)
-      vec_ptrs[j] = tmp[j].begin();
-    Number const * rhs_ptr = rhs.begin();
-
-    unsigned int constexpr n_lanes    = dealii::VectorizedArray<Number>::size();
-    unsigned int constexpr n_lanes_4  = 4 * n_lanes;
-    unsigned int const regular_size_4 = (vectors[0].locally_owned_size()) / n_lanes_4 * n_lanes_4;
-    unsigned int const regular_size   = (vectors[0].locally_owned_size()) / n_lanes * n_lanes;
-
-    // compute inner products in normal equations (all at once)
-    std::array<dealii::VectorizedArray<Number>, 12> local_sums = {};
-
-    unsigned int k = 0;
-    for(; k < regular_size_4; k += n_lanes_4)
-    {
-      dealii::VectorizedArray<Number> v_k_0, v_k_1, v_k_2, v_k_3;
-      v_k_0.load(vec_ptrs[i] + k);
-      v_k_1.load(vec_ptrs[i] + k + n_lanes);
-      v_k_2.load(vec_ptrs[i] + k + 2 * n_lanes);
-      v_k_3.load(vec_ptrs[i] + k + 3 * n_lanes);
-      for(unsigned int j = 0; j < i; ++j)
-      {
-        dealii::VectorizedArray<Number> v_j_k, tmp0;
-        v_j_k.load(vec_ptrs[j] + k);
-        tmp0 = v_k_0 * v_j_k;
-        v_j_k.load(vec_ptrs[j] + k + n_lanes);
-        tmp0 += v_k_1 * v_j_k;
-        v_j_k.load(vec_ptrs[j] + k + 2 * n_lanes);
-        tmp0 += v_k_2 * v_j_k;
-        v_j_k.load(vec_ptrs[j] + k + 3 * n_lanes);
-        tmp0 += v_k_3 * v_j_k;
-        local_sums[j] += tmp0;
-      }
-      local_sums[i] += v_k_0 * v_k_0 + v_k_1 * v_k_1 + v_k_2 * v_k_2 + v_k_3 * v_k_3;
-
-      dealii::VectorizedArray<Number> rhs_k, tmp0;
-      rhs_k.load(rhs_ptr + k);
-      tmp0 = rhs_k * v_k_0;
-      rhs_k.load(rhs_ptr + k + n_lanes);
-      tmp0 += rhs_k * v_k_1;
-      rhs_k.load(rhs_ptr + k + 2 * n_lanes);
-      tmp0 += rhs_k * v_k_2;
-      rhs_k.load(rhs_ptr + k + 3 * n_lanes);
-      tmp0 += rhs_k * v_k_3;
-      local_sums[i + 1] += tmp0;
-    }
-    for(; k < regular_size; k += n_lanes)
-    {
-      dealii::VectorizedArray<Number> v_k;
-      v_k.load(vec_ptrs[i] + k);
-      for(unsigned int j = 0; j < i; ++j)
-      {
-        dealii::VectorizedArray<Number> v_j_k;
-        v_j_k.load(vec_ptrs[j] + k);
-        local_sums[j] += v_k * v_j_k;
-      }
-      local_sums[i] += v_k * v_k;
-      dealii::VectorizedArray<Number> rhs_k;
-      rhs_k.load(rhs_ptr + k);
-      local_sums[i + 1] += v_k * rhs_k;
-    }
-    for(; k < vectors[0].locally_owned_size(); ++k)
-    {
-      for(unsigned int j = 0; j <= i; ++j)
-        local_sums[j][k - regular_size] += vec_ptrs[i][k] * vec_ptrs[j][k];
-      local_sums[i + 1][k - regular_size] += vec_ptrs[i][k] * rhs_ptr[k];
-    }
-    std::array<Number, 12> scalar_sums;
-    for(unsigned int j = 0; j < i + 2; ++j)
-      scalar_sums[j] = local_sums[j].sum();
-
-    dealii::Utilities::MPI::sum(dealii::ArrayView<Number const>(scalar_sums.data(), i + 2),
-                                vectors[0].get_mpi_communicator(),
-                                dealii::ArrayView<Number>(scalar_sums.data(), i + 2));
-
-    for(unsigned int j = 0; j <= i; ++j)
-      matrix(i, j) = scalar_sums[j];
-
-    // update row in Cholesky factorization associated to matrix of normal
-    // equations using the diagonal entry D
-    for(unsigned int j = 0; j < i; ++j)
-    {
-      double const inv_entry = matrix(i, j) / matrix(j, j);
-      for(unsigned int k = j + 1; k <= i; ++k)
-        matrix(i, k) -= matrix(k, j) * inv_entry;
-    }
-    if(matrix(i, i) < 1e-12 * matrix(0, 0) or matrix(0, 0) < 1e-30)
-      break;
-
-    // update for the right hand side (forward substitution)
-    small_vector[i] = scalar_sums[i + 1];
-    for(unsigned int j = 0; j < i; ++j)
-      small_vector[i] -= matrix(i, j) / matrix(j, j) * small_vector[j];
+    // evaluate convective term once the final solution at time t_{n+1} is known
+    evaluate_convective_term();
   }
-
-  // backward substitution of Cholesky factorization
-  for(unsigned int s = i; s < small_vector.size(); ++s)
-    small_vector[s] = 0.;
-  for(int s = i - 1; s >= 0; --s)
-  {
-    double sum = small_vector[s];
-    for(unsigned int j = s + 1; j < i; ++j)
-      sum -= small_vector[j] * matrix(j, s);
-    small_vector[s] = sum / matrix(s, s);
-  }
-  // if(dealii::Utilities::MPI::this_mpi_process(vectors[0].get_mpi_communicator()) == 0)
-  //{
-  //  std::cout << "extrapolate " << std::defaultfloat << std::setprecision(3) << result.size()
-  //            << ": ";
-  //  for(const double a : small_vector)
-  //    std::cout << a << " ";
-  //  if(i > 0)
-  //    std::cout << "i=" << i << " " << matrix(i - 1, i - 1) / matrix(0, 0) << "   ";
-  //}
-  extrapolate_vectors(small_vector, vectors, result);
-}
-
-// Compute a least squares fit and return the norm of the right-hand side as
-// well as the achieved residual
-template<typename VectorType>
-std::pair<double, double>
-compute_least_squares_fit(std::vector<VectorType> const & vectors_matvec,
-                          VectorType const &              rhs,
-                          std::vector<VectorType> const & vectors,
-                          VectorType &                    result)
-{
-  AssertDimension(vectors.size(), vectors_matvec.size());
-  const unsigned int n_vectors = vectors.size();
-  using Number                 = typename VectorType::value_type;
-  dealii::FullMatrix<double> matrix(n_vectors, n_vectors);
-  std::vector<double>        small_vector(n_vectors);
-
-  // Solve the normal equations for the minimization problem
-  // min_{alpha_i} | sum(alpha_i A x_i) - b |
-  // for which we compute the matrix (A x_i)^T (A x_j) and rhs (A x_i)^T b
-  AssertThrow(vectors.size() <= 5, dealii::ExcNotImplemented());
-  std::array<const Number *, 5> vec_ptrs = {};
-  for(unsigned int j = 0; j < n_vectors; ++j)
-    vec_ptrs[j] = vectors_matvec[j].begin();
-  Number const * rhs_ptr = rhs.begin();
-
-  unsigned int constexpr n_lanes    = dealii::VectorizedArray<double>::size();
-  unsigned int constexpr n_lanes_4  = 4 * n_lanes;
-  unsigned int const regular_size_4 = (vectors[0].locally_owned_size()) / n_lanes_4 * n_lanes_4;
-  unsigned int const regular_size   = (vectors[0].locally_owned_size()) / n_lanes * n_lanes;
-
-  // compute inner products in normal equations (all at once)
-  dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
-
-  unsigned int k = 0;
-  for(; k < regular_size_4; k += n_lanes_4)
-  {
-    for(unsigned int i = 0; i < n_vectors; ++i)
-    {
-      dealii::VectorizedArray<double> v_k_0, v_k_1, v_k_2, v_k_3;
-      v_k_0.load(vec_ptrs[i] + k);
-      v_k_1.load(vec_ptrs[i] + k + n_lanes);
-      v_k_2.load(vec_ptrs[i] + k + 2 * n_lanes);
-      v_k_3.load(vec_ptrs[i] + k + 3 * n_lanes);
-      for(unsigned int j = 0; j < i; ++j)
-      {
-        dealii::VectorizedArray<double> v_j_k, tmp0;
-        v_j_k.load(vec_ptrs[j] + k);
-        tmp0 = v_k_0 * v_j_k;
-        v_j_k.load(vec_ptrs[j] + k + n_lanes);
-        tmp0 += v_k_1 * v_j_k;
-        v_j_k.load(vec_ptrs[j] + k + 2 * n_lanes);
-        tmp0 += v_k_2 * v_j_k;
-        v_j_k.load(vec_ptrs[j] + k + 3 * n_lanes);
-        tmp0 += v_k_3 * v_j_k;
-        local_sums[i][j] += tmp0;
-      }
-      local_sums[i][i] += v_k_0 * v_k_0 + v_k_1 * v_k_1 + v_k_2 * v_k_2 + v_k_3 * v_k_3;
-
-      dealii::VectorizedArray<double> rhs_k, tmp0, tmp1;
-      rhs_k.load(rhs_ptr + k);
-      tmp0 = rhs_k * v_k_0;
-      tmp1 = rhs_k * rhs_k;
-      rhs_k.load(rhs_ptr + k + n_lanes);
-      tmp0 += rhs_k * v_k_1;
-      tmp1 += rhs_k * rhs_k;
-      rhs_k.load(rhs_ptr + k + 2 * n_lanes);
-      tmp0 += rhs_k * v_k_2;
-      tmp1 += rhs_k * rhs_k;
-      rhs_k.load(rhs_ptr + k + 3 * n_lanes);
-      tmp0 += rhs_k * v_k_3;
-      tmp1 += rhs_k * rhs_k;
-      local_sums[i][i + 1] += tmp0;
-      if(i == 0)
-        local_sums[0][5] += tmp1;
-    }
-  }
-  for(; k < regular_size; k += n_lanes)
-  {
-    dealii::VectorizedArray<double> rhs_k;
-    for(unsigned int i = 0; i < n_vectors; ++i)
-    {
-      dealii::VectorizedArray<double> v_k;
-      v_k.load(vec_ptrs[i] + k);
-      for(unsigned int j = 0; j < i; ++j)
-      {
-        dealii::VectorizedArray<double> v_j_k;
-        v_j_k.load(vec_ptrs[j] + k);
-        local_sums[i][j] += v_k * v_j_k;
-      }
-      local_sums[i][i] += v_k * v_k;
-      rhs_k.load(rhs_ptr + k);
-      local_sums[i][i + 1] += v_k * rhs_k;
-    }
-    local_sums[0][5] += rhs_k * rhs_k;
-  }
-  for(; k < vectors[0].locally_owned_size(); ++k)
-  {
-    for(unsigned int i = 0; i < n_vectors; ++i)
-    {
-      for(unsigned int j = 0; j <= i; ++j)
-        local_sums[i][j][k - regular_size] += vec_ptrs[i][k] * vec_ptrs[j][k];
-      local_sums[i][i + 1][k - regular_size] += vec_ptrs[i][k] * rhs_ptr[k];
-    }
-    local_sums[0][5][k - regular_size] += rhs_ptr[k] * rhs_ptr[k];
-  }
-  std::array<double, 21> scalar_sums;
-  unsigned int           count = 0;
-  for(unsigned int i = 0; i < n_vectors; ++i)
-    for(unsigned int j = 0; j < i + 2; ++j, ++count)
-      scalar_sums[count] = local_sums[i][j].sum();
-  scalar_sums[count] = local_sums[0][5].sum();
-
-  dealii::Utilities::MPI::sum(dealii::ArrayView<double const>(scalar_sums.data(), count + 1),
-                              vectors[0].get_mpi_communicator(),
-                              dealii::ArrayView<double>(scalar_sums.data(), count + 1));
-
-  // This algorithm performs a Cholesky (LDLT) factorization of
-  // which eventually gives the linear combination sum (alpha_i x_i)
-  // minimizing the residual among the given search vectors
-  unsigned int i = 0;
-  for(unsigned int c = 0; i < n_vectors; ++i, ++c)
-  {
-    for(unsigned int j = 0; j <= i; ++j, ++c)
-      matrix(i, j) = scalar_sums[c];
-
-    // update row in Cholesky factorization associated to matrix of normal
-    // equations using the diagonal entry D
-    for(unsigned int j = 0; j < i; ++j)
-    {
-      double const inv_entry = matrix(i, j) / matrix(j, j);
-      for(unsigned int k = j + 1; k <= i; ++k)
-        matrix(i, k) -= matrix(k, j) * inv_entry;
-    }
-    if(matrix(i, i) < 1e-12 * matrix(0, 0) or matrix(0, 0) < 1e-30)
-      break;
-
-    // update for the right hand side (forward substitution)
-    small_vector[i] = scalar_sums[c];
-    for(unsigned int j = 0; j < i; ++j)
-      small_vector[i] -= matrix(i, j) / matrix(j, j) * small_vector[j];
-  }
-
-  // backward substitution of Cholesky factorization
-  for(unsigned int s = i; s < small_vector.size(); ++s)
-    small_vector[s] = 0.;
-  for(int s = i - 1; s >= 0; --s)
-  {
-    double sum = small_vector[s];
-    for(unsigned int j = s + 1; j < i; ++j)
-      sum -= small_vector[j] * matrix(j, s);
-    small_vector[s] = sum / matrix(s, s);
-  }
-
-  // compute residual norm of resulting minimization problem
-  double residual_norm_sqr = scalar_sums[count];
-  for(unsigned int i = 0, c = 0; i < n_vectors; ++i, c += 2)
-  {
-    for(unsigned int j = 0; j < i; ++j, ++c)
-      residual_norm_sqr += 2. * scalar_sums[c] * small_vector[i] * small_vector[j];
-    residual_norm_sqr += scalar_sums[c] * small_vector[i] * small_vector[i];
-    residual_norm_sqr -= 2 * scalar_sums[c + 1] * small_vector[i];
-  }
-
-  // if(dealii::Utilities::MPI::this_mpi_process(vectors[0].get_mpi_communicator()) == 0)
-  //{
-  //  std::cout << "extrapolate " << std::defaultfloat << std::setprecision(3) << result.size()
-  //            << ": ";
-  //  for(const double a : small_vector)
-  //    std::cout << a << " ";
-  //  if(i > 0)
-  //    std::cout << "i=" << i << " " << matrix(i - 1, i - 1) / matrix(0, 0) << " "
-  //              << std::sqrt(residual_norm_sqr) << "   ";
-  //}
-  extrapolate_vectors(small_vector, vectors, result);
-
-  return std::make_pair(std::sqrt(scalar_sums[count]), std::sqrt(std::abs(residual_norm_sqr)));
 }
 
 template<int dim, typename Number>
@@ -910,7 +381,10 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
       velocity_np.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
   }
   else
+  {
     velocity_np = 0.0;
+  }
+
 
   // compute body force vector
   if(this->param.right_hand_side == true)
@@ -919,40 +393,20 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
   }
 
   // apply inverse mass operator
-  unsigned int n_iter_mass = 0;
-  if constexpr(dim == 3)
-  {
-    op_rt->copy_mf_to_this_vector(velocity_np, rhs_rt);
-
-    dealii::ReductionControl control(this->param.inverse_mass_operator.solver_data.max_iter,
-                                     this->param.inverse_mass_operator.solver_data.abs_tol,
-                                     this->param.inverse_mass_operator.solver_data.rel_tol);
-
-    dealii::SolverCG<VectorType> solver_cg(control);
-    op_rt->set_parameters(1.0, 0.0);
-    std::vector<Number> beta(velocity.size());
-    for(unsigned int i = 0; i < velocity.size(); ++i)
-      beta[i] = this->extra.get_beta(i);
-    extrapolate_vectors(beta, solutions_convective, solution_rt);
-    solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_mass);
-    n_iter_mass = control.last_step();
-    op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
-    for(unsigned int i = solutions_convective.size() - 1; i > 0; --i)
-      solutions_convective[i].swap(solutions_convective[i - 1]);
-    solutions_convective[0].copy_locally_owned_data_from(solution_rt);
-  }
-  else
-  {
-    n_iter_mass = pde_operator->apply_inverse_mass_operator(velocity_np, velocity_np);
-  }
+  unsigned int const n_iter_mass =
+    pde_operator->apply_inverse_mass_operator(velocity_np, velocity_np);
   iterations_mass.first += 1;
   iterations_mass.second += n_iter_mass;
 
-  // calculate sum (alpha_i/dt * u_i) and add to velocity_np
+  // calculate sum (alpha_i/dt * u_i) and add to velocity_np, last addition is merged with scaling
+  // below
   for(unsigned int i = 0; i < velocity.size() - 1; ++i)
   {
     velocity_np.add(this->bdf.get_alpha(i) / this->get_time_step_size(), velocity[i]);
   }
+
+  // solve discrete temporal derivative term for intermediate velocity u_hat, merged with last
+  // addition from above
   velocity_np.sadd(this->get_time_step_size() / this->bdf.get_gamma0(),
                    this->bdf.get_alpha(velocity.size() - 1) / this->bdf.get_gamma0(),
                    velocity.back());
@@ -998,8 +452,6 @@ TimeIntBDFDualSplitting<dim, Number>::evaluate_convective_term()
   this->timer_tree->insert({"Timeloop", "Convective step"}, timer.wall_time());
 }
 
-
-
 template<int dim, typename Number>
 void
 TimeIntBDFDualSplitting<dim, Number>::pressure_step()
@@ -1011,45 +463,14 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   VectorType rhs(pressure_np);
   rhs_pressure(rhs);
 
-  if (false)
-    {
-  VectorType vec1, vec2;
-  laplace_op->initialize_dof_vector(vec1);
-  laplace_op->initialize_dof_vector(vec2);
-  if(this->print_solver_info() and not(this->is_test))
-  {
-    vec1.copy_locally_owned_data_from(rhs);
-    for(unsigned int t = 0; t < 2; ++t)
-    {
-      dealii::Timer timer2;
-      for(unsigned int i = 0; i < 20; ++i)
-        laplace_op->vmult(vec2, vec1);
-      std::cout << std::defaultfloat << std::setprecision(4);
-      RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(),
-                             "Mat-vec DG optim [MDoF/s]",
-                             vec1.get_mpi_communicator());
-    }
-    for(unsigned int t = 0; t < 2; ++t)
-    {
-      dealii::Timer timer2;
-      for(unsigned int i = 0; i < 20; ++i)
-        pde_operator->laplace_operator.vmult(pressure_np, rhs);
-      RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(),
-                             "Mat-vec DG basic [MDoF/s]",
-                             vec1.get_mpi_communicator());
-    }
-    this->pcout << "Norm vec2: " << vec2.l2_norm() << " " << pressure_np.l2_norm() << " ";
-    pressure_np -= vec2;
-    this->pcout << " diff " << pressure_np.l2_norm() << std::endl;
-  }
-    }
-
   // extrapolate old solution to get a good initial estimate for the solver
-  std::pair<double, double> extrapolate_accuracy(0., 0.);
   if(this->use_extrapolation)
   {
-    laplace_op->vmult(pressure_matvec[0], pressure[0]);
-    extrapolate_accuracy = compute_least_squares_fit(pressure_matvec, rhs, pressure, pressure_np);
+    pressure_np = 0;
+    for(unsigned int i = 0; i < pressure.size(); ++i)
+    {
+      pressure_np.add(this->extra.get_beta(i), pressure[i]);
+    }
   }
   else
   {
@@ -1063,38 +484,9 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
        this->param.update_preconditioner_pressure_poisson_every_time_steps ==
      0);
 
-  // const double rhs_norm = rhs.l2_norm();
-  // VectorType tmp, tmp2;
-  // tmp.reinit(pressure_np, true);
-  // tmp2.reinit(pressure_np, true);
-  // pde_operator->apply_laplace_operator(tmp, pressure_np);
-  // const double res_norm = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-  // if (pressure.size() > 0)
-  // pde_operator->apply_laplace_operator(tmp, pressure[0]);
-  // const double res2_norm = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-
-  unsigned int n_iter = 0;
-  if(false)
-  {
-    n_iter = pde_operator->solve_pressure(pressure_np, rhs, update_preconditioner);
-  }
-  else
-  {
-    dealii::ReductionControl     control(this->param.solver_data_pressure_poisson.max_iter,
-                                     this->param.solver_data_pressure_poisson.abs_tol,
-                                     this->param.solver_data_pressure_poisson.rel_tol);
-    dealii::SolverCG<VectorType> solver(control);
-    solver.solve(*laplace_op, pressure_np, rhs, *poisson_preconditioner);
-    n_iter = control.last_step();
-  }
+  unsigned int const n_iter = pde_operator->solve_pressure(pressure_np, rhs, update_preconditioner);
   iterations_pressure.first += 1;
   iterations_pressure.second += n_iter;
-
-  // pde_operator->apply_laplace_operator(tmp, pressure_np);
-  // const double res_norm4 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-  // this->pcout << "Residual norms:   " << std::setprecision(3) << rhs_norm << " " << res_norm << "
-  // "
-  //             << res2_norm << " " << res_norm4 << " (" << n_iter << ")" << std::endl;
 
   // special case: pressure level is undefined
   // Adjust the pressure level in order to allow a calculation of the pressure error.
@@ -1107,9 +499,7 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // write output
   if(this->print_solver_info() and not(this->is_test))
   {
-    this->pcout << std::endl
-                << "Solve pressure step (projection reduced residual from "
-                << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second << "):";
+    this->pcout << std::endl << "Solve pressure step:";
     print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
   }
 
@@ -1180,26 +570,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
     acceleration, velocity_dbc_np, velocity_dbc, this->bdf, this->get_time_step_size());
   pde_operator->rhs_ppe_nbc_numerical_time_derivative_add(rhs, acceleration);
 
-  // II.4. viscous term of pressure Neumann boundary condition on Gamma_D:
-  //       extrapolate velocity, evaluate vorticity, and subsequently evaluate boundary
-  //       face integral (this is possible since pressure Neumann BC is linear in vorticity)
-  if(this->param.viscous_problem())
-  {
-    if(this->param.order_extrapolation_pressure_nbc > 0)
-    {
-      VectorType velocity_extra;
-      velocity_extra.reinit(velocity[0], true);
-      velocity_extra.equ(this->extra_pressure_nbc.get_beta(0), velocity[0]);
-      for(unsigned int i = 1; i < extra_pressure_nbc.get_order(); ++i)
-      {
-        velocity_extra.add(this->extra_pressure_nbc.get_beta(i), velocity[i]);
-      }
-
-      pde_operator->rhs_ppe_nbc_viscous_add(rhs, velocity_extra);
-    }
-  }
-
-  // II.5. convective term of pressure Neumann boundary condition on Gamma_D:
+  // II.4. convective term of pressure Neumann boundary condition on Gamma_D:
   //       evaluate convective term and subsequently extrapolate rhs vectors
   //       (the convective term is nonlinear!)
   if(this->param.convective_problem())
@@ -1214,6 +585,43 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
         rhs.add(this->extra_pressure_nbc.get_beta(i), temp);
       }
     }
+  }
+
+  if(this->param.order_extrapolation_pressure_nbc > 0 and this->param.viscous_problem())
+  {
+    // II.5. viscous term of pressure Neumann boundary condition on Gamma_D:
+    //       extrapolate velocity, evaluate vorticity, and subsequently evaluate boundary
+    //       face integral (this is possible since pressure Neumann BC is linear in vorticity)
+
+    // Prepare velocity extrapolation of lower (stable) order
+    VectorType velocity_extrapolated_ppe;
+    pde_operator->initialize_vector_velocity(velocity_extrapolated_ppe);
+    for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
+    {
+      velocity_extrapolated_ppe.add(this->extra_pressure_nbc.get_beta(i), velocity[i]);
+    }
+
+    // Add curl-curl term
+    VectorType vorticity_extrapolated_ppe;
+    pde_operator->initialize_vector_velocity(vorticity_extrapolated_ppe);
+    pde_operator->compute_vorticity(vorticity_extrapolated_ppe, velocity_extrapolated_ppe);
+
+    pde_operator->rhs_ppe_nbc_viscous_add(rhs, vorticity_extrapolated_ppe);
+
+    // Add viscosity gradient term
+    if(this->param.viscosity_is_variable())
+    {
+      VectorType viscosity_extrapolated_ppe;
+      pde_operator->update_viscosity(velocity_extrapolated_ppe);
+      pde_operator->initialize_vector_velocity_scalar(viscosity_extrapolated_ppe);
+      pde_operator->access_viscosity(viscosity_extrapolated_ppe);
+
+      pde_operator->rhs_ppe_nbc_variable_viscosity_add(rhs,
+                                                       velocity_extrapolated_ppe,
+                                                       viscosity_extrapolated_ppe);
+    }
+
+    // Note: the divergence of the convective, viscous and body force terms are neglected.
   }
 
   // special case: pressure level is undefined
@@ -1342,21 +750,17 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     // Extrapolate old solution to get a good initial estimate for the solver.
     if(this->use_extrapolation)
     {
-      std::vector<Number> beta(velocity.size());
-      for(unsigned int i = 0; i < velocity.size(); ++i)
-        beta[i] = this->extra.get_beta(i);
-      extrapolate_vectors(beta, velocity, velocity_np);
+      velocity_np.equ(this->extra.get_beta(0), velocity[0]);
+      for(unsigned int i = 1; i < velocity.size(); ++i)
+        velocity_np.add(this->extra.get_beta(i), velocity[i]);
     }
     else
     {
       velocity_np = velocity_viscous_last_iter;
     }
 
-    /*
-     *  update variable viscosity
-     */
-    if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
-       this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
+    // explicit viscosity update or initial guess for viscosity
+    if(this->param.viscous_problem() and this->param.viscosity_is_variable())
     {
       dealii::Timer timer_viscosity_update;
       timer_viscosity_update.restart();
@@ -1375,18 +779,16 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       ((this->time_step_number - 1) % this->param.update_preconditioner_momentum_every_time_steps ==
        0);
 
-    VectorType rhs;
-    rhs.reinit(velocity_np, true);
-    VectorType transport_velocity;
-
-    if(this->param.nonlinear_problem_has_to_be_solved())
+    if(this->param.implicit_nonlinear_convective_problem())
     {
       /*
        *  Calculate the vector that is constant when solving the nonlinear momentum equation
        *  (where constant means that the vector does not change from one Newton iteration
        *  to the next, i.e., it does not depend on the current solution of the nonlinear solver)
        */
-      rhs_viscous(rhs, velocity_rhs, transport_velocity);
+      VectorType rhs(velocity_rhs);
+      VectorType transport_velocity_dummy;
+      rhs_viscous(rhs, velocity_rhs, transport_velocity_dummy);
 
       // solve non-linear system of equations
       auto const iter = pde_operator->solve_nonlinear_momentum_equation(
@@ -1409,7 +811,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
                                     timer.wall_time());
       }
     }
-    else // linear problem
+    else // convective term is linear, viscous term might not be.
     {
       // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
       VectorType transport_velocity;
@@ -1418,87 +820,127 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       {
         transport_velocity = velocity_np;
       }
+      // Picard iteration to converge the nonlinear viscous term.
+      bool constexpr apply_aitken_relaxation = true;
+      unsigned int picard_iterations         = 0;
+      unsigned int linear_iterations         = 0;
+      bool         converged                 = false;
+      double       norm_0                    = 1.0;
+      double       relaxation                = 1.0;
+      double       relaxation_old            = 1.0;
 
-      /*
-       *  Calculate the right-hand side of the linear system of equations.
-       */
-      rhs_viscous(rhs, velocity_rhs, transport_velocity);
+      VectorType rhs, residual, residual_old, delta_residual, velocity_np_old;
+      rhs.reinit(velocity_rhs, false /* omit_zeroing_entries */);
 
-      //   const double rhs_norm = rhs.l2_norm();
-      // VectorType tmp, tmp2;
-      // tmp.reinit(velocity_np, true);
-      // tmp2.reinit(velocity_np, true);
-      // pde_operator->momentum_operator.vmult(tmp, velocity_np);
-      // const double res_norm = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-      // if (velocity.size() > 0)
-      //  pde_operator->momentum_operator.vmult(tmp, velocity[0]);
-      // const double res2_norm = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-      // compute_least_squares_fit(pde_operator->momentum_operator, velocity, rhs, tmp2);
-      // pde_operator->momentum_operator.vmult(tmp, tmp2);
-      // const double res_norm3 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-      // if (velocity_viscous_last_iter.size() > 0)
-      //  pde_operator->momentum_operator.vmult(tmp, velocity_viscous_last_iter);
-      // const double res_norm5 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-      // this->pcout << std::setprecision(6) << "Residual norms momentum:   " << rhs_norm << " " <<
-      // res_norm << " " << res2_norm << " " << res_norm3 << " " << res_norm5;
-
-      // solve linear system of equations
-      unsigned int n_iter = 0;
-      if constexpr(dim == 3)
+      // Compute the initial residual and update the viscosity.
+      if(this->param.nonlinear_viscous_problem())
       {
-        const Number factor_mass = this->get_scaling_factor_time_derivative_term();
-        const Number factor_lapl = this->pde_operator->get_viscous_kernel_data().viscosity;
-        op_rt->set_parameters(this->get_scaling_factor_time_derivative_term(),
-                              pde_operator->get_viscous_kernel_data().viscosity);
-        preconditioner_viscous.get_vector().reinit(diagonal_mass, true);
-
-        const unsigned int owned_size = diagonal_mass.locally_owned_size();
-        DEAL_II_OPENMP_SIMD_PRAGMA
-        for(unsigned int i = 0; i < owned_size; ++i)
-          preconditioner_viscous.get_vector().local_element(i) =
-            1.0 / (factor_mass * diagonal_mass.local_element(i) +
-                   factor_lapl * diagonal_laplace.local_element(i));
-
-        op_rt->copy_mf_to_this_vector(rhs, rhs_rt);
-        op_rt->copy_mf_to_this_vector(velocity_np, solution_rt);
-
-        const double t_prep = timer.wall_time();
-
-        dealii::Timer timer2;
-
-        dealii::ReductionControl     control(this->param.solver_data_momentum.max_iter,
-                                         this->param.solver_data_momentum.abs_tol,
-                                         this->param.solver_data_momentum.rel_tol);
-        dealii::SolverCG<VectorType> solver_cg(control);
-        solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_viscous);
-        n_iter = control.last_step();
-        if(this->print_solver_info() and not(this->is_test))
+        residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+        if constexpr(apply_aitken_relaxation)
         {
-          this->pcout << std::endl
-                      << "Viscous step prepare: " << t_prep << " s, solve " << timer2.wall_time()
-                      << " s";
+          residual_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+          delta_residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+          velocity_np_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
         }
-        op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
+
+        residual_rhs_viscous(rhs, velocity_rhs);
+        this->pde_operator->evaluate_linearized_residual(
+          residual,
+          velocity_np,
+          transport_velocity,
+          &rhs,
+          this->get_next_time(),
+          this->get_scaling_factor_time_derivative_term());
+
+        norm_0 = residual.l2_norm();
+
+        residual_old = residual;
       }
-      else
-        n_iter = pde_operator->solve_linear_momentum_equation(
+
+      while(not converged)
+      {
+        // Calculate the right-hand side of the linear system of equations.
+        rhs_viscous(rhs, velocity_rhs, transport_velocity);
+
+        // Solve the linearized problem.
+        linear_iterations += pde_operator->solve_linear_momentum_equation(
           velocity_np,
           rhs,
           transport_velocity,
           update_preconditioner,
           this->get_scaling_factor_time_derivative_term());
 
-      iterations_viscous.first += 1;
-      std::get<1>(iterations_viscous.second) += n_iter;
+        if(this->param.nonlinear_viscous_problem())
+        {
+          // Update the viscosity and compute the residual.
+          residual_rhs_viscous(rhs, velocity_rhs);
+          this->pde_operator->evaluate_linearized_residual(
+            residual,
+            velocity_np,
+            transport_velocity,
+            &rhs,
+            this->get_next_time(),
+            this->get_scaling_factor_time_derivative_term());
 
-      // pde_operator->apply_momentum_operator(tmp, velocity_np);
-      // const double res_norm4 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-      // this->pcout << " " << res_norm4 << " (" << n_iter << ")" << std::endl;
+          // Compute convergence criteria.
+          double norm_abs = residual.l2_norm();
+          double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+
+          picard_iterations += 1;
+          if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+             norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+          {
+            converged = true;
+          }
+          else
+          {
+            AssertThrow(picard_iterations <= this->param.newton_solver_data_momentum.max_iter,
+                        dealii::ExcMessage(
+                          "Picard solver to resolve nonlinear viscous term did not converge."));
+
+            // Apply relaxation
+            if constexpr(apply_aitken_relaxation)
+            {
+              delta_residual = residual;
+              delta_residual -= residual_old;
+              relaxation =
+                -relaxation_old * (residual_old * delta_residual) / delta_residual.norm_sqr();
+
+              velocity_np.sadd(relaxation, 1.0 - relaxation, velocity_np_old);
+
+              // Update old values for next iteration.
+              velocity_np_old = velocity_np;
+              residual_old    = residual;
+              relaxation_old  = relaxation;
+            }
+          }
+        }
+        else
+        {
+          converged = true;
+        }
+      }
+
+      iterations_viscous.first += 1;
+      std::get<0>(iterations_viscous.second) +=
+        this->param.nonlinear_viscous_problem() ? picard_iterations : 0;
+      std::get<1>(iterations_viscous.second) += linear_iterations;
 
       if(this->print_solver_info() and not(this->is_test))
       {
-        this->pcout << std::endl << "Solve viscous step:";
-        print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
+        if(this->param.nonlinear_viscous_problem())
+        {
+          this->pcout << std::endl << "Solve viscous step (Picard):";
+          print_solver_info_nonlinear(this->pcout,
+                                      picard_iterations,
+                                      linear_iterations,
+                                      timer.wall_time());
+        }
+        else
+        {
+          this->pcout << std::endl << "Solve viscous step:";
+          print_solver_info_linear(this->pcout, linear_iterations, timer.wall_time());
+        }
       }
     }
 
@@ -1520,23 +962,14 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
 template<int dim, typename Number>
 void
 TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType &       rhs,
-                                                  VectorType const & velocity,
+                                                  VectorType const & velocity_mass_operator,
                                                   VectorType const & transport_velocity) const
 {
   /*
    *  apply mass operator
    */
-  pde_operator->apply_scaled_mass_operator(rhs,
-                                           this->bdf.get_gamma0() / this->get_time_step_size(),
-                                           velocity);
-  if(this->param.apply_penalty_terms_in_postprocessing_step == true or
-     (this->param.use_divergence_penalty == false and this->param.use_continuity_penalty == false))
-  {
-    VectorType tmp;
-    tmp.reinit(rhs);
-    pde_operator->evaluate_pressure_gradient_term(tmp, pressure_np, this->get_next_time());
-    rhs -= tmp;
-  }
+  pde_operator->apply_mass_operator(rhs, velocity_mass_operator);
+  rhs *= this->bdf.get_gamma0() / this->get_time_step_size();
 
   // compensate for explicit convective term taken into account in the first sub-step of the
   // dual-splitting scheme
@@ -1546,7 +979,7 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType &       rhs,
       rhs.add(this->extra.get_beta(i), this->vec_convective_term[i]);
   }
 
-  if(this->param.nonlinear_problem_has_to_be_solved())
+  if(this->param.implicit_nonlinear_convective_problem())
   {
     // for a nonlinear problem, inhomogeneous contributions are taken into account when evaluating
     // the nonlinear residual
@@ -1567,6 +1000,27 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_viscous(VectorType &       rhs,
 
 template<int dim, typename Number>
 void
+TimeIntBDFDualSplitting<dim, Number>::residual_rhs_viscous(
+  VectorType &       rhs,
+  VectorType const & velocity_mass_operator) const
+{
+  // Intermediate velocity contribution.
+  pde_operator->apply_mass_operator(rhs, velocity_mass_operator);
+  rhs *= this->bdf.get_gamma0() / this->get_time_step_size();
+
+  // compensate for explicit convective term taken into account in the first sub-step of the
+  // dual-splitting scheme
+  if(this->param.non_explicit_convective_problem())
+  {
+    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+    {
+      rhs.add(this->extra.get_beta(i), this->vec_convective_term[i]);
+    }
+  }
+}
+
+template<int dim, typename Number>
+void
 TimeIntBDFDualSplitting<dim, Number>::penalty_step()
 {
   if(this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true)
@@ -1576,17 +1030,16 @@ TimeIntBDFDualSplitting<dim, Number>::penalty_step()
 
     // compute right-hand-side vector
     VectorType rhs;
-    rhs.reinit(velocity_np, true);
+    rhs.reinit(velocity_np, true /* omit_zeroing_entries */);
     pde_operator->apply_mass_operator(rhs, velocity_np);
 
     // extrapolate velocity to time t_n+1 and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty term
     VectorType velocity_extrapolated;
-    velocity_extrapolated.reinit(velocity_np, true);
-    std::vector<Number> beta(velocity.size());
-    for(unsigned int i = 0; i < velocity.size(); ++i)
-      beta[i] = this->extra.get_beta(i);
-    extrapolate_vectors(beta, velocity, velocity_extrapolated);
+    velocity_extrapolated.reinit(velocity_np, true /* omit_zeroing_entries */);
+    velocity_extrapolated.equ(this->extra.get_beta(0), velocity[0]);
+    for(unsigned int i = 1; i < velocity.size(); ++i)
+      velocity_extrapolated.add(this->extra.get_beta(i), velocity[i]);
 
     pde_operator->update_projection_operator(velocity_extrapolated, this->get_time_step_size());
 
@@ -1604,20 +1057,9 @@ TimeIntBDFDualSplitting<dim, Number>::penalty_step()
 
     if(this->use_extrapolation == false)
       velocity_np = velocity_projection_last_iter;
-    else
-      compute_least_squares_fit(*pde_operator->projection_operator, velocity, rhs, velocity_np);
-
-    VectorType tmp;
-    tmp.reinit(velocity_np, true);
-    pde_operator->projection_operator->vmult(tmp, velocity_np);
-    const double res_norm3 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-    this->pcout << "Residual norms projection: " << rhs.l2_norm() << " " << res_norm3;
 
     unsigned int const n_iter =
       pde_operator->solve_projection(velocity_np, rhs, update_preconditioner);
-    pde_operator->projection_operator->vmult(tmp, velocity_np);
-    const double res_norm4 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
-    this->pcout << " " << res_norm4 << " (" << n_iter << ")" << std::endl;
 
     iterations_penalty.first += 1;
     iterations_penalty.second += n_iter;
@@ -1642,17 +1084,15 @@ TimeIntBDFDualSplitting<dim, Number>::prepare_vectors_for_next_timestep()
 {
   Base::prepare_vectors_for_next_timestep();
 
-  push_back(velocity);
+  swap_back_one_step(velocity);
   velocity[0].swap(velocity_np);
 
-  push_back(pressure);
+  swap_back_one_step(pressure);
   pressure[0].swap(pressure_np);
-
-  push_back(pressure_matvec);
 
   // We also have to care about the history of velocity Dirichlet boundary conditions.
   // Note that velocity_dbc_np has already been updated.
-  push_back(velocity_dbc);
+  swap_back_one_step(velocity_dbc);
   velocity_dbc[0].swap(velocity_dbc_np);
 }
 
