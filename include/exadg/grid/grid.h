@@ -192,18 +192,18 @@ public:
     lambda_initialize_coarse_mappings =
       [&](std::shared_ptr<dealii::Triangulation<dim> const> const & fine_triangulation,
           std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const &
-            coarse_triangulations)
-  {
-    AssertThrow(mapping_dof_vector_fine_level.get(),
-                dealii::ExcMessage(
-                  "Coarse mappings can not be initialized because fine level mapping is invalid."));
+            coarse_triangulations) {
+        AssertThrow(
+          mapping_dof_vector_fine_level.get(),
+          dealii::ExcMessage(
+            "Coarse mappings can not be initialized because fine level mapping is invalid."));
 
-    MappingTools::initialize_coarse_mappings<dim, Number>(mapping_dof_vector_coarse_levels,
-                                                          degree_coarse_mappings,
-                                                          mapping_dof_vector_fine_level,
-                                                          fine_triangulation,
-                                                          coarse_triangulations);
-  };
+        MappingTools::initialize_coarse_mappings<dim, Number>(mapping_dof_vector_coarse_levels,
+                                                              degree_coarse_mappings,
+                                                              mapping_dof_vector_fine_level,
+                                                              fine_triangulation,
+                                                              coarse_triangulations);
+      };
 
 private:
   /**

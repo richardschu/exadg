@@ -207,8 +207,7 @@ create_triangulation(
   }
   else if(data.triangulation_type == TriangulationType::FullyDistributed)
   {
-    auto const serial_grid_generator = [&](dealii::Triangulation<dim, dim> & tria_serial)
-    {
+    auto const serial_grid_generator = [&](dealii::Triangulation<dim, dim> & tria_serial) {
       lambda_create_triangulation(tria_serial,
                                   periodic_face_pairs,
                                   global_refinements,
@@ -217,8 +216,7 @@ create_triangulation(
 
     auto const serial_grid_partitioner = [&](dealii::Triangulation<dim, dim> & tria_serial,
                                              MPI_Comm const                    comm,
-                                             unsigned int const                group_size)
-    {
+                                             unsigned int const                group_size) {
       (void)group_size;
       if(data.partitioning_type == PartitioningType::Metis)
       {

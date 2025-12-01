@@ -34,7 +34,7 @@
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tensor_product_kernels.h>
-#include <deal.II/multigrid/mg_transfer_global_coarsening.h>
+#include <deal.II/multigrid/mg_transfer_matrix_free.h>
 #include <deal.II/numerics/vector_tools.h>
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/laplace_operator_extruded.h>
@@ -181,8 +181,9 @@ public:
                          dof_handler_hierarchy[level - 1],
                          level_constraints[level],
                          level_constraints[level - 1]);
-        transfer->enable_inplace_operations_if_possible(mg_matrices[level - 1].get_matrix_free().get_dof_info().vector_partitioner,
-                                                        mg_matrices[level].get_matrix_free().get_dof_info().vector_partitioner);
+        transfer->enable_inplace_operations_if_possible(
+          mg_matrices[level - 1].get_matrix_free().get_dof_info().vector_partitioner,
+          mg_matrices[level].get_matrix_free().get_dof_info().vector_partitioner);
 
         mg_transfers[level - 1] = std::move(transfer);
       }
@@ -204,8 +205,10 @@ public:
 
       dealii::SolverCG<VectorType>        solver(control);
       dealii::internal::EigenvalueTracker eigenvalue_tracker;
-      solver.connect_eigenvalues_slot([&eigenvalue_tracker](const std::vector<double> & eigenvalues)
-                                      { eigenvalue_tracker.slot(eigenvalues); });
+      solver.connect_eigenvalues_slot(
+        [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
+          eigenvalue_tracker.slot(eigenvalues);
+        });
 
       mg_matrices[level].initialize_dof_vector(solution_update[level]);
       mg_matrices[level].initialize_dof_vector(temp_vector[level]);
@@ -250,8 +253,10 @@ public:
 
       dealii::SolverCG<VectorType>        solver(control);
       dealii::internal::EigenvalueTracker eigenvalue_tracker;
-      solver.connect_eigenvalues_slot([&eigenvalue_tracker](const std::vector<double> & eigenvalues)
-                                      { eigenvalue_tracker.slot(eigenvalues); });
+      solver.connect_eigenvalues_slot(
+        [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
+          eigenvalue_tracker.slot(eigenvalues);
+        });
 
       dg_matrix.initialize_dof_vector(solution_update_dg);
       dg_matrix.initialize_dof_vector(rhs_dg);
@@ -272,8 +277,9 @@ public:
                      dof_handler_hierarchy[max_level],
                      empty_constraints,
                      level_constraints[max_level]);
-    transfer->enable_inplace_operations_if_possible(mg_matrices[max_level].get_matrix_free().get_dof_info().vector_partitioner,
-                                                    dg_matrix.get_matrix_free().get_dof_info().vector_partitioner);
+    transfer->enable_inplace_operations_if_possible(
+      mg_matrices[max_level].get_matrix_free().get_dof_info().vector_partitioner,
+      dg_matrix.get_matrix_free().get_dof_info().vector_partitioner);
 
     mg_transfers[max_level] = std::move(transfer);
 
@@ -287,11 +293,11 @@ public:
     if(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     {
       double all_time = 0;
-      for (const auto &array : timings)
-        for (const auto time : array)
+      for(const auto & array : timings)
+        for(const auto time : array)
           all_time += time;
-      std::cout << "Collected multigrid timings in " << count_times << " evaluations [t_total="
-                << all_time << "s]" << std::endl;
+      std::cout << "Collected multigrid timings in " << count_times
+                << " evaluations [t_total=" << all_time << "s]" << std::endl;
       std::cout << "Level   smooth      residual    restrict    prolongate" << std::endl;
       for(unsigned int i = 0; i < timings.size(); ++i)
       {
@@ -411,7 +417,8 @@ private:
   dealii::MGLevelObject<SmootherType> mg_smoother;
   SmootherTypeDG                      mg_smoother_dg;
 
-  dealii::MGLevelObject<std::unique_ptr<dealii::MGTwoLevelTransferBase<VectorType>>> mg_transfers;
+  dealii::MGLevelObject<std::unique_ptr<dealii::MGTwoLevelTransferBase<dim, VectorType>>>
+    mg_transfers;
 
   mutable dealii::MGLevelObject<VectorType> rhs;
   mutable dealii::MGLevelObject<VectorType> temp_vector;

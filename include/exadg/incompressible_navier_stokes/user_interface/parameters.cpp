@@ -674,6 +674,7 @@ Parameters::involves_h_multigrid() const
   // to write a separate class SpatialOperatorInterpolateAnalyticalSolution that does not create
   // preconditioners (including multigrid)
   else if(temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+          temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded or
           temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
           temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
           temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)

@@ -323,9 +323,7 @@ allocate_shared_recv_data(MemorySpace::MemorySpaceData<Number, MemorySpace::Host
   // Kokkos will not free the memory because the memory is
   // unmanaged. Instead we use a shared pointer to take care of
   // that.
-  data.values_sm_ptr = {ptr_aligned,
-                        [mpi_window](Number *) mutable
-                        {
+  data.values_sm_ptr = {ptr_aligned, [mpi_window](Number *) mutable {
                           // note: we are creating here a copy of
                           // the window other approaches led to
                           // segmentation faults
@@ -573,8 +571,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -595,8 +592,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -2943,8 +2939,8 @@ private:
             const unsigned int            iy         = dim * (qz * nn + qy * nn * nn + qx);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[q * dim],
-                                                        quad_values[q * dim + 1],
-                                                        quad_values[q * dim + 2]};
+                                                    quad_values[q * dim + 1],
+                                                    quad_values[q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], grad_y[iy + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], grad_y[iy + 1], grad_z[iz + 1]},
@@ -3900,8 +3896,7 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position)
-          {
+          const auto add_entry = [&](const unsigned int position) {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 

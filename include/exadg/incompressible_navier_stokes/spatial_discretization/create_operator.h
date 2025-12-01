@@ -61,7 +61,8 @@ create_operator(std::shared_ptr<Grid<dim> const>                      grid,
                                                                   field,
                                                                   mpi_comm);
   }
-  else if(parameters.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
+  else if(parameters.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+          parameters.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded)
   {
     pde_operator = std::make_shared<OperatorDualSplitting<dim, Number>>(grid,
                                                                         mapping,

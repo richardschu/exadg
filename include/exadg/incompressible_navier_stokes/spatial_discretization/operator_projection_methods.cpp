@@ -115,6 +115,7 @@ OperatorProjectionMethods<dim, Number>::initialize_laplace_operator()
    *  p0^T * A * p = (A^T * p0)^T * p = 0 != p0 * rhs (since A is symmetric).
    */
   if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+     this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded or
      this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
      this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
   {
