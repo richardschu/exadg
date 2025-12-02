@@ -298,12 +298,17 @@ public:
           all_time += time;
       std::cout << "Collected multigrid timings in " << count_times
                 << " evaluations [t_total=" << all_time << "s]" << std::endl;
-      std::cout << "Level   smooth      residual    restrict    prolongate" << std::endl;
+      std::cout << "Level   smooth      residual    restrict    prolongate   [rel. share]"
+                << std::endl;
       for(unsigned int i = 0; i < timings.size(); ++i)
       {
-        std::cout << std::left << std::setw(8) << i << std::setw(12) << std::setprecision(3)
-                  << timings[i][1] << std::setw(12) << timings[i][2] << std::setw(12)
-                  << timings[i][0] << std::setw(12) << timings[i][3] << std::endl;
+        std::cout << std::left << std::scientific << std::setw(8) << i << std::setw(12)
+                  << std::setprecision(3) << timings[i][1] << std::setw(12) << timings[i][2]
+                  << std::setw(12) << timings[i][0] << std::setw(13) << timings[i][3]
+                  << std::defaultfloat
+                  << (timings[i][0] + timings[i][1] + timings[i][2] + timings[i][3]) / all_time *
+                       100
+                  << "%" << std::endl;
       }
       std::cout << std::endl;
     }
