@@ -299,6 +299,27 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       }
     }
 
+    // Initialize non-matching mapping info
+    nonmatching_mapping_info = std::make_shared<dealii::NonMatching::MappingInfo<dim, dim, double>>(
+      mapping, dealii::update_values | dealii::update_jacobians | dealii::update_gradients);
+    std::vector<typename dealii::DoFHandler<dim>::active_cell_iterator> cells;
+    std::vector<std::vector<dealii::Point<dim>>>                        unit_points;
+    dealii::QGauss<1> gauss_1d(dof_handler_velocity.get_fe().degree + 1);
+    for(const auto & line_points : cells_and_ref_points_velocity)
+      for(const auto & cell_and_pts : line_points)
+      {
+        cells.push_back(cell_and_pts.first);
+        unit_points.emplace_back();
+        unit_points.back().resize(cell_and_pts.second.size() * gauss_1d.size());
+        for(unsigned int p = 0, idx = 0; p < cell_and_pts.second.size(); ++p)
+          for(unsigned int q = 0; q < gauss_1d.size(); ++q, ++idx)
+            for(unsigned int d = 0; d < dim; ++d)
+              unit_points.back()[idx][d] = (d == averaging_direction) ?
+                                             gauss_1d.point(q)[0] :
+                                             cell_and_pts.second[p].second[d];
+      }
+    nonmatching_mapping_info->reinit_cells(cells, unit_points);
+
     create_directories(data.directory, mpi_comm);
   }
 }
@@ -361,15 +382,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
   dealii::FiniteElement<dim> const & fe_u = dof_handler_velocity.get_fe();
 
   // use quadrature for averaging in homogeneous direction
-  dealii::QGauss<1>                   gauss_1d(fe_u.degree + 1);
+  const unsigned int                  n_q_points_1d = fe_u.degree + 1;
+  dealii::QGauss<1>                   gauss_1d(n_q_points_1d);
   std::vector<dealii::Point<dim>>     points; // 1D points combined for several line points
   dealii::FE_DGQ<dim>                 fe_dgq(fe_u.degree + 1);
   std::vector<double>                 velocity_dgq_on_cell(fe_dgq.dofs_per_cell * dim);
-  dealii::FEPointEvaluation<dim, dim> evaluator_u(mapping,
-                                                  fe_dgq,
-                                                  dealii::update_values | dealii::update_jacobians |
-                                                    dealii::update_quadrature_points |
-                                                    dealii::update_gradients);
+  dealii::FEPointEvaluation<dim, dim> evaluator_u(*nonmatching_mapping_info, fe_dgq);
 
   dealii::FiniteElement<dim> const &           fe_p = dof_handler_pressure.get_fe();
   std::vector<double>                          pressure_on_cell(fe_p.dofs_per_cell);
@@ -382,6 +400,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
   velocity.update_ghost_values();
   pressure.update_ghost_values();
 
+  unsigned int counter_all_cells = 0;
   for(unsigned int index = 0; index < data.lines.size(); ++index)
   {
     Line<dim> & line = *data.lines[index];
@@ -406,13 +425,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
 
       for(auto const & [cell, point_list] : cells_and_ref_points_velocity[index])
       {
-        points.resize(point_list.size() * gauss_1d.size());
-        for(unsigned int p = 0, idx = 0; p < point_list.size(); ++p)
-          for(unsigned int q = 0; q < gauss_1d.size(); ++q, ++idx)
-            for(unsigned int d = 0; d < dim; ++d)
-              points[idx][d] =
-                (d == averaging_direction) ? gauss_1d.point(q)[0] : point_list[p].second[d];
-
         evaluator_tensor_product.reinit(cell);
         evaluator_tensor_product.read_dof_values(velocity);
         evaluator_tensor_product.evaluate(dealii::EvaluationFlags::values);
@@ -424,13 +436,14 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
             velocity_dgq_on_cell[q + d * fe_dgq.dofs_per_cell] = vel[d][0];
         }
 
-        evaluator_u.reinit(cell, points);
+        evaluator_u.reinit(counter_all_cells);
+        ++counter_all_cells;
         evaluator_u.evaluate(velocity_dgq_on_cell,
                              dealii::EvaluationFlags::values | dealii::EvaluationFlags::gradients);
 
         // perform averaging in homogeneous direction
         for(unsigned int p1 = 0, q = 0; p1 < point_list.size(); ++p1)
-          for(unsigned int q1 = 0; q1 < gauss_1d.size(); ++q1, ++q)
+          for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1, ++q)
           {
             unsigned int const p = point_list[p1].first;
             double const       det =

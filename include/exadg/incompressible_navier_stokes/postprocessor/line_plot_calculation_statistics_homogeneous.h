@@ -29,6 +29,7 @@
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/lac/la_parallel_vector.h>
+#include <deal.II/non_matching/mapping_info.h>
 
 // ExaDG
 #include <exadg/incompressible_navier_stokes/postprocessor/line_plot_data.h>
@@ -147,6 +148,9 @@ private:
   // evaluator to help for efficient evaluation in velocity fields
   dealii::FEEvaluation<dim, -1, 0, dim, Number, dealii::VectorizedArray<Number, 1>>
     evaluator_tensor_product;
+
+  // evaluated point locations for the line evaluations
+  std::shared_ptr<dealii::NonMatching::MappingInfo<dim, dim, double>> nonmatching_mapping_info;
 
   // timer results
   double time_all;
