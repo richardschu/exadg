@@ -629,19 +629,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
     jacobians_at_nodal_points.size(1));
   std::vector<Number> tmp_array;
 
-  dealii::FE_DGQArbitraryNodes<dim>   fe_dgq(gauss_1d);
-  std::vector<double>                 velocity_dgq_on_cell_b(fe_dgq.dofs_per_cell * dim);
-  dealii::FEPointEvaluation<dim, dim> evaluator_u(mapping,
-                                                  fe_dgq,
-                                                  dealii::update_values | dealii::update_jacobians |
-                                                    dealii::update_quadrature_points |
-                                                    dealii::update_gradients);
-  dealii::FEEvaluation<dim, -1, 0, dim, double, VectorizedArray<double, 1>>
-    evaluator_tensor_product(mapping,
-                             dof_handler_velocity.get_fe(),
-                             dealii::QGauss<1>(dof_handler_velocity.get_fe().degree + 1),
-                             dealii::update_values);
-
   dealii::FiniteElement<dim> const &           fe_p = dof_handler_pressure.get_fe();
   std::vector<double>                          pressure_on_cell(fe_p.dofs_per_cell);
   std::vector<dealii::types::global_dof_index> dof_indices_p(fe_p.dofs_per_cell);
@@ -679,26 +666,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
 
       for(auto const & [cell, point_list] : cells_and_ref_points_velocity[index])
       {
-        points.resize(point_list.size() * gauss_1d.size());
-        for(unsigned int p = 0, idx = 0; p < point_list.size(); ++p)
-          for(unsigned int q = 0; q < gauss_1d.size(); ++q, ++idx)
-            for(unsigned int d = 0; d < dim; ++d)
-              points[idx][d] =
-                (d == averaging_direction) ? gauss_1d.point(q)[0] : point_list[p].second[d];
-
-        evaluator_tensor_product.reinit(cell);
-        evaluator_tensor_product.read_dof_values(velocity);
-        evaluator_tensor_product.evaluate(dealii::EvaluationFlags::values);
-        for(unsigned int q = 0; q < fe_dgq.dofs_per_cell; ++q)
-        {
-          const auto vel = evaluator_tensor_product.get_value(q);
-          for(unsigned int d = 0; d < dim; ++d)
-            velocity_dgq_on_cell_b[q + d * fe_dgq.dofs_per_cell] = vel[d][0];
-        }
-        evaluator_u.reinit(cell, points);
-        evaluator_u.evaluate(velocity_dgq_on_cell_b,
-                             dealii::EvaluationFlags::values | dealii::EvaluationFlags::gradients);
-
         const std::array<unsigned int, 2 * dim + 1> cell_indices =
           dof_indices_on_cell[counter_all_cells];
         // RT elements have all entries set, DG elements only first
@@ -762,22 +729,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               for(unsigned int e = 0; e < dim - 1; ++e)
                 velocity_gradient[d][e] = grad[e][d];
               velocity_gradient[d] = inv_jac * velocity_gradient[d];
-            }
-
-            const unsigned int q = p1 * n_q_points_1d + q1;
-            if((velocity - evaluator_u.get_value(q)).norm() >
-               1e-8 * evaluator_u.get_value(q).norm())
-            {
-              std::cout << "error " << counter_all_cells << " " << counter_line - 1 << " " << q1
-                        << " " << p << "  " << p1 << "   " << point_on_line << "   " << points[q]
-                        << "  " << point_list.size() << "   " << std::endl
-                        << inv_jac << "    " << det << "   " << evaluator_u.inverse_jacobian(q)
-                        << std::endl
-                        << velocity << std::endl
-                        << velocity_gradient << std::endl
-                        << evaluator_u.get_value(q) << std::endl
-                        << evaluator_u.get_gradient(q) << std::endl;
-              std::abort();
             }
 
             double const JxW = det * gauss_1d.weight(q1);
