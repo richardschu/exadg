@@ -145,12 +145,23 @@ private:
   // write final output
   bool write_final_output;
 
-  // evaluator to help for efficient evaluation in velocity fields
-  dealii::FEEvaluation<dim, -1, 0, dim, Number, dealii::VectorizedArray<Number, 1>>
-    evaluator_tensor_product;
+  // Jacobians needed for the evaluation of the RT polynomial space on the
+  // support points of an FE_DGQ for later evaluation with FE_PointEvaluation.
+  dealii::Table<2, dealii::Tensor<2, dim>> jacobians_at_nodal_points;
 
-  // evaluated point locations for the line evaluations
-  std::shared_ptr<dealii::NonMatching::MappingInfo<dim, dim, double>> nonmatching_mapping_info;
+  // Inverse Jacobians needed for the evaluation of the FE_DGQ representation
+  // of the velocity field
+  std::vector<dealii::Tensor<2, dim>> inverse_jacobians_on_lines;
+
+  // dof indices on cell for Raviart-Thomas elements
+  std::vector<std::array<unsigned int, 2 * dim + 1>> dof_indices_on_cell;
+
+  // shape info used for evaluation with RT element
+  dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> shape_info_velocity;
+
+  // polynomials for FE_DGQ representing Lagrange polynomials in node points
+  // of FE_DGQ, which is the basis for the computation along the lines
+  std::vector<dealii::Polynomials::Polynomial<double>> polynomials_nodal;
 
   // timer results
   double time_all;

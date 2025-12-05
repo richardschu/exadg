@@ -234,23 +234,20 @@ template<int dim, typename Number>
 Number
 MeanVelocityCalculator<dim, Number>::calculate_volume() const
 {
-  std::vector<Number> dst(1, 0.0);
+  Number volume = 0.0;
 
   VectorType src_dummy;
-  matrix_free.cell_loop(&This::local_calculate_volume, this, dst, src_dummy);
+  matrix_free.cell_loop(&This::local_calculate_volume, this, volume, src_dummy);
 
   // sum over all MPI processes
-  Number volume = 1.0;
-  volume        = dealii::Utilities::MPI::sum(dst.at(0), mpi_comm);
-
-  return volume;
+  return dealii::Utilities::MPI::sum(volume, mpi_comm);
 }
 
 template<int dim, typename Number>
 void
 MeanVelocityCalculator<dim, Number>::local_calculate_volume(
   dealii::MatrixFree<dim, Number> const & data,
-  std::vector<Number> &                   dst,
+  Number &                                result,
   VectorType const &,
   std::pair<unsigned int, unsigned int> const & cell_range) const
 {
@@ -265,7 +262,7 @@ MeanVelocityCalculator<dim, Number>::local_calculate_volume(
 
     scalar volume_vec = dealii::make_vectorized_array<Number>(0.);
 
-    for(unsigned int q = 0; q < integrator.n_q_points; ++q)
+    for(const unsigned int q : integrator.quadrature_point_indices())
     {
       volume_vec += integrator.JxW(q);
     }
@@ -277,7 +274,7 @@ MeanVelocityCalculator<dim, Number>::local_calculate_volume(
     }
   }
 
-  dst.at(0) += volume;
+  result += volume;
 }
 
 template<int dim, typename Number>
@@ -326,11 +323,11 @@ Number
 MeanVelocityCalculator<dim, Number>::do_calculate_mean_velocity_volume(
   VectorType const & velocity) const
 {
-  std::vector<Number> dst(1, 0.0);
-  matrix_free.cell_loop(&This::local_calculate_flow_rate_volume, this, dst, velocity);
+  Number mean_velocity = 0.0;
+  matrix_free.cell_loop(&This::local_calculate_flow_rate_volume, this, mean_velocity, velocity);
 
   // sum over all MPI processes
-  Number mean_velocity = dealii::Utilities::MPI::sum(dst.at(0), mpi_comm);
+  mean_velocity = dealii::Utilities::MPI::sum(mean_velocity, mpi_comm);
 
   AssertThrow(volume_has_been_initialized == true,
               dealii::ExcMessage("Volume has not been initialized."));
@@ -346,26 +343,24 @@ Number
 MeanVelocityCalculator<dim, Number>::do_calculate_flow_rate_volume(
   VectorType const & velocity) const
 {
-  std::vector<Number> dst(1, 0.0);
-  matrix_free.cell_loop(&This::local_calculate_flow_rate_volume, this, dst, velocity);
+  Number flow_rate = 0;
+  matrix_free.cell_loop(&This::local_calculate_flow_rate_volume, this, flow_rate, velocity);
 
   // sum over all MPI processes
-  Number flow_rate_times_length = dealii::Utilities::MPI::sum(dst.at(0), mpi_comm);
-
-  return flow_rate_times_length;
+  return dealii::Utilities::MPI::sum(flow_rate, mpi_comm);
 }
 
 template<int dim, typename Number>
 void
 MeanVelocityCalculator<dim, Number>::local_calculate_flow_rate_volume(
   dealii::MatrixFree<dim, Number> const &       data,
-  std::vector<Number> &                         dst,
+  Number &                                      flow_rate,
   VectorType const &                            src,
   std::pair<unsigned int, unsigned int> const & cell_range) const
 {
   CellIntegratorU integrator(data, dof_index, quad_index);
 
-  Number flow_rate = 0.;
+  Number local_flow_rate = 0.;
 
   // Loop over all elements
   for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
@@ -387,11 +382,11 @@ MeanVelocityCalculator<dim, Number>::local_calculate_flow_rate_volume(
     // that are "active"
     for(unsigned int v = 0; v < data.n_active_entries_per_cell_batch(cell); ++v)
     {
-      flow_rate += flow_rate_vec[v];
+      local_flow_rate += flow_rate_vec[v];
     }
   }
 
-  dst.at(0) += flow_rate;
+  flow_rate += local_flow_rate;
 }
 
 template class MeanVelocityCalculator<2, float>;

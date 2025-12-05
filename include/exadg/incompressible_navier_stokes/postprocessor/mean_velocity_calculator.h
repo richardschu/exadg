@@ -147,7 +147,7 @@ private:
 
   void
   local_calculate_volume(dealii::MatrixFree<dim, Number> const & data,
-                         std::vector<Number> &                   dst,
+                         Number &                                volume,
                          VectorType const &,
                          std::pair<unsigned int, unsigned int> const & cell_range) const;
 
@@ -162,7 +162,7 @@ private:
 
   void
   local_calculate_flow_rate_volume(dealii::MatrixFree<dim, Number> const &       data,
-                                   std::vector<Number> &                         dst,
+                                   Number &                                      flow_rate,
                                    VectorType const &                            src,
                                    std::pair<unsigned int, unsigned int> const & cell_range) const;
 
