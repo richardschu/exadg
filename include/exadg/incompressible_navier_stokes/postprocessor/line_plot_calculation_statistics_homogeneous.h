@@ -156,8 +156,10 @@ private:
   // dof indices on cell for Raviart-Thomas elements
   std::vector<std::array<unsigned int, 2 * dim + 1>> dof_indices_on_cell;
 
-  // shape info used for evaluation with RT element
-  dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> shape_info_velocity;
+  // tabulated 1D shape data used for evaluation with RT element
+  dealii::AlignedVector<dealii::VectorizedArray<Number>> shape_values_eo_n;
+  dealii::AlignedVector<dealii::VectorizedArray<Number>> shape_values_eo_t;
+  dealii::AlignedVector<Number>                          shape_values_eo_dgq;
 
   // polynomials for FE_DGQ representing Lagrange polynomials in node points
   // of FE_DGQ, which is the basis for the computation along the lines

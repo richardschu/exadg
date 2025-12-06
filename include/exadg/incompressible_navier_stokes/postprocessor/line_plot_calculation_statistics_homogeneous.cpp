@@ -294,11 +294,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       }
     }
 
-    const unsigned        degree_dgq = dof_handler_velocity.get_fe().degree;
-    dealii::QGauss<dim>   quadrature_cell(degree_dgq + 1);
-    dealii::FE_DGQ<dim>   fe_dummy(0);
-    dealii::FEValues<dim> fe_values(mapping, fe_dummy, quadrature_cell, dealii::update_jacobians);
-    unsigned int          n_cells = 0, n_points = 0;
+    const unsigned          degree_dgq = dof_handler_velocity.get_fe().degree;
+    dealii::QGauss<1>       gauss_1d(degree_dgq + 1);
+    dealii::Quadrature<dim> quadrature_cell(gauss_1d);
+    dealii::FE_DGQ<dim>     fe_dummy(0);
+    dealii::FEValues<dim>   fe_values(mapping, fe_dummy, quadrature_cell, dealii::update_jacobians);
+    unsigned int            n_cells = 0, n_points = 0;
     for(const auto & line_points : cells_and_ref_points_velocity)
       for(const auto & [_, pts] : line_points)
       {
@@ -329,10 +330,50 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       }
 
     dof_indices_on_cell.clear();
-    shape_info_velocity.reinit(dealii::QGauss<1>(degree_dgq + 1), dof_handler_velocity.get_fe());
+    dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> shape_info(
+      gauss_1d, dof_handler_velocity.get_fe());
+    if(shape_info.element_type == dealii::internal::MatrixFreeFunctions::tensor_raviart_thomas)
+    {
+      const unsigned int n_n    = shape_info.data[0].fe_degree + 1;
+      const unsigned int n_t    = shape_info.data[1].fe_degree + 1;
+      const unsigned int n_cols = (n_n + 1) / 2;
+      const unsigned int n_rows = 2;
+      shape_values_eo_n.resize(n_cols * n_rows);
+      for(unsigned int i = 0; i < n_cols; ++i)
+        for(unsigned int j = 0; j < (n_n + 1) / 2; ++j)
+        {
+          if(i == n_cols - 1 && n_n % 2 == 1)
+            shape_values_eo_n[2 * i][j] = 0.5 * shape_info.data[0].shape_values[i * n_n + j];
+          else
+            shape_values_eo_n[2 * i][j] =
+              0.5 * (shape_info.data[0].shape_values[i * n_n + j] +
+                     shape_info.data[0].shape_values[i * n_n + n_n - 1 - j]);
+          shape_values_eo_n[2 * i + 1][j] =
+            0.5 * (shape_info.data[0].shape_values[i * n_n + j] -
+                   shape_info.data[0].shape_values[i * n_n + n_n - 1 - j]);
+        }
+      shape_values_eo_t.resize(n_cols * n_rows);
+      for(unsigned int i = 0; i < (n_t + 1) / 2; ++i)
+        for(unsigned int j = 0; j < (n_n + 1) / 2; ++j)
+        {
+          if(i == n_cols - 1 && n_n % 2 == 1)
+            shape_values_eo_t[2 * i][j] = 0.5 * shape_info.data[1].shape_values[i * n_n + j];
+          else
+            shape_values_eo_t[2 * i][j] =
+              0.5 * (shape_info.data[1].shape_values[i * n_n + j] +
+                     shape_info.data[1].shape_values[i * n_n + n_n - 1 - j]);
+          shape_values_eo_t[2 * i + 1][j] =
+            0.5 * (shape_info.data[1].shape_values[i * n_n + j] -
+                   shape_info.data[1].shape_values[i * n_n + n_n - 1 - j]);
+        }
+    }
+    else
+    {
+      shape_values_eo_dgq = shape_info.data[0].shape_values_eo;
+    }
 
-    polynomials_nodal = dealii::Polynomials::generate_complete_Lagrange_basis(
-      dealii::QGauss<1>(degree_dgq + 1).get_points());
+    polynomials_nodal =
+      dealii::Polynomials::generate_complete_Lagrange_basis(gauss_1d.get_points());
 
     create_directories(data.directory, mpi_comm);
   }
@@ -380,14 +421,62 @@ mpi_sum_at_root(double * data_ptr, const unsigned int size, const MPI_Comm mpi_c
 
 using namespace dealii;
 
+template<int templ_stride_in, int templ_stride_out, typename Number>
+void
+apply_matrix_vector_vect_eo(const VectorizedArray<Number> * matrix,
+                            const Number *                  in,
+                            Number *                        out,
+                            const int                       n_rows,
+                            const int                       n_cols,
+                            const int                       run_stride_in  = 0,
+                            const int                       run_stride_out = 0)
+{
+  const unsigned int n_lanes    = VectorizedArray<Number>::size();
+  const int          stride_in  = templ_stride_in > 0 ? templ_stride_in : run_stride_in;
+  const int          stride_out = templ_stride_out > 0 ? templ_stride_out : run_stride_out;
+
+  const int      n_actual_rows = (n_rows + 1) / 2;
+  const int      n_chunks      = (n_actual_rows + n_lanes - 1) / n_lanes;
+  const Number * in_back       = in + stride_in * (n_cols - 1);
+  const int      n_actual_cols = (n_cols + 1) / 2;
+  if(n_chunks == 1)
+  {
+    Number                  x_p   = (*in + *in_back);
+    Number                  x_m   = (*in - *in_back);
+    VectorizedArray<Number> sum_p = matrix[0] * x_p;
+    VectorizedArray<Number> sum_m = matrix[1] * x_m;
+    for(int i = 1; i < n_actual_cols; ++i)
+    {
+      in += stride_in;
+      in_back -= stride_in;
+      x_p = (*in + *in_back);
+      x_m = (*in - *in_back);
+      sum_p += matrix[2 * i] * x_p;
+      sum_m += matrix[2 * i + 1] * x_m;
+    }
+    const VectorizedArray<Number> result_p = sum_p + sum_m;
+    const VectorizedArray<Number> result_m = sum_p - sum_m;
+    for(int i = 0; i < n_actual_rows; ++i, out += stride_out)
+      *out = result_p[i];
+    for(int i = n_rows / 2 - 1; i >= 0; --i, out += stride_out)
+      *out = result_m[i];
+  }
+  else
+    AssertThrow(false,
+                ExcNotImplemented("Implement some loop unrolling n=" + std::to_string(n_rows)));
+}
+
+
+
 template<int dim, typename Number>
 void
-read_rt_cell_values(const unsigned int                                               degree_normal,
-                    const Number *                                                   src_vector,
-                    const dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> & shape_info,
-                    const dealii::ndarray<unsigned int, 2 * dim + 1> &               dof_indices,
-                    std::vector<Number> &                                            tmp_array,
-                    std::vector<Tensor<1, dim, Number>> &                            out)
+read_rt_cell_values(const unsigned int                                     degree_normal,
+                    const Number *                                         src_vector,
+                    const dealii::AlignedVector<VectorizedArray<Number>> & matrix_n,
+                    const dealii::AlignedVector<VectorizedArray<Number>> & matrix_t,
+                    const dealii::ndarray<unsigned int, 2 * dim + 1> &     dof_indices,
+                    std::vector<Number> &                                  tmp_array,
+                    std::vector<Tensor<1, dim, Number>> &                  out)
 {
   const unsigned int n_t                = degree_normal;
   const unsigned int n_n                = n_t + 1;
@@ -398,8 +487,6 @@ read_rt_cell_values(const unsigned int                                          
   tmp_array.resize(cell_dofs_per_comp + 2 * dofs_per_face + dealii::Utilities::pow(n_n, dim));
   Number * tmp2 = tmp_array.data() + cell_dofs_per_comp + 2 * dofs_per_face;
 
-  const Number * DEAL_II_RESTRICT shape_data_n = shape_info.data[0].shape_values_eo.data();
-  const Number * DEAL_II_RESTRICT shape_data_t = shape_info.data[1].shape_values_eo.data();
   for(unsigned int f = 0; f < 2; ++f)
   {
     const unsigned int idx = dof_indices[f];
@@ -417,46 +504,23 @@ read_rt_cell_values(const unsigned int                                          
   for(unsigned int i_z = 0, i = 0; i_z < (dim > 2 ? n_t : 1); ++i_z)
   {
     for(unsigned int i_y = 0; i_y < n_t; ++i_y, ++i)
-    {
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            1,
-                                            1,
-                                            true,
-                                            false>(
-        shape_data_n, tmp_array.data() + i * n_n, tmp2 + (i_z * n_n + i_y) * n_n, n_n, n_n);
-    }
+      apply_matrix_vector_vect_eo<1, 1>(
+        matrix_n.data(), tmp_array.data() + i * n_n, tmp2 + (i_z * n_n + i_y) * n_n, n_n, n_n);
 
     // perform interpolation in y direction
     for(unsigned int i_x = 0; i_x < n_n; ++i_x)
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            true,
-                                            false>(shape_data_t,
-                                                   tmp2 + i_z * n_n * n_n + i_x,
-                                                   tmp2 + i_z * n_n * n_n + i_x,
-                                                   n_t,
-                                                   n_n,
-                                                   n_n,
-                                                   n_n);
+      apply_matrix_vector_vect_eo<0, 0>(matrix_t.data(),
+                                        tmp2 + i_z * n_n * n_n + i_x,
+                                        tmp2 + i_z * n_n * n_n + i_x,
+                                        n_n,
+                                        n_t,
+                                        n_n,
+                                        n_n);
   }
   if(dim == 3)
     for(unsigned int i = 0; i < n_n * n_n; ++i)
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            true,
-                                            false>(
-        shape_data_t, tmp2 + i, &out[i][0], n_t, n_n, n_n * n_n, n_n * n_n * dim);
+      apply_matrix_vector_vect_eo<0, 0>(
+        matrix_t.data(), tmp2 + i, &out[i][0], n_n, n_t, n_n * n_n, n_n * n_n * dim);
 
   // y component
   for(unsigned int f = 0; f < 2; ++f)
@@ -478,46 +542,24 @@ read_rt_cell_values(const unsigned int                                          
   {
     // perform interpolation in y direction
     for(unsigned int i_x = 0; i_x < n_t; ++i_x)
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            true,
-                                            false>(shape_data_n,
-                                                   tmp_array.data() + i_z * n_t * n_n + i_x,
-                                                   tmp2 + i_z * n_n * n_n + i_x,
-                                                   n_n,
-                                                   n_n,
-                                                   n_t,
-                                                   n_n);
+      apply_matrix_vector_vect_eo<0, 0>(matrix_n.data(),
+                                        tmp_array.data() + i_z * n_t * n_n + i_x,
+                                        tmp2 + i_z * n_n * n_n + i_x,
+                                        n_n,
+                                        n_n,
+                                        n_t,
+                                        n_n);
 
     // perform interpolation in x direction
     for(unsigned int i_y = 0; i_y < n_n; ++i_y, ++i)
     {
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            1,
-                                            1,
-                                            true,
-                                            false>(
-        shape_data_t, tmp2 + i * n_n, tmp2 + i * n_n, n_t, n_n);
+      apply_matrix_vector_vect_eo<1, 1>(matrix_t.data(), tmp2 + i * n_n, tmp2 + i * n_n, n_n, n_t);
     }
   }
   if(dim == 3)
     for(unsigned int i = 0; i < n_n * n_n; ++i)
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            true,
-                                            false>(
-        shape_data_t, tmp2 + i, &out[i][1], n_t, n_n, n_n * n_n, n_n * n_n * dim);
+      apply_matrix_vector_vect_eo<0, 0>(
+        matrix_t.data(), tmp2 + i, &out[i][1], n_n, n_t, n_n * n_n, n_n * n_n * dim);
 
   // z component
   if constexpr(dim == 3)
@@ -536,45 +578,24 @@ read_rt_cell_values(const unsigned int                                          
             tmp_array[i_z * n_t * n_t + i_y * n_t + i_x] = src_vector[idx];
     }
     for(unsigned int i = 0; i < n_t * n_t; ++i)
-      internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                            internal::EvaluatorQuantity::value,
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            true,
-                                            false>(
-        shape_data_n, tmp_array.data() + i, tmp2 + i, n_n, n_n, n_t * n_t, n_n * n_n);
+      apply_matrix_vector_vect_eo<0, 0>(
+        matrix_n.data(), tmp_array.data() + i, tmp2 + i, n_n, n_n, n_t * n_t, n_n * n_n);
     for(unsigned int i_z = 0; i_z < n_n; ++i_z)
     {
       for(unsigned int i_x = 0; i_x < n_t; ++i_x)
-        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                              internal::EvaluatorQuantity::value,
-                                              0,
-                                              0,
-                                              0,
-                                              0,
-                                              true,
-                                              false>(shape_data_t,
-                                                     tmp2 + i_z * n_n * n_n + i_x,
-                                                     tmp2 + i_z * n_n * n_n + i_x,
-                                                     n_t,
-                                                     n_n,
-                                                     n_t,
-                                                     n_t);
+        apply_matrix_vector_vect_eo<0, 0>(matrix_t.data(),
+                                          tmp2 + i_z * n_n * n_n + i_x,
+                                          tmp2 + i_z * n_n * n_n + i_x,
+                                          n_n,
+                                          n_t,
+                                          n_t,
+                                          n_t);
       for(unsigned int i_y = 0; i_y < n_n; ++i_y)
-        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                              internal::EvaluatorQuantity::value,
-                                              0,
-                                              0,
-                                              1,
-                                              dim,
-                                              true,
-                                              false>(shape_data_t,
-                                                     tmp2 + i_z * n_n * n_n + i_y * n_t,
-                                                     &out[i_z * n_n * n_n + i_y * n_n][2],
-                                                     n_t,
-                                                     n_n);
+        apply_matrix_vector_vect_eo<1, dim>(matrix_t.data(),
+                                            tmp2 + i_z * n_n * n_n + i_y * n_t,
+                                            &out[i_z * n_n * n_n + i_y * n_n][2],
+                                            n_n,
+                                            n_t);
     }
   }
 }
@@ -627,7 +648,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
 
   std::vector<dealii::Tensor<1, dim, Number>> velocity_dgq_on_cell(
     jacobians_at_nodal_points.size(1));
-  std::vector<Number> tmp_array;
+  std::vector<Number>                                                  tmp_array;
+  std::array<dealii::ndarray<VectorizedArray<Number>, 2, dim - 1>, 20> shapes_2d;
 
   dealii::FiniteElement<dim> const &           fe_p = dof_handler_pressure.get_fe();
   std::vector<double>                          pressure_on_cell(fe_p.dofs_per_cell);
@@ -673,7 +695,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         {
           read_rt_cell_values(fe_u.degree,
                               velocity.begin(),
-                              shape_info_velocity,
+                              shape_values_eo_n,
+                              shape_values_eo_t,
                               cell_indices,
                               tmp_array,
                               velocity_dgq_on_cell);
@@ -687,11 +710,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           for(unsigned int c = 0; c < dim; ++c)
           {
             internal::EvaluatorTensorProduct<internal::evaluate_evenodd, dim, 0, 0, Number, Number>
-              eval(shape_info_velocity.data[0].shape_values_eo.data(),
-                   nullptr,
-                   nullptr,
-                   fe_u.degree + 1,
-                   fe_u.degree + 1);
+              eval(shape_values_eo_dgq.data(), nullptr, nullptr, fe_u.degree + 1, fe_u.degree + 1);
             eval.template values<0, true, false>(velocity.begin() + cell_indices[0] +
                                                    c * velocity_dgq_on_cell.size(),
                                                  tmp_array.data());
@@ -705,49 +724,72 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         // here
         AssertThrow(averaging_direction == dim - 1, dealii::ExcNotImplemented());
         const unsigned int n_points_in_plane = dealii::Utilities::pow(n_q_points_1d, dim - 1);
-        for(unsigned int p1 = 0; p1 < point_list.size(); ++p1)
+        const unsigned int n_lanes           = VectorizedArray<Number>::size();
+        const unsigned int n_points          = point_list.size();
+        const unsigned int n_chunks          = (n_points + n_lanes - 1) / n_lanes;
+        for(unsigned int p1_v = 0; p1_v < n_chunks; ++p1_v)
         {
-          dealii::Point<dim - 1> point_on_line;
-          for(unsigned int d = 0, c = 0; d < dim; ++d)
-            if(d != averaging_direction)
-              point_on_line[c++] = point_list[p1].second[d];
-          unsigned int const   p       = point_list[p1].first;
-          Tensor<2, dim> const inv_jac = inverse_jacobians_on_lines[counter_line++];
-          double const det = 1.0 / std::abs(inv_jac[averaging_direction][averaging_direction]);
+          dealii::Point<dim - 1, VectorizedArray<Number>> point_on_line;
+          Tensor<2, dim, VectorizedArray<Number>>         inv_jac;
+          for(unsigned int d = 0; d < dim; ++d)
+            inv_jac[d][d] = 1.0;
+          for(unsigned int p1 = p1_v * n_lanes, v = 0;
+              p1 < std::min((p1_v + 1) * n_lanes, n_points);
+              ++p1, ++v)
+          {
+            for(unsigned int d = 0, c = 0; d < dim; ++d)
+              if(d != averaging_direction)
+                point_on_line[c++][v] = point_list[p1].second[d];
+            Tensor<2, dim> const inv_jac_v = inverse_jacobians_on_lines[counter_line++];
+            for(unsigned int d = 0; d < dim; ++d)
+              for(unsigned int e = 0; e < dim; ++e)
+                inv_jac[d][e][v] = inv_jac_v[d][e];
+          }
+          VectorizedArray<Number> const det =
+            1.0 / std::abs(inv_jac[averaging_direction][averaging_direction]);
+          dealii::internal::compute_values_of_array(shapes_2d.data(),
+                                                    polynomials_nodal,
+                                                    point_on_line);
 
+          VectorizedArray<Number>                 length = 0;
+          Tensor<1, dim, VectorizedArray<Number>> vel;
+          Tensor<2, dim, VectorizedArray<Number>> reynolds;
+          VectorizedArray<Number>                 skin_friction = 0;
           for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1)
           {
-            auto const & [velocity, grad] = internal::evaluate_tensor_product_value_and_gradient(
-              polynomials_nodal,
-              ArrayView<const Tensor<1, dim, Number>>(&velocity_dgq_on_cell[q1 * n_points_in_plane],
-                                                      n_points_in_plane),
-              point_on_line,
-              false);
-            Tensor<2, dim> velocity_gradient;
+            auto const val_grad =
+              internal::evaluate_tensor_product_value_and_gradient_shapes<dim - 1,
+                                                                          Tensor<1, dim, Number>,
+                                                                          VectorizedArray<Number>>(
+                shapes_2d.data(),
+                polynomials_nodal.size(),
+                &velocity_dgq_on_cell[q1 * n_points_in_plane]);
+            const Tensor<1, dim, VectorizedArray<Number>> velocity = val_grad[dim - 1];
+            Tensor<2, dim, VectorizedArray<Number>>       velocity_gradient;
             for(unsigned int d = 0; d < dim; ++d)
             {
               for(unsigned int e = 0; e < dim - 1; ++e)
-                velocity_gradient[d][e] = grad[e][d];
+                velocity_gradient[d][e] = val_grad[e][d];
               velocity_gradient[d] = inv_jac * velocity_gradient[d];
             }
 
-            double const JxW = det * gauss_1d.weight(q1);
+            VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
 
             // calculate integrals in homogeneous direction
-            length_local[index][p] += JxW;
+            length += JxW;
 
             for(const std::shared_ptr<Quantity> & quantity : line.quantities)
             {
               if(quantity->type == QuantityType::Velocity)
               {
                 for(unsigned int d = 0; d < dim; ++d)
-                  velocity_local[index][p][d] += velocity[d] * JxW;
+                  vel[d] += velocity[d] * JxW;
               }
               else if(quantity->type == QuantityType::ReynoldsStresses)
               {
                 for(unsigned int d = 0; d < dim; ++d)
                   for(unsigned int e = 0; e < dim; ++e)
-                    reynolds_local[index][p][d][e] += velocity[d] * velocity[e] * JxW;
+                    reynolds[d][e] += velocity[d] * velocity[e] * JxW;
               }
               else if(quantity->type == QuantityType::SkinFriction)
               {
@@ -759,8 +801,35 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
 
                 for(unsigned int d = 0; d < dim; ++d)
                   for(unsigned int e = 0; e < dim; ++e)
-                    wall_shear_local[index][p] +=
-                      tangent[d] * velocity_gradient[d][e] * normal[e] * JxW;
+                    skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);
+              }
+            }
+          }
+
+          for(unsigned int p1 = p1_v * n_lanes, v = 0;
+              p1 < std::min((p1_v + 1) * n_lanes, n_points);
+              ++p1, ++v)
+          {
+            const unsigned int p = point_list[p1].first;
+            // calculate integrals in homogeneous direction
+            length_local[index][p] += length[v];
+
+            for(const std::shared_ptr<Quantity> & quantity : line.quantities)
+            {
+              if(quantity->type == QuantityType::Velocity)
+              {
+                for(unsigned int d = 0; d < dim; ++d)
+                  velocity_local[index][p][d] += vel[d][v];
+              }
+              else if(quantity->type == QuantityType::ReynoldsStresses)
+              {
+                for(unsigned int d = 0; d < dim; ++d)
+                  for(unsigned int e = 0; e < dim; ++e)
+                    reynolds_local[index][p][d][e] += reynolds[d][e][v];
+              }
+              else if(quantity->type == QuantityType::SkinFriction)
+              {
+                wall_shear_local[index][p] += skin_friction[v];
               }
             }
           }
