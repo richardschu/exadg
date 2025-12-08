@@ -377,6 +377,17 @@ Operator<dim, Number>::setup_calculators_for_derived_quantities()
                                                 get_dof_index(),
                                                 get_dof_index_scalar(),
                                                 get_quad_index());
+
+    ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
+      param.large_deformation ?
+        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
+        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
+
+    max_principal_stress_calculator.initialize(*matrix_free,
+                                               get_dof_index(),
+                                               get_dof_index_scalar(),
+                                               get_quad_index(),
+                                               elasticity_operator_base);
   }
 }
 
@@ -580,67 +591,57 @@ void
 Operator<dim, Number>::setup_solver()
 {
   // initialize linear solver
+  std::string name;
   if(param.solver == Solver::CG)
   {
-    // initialize solver_data
-    Krylov::SolverDataCG solver_data;
-    solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
-    solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
-    solver_data.max_iter             = param.solver_data.max_iter;
-
-    if(param.preconditioner != Preconditioner::None)
-      solver_data.use_preconditioner = true;
-
-    // initialize solver
-    if(param.large_deformation)
-    {
-      typedef Krylov::
-        SolverCG<NonLinearOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
-          CG;
-      linear_solver =
-        std::make_shared<CG>(elasticity_operator_nonlinear, *preconditioner, solver_data);
-    }
-    else
-    {
-      typedef Krylov::SolverCG<LinearOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
-        CG;
-      linear_solver =
-        std::make_shared<CG>(elasticity_operator_linear, *preconditioner, solver_data);
-    }
+    name = "cg";
+  }
+  else if(param.solver == Solver::BiCGStab)
+  {
+    name = "bicgstab";
+  }
+  else if(param.solver == Solver::GMRES)
+  {
+    name = "gmres";
   }
   else if(param.solver == Solver::FGMRES)
   {
-    // initialize solver_data
-    Krylov::SolverDataFGMRES solver_data;
-    solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
-    solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
-    solver_data.max_iter             = param.solver_data.max_iter;
-    solver_data.max_n_tmp_vectors    = param.solver_data.max_krylov_size;
-
-    if(param.preconditioner != Preconditioner::None)
-      solver_data.use_preconditioner = true;
-
-    // initialize solver
-    if(param.large_deformation)
-    {
-      typedef Krylov::
-        SolverFGMRES<NonLinearOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
-          FGMRES;
-      linear_solver =
-        std::make_shared<FGMRES>(elasticity_operator_nonlinear, *preconditioner, solver_data);
-    }
-    else
-    {
-      typedef Krylov::
-        SolverFGMRES<LinearOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
-          FGMRES;
-      linear_solver =
-        std::make_shared<FGMRES>(elasticity_operator_linear, *preconditioner, solver_data);
-    }
+    name = "fgmres";
   }
   else
   {
-    AssertThrow(false, dealii::ExcMessage("Specified solver is not implemented!"));
+    AssertThrow(false, dealii::ExcMessage("Specified solver not implemented in structure module."));
+  }
+
+  bool const use_preconditioner              = param.preconditioner != Preconditioner::None;
+  bool constexpr compute_performance_metrics = false;
+  bool constexpr compute_eigenvalues         = false;
+
+  if(param.large_deformation)
+  {
+    typedef Krylov::
+      KrylovSolver<NonLinearOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
+        SolverType;
+    linear_solver = std::make_shared<SolverType>(elasticity_operator_nonlinear,
+                                                 *preconditioner,
+                                                 param.solver_data,
+                                                 name,
+                                                 use_preconditioner,
+                                                 compute_performance_metrics,
+                                                 compute_eigenvalues);
+  }
+  else
+  {
+    typedef Krylov::
+      KrylovSolver<LinearOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
+        SolverType;
+    linear_solver = std::make_shared<SolverType>(elasticity_operator_linear,
+                                                 *preconditioner,
+                                                 param.solver_data,
+                                                 name,
+                                                 use_preconditioner,
+                                                 compute_performance_metrics,
+                                                 compute_eigenvalues);
   }
 
   // initialize Newton solver
@@ -724,6 +725,20 @@ Operator<dim, Number>::compute_displacement_jacobian(VectorType &       dst_scal
                                  "Cannot compute Jacobian of the displacement field."));
 
   displacement_jacobian_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
+
+  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_max_principal_stress(VectorType &       dst_scalar_valued,
+                                                    VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_scalar_field,
+              dealii::ExcMessage("Scalar field not set up. "
+                                 "Cannot compute maximum principal stress."));
+
+  max_principal_stress_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
   inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
 }
@@ -845,12 +860,13 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
         elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
       elasticity_operator_nonlinear.set_scaling_factor_mass_operator(0.0);
 
-      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary conditions:
-      // Note that we do not have to set inhomogeneous Dirichlet degrees of freedom explicitly since
-      // the function prescribe_initial_displacement() sets the initial displacement for all dofs
-      // (including Dirichlet dofs) and since the initial condition for the displacements needs to
-      // be consistent with the Dirichlet boundary data g(t=t0) at initial time, i.e. the vector
-      // initial_displacement already contains the correct Dirichlet data.
+      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary
+      // conditions: Note that we do not have to set inhomogeneous Dirichlet degrees of freedom
+      // explicitly since the function prescribe_initial_displacement() sets the initial
+      // displacement for all dofs (including Dirichlet dofs) and since the initial condition for
+      // the displacements needs to be consistent with the Dirichlet boundary data g(t=t0) at
+      // initial time, i.e. the vector initial_displacement already contains the correct Dirichlet
+      // data.
       elasticity_operator_nonlinear.set_time(time);
       elasticity_operator_nonlinear.evaluate_nonlinear(rhs, initial_displacement);
       // shift to right-hand side
@@ -874,12 +890,13 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
         elasticity_operator_linear.get_scaling_factor_mass_operator();
       elasticity_operator_linear.set_scaling_factor_mass_operator(0.0);
 
-      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary conditions:
-      // Note that we do not have to set inhomogeneous Dirichlet degrees of freedom explicitly since
-      // the function prescribe_initial_displacement() sets the initial displacement for all dofs
-      // (including Dirichlet dofs) and since the initial condition for the displacements needs to
-      // be consistent with the Dirichlet boundary data g(t=t0) at initial time, i.e. the vector
-      // initial_displacement already contains the correct Dirichlet data.
+      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary
+      // conditions: Note that we do not have to set inhomogeneous Dirichlet degrees of freedom
+      // explicitly since the function prescribe_initial_displacement() sets the initial
+      // displacement for all dofs (including Dirichlet dofs) and since the initial condition for
+      // the displacements needs to be consistent with the Dirichlet boundary data g(t=t0) at
+      // initial time, i.e. the vector initial_displacement already contains the correct Dirichlet
+      // data.
       elasticity_operator_linear.set_time(time);
       elasticity_operator_linear.evaluate(rhs, initial_displacement);
       // shift to right-hand side
@@ -901,9 +918,9 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
     // with the initial acceleration in Dirichlet degrees of freedom) to the right-hand side.
     mass_operator.rhs_add(rhs);
 
-    // Apply inverse mass operator to compute the initial acceleration. Note that the mass operator
-    // is scaled with `density`, hence scale the right-hand side, as the `InverseMassOperator` has
-    // its own `MassOperator`.
+    // Apply inverse mass operator to compute the initial acceleration. Note that the mass
+    // operator is scaled with `density`, hence scale the right-hand side, as the
+    // `InverseMassOperator` has its own `MassOperator`.
     rhs /= param.density;
     inverse_mass.apply(initial_acceleration, rhs);
 
@@ -964,7 +981,7 @@ Operator<dim, Number>::evaluate_nonlinear_residual(VectorType &       dst,
 
   // To ensure convergence of the Newton solver, the residual has to be zero
   // for constrained degrees of freedom as well, which might not be the case
-  // in general, e.g. due to const_vector. Hence, we set the constrained
+  // in general, e.g. due to `const_vector`. Hence, we set the constrained
   // degrees of freedom explicitly to zero.
   elasticity_operator_nonlinear.set_constrained_dofs_to_zero(dst);
 }
@@ -1110,8 +1127,8 @@ Operator<dim, Number>::solve_linear(VectorType &       sol,
 
   update_elasticity_operator(scaling_factor_mass, time);
 
-  // In case of a matrix-based implementation, we assemble the matrix once at initialization, since
-  // it remains constant, and avoid calling `assemble_matrix_if_matrix_based()` here.
+  // In case of a matrix-based implementation, we assemble the matrix once at initialization,
+  // since it remains constant, and avoid calling `assemble_matrix_if_matrix_based()` here.
 
   linear_solver->update_preconditioner(update_preconditioner);
 

@@ -43,6 +43,8 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType const & src) const
 {
+  src.update_ghost_values();
+
   this->matrix_free->loop(&This::cell_loop_nonlinear,
                           &This::face_loop_nonlinear,
                           &This::boundary_face_loop_nonlinear,
@@ -50,6 +52,8 @@ NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType 
                           dst,
                           src,
                           true);
+
+  src.zero_out_ghost_values();
 }
 
 template<int dim, typename Number>
@@ -250,7 +254,7 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     tensor const F = get_F<dim, Number>(Grad_d);
 
     // 2nd Piola-Kirchhoff stresses
-    tensor const S =
+    symmetric_tensor const S =
       material->second_piola_kirchhoff_stress(Grad_d, integrator.get_current_cell_index(), q);
 
     // 1st Piola-Kirchhoff stresses P = F * S
@@ -326,7 +330,7 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
     tensor const F_lin = get_F<dim, Number>(Grad_d_lin);
 
     // 2nd Piola-Kirchhoff stresses
-    tensor const S_lin =
+    symmetric_tensor const S_lin =
       material->second_piola_kirchhoff_stress(Grad_d_lin, integrator.get_current_cell_index(), q);
 
     // directional derivative of 1st Piola-Kirchhoff stresses P
