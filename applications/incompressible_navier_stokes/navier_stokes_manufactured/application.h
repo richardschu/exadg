@@ -401,7 +401,7 @@ private:
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
-    this->param.time_step_size                = std::abs(end_time - start_time) / 100;
+    this->param.time_step_size                = std::abs(end_time - start_time) / 1.0;
     this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
     this->param.start_with_low_order          = false; // true;
 
@@ -707,7 +707,7 @@ private:
       data.dimensions[0]                  = std::abs(interval_end - interval_start);
       data.dimensions[1]                  = std::abs(interval_end - interval_start);
       data.amplitude                      = std::abs(interval_end - interval_start) / 15.0;
-      data.period                         = std::abs(end_time - start_time);
+      data.period                         = 1.0;
       data.t_start                        = start_time;
       data.t_end                          = end_time;
       data.spatial_number_of_oscillations = 1.0;
@@ -794,7 +794,7 @@ private:
     pp_data.output_data.write_higher_order = true;
 
     // calculation of velocity error
-    pp_data.error_data_u.compute_convergence_table          = false;
+    pp_data.error_data_u.compute_convergence_table          = true;
     pp_data.error_data_u.write_errors_to_file               = true;
     pp_data.error_data_u.time_control_data.is_active        = true;
     pp_data.error_data_u.time_control_data.start_time       = start_time;

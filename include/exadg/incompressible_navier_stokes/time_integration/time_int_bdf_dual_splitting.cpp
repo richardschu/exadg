@@ -359,10 +359,10 @@ TimeIntBDFDualSplitting<dim, Number>::do_timestep_solve()
   {
     pressure_step();
 
-    // uncommenting this part here gives good results for HDIV, 
-    // but u_hat is used in the peojection step as well 
-    // --> the pressure step is the culprit!
-    // overwrite solution. ##+
+    // // uncommenting this part here gives good results for HDIV, 
+    // // but u_hat is used in the peojection step as well 
+    // // --> the pressure step is the culprit!
+    // // overwrite solution. ##+
     // VectorType u(velocity_np);
     // VectorType p(pressure_np);
 
