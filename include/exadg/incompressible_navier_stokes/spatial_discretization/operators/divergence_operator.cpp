@@ -381,6 +381,7 @@ DivergenceOperator<dim, Number>::boundary_face_loop_hom_operator(
   VectorType const &                      src,
   Range const &                           face_range) const
 {
+  std::cout << "this is not even used anywhere\n";
   if(data.integration_by_parts == true)
   {
     FaceIntegratorU velocity(matrix_free, true, data.dof_index_velocity, data.quad_index);

@@ -440,7 +440,7 @@ private:
       this->param.adjust_pressure_level = AdjustPressureLevel::ApplyAnalyticalMeanValue;
 
     // div-div and continuity penalty terms
-    this->param.use_divergence_penalty                     = spatial_discretization == SpatialDiscretization::L2;
+    this->param.use_divergence_penalty                     = true; // spatial_discretization == SpatialDiscretization::L2;
     this->param.use_continuity_penalty                     = spatial_discretization == SpatialDiscretization::L2;
     this->param.continuity_penalty_use_boundary_data       = true;
     this->param.apply_penalty_terms_in_postprocessing_step = true;

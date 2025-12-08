@@ -555,6 +555,8 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   // inhomogeneous parts of boundary face integrals of velocity divergence operator
   if(this->param.divu_integrated_by_parts == true and this->param.divu_use_boundary_data == true)
   {
+    std::cout << "I am in that special block\n";
+
     VectorType temp(rhs);
 
     // sum alpha_i * u_i term
