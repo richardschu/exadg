@@ -59,6 +59,7 @@ private:
   typedef TimeIntBDF<dim, Number> Base;
 
   typedef typename Base::VectorType VectorType;
+  using VectorTypeFloat = dealii::LinearAlgebra::distributed::Vector<float>;
 
   typedef OperatorDualSplitting<dim, Number> Operator;
 
@@ -175,13 +176,13 @@ private:
 
   VectorType velocity_np;
 
-  std::vector<VectorType> pressure;
-  std::vector<VectorType> pressure_matvec;
+  std::vector<VectorTypeFloat> pressure;
+  std::vector<VectorTypeFloat> pressure_matvec;
+
+  std::vector<VectorTypeFloat> velocity_red;
+  std::vector<VectorTypeFloat> velocity_matvec;
 
   VectorType pressure_np;
-
-  std::vector<VectorType> velocity_dbc;
-  VectorType              velocity_dbc_np;
 
   // required for strongly-coupled partitioned FSI
   VectorType pressure_last_iter;
@@ -189,16 +190,17 @@ private:
   VectorType velocity_viscous_last_iter;
 
   std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, Number>>   op_rt;
+  std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, float>>    op_rt_float;
   std::shared_ptr<LaplaceOperator::LaplaceOperatorDG<dim, Number>>      laplace_op;
   std::shared_ptr<LaplaceOperator::PoissonPreconditionerMG<dim, float>> poisson_preconditioner;
-  VectorType                                                            diagonal_mass;
-  VectorType                                                            diagonal_laplace;
-  dealii::DiagonalMatrix<VectorType>                                    preconditioner_viscous;
+  VectorTypeFloat                                                       diagonal_mass;
+  VectorTypeFloat                                                       diagonal_laplace;
+  dealii::DiagonalMatrix<VectorTypeFloat>                               preconditioner_viscous;
   dealii::DiagonalMatrix<VectorType>                                    preconditioner_mass;
   VectorType                                                            solution_rt;
   std::vector<VectorType>                                               solutions_convective;
-  std::vector<VectorType>                                               solutions_viscous;
   VectorType                                                            rhs_rt;
+  VectorTypeFloat                                                       rhs_float;
 
   // iteration counts
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */>

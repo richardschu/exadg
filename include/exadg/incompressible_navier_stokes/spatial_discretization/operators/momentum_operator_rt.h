@@ -933,6 +933,16 @@ public:
   }
 
   void
+  vmult_add(VectorType & dst, const VectorType & src) const
+  {
+    vmult(
+      dst,
+      src,
+      [](const unsigned int, const unsigned int) {},
+      [](const unsigned int, const unsigned int) {});
+  }
+
+  void
   compute_diagonal(VectorType & dst) const
   {
     initialize_dof_vector(dst);

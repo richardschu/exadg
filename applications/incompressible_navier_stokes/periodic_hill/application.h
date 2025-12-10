@@ -258,20 +258,13 @@ private:
 
     // pressure Poisson equation
     this->param.solver_pressure_poisson              = SolverPressurePoisson::CG;
-    this->param.solver_data_pressure_poisson         = SolverData(1000, 1.e-12, 1.e-3, 100);
+    this->param.solver_data_pressure_poisson         = SolverData(1000, 1.e-12, 1.e-2, 100);
     this->param.preconditioner_pressure_poisson      = PreconditionerPressurePoisson::Multigrid;
     this->param.multigrid_data_pressure_poisson.type = MultigridType::cphMG;
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver =
       MultigridCoarseGridSolver::Chebyshev;
     this->param.multigrid_data_pressure_poisson.coarse_problem.preconditioner =
       MultigridCoarseGridPreconditioner::PointJacobi;
-
-    // projection step
-    this->param.solver_projection                = SolverProjection::CG;
-    this->param.solver_data_projection           = SolverData(1000, 1.e-12, 1.e-3);
-    this->param.preconditioner_projection        = PreconditionerProjection::InverseMassMatrix;
-    this->param.update_preconditioner_projection = true;
-
 
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
@@ -281,7 +274,7 @@ private:
 
     this->param.solver_momentum = SolverMomentum::CG;
 
-    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-3);
+    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-2);
     this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                             MomentumPreconditioner::InverseMassMatrix :
                                             MomentumPreconditioner::PointJacobi;

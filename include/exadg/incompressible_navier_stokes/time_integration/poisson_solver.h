@@ -61,7 +61,7 @@ make_zero_mean(const std::vector<unsigned int> &                    constrained_
   for(const unsigned int index : constrained_dofs)
     vec.local_element(index) = 0.;
 
-  Assert(std::abs(vec.mean_value()) < std::numeric_limits<Number>::epsilon() * vec.size(),
+  Assert(std::abs(vec.mean_value()) < vec.l1_norm() * std::numeric_limits<Number>::epsilon(),
          dealii::ExcInternalError());
 }
 
@@ -161,10 +161,19 @@ public:
       level_constraints[level].close();
       if(level < coarse_triangulations.size())
       {
-        dealii::MappingQCache<dim> mapping_coarse(1);
-        mapping_coarse.initialize(dof_h.get_triangulation(), mapping_function);
-        mg_matrices[level].reinit(
-          mapping_coarse, dof_h, level_constraints[level], {}, dealii::QGauss<1>(2));
+        if(mapping_function)
+        {
+          dealii::MappingQCache<dim> mapping_coarse(1);
+          mapping_coarse.initialize(dof_h.get_triangulation(), mapping_function);
+          mg_matrices[level].reinit(
+            mapping_coarse, dof_h, level_constraints[level], {}, dealii::QGauss<1>(2));
+        }
+        else
+        {
+          dealii::MappingQ1<dim> mapping_coarse;
+          mg_matrices[level].reinit(
+            mapping_coarse, dof_h, level_constraints[level], {}, dealii::QGauss<1>(2));
+        }
       }
       else
         mg_matrices[level].reinit(mapping_fine,
@@ -401,6 +410,12 @@ public:
 
     dst.copy_locally_owned_data_from(solution_update_dg);
     timings.back()[0] += time.wall_time();
+  }
+
+  const MatrixTypeDG &
+  get_dg_matrix() const
+  {
+    return dg_matrix;
   }
 
 private:
