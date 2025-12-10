@@ -2361,7 +2361,6 @@ OperatorBase<dim, Number, n_components>::compute_factorized_additive_schwarz_mat
     dealii::ExcMessage(
       "If you want to use this function in parallel you have to compile deal.II with either "
       "Trilinos or Petsc support for distributed sparse matrices."));
-  internal_compute_factorized_additive_schwarz_matrices<dealii::SparseMatrix>();
 #endif
 }
 
