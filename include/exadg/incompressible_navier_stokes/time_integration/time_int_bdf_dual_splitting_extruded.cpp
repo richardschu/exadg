@@ -268,7 +268,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
       op_rt_float->initialize_dof_vector(vector);
     for(auto & vector : velocity_matvec)
       op_rt_float->initialize_dof_vector(vector);
-    op_rt_float->initilaize_dof_vector(rhs_float);
+    op_rt_float->initialize_dof_vector(rhs_float);
   }
 
 
