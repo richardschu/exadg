@@ -158,7 +158,7 @@ private:
 
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                            = SolverType::Unsteady;
-    this->param.temporal_discretization                = TemporalDiscretization::BDFDualSplitting;
+    this->param.temporal_discretization                = TemporalDiscretization::BDFDualSplittingExtruded;
     this->param.treatment_of_convective_term           = TreatmentOfConvectiveTerm::Explicit;
     this->param.order_time_integrator                  = 2;
     this->param.start_with_low_order                   = not read_restart;
@@ -188,7 +188,7 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.grid.triangulation_type = TriangulationType::Distributed;
-    this->param.spatial_discretization  = SpatialDiscretization::L2;
+    this->param.spatial_discretization  = SpatialDiscretization::HDIV;
     this->param.degree_p                = DegreePressure::MixedOrder;
 
     // mapping
@@ -214,9 +214,9 @@ private:
     this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Weak;
 
     // div-div and continuity penalty
-    this->param.use_divergence_penalty                     = true;
+    this->param.use_divergence_penalty                     = false;
     this->param.divergence_penalty_factor                  = 1.0e0;
-    this->param.use_continuity_penalty                     = true;
+    this->param.use_continuity_penalty                     = false;
     this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
     this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
@@ -249,11 +249,12 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting ||
+       this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
-      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+      this->param.preconditioner_momentum = MomentumPreconditioner::PointJacobi;
     }
 
     // PRESSURE-CORRECTION SCHEME
@@ -458,7 +459,7 @@ private:
     pp_data.output_data.write_vorticity_magnitude = true;
     pp_data.output_data.write_q_criterion         = true;
     pp_data.output_data.write_processor_id        = true;
-    pp_data.output_data.write_higher_order        = false;
+    pp_data.output_data.write_higher_order        = true;
     pp_data.output_data.degree                    = this->param.degree_u;
 
     // calculate div and mass error
