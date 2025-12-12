@@ -74,7 +74,6 @@ SpatialOperatorBase<dim, Number>::SpatialOperatorBase(
   pcout << std::endl
         << "Construct incompressible Navier-Stokes operator ..." << std::endl
         << std::flush;
-
   initialize_dof_handler_and_constraints();
 
   initialize_boundary_descriptor_laplace();
@@ -1295,6 +1294,9 @@ SpatialOperatorBase<dim, Number>::calculate_time_step_cfl(VectorType const & vel
                                                     param.cfl_exponent_fe_degree_velocity,
                                                     param.adaptive_time_stepping_cfl_type,
                                                     mpi_comm);
+
+  if(param.spatial_discretization == SpatialDiscretization::HDIV)
+    velocity.zero_out_ghost_values();
 }
 
 template<int dim, typename Number>
@@ -1564,14 +1566,24 @@ SpatialOperatorBase<dim, Number>::compute_streamfunction(VectorType &       dst,
                                 laplace_operator.get_data().bc->dirichlet_bc,
                                 dirichlet_bc_component_mask);
 
-  // setup solver
-  Krylov::SolverDataCG solver_data;
-  solver_data.solver_tolerance_rel = 1.e-10;
-  solver_data.use_preconditioner   = true;
+  // initialize solver data
+  SolverData solver_data;
+  solver_data.rel_tol                        = 1e-10;
+  bool constexpr compute_performance_metrics = false;
+  bool constexpr compute_eigenvalues         = false;
+  bool const        use_preconditioner       = true;
+  std::string const name                     = "cg";
 
-  Krylov::SolverCG<Laplace, PreconditionerBase<Number>, VectorType> poisson_solver(laplace_operator,
-                                                                                   *preconditioner,
-                                                                                   solver_data);
+  typedef Krylov::KrylovSolver<Laplace, PreconditionerBase<Number>, VectorType> SolverType;
+
+  // initialize solver
+  SolverType poisson_solver(laplace_operator,
+                            *preconditioner,
+                            solver_data,
+                            name,
+                            use_preconditioner,
+                            compute_performance_metrics,
+                            compute_eigenvalues);
 
   // solve Poisson problem
   poisson_solver.solve(dst, rhs);
@@ -1592,6 +1604,7 @@ SpatialOperatorBase<dim, Number>::apply_inverse_mass_operator(VectorType &      
                                                               VectorType const & src) const
 {
   inverse_mass_velocity.apply(dst, src);
+
   return inverse_mass_velocity.get_n_iter_global_last();
 }
 
@@ -1761,10 +1774,13 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::setup_projection_solver()
 {
-  // setup projection solver
+  // skip setup of projection solver
+  if(param.use_divergence_penalty == false and param.use_continuity_penalty == false)
+    return;
 
-  // divergence penalty only -> local, elementwise problem
-  if(param.use_divergence_penalty == true and param.use_continuity_penalty == false)
+  // divergence penalty only -> local, elementwise problem for `SpatialDiscretization::L2`
+  if(param.use_divergence_penalty == true and param.use_continuity_penalty == false and
+     param.spatial_discretization == SpatialDiscretization::L2)
   {
     // elementwise operator
     elementwise_projection_operator =
@@ -1831,8 +1847,10 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
                   dealii::ExcMessage("Specified projection solver not implemented."));
     }
   }
-  // continuity penalty term with/without divergence penalty term -> globally coupled problem
-  else if(param.use_continuity_penalty == true)
+  // continuity penalty term with/without divergence penalty term *or* HDIV discretization
+  // (where continuity penalty could still be useful in projection/splitting schemes)
+  // give a globally coupled problem
+  else
   {
     // preconditioner
     if(param.preconditioner_projection == PreconditionerProjection::None)
@@ -1845,6 +1863,10 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
       inverse_mass_operator_data.dof_index  = get_dof_index_velocity();
       inverse_mass_operator_data.quad_index = get_quad_index_velocity_standard();
       inverse_mass_operator_data.parameters = param.inverse_mass_preconditioner;
+      // overwrite invalid combination for HDIV, keep remaining parameters
+      if(param.spatial_discretization == SpatialDiscretization::HDIV)
+        inverse_mass_operator_data.parameters.implementation_type =
+          InverseMassType::GlobalKrylovSolver;
 
       preconditioner_projection =
         std::make_shared<InverseMassPreconditioner<dim, dim, Number>>(*matrix_free,
@@ -1863,8 +1885,9 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
     {
       // Note that at this point (when initializing the Jacobi preconditioner)
       // the penalty parameter of the projection operator has not been calculated and the time step
-      // size has not been set. Hence, 'update_preconditioner = true' should be used for the Jacobi
-      // preconditioner in order to use to correct diagonal blocks for preconditioning.
+      // size has not been set. Hence, 'update_preconditioner = true' should be used for the
+      // `BlockJacobi` preconditioner in order to use to correct diagonal blocks for
+      // preconditioning.
       preconditioner_projection =
         std::make_shared<BlockJacobiPreconditioner<ProjOperator>>(*projection_operator, false);
     }
@@ -1918,56 +1941,36 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
                     "Preconditioner specified for projection step is not implemented."));
     }
 
-    // solver
+    // initialize solver data
+    bool constexpr compute_performance_metrics = false;
+    bool constexpr compute_eigenvalues         = false;
+    bool const use_preconditioner =
+      param.preconditioner_projection != PreconditionerProjection::None;
+    std::string name;
     if(param.solver_projection == SolverProjection::CG)
     {
-      // setup solver data
-      Krylov::SolverDataCG solver_data;
-      solver_data.max_iter             = param.solver_data_projection.max_iter;
-      solver_data.solver_tolerance_abs = param.solver_data_projection.abs_tol;
-      solver_data.solver_tolerance_rel = param.solver_data_projection.rel_tol;
-      // default value of use_preconditioner = false
-      if(param.preconditioner_projection != PreconditionerProjection::None)
-      {
-        solver_data.use_preconditioner = true;
-      }
-
-      // setup solver
-      projection_solver =
-        std::make_shared<Krylov::SolverCG<ProjOperator, PreconditionerBase<Number>, VectorType>>(
-          *projection_operator, *preconditioner_projection, solver_data);
+      name = "cg";
     }
     else if(param.solver_projection == SolverProjection::FGMRES)
     {
-      // setup solver data
-      Krylov::SolverDataFGMRES solver_data;
-      solver_data.max_iter             = param.solver_data_projection.max_iter;
-      solver_data.solver_tolerance_abs = param.solver_data_projection.abs_tol;
-      solver_data.solver_tolerance_rel = param.solver_data_projection.rel_tol;
-      solver_data.max_n_tmp_vectors    = param.solver_data_projection.max_krylov_size;
-
-      // default value of use_preconditioner = false
-      if(param.preconditioner_projection != PreconditionerProjection::None)
-      {
-        solver_data.use_preconditioner = true;
-      }
-
-      // setup solver
-      projection_solver = std::make_shared<
-        Krylov::SolverFGMRES<ProjOperator, PreconditionerBase<Number>, VectorType>>(
-        *projection_operator, *preconditioner_projection, solver_data);
+      name = "fgmres";
     }
     else
     {
       AssertThrow(false, dealii::ExcMessage("Specified projection solver not implemented."));
     }
-  }
-  else
-  {
-    AssertThrow(
-      param.use_divergence_penalty == false and param.use_continuity_penalty == false,
-      dealii::ExcMessage(
-        "Specified combination of divergence and continuity penalty operators not implemented."));
+
+
+    typedef Krylov::KrylovSolver<ProjOperator, PreconditionerBase<Number>, VectorType> SolverType;
+
+    // initialize solver
+    projection_solver = std::make_shared<SolverType>(*projection_operator,
+                                                     *preconditioner_projection,
+                                                     param.solver_data_projection,
+                                                     name,
+                                                     use_preconditioner,
+                                                     compute_performance_metrics,
+                                                     compute_eigenvalues);
   }
 }
 

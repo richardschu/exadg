@@ -49,9 +49,7 @@ DivergenceCalculator<dim, Number>::compute_projection_rhs(
   VectorType &       dst_scalar_valued,
   VectorType const & src_vector_valued) const
 {
-  dst_scalar_valued = 0.0;
-
-  matrix_free->cell_loop(&This::cell_loop, this, dst_scalar_valued, src_vector_valued);
+  matrix_free->cell_loop(&This::cell_loop, this, dst_scalar_valued, src_vector_valued, true);
 }
 
 template<int dim, typename Number>
@@ -109,9 +107,8 @@ void
 ShearRateCalculator<dim, Number>::compute_projection_rhs(VectorType &       dst_scalar_valued,
                                                          VectorType const & src_vector_valued) const
 {
-  dst_scalar_valued = 0.0;
-
-  matrix_free->cell_loop(&This::cell_loop, this, dst_scalar_valued, src_vector_valued);
+  matrix_free->cell_loop(
+    &This::cell_loop, this, dst_scalar_valued, src_vector_valued, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -170,12 +167,11 @@ template<int dim, typename Number>
 void
 ViscosityCalculator<dim, Number>::compute_projection_rhs(VectorType & dst_scalar_valued) const
 {
-  dst_scalar_valued = 0.0;
-
   matrix_free->cell_loop(&This::cell_loop,
                          this,
                          dst_scalar_valued,
-                         dst_scalar_valued /* not used */);
+                         dst_scalar_valued /* not used */,
+                         true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -291,9 +287,8 @@ void
 MagnitudeCalculator<dim, Number>::compute_projection_rhs(VectorType &       dst_scalar_valued,
                                                          VectorType const & src_vector_valued) const
 {
-  dst_scalar_valued = 0.0;
-
-  matrix_free->cell_loop(&This::cell_loop, this, dst_scalar_valued, src_vector_valued);
+  matrix_free->cell_loop(
+    &This::cell_loop, this, dst_scalar_valued, src_vector_valued, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -358,10 +353,8 @@ QCriterionCalculator<dim, Number>::compute_projection_rhs(
   VectorType &       dst_scalar_valued,
   VectorType const & src_vector_valued) const
 {
-  dst_scalar_valued = 0;
-
   matrix_free->cell_loop(
-    &This::cell_loop, this, dst_scalar_valued, src_vector_valued, compressible_flow);
+    &This::cell_loop, this, dst_scalar_valued, src_vector_valued, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
