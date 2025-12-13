@@ -1025,18 +1025,18 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
         for(unsigned int i = 0; i < 20; ++i)
           laplace_op->vmult(vec2, vec1);
         std::cout << std::defaultfloat << std::setprecision(4);
-        RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(),
-                               "Mat-vec DG optim [MDoF/s]",
-                               vec1.get_mpi_communicator());
+        Helper::print_time(2e-5 * vec2.size() / timer2.wall_time(),
+                           "Mat-vec DG optim [MDoF/s]",
+                           vec1.get_mpi_communicator());
       }
       for(unsigned int t = 0; t < 2; ++t)
       {
         dealii::Timer timer2;
         for(unsigned int i = 0; i < 20; ++i)
           pde_operator->laplace_operator.vmult(pressure_np, rhs);
-        RTOperator::print_time(2e-5 * vec2.size() / timer2.wall_time(),
-                               "Mat-vec DG basic [MDoF/s]",
-                               vec1.get_mpi_communicator());
+        Helper::print_time(2e-5 * vec2.size() / timer2.wall_time(),
+                           "Mat-vec DG basic [MDoF/s]",
+                           vec1.get_mpi_communicator());
       }
       this->pcout << "Norm vec2: " << vec2.l2_norm() << " " << pressure_np.l2_norm() << " ";
       pressure_np -= vec2;

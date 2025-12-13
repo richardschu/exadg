@@ -1,0 +1,297 @@
+/*  ______________________________________________________________________
+ *
+ *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
+ *
+ *  Copyright (C) 2025 by Martin Kronbichler, Shubham Goswami,
+ *  Schussnig
+ *
+ *  This file is dual-licensed under the Apache-2.0 with LLVM Exception (see
+ *  https://spdx.org/licenses/Apache-2.0.html and
+ *  https://spdx.org/licenses/LLVM-exception.html) and the GNU General Public
+ *  License as published by the Free Software Foundation, either version 3 of
+ *  the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License in the top-level LICENSE file for
+ *  more details.
+ *  ______________________________________________________________________
+ */
+
+#pragma once
+
+#include <deal.II/base/floating_point_comparator.h>
+#include <deal.II/fe/mapping.h>
+#include <deal.II/matrix_free/matrix_free.h>
+
+
+namespace Helper
+{
+void
+print_time(const double        time,
+           const std::string & name,
+           const MPI_Comm      communicator,
+           const double        total_time = 0.)
+{
+  dealii::Utilities::MPI::MinMaxAvg data = dealii::Utilities::MPI::min_max_avg(time, communicator);
+
+  if(dealii::Utilities::MPI::this_mpi_process(communicator) == 0)
+  {
+    const unsigned int n_digits = static_cast<unsigned int>(
+      std::ceil(std::log10(dealii::Utilities::MPI::n_mpi_processes(communicator))));
+    std::cout << std::left << std::setw(29) << name << " " << std::setw(11) << data.min << " [p"
+              << std::setw(n_digits) << data.min_index << "] " << std::setw(11) << data.avg << " "
+              << std::setw(11) << data.max << " [p" << std::setw(n_digits) << data.max_index << "]";
+    if(total_time > 0)
+      std::cout << " " << data.avg * 100. / total_time << "%";
+    std::cout << std::endl;
+  }
+}
+
+// function to convert from a map, with keys associated to the buckets by
+// which we sliced the index space, length chunk_size_zero_vector, and
+// values equal to the slice index which are touched by the respective
+// partition, to a "vectors-of-vectors" like data structure. Rather than
+// using the vectors, we set up a sparsity-pattern like structure where
+// one index specifies the start index (range_list_index), and the other
+// the actual ranges (range_list).
+void
+convert_map_to_range_list(const unsigned int                                        n_partitions,
+                          const unsigned int                                        chunk_size,
+                          const std::map<unsigned int, std::vector<unsigned int>> & ranges_in,
+                          std::vector<unsigned int> &                          range_list_index,
+                          std::vector<std::pair<unsigned int, unsigned int>> & range_list,
+                          const unsigned int                                   max_size)
+{
+  range_list_index.resize(n_partitions + 1);
+  range_list_index[0] = 0;
+  range_list.clear();
+  for(unsigned int partition = 0; partition < n_partitions; ++partition)
+  {
+    auto it = ranges_in.find(partition);
+    if(it != ranges_in.end())
+    {
+      for(unsigned int i = 0; i < it->second.size(); ++i)
+      {
+        const unsigned int first_i = i;
+        while(i + 1 < it->second.size() && it->second[i + 1] == it->second[i] + 1)
+          ++i;
+        range_list.emplace_back(std::min(it->second[first_i] * chunk_size, max_size),
+                                std::min((it->second[i] + 1) * chunk_size, max_size));
+      }
+      range_list_index[partition + 1] = range_list.size();
+    }
+    else
+      range_list_index[partition + 1] = range_list_index[partition];
+  }
+}
+
+} // namespace Helper
+
+
+namespace Extruded
+{
+using namespace dealii;
+template<int dim, typename Number>
+struct MappingInfo
+{
+  static constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+
+  void
+  reinit(const Mapping<dim> &            mapping,
+         const Quadrature<1> &           quadrature_1d,
+         const MatrixFree<dim, Number> & matrix_free)
+  {
+    const DoFHandler<dim> &         dof_handler = matrix_free.get_dof_handler();
+    FloatingPointComparator<double> comparator(dof_handler.get_triangulation().begin()->diameter() *
+                                               1e-10);
+    std::map<Point<2>, std::array<int, 3>, FloatingPointComparator<double>> unique_cells(
+      comparator);
+
+    std::vector<unsigned int> geometry_index(dof_handler.get_triangulation().n_active_cells(),
+                                             numbers::invalid_unsigned_int);
+    // collect possible compression of Jacobian data due to extrusion in z
+    // direction by checking the position of the first cell vertex in the xy
+    // plane. First check locally owned cells in exactly the order matrix-free
+    // loops visit them, then for ghosts to get the complete face data also in
+    // parallel computations
+    for(unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
+      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(c); ++v)
+      {
+        const auto cell     = matrix_free.get_cell_iterator(c, v);
+        const auto vertices = mapping.get_vertices(cell);
+        Point<2>   p(vertices[0][0], vertices[0][1]);
+        const auto position = unique_cells.find(p);
+        if(position == unique_cells.end())
+        {
+          geometry_index[cell->active_cell_index()] = unique_cells.size();
+          unique_cells.insert(std::make_pair(
+            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
+        }
+        else
+          geometry_index[cell->active_cell_index()] = position->second[0];
+      }
+    for(const auto & cell : dof_handler.active_cell_iterators())
+      if(cell->is_ghost())
+      {
+        const auto vertices = mapping.get_vertices(cell);
+        Point<2>   p(vertices[0][0], vertices[0][1]);
+        const auto position = unique_cells.find(p);
+        if(position == unique_cells.end())
+        {
+          geometry_index[cell->active_cell_index()] = unique_cells.size();
+          unique_cells.insert(std::make_pair(
+            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
+        }
+        else
+          geometry_index[cell->active_cell_index()] = position->second[0];
+      }
+
+    const unsigned int n_q_points_1d = quadrature_1d.size();
+    const unsigned int n_q_points_2d = Utilities::pow(n_q_points_1d, 2);
+    mapping_data_index.resize(matrix_free.n_cell_batches());
+    face_mapping_data_index.resize(matrix_free.n_cell_batches());
+    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
+    {
+      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
+      {
+        const auto dcell            = matrix_free.get_cell_iterator(cell, v);
+        mapping_data_index[cell][v] = geometry_index[dcell->active_cell_index()] * n_q_points_2d;
+        for(unsigned int f = 0; f < 4; ++f)
+        {
+          face_mapping_data_index[cell][f][0][v] =
+            (geometry_index[dcell->active_cell_index()] * 4 + f) * n_q_points_1d;
+          const bool at_boundary           = dcell->at_boundary(f);
+          const bool has_periodic_neighbor = at_boundary && dcell->has_periodic_neighbor(f);
+          if(at_boundary == false || has_periodic_neighbor)
+          {
+            const auto neighbor =
+              has_periodic_neighbor ? dcell->periodic_neighbor(f) : dcell->neighbor(f);
+            const unsigned int neighbor_face_idx = has_periodic_neighbor ?
+                                                     dcell->periodic_neighbor_face_no(f) :
+                                                     dcell->neighbor_face_no(f);
+            face_mapping_data_index[cell][f][1][v] =
+              (geometry_index[neighbor->active_cell_index()] * 4 + neighbor_face_idx) *
+              n_q_points_1d;
+          }
+          else
+            face_mapping_data_index[cell][f][1][v] = face_mapping_data_index[cell][f][0][v];
+        }
+      }
+      for(unsigned int v = matrix_free.n_active_entries_per_cell_batch(cell); v < n_lanes; ++v)
+        for(unsigned int f = 0; f < 4; ++f)
+          for(unsigned int s = 0; s < 2; ++s)
+            face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
+    }
+
+    Quadrature<dim - 1>     face_quadrature(quadrature_1d);
+    Quadrature<2>           quadrature_2d(quadrature_1d);
+    std::vector<Point<dim>> points(quadrature_2d.size());
+    for(unsigned int i = 0; i < quadrature_2d.size(); ++i)
+      for(unsigned int d = 0; d < 2; ++d)
+        points[i][d] = quadrature_2d.point(i)[d];
+
+    FE_Nothing<dim>   dummy_fe;
+    FEValues<dim>     fe_values(mapping, dummy_fe, Quadrature<dim>(points), update_jacobians);
+    FEFaceValues<dim> fe_face_values(mapping,
+                                     dummy_fe,
+                                     face_quadrature,
+                                     update_jacobians | update_JxW_values | update_normal_vectors);
+
+    jacobians_xy.resize(n_q_points_2d * unique_cells.size());
+    cell_JxW_xy.resize(n_q_points_2d * unique_cells.size());
+    face_jxn_xy.resize(4 * n_q_points_1d * unique_cells.size());
+    face_JxW_xy.resize(4 * n_q_points_1d * unique_cells.size());
+
+    ip_penalty_factors.resize(unique_cells.size());
+    for(const auto & [_, index] : unique_cells)
+    {
+      const typename Triangulation<dim>::cell_iterator cell(&dof_handler.get_triangulation(),
+                                                            index[1],
+                                                            index[2]);
+      fe_values.reinit(cell);
+      AssertDimension(geometry_index[cell->active_cell_index()], index[0]);
+      double cell_volume = 0;
+      for(unsigned int q = 0; q < n_q_points_2d; ++q)
+      {
+        const DerivativeForm<1, dim, dim> jacobian = fe_values.jacobian(q);
+        cell_volume += jacobian.determinant() * face_quadrature.weight(q);
+        const DerivativeForm<1, dim, dim> inv_jacobian = jacobian.covariant_form();
+        const unsigned int                data_idx     = index[0] * n_q_points_2d + q;
+        cell_JxW_xy[data_idx] =
+          (jacobian[0][0] * jacobian[1][1] - jacobian[0][1] * jacobian[1][0]) *
+          face_quadrature.weight(q);
+        if(dim == 3)
+        {
+          h_z         = jacobian[2][2];
+          h_z_inverse = 1. / h_z;
+        }
+        for(unsigned int d = 0; d < 2; ++d)
+          for(unsigned int e = 0; e < 2; ++e)
+            jacobians_xy[data_idx][d][e] = inv_jacobian[d][e];
+      }
+
+      double surface_area = 0;
+      for(unsigned int face = 0; face < 4; ++face)
+      {
+        fe_face_values.reinit(cell, face);
+        double face_factor =
+          (cell->at_boundary(face) && !cell->has_periodic_neighbor(face)) ? 1. : 0.5;
+        for(unsigned int q = 0; q < face_quadrature.size(); ++q)
+          surface_area += face_factor * fe_face_values.JxW(q);
+
+        for(unsigned int qx = 0; qx < n_q_points_1d; ++qx)
+        {
+          // take switched coordinates xz on y faces into account
+          const unsigned int q        = (face < 2 || dim == 2) ? qx : qx * n_q_points_1d;
+          const unsigned int data_idx = (index[0] * 4 + face) * n_q_points_1d + qx;
+          const auto         jac      = fe_face_values.jacobian(q);
+          const auto         inv_jac  = jac.covariant_form();
+          for(unsigned int d = 0; d < 2; ++d)
+            face_jxn_xy[data_idx][d] = inv_jac[0][d] * fe_face_values.normal_vector(q)[0] +
+                                       inv_jac[1][d] * fe_face_values.normal_vector(q)[1];
+          face_JxW_xy[data_idx] = std::sqrt(jac[0][1 - face / 2] * jac[0][1 - face / 2] +
+                                            jac[1][1 - face / 2] * jac[1][1 - face / 2]) *
+                                  quadrature_1d.weight(qx);
+        }
+      }
+      // take the two faces in z direction into account; they are always in
+      // periodic direction so do not check for boundary
+      if(dim == 3)
+        surface_area += 2 * 0.5 * cell_volume / h_z;
+
+      ip_penalty_factors[index[0]] = surface_area / cell_volume;
+    }
+    quad_weights_h_z.resize(n_q_points_1d);
+    QGauss<1> quad(n_q_points_1d);
+    for(unsigned int q = 0; q < quad.size(); ++q)
+      quad_weights_h_z[q] = quad.weight(q) * h_z;
+  }
+
+  std::size_t
+  memory_consumption() const
+  {
+    return MemoryConsumption::memory_consumption(mapping_data_index) +
+           MemoryConsumption::memory_consumption(jacobians_xy) +
+           MemoryConsumption::memory_consumption(cell_JxW_xy) +
+           MemoryConsumption::memory_consumption(face_mapping_data_index) +
+           MemoryConsumption::memory_consumption(face_jxn_xy) +
+           MemoryConsumption::memory_consumption(face_JxW_xy) +
+           MemoryConsumption::memory_consumption(quad_weights_h_z) +
+           MemoryConsumption::memory_consumption(ip_penalty_factors);
+  }
+
+  Number                                            h_z;
+  Number                                            h_z_inverse;
+  std::vector<std::array<unsigned int, n_lanes>>    mapping_data_index;
+  AlignedVector<Tensor<2, 2, Number>>               jacobians_xy;
+  AlignedVector<Number>                             cell_JxW_xy;
+  std::vector<ndarray<unsigned int, 4, 2, n_lanes>> face_mapping_data_index;
+  AlignedVector<Tensor<1, 2, Number>>               face_jxn_xy;
+  AlignedVector<Number>                             face_JxW_xy;
+  std::vector<Number>                               quad_weights_h_z;
+  std::vector<Number>                               ip_penalty_factors;
+};
+
+} // namespace Extruded

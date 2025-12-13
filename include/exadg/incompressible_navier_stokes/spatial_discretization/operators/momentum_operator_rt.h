@@ -34,66 +34,6 @@
 
 namespace RTOperator
 {
-void
-print_time(const double        time,
-           const std::string & name,
-           const MPI_Comm      communicator,
-           const double        total_time = 0.)
-{
-  dealii::Utilities::MPI::MinMaxAvg data = dealii::Utilities::MPI::min_max_avg(time, communicator);
-
-  if(dealii::Utilities::MPI::this_mpi_process(communicator) == 0)
-  {
-    const unsigned int n_digits = static_cast<unsigned int>(
-      std::ceil(std::log10(dealii::Utilities::MPI::n_mpi_processes(communicator))));
-    std::cout << std::left << std::setw(29) << name << " " << std::setw(11) << data.min << " [p"
-              << std::setw(n_digits) << data.min_index << "] " << std::setw(11) << data.avg << " "
-              << std::setw(11) << data.max << " [p" << std::setw(n_digits) << data.max_index << "]";
-    if(total_time > 0)
-      std::cout << " " << data.avg * 100. / total_time << "%";
-    std::cout << std::endl;
-  }
-}
-
-// function to convert from a map, with keys associated to the buckets by
-// which we sliced the index space, length chunk_size_zero_vector, and
-// values equal to the slice index which are touched by the respective
-// partition, to a "vectors-of-vectors" like data structure. Rather than
-// using the vectors, we set up a sparsity-pattern like structure where
-// one index specifies the start index (range_list_index), and the other
-// the actual ranges (range_list).
-void
-convert_map_to_range_list(const unsigned int                                        n_partitions,
-                          const unsigned int                                        chunk_size,
-                          const std::map<unsigned int, std::vector<unsigned int>> & ranges_in,
-                          std::vector<unsigned int> &                          range_list_index,
-                          std::vector<std::pair<unsigned int, unsigned int>> & range_list,
-                          const unsigned int                                   max_size)
-{
-  range_list_index.resize(n_partitions + 1);
-  range_list_index[0] = 0;
-  range_list.clear();
-  for(unsigned int partition = 0; partition < n_partitions; ++partition)
-  {
-    auto it = ranges_in.find(partition);
-    if(it != ranges_in.end())
-    {
-      for(unsigned int i = 0; i < it->second.size(); ++i)
-      {
-        const unsigned int first_i = i;
-        while(i + 1 < it->second.size() && it->second[i + 1] == it->second[i] + 1)
-          ++i;
-        range_list.emplace_back(std::min(it->second[first_i] * chunk_size, max_size),
-                                std::min((it->second[i] + 1) * chunk_size, max_size));
-      }
-      range_list_index[partition + 1] = range_list.size();
-    }
-    else
-      range_list_index[partition + 1] = range_list_index[partition];
-  }
-}
-
-
 template<int dim, int degree, typename Number>
 void
 distribute_local_to_global_rt_compressed(
@@ -855,16 +795,16 @@ public:
                   << (std::is_same_v<Number, double> ? "double" : "float") << "> in "
                   << static_cast<unsigned long>(timings[0])
                   << " evaluations [t_total=" << total_time * timings[0] << "s]" << std::endl;
-      print_time(timings[1] / timings[0], "Update cell ghost values", comm, total_time);
+      Helper::print_time(timings[1] / timings[0], "Update cell ghost values", comm, total_time);
       if(Utilities::MPI::n_mpi_processes(comm) > 1)
       {
-        print_time(timings[3] / timings[0], "Pack/send data dg ghosts", comm, total_time);
-        print_time(timings[5] / timings[0], "MPI_Waitall dg ghosts", comm, total_time);
-        print_time(timings[4] / timings[0], "Pre-loop before ghosts", comm, total_time);
+        Helper::print_time(timings[3] / timings[0], "Pack/send data dg ghosts", comm, total_time);
+        Helper::print_time(timings[5] / timings[0], "MPI_Waitall dg ghosts", comm, total_time);
+        Helper::print_time(timings[4] / timings[0], "Pre-loop before ghosts", comm, total_time);
       }
 
-      print_time(timings[7] / timings[0], "Matrix-free loop", comm, total_time);
-      print_time(timings[8] / timings[0], "Compress cell ghost values", comm, total_time);
+      Helper::print_time(timings[7] / timings[0], "Matrix-free loop", comm, total_time);
+      Helper::print_time(timings[8] / timings[0], "Compress cell ghost values", comm, total_time);
       if(Utilities::MPI::this_mpi_process(comm) == 0)
         std::cout << std::endl;
     }
@@ -878,10 +818,10 @@ public:
                   << (std::is_same_v<Number, double> ? "double" : "float") << "> in "
                   << static_cast<unsigned long>(timings[10])
                   << " evaluations [t_total=" << total_time * timings[10] << "s]" << std::endl;
-      print_time(timings[11] / timings[10], "Update cell ghost values", comm, total_time);
+      Helper::print_time(timings[11] / timings[10], "Update cell ghost values", comm, total_time);
 
-      print_time(timings[12] / timings[10], "Matrix-free loop", comm, total_time);
-      print_time(timings[13] / timings[10], "Compress cell ghost values", comm, total_time);
+      Helper::print_time(timings[12] / timings[10], "Matrix-free loop", comm, total_time);
+      Helper::print_time(timings[13] / timings[10], "Compress cell ghost values", comm, total_time);
       if(Utilities::MPI::this_mpi_process(comm) == 0)
         std::cout << std::endl;
     }
@@ -1364,12 +1304,13 @@ private:
         else if(touched_last_by[i] - touched_first_by[i] > 10)
           ++n_batches_10;
 
-      print_time(static_cast<double>(n_batches_half) / touched_first_by.size(),
-                 "Pre-/post distance > 1/2 size",
-                 MPI_COMM_WORLD);
-      print_time(static_cast<double>(n_batches_half + n_batches_10) / touched_first_by.size(),
-                 "Pre-/post distance > 10",
-                 MPI_COMM_WORLD);
+      Helper::print_time(static_cast<double>(n_batches_half) / touched_first_by.size(),
+                         "Pre-/post distance > 1/2 size",
+                         MPI_COMM_WORLD);
+      Helper::print_time(static_cast<double>(n_batches_half + n_batches_10) /
+                           touched_first_by.size(),
+                         "Pre-/post distance > 10",
+                         MPI_COMM_WORLD);
     }
 
     // set the import indices in the data to be exchanged via the partitioner
@@ -1430,43 +1371,44 @@ private:
         else if(touched_last_by[i] - touched_first_by[i] > 10)
           ++n_batches_10;
 
-      print_time(static_cast<double>(n_batches_half) / touched_first_by.size(),
-                 "Pre-/post distance > 1/2 size",
-                 MPI_COMM_WORLD);
-      print_time(static_cast<double>(n_batches_half + n_batches_10) / touched_first_by.size(),
-                 "Pre-/post distance > 10",
-                 MPI_COMM_WORLD);
+      Helper::print_time(static_cast<double>(n_batches_half) / touched_first_by.size(),
+                         "Pre-/post distance > 1/2 size",
+                         MPI_COMM_WORLD);
+      Helper::print_time(static_cast<double>(n_batches_half + n_batches_10) /
+                           touched_first_by.size(),
+                         "Pre-/post distance > 10",
+                         MPI_COMM_WORLD);
     }
 
     std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_pre;
     for(unsigned int i = 0; i < touched_first_by.size(); ++i)
       chunk_must_do_pre[touched_first_by[i]].push_back(i);
-    convert_map_to_range_list(n_cell_batches + 2,
-                              chunk_size,
-                              chunk_must_do_pre,
-                              cell_loop_pre_list_index,
-                              cell_loop_pre_list,
-                              n_dofs);
+    Helper::convert_map_to_range_list(n_cell_batches + 2,
+                                      chunk_size,
+                                      chunk_must_do_pre,
+                                      cell_loop_pre_list_index,
+                                      cell_loop_pre_list,
+                                      n_dofs);
 
     std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_mass_pre;
     for(unsigned int i = 0; i < touched_mass_first_by.size(); ++i)
       chunk_must_do_mass_pre[touched_mass_first_by[i]].push_back(i);
-    convert_map_to_range_list(n_cell_batches + 1,
-                              chunk_size,
-                              chunk_must_do_mass_pre,
-                              cell_loop_mass_pre_list_index,
-                              cell_loop_mass_pre_list,
-                              n_dofs);
+    Helper::convert_map_to_range_list(n_cell_batches + 1,
+                                      chunk_size,
+                                      chunk_must_do_mass_pre,
+                                      cell_loop_mass_pre_list_index,
+                                      cell_loop_mass_pre_list,
+                                      n_dofs);
 
     std::map<unsigned int, std::vector<unsigned int>> chunk_must_do_post;
     for(unsigned int i = 0; i < touched_last_by.size(); ++i)
       chunk_must_do_post[touched_last_by[i]].push_back(i);
-    convert_map_to_range_list(n_cell_batches + 1,
-                              chunk_size,
-                              chunk_must_do_post,
-                              cell_loop_post_list_index,
-                              cell_loop_post_list,
-                              n_dofs);
+    Helper::convert_map_to_range_list(n_cell_batches + 1,
+                                      chunk_size,
+                                      chunk_must_do_post,
+                                      cell_loop_post_list_index,
+                                      cell_loop_post_list,
+                                      n_dofs);
 
 #if 0
     for (unsigned int i = 0; i < n_cell_batches + 2; ++i)
@@ -3993,9 +3935,9 @@ private:
         else
           ++count_1;
 
-    print_time(static_cast<double>(count_1) / (count_0 + count_1),
-               "Face flux buffer efficiency",
-               MPI_COMM_WORLD);
+    Helper::print_time(static_cast<double>(count_1) / (count_0 + count_1),
+                       "Face flux buffer efficiency",
+                       MPI_COMM_WORLD);
 
 #if 0
     std::cout << "Identified storage of length " << size_of_storage << " with "
