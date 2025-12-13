@@ -1129,6 +1129,7 @@ class LaplaceOperatorDG : public EnableObserverPointer
 {
 public:
   static constexpr unsigned int dimension = dim;
+  static constexpr unsigned int n_lanes   = VectorizedArray<Number>::size();
   using VectorType                        = LinearAlgebra::distributed::Vector<Number>;
 
   LaplaceOperatorDG() = default;
@@ -1754,8 +1755,26 @@ public:
            MemoryConsumption::memory_consumption(all_left_face_fluxes_from_buffer);
   }
 
+  void
+  verify_other_cell_level_index(
+    const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> other_cell_level_index) const
+  {
+    AssertThrow(cell_level_index.size() == other_cell_level_index.size(),
+                ExcDimensionMismatch(cell_level_index.size(), other_cell_level_index.size()));
+    for(unsigned int i = 0; i < cell_level_index.size(); ++i)
+      for(unsigned int v = 0; v < n_lanes; ++v)
+        for(unsigned int d = 0; d < 2; ++d)
+          AssertThrow(cell_level_index[i][v][d] == other_cell_level_index[i][v][d],
+                      ExcMessage("Found invalid cell/level index of cells in two operators "
+                                 "for batch index " +
+                                 std::to_string(i) + " and lane " + std::to_string(v) + ": " +
+                                 std::to_string(cell_level_index[i][v][0]) + "," +
+                                 std::to_string(cell_level_index[i][v][1]) + " vs " +
+                                 std::to_string(other_cell_level_index[i][v][0]) + "," +
+                                 std::to_string(other_cell_level_index[i][v][1])));
+  }
+
 private:
-  static constexpr unsigned int          n_lanes = VectorizedArray<Number>::size();
   ObserverPointer<const DoFHandler<dim>> dof_handler;
   MatrixFree<dim, Number>                matrix_free;
 

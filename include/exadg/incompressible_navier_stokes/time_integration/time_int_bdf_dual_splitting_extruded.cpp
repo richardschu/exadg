@@ -281,6 +281,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
   laplace_op->set_penalty_parameters(
     pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 
+  laplace_op->verify_other_cell_level_index(op_rt->get_cell_level_index());
+
   poisson_preconditioner = std::make_shared<LaplaceOperator::PoissonPreconditionerMG<dim, float>>(
     *pde_operator->get_mapping(),
     pde_operator->get_dof_handler_p(),

@@ -279,7 +279,8 @@ template<int dim, typename Number = double>
 class RaviartThomasOperatorBase : public EnableObserverPointer
 {
 public:
-  using VectorType = LinearAlgebra::distributed::Vector<Number>;
+  static constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+  using VectorType                      = LinearAlgebra::distributed::Vector<Number>;
 
   RaviartThomasOperatorBase() = default;
 
@@ -578,6 +579,41 @@ public:
     }
 
     shape_info = matrix_free.get_shape_info();
+
+    {
+      std::vector<Quadrature<1>> auxiliary_quadratures;
+      // quadrature for coupling terms with pressure
+      auxiliary_quadratures.push_back(QGauss<1>(fe.degree));
+      // quadrature for convective term
+      auxiliary_quadratures.push_back(QGauss<1>(quadrature.size() + 1));
+
+      auxiliary_mapping_info.resize(auxiliary_quadratures.size());
+      for(unsigned int i = 0; i < auxiliary_quadratures.size(); ++i)
+        auxiliary_mapping_info[i].reinit(mapping, auxiliary_quadratures[i], matrix_free);
+
+      auxiliary_shape_infos.resize(auxiliary_quadratures.size());
+      for(unsigned int i = 0; i < auxiliary_quadratures.size(); ++i)
+        auxiliary_shape_infos[i].reinit(auxiliary_quadratures[i], fe);
+
+      auxiliary_interpolate_quad_to_boundary.resize(auxiliary_quadratures.size());
+      for(unsigned int q = 0; q < auxiliary_quadratures.size(); ++q)
+      {
+        std::vector<Polynomials::Polynomial<double>> basis =
+          Polynomials::generate_complete_Lagrange_basis(auxiliary_quadratures[q].get_points());
+        auxiliary_interpolate_quad_to_boundary[q][0].resize(basis.size());
+        auxiliary_interpolate_quad_to_boundary[q][1].resize(basis.size());
+        std::vector<double> val_and_der(2);
+        for(unsigned int i = 0; i < basis.size(); ++i)
+        {
+          basis[i].value(0., val_and_der);
+          auxiliary_interpolate_quad_to_boundary[q][0][i][0] = val_and_der[0];
+          auxiliary_interpolate_quad_to_boundary[q][0][i][1] = val_and_der[1];
+          basis[i].value(1., val_and_der);
+          auxiliary_interpolate_quad_to_boundary[q][1][i][0] = val_and_der[0];
+          auxiliary_interpolate_quad_to_boundary[q][1][i][1] = val_and_der[1];
+        }
+      }
+    }
 
     cell_level_index.resize(matrix_free.n_cell_batches());
     AssertDimension(cell_level_index.size(), dof_indices.size());
@@ -925,6 +961,12 @@ public:
     }
   }
 
+  const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> &
+  get_cell_level_index() const
+  {
+    return cell_level_index;
+  }
+
   std::size_t
   memory_consumption() const
   {
@@ -951,9 +993,7 @@ public:
   }
 
 private:
-  static constexpr unsigned int                    n_lanes = VectorizedArray<Number>::size();
-  ObserverPointer<const DoFHandler<dim>>           dof_handler;
-  internal::MatrixFreeFunctions::ShapeInfo<Number> shape_info;
+  ObserverPointer<const DoFHandler<dim>>                           dof_handler;
   std::vector<dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes>> dof_indices;
   std::vector<dealii::ndarray<unsigned int, 2 * dim, n_lanes>>     neighbor_cells;
   std::vector<dealii::ndarray<unsigned int, 2 * dim, n_lanes>>     mpi_exchange_data_on_faces;
@@ -968,8 +1008,14 @@ private:
   Number factor_mass;
   Number factor_laplace;
 
+  internal::MatrixFreeFunctions::ShapeInfo<Number>  shape_info;
   Extruded::MappingInfo<dim, Number>                mapping_info;
   std::array<std::vector<std::array<Number, 2>>, 2> interpolate_quad_to_boundary;
+
+  std::vector<internal::MatrixFreeFunctions::ShapeInfo<Number>> auxiliary_shape_infos;
+  std::vector<Extruded::MappingInfo<dim, Number>>               auxiliary_mapping_info;
+  std::vector<std::array<std::vector<std::array<Number, 2>>, 2>>
+    auxiliary_interpolate_quad_to_boundary;
 
   AlignedVector<std::array<VectorizedArray<Number>, 2 * dim>> penalty_parameters;
 
