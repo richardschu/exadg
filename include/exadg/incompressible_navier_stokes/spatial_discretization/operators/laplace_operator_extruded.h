@@ -59,6 +59,7 @@ compute_cell_lapl(const internal::MatrixFreeFunctions::UnivariateShapeData<Numbe
   for(unsigned int v = 0; v < n_lanes; ++v)
     shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
 
+  const Number h_z         = mapping_info.h_z;
   const Number h_z_inverse = mapping_info.h_z_inverse;
 
   constexpr unsigned int nn         = n_q_points_1d;
@@ -94,7 +95,7 @@ compute_cell_lapl(const internal::MatrixFreeFunctions::UnivariateShapeData<Numbe
     {
       Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy;
       vectorized_load_and_transpose(4,
-                                    &mapping_info.jacobians_xy[q1][0][0],
+                                    &mapping_info.inv_jacobians_xy[q1][0][0],
                                     shifted_data_indices.data(),
                                     &inv_jac_xy[0][0]);
       VectorizedArray<Number> JxW_xy;
@@ -141,7 +142,7 @@ compute_cell_lapl(const internal::MatrixFreeFunctions::UnivariateShapeData<Numbe
             grad_real[d] = inv_jac_xy[d][0] * grad[0] + inv_jac_xy[d][1] * grad[1];
           grad_real[2] = h_z_inverse * grad[2];
 
-          const Number                  weight_h_z   = mapping_info.quad_weights_h_z[qz];
+          const Number                  weight_h_z   = mapping_info.quad_weights_z[qz] * h_z;
           const VectorizedArray<Number> factor_deriv = (JxW_xy * factor_lapl) * weight_h_z;
           const VectorizedArray<Number> factor_ma    = (JxW_xy * factor_mass) * weight_h_z;
 
@@ -2563,6 +2564,7 @@ private:
       }
 
     const Number                  h_z_inverse = mapping_info.h_z_inverse;
+    const Number                  h_z         = mapping_info.h_z;
     const VectorizedArray<Number> sigmaF      = penalty_parameters[cell][f] * factor_lapl;
 
     if(face_direction < 2)
@@ -2620,7 +2622,7 @@ private:
 
 
           const VectorizedArray<Number> integrate_factor =
-            JxW_xy * mapping_info.quad_weights_h_z[qz];
+            (JxW_xy * h_z) * mapping_info.quad_weights_z[qz];
 
           // physical terms
           const VectorizedArray<Number> effective_factor =
@@ -2861,7 +2863,7 @@ private:
     face_flux_buffer_index.resize(dof_indices.size());
     all_left_face_fluxes_from_buffer.resize(dof_indices.size());
     const unsigned int n_data_per_face =
-      Utilities::pow(mapping_info.quad_weights_h_z.size(), dim - 1) * 2;
+      Utilities::pow(mapping_info.quad_weights_z.size(), dim - 1) * 2;
 
     constexpr unsigned int     long_range_start = 16;
     std::vector<std::uint64_t> face_storage(1);

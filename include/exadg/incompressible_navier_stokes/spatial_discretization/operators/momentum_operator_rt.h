@@ -556,196 +556,15 @@ public:
       export_values.resize_fast(send_data_cell_index.size() * data_per_face);
     }
 
+    mapping_info.reinit(mapping, quadrature, matrix_free);
+
     compute_vector_access_pattern();
 
-    FloatingPointComparator<double> comparator(dof_handler.get_triangulation().begin()->diameter() *
-                                               1e-10);
-    std::map<Point<2>, std::array<int, 3>, FloatingPointComparator<double>> unique_cells(
-      comparator);
-
-    std::vector<unsigned int> geometry_index(dof_handler.get_triangulation().n_active_cells(),
-                                             numbers::invalid_unsigned_int);
-    // collect possible compression of Jacobian data due to extrusion in z
-    // direction by checking the position of the first cell vertex in the xy
-    // plane. First check locally owned cells in exactly the order matrix-free
-    // loops visit them, then for ghosts to get the complete face data also in
-    // parallel computations
-    for(unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
-      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(c); ++v)
-      {
-        const auto cell     = matrix_free.get_cell_iterator(c, v);
-        const auto vertices = mapping.get_vertices(cell);
-        Point<2>   p(vertices[0][0], vertices[0][1]);
-        const auto position = unique_cells.find(p);
-        if(position == unique_cells.end())
-        {
-          geometry_index[cell->active_cell_index()] = unique_cells.size();
-          unique_cells.insert(std::make_pair(
-            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
-        }
-        else
-          geometry_index[cell->active_cell_index()] = position->second[0];
-      }
-    for(const auto & cell : dof_handler.active_cell_iterators())
-      if(cell->is_ghost())
-      {
-        const auto vertices = mapping.get_vertices(cell);
-        Point<2>   p(vertices[0][0], vertices[0][1]);
-        const auto position = unique_cells.find(p);
-        if(position == unique_cells.end())
-        {
-          geometry_index[cell->active_cell_index()] = unique_cells.size();
-          unique_cells.insert(std::make_pair(
-            p, std::array<int, 3>{{(int)unique_cells.size(), cell->level(), cell->index()}}));
-        }
-        else
-          geometry_index[cell->active_cell_index()] = position->second[0];
-      }
-
-    const unsigned int n_q_points_1d = matrix_free.get_shape_info().data[0].n_q_points_1d;
-    const unsigned int n_q_points_2d = Utilities::pow(n_q_points_1d, 2);
-    mapping_data_index.resize(matrix_free.n_cell_batches());
-    face_mapping_data_index.resize(matrix_free.n_cell_batches());
-    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
     {
-      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
-      {
-        const auto dcell            = matrix_free.get_cell_iterator(cell, v);
-        mapping_data_index[cell][v] = geometry_index[dcell->active_cell_index()] * n_q_points_2d;
-        for(unsigned int f = 0; f < 4; ++f)
-        {
-          face_mapping_data_index[cell][f][0][v] =
-            (geometry_index[dcell->active_cell_index()] * 4 + f) * n_q_points_1d;
-          const bool at_boundary           = dcell->at_boundary(f);
-          const bool has_periodic_neighbor = at_boundary && dcell->has_periodic_neighbor(f);
-          if(at_boundary == false || has_periodic_neighbor)
-          {
-            const auto neighbor =
-              has_periodic_neighbor ? dcell->periodic_neighbor(f) : dcell->neighbor(f);
-            const unsigned int neighbor_face_idx = has_periodic_neighbor ?
-                                                     dcell->periodic_neighbor_face_no(f) :
-                                                     dcell->neighbor_face_no(f);
-            face_mapping_data_index[cell][f][1][v] =
-              (geometry_index[neighbor->active_cell_index()] * 4 + neighbor_face_idx) *
-              n_q_points_1d;
-          }
-          else
-            face_mapping_data_index[cell][f][1][v] = face_mapping_data_index[cell][f][0][v];
-        }
-      }
-      for(unsigned int v = matrix_free.n_active_entries_per_cell_batch(cell); v < n_lanes; ++v)
-        for(unsigned int f = 0; f < 4; ++f)
-          for(unsigned int s = 0; s < 2; ++s)
-            face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
-    }
-
-    QGauss<1>               quadrature_1d(n_q_points_1d);
-    Quadrature<dim - 1>     face_quadrature(quadrature_1d);
-    std::vector<Point<dim>> points(face_quadrature.size());
-    for(unsigned int i = 0; i < face_quadrature.size(); ++i)
-      for(unsigned int d = 0; d < 2; ++d)
-        points[i][d] = face_quadrature.point(i)[d];
-
-    FE_Nothing<dim>   dummy_fe;
-    FEValues<dim>     fe_values(mapping,
-                            dummy_fe,
-                            Quadrature<dim>(points),
-                            update_jacobians | update_jacobian_grads);
-    FEFaceValues<dim> fe_face_values(mapping,
-                                     dummy_fe,
-                                     face_quadrature,
-                                     update_jacobians | update_JxW_values | update_jacobian_grads |
-                                       update_normal_vectors);
-
-    jacobians_xy.resize(n_q_points_2d * unique_cells.size());
-    jacobian_grads.resize(n_q_points_2d * unique_cells.size());
-    face_jacobians_xy.resize(4 * n_q_points_1d * unique_cells.size());
-    face_jacobian_grads.resize(4 * n_q_points_1d * unique_cells.size());
-    face_normal_vector_xy.resize(4 * n_q_points_1d * unique_cells.size());
-
-    ip_penalty_factors.resize(unique_cells.size());
-    for(const auto & [_, index] : unique_cells)
-    {
-      const typename Triangulation<dim>::cell_iterator cell(&dof_handler.get_triangulation(),
-                                                            index[1],
-                                                            index[2]);
-      fe_values.reinit(cell);
-      AssertDimension(geometry_index[cell->active_cell_index()], index[0]);
-      double cell_volume = 0;
-      for(unsigned int q = 0; q < n_q_points_2d; ++q)
-      {
-        const DerivativeForm<1, dim, dim> jacobian = fe_values.jacobian(q);
-        cell_volume += jacobian.determinant() * face_quadrature.weight(q);
-        const unsigned int data_idx = index[0] * n_q_points_2d + q;
-        if(dim == 3)
-        {
-          h_z         = jacobian[2][2];
-          h_z_inverse = 1. / h_z;
-        }
-        for(unsigned int d = 0; d < 2; ++d)
-          for(unsigned int e = 0; e < 2; ++e)
-            jacobians_xy[data_idx][d][e] = jacobian[d][e];
-        const auto jac_grad = fe_values.jacobian_grad(q);
-        for(unsigned int d = 0; d < 2; ++d)
-        {
-          jacobian_grads[data_idx][0][d] = jac_grad[d][0][0];
-          jacobian_grads[data_idx][1][d] = jac_grad[d][1][1];
-          jacobian_grads[data_idx][2][d] = jac_grad[d][0][1];
-        }
-      }
-
-      double surface_area = 0;
-      for(unsigned int face = 0; face < 4; ++face)
-      {
-        fe_face_values.reinit(cell, face);
-        double face_factor =
-          (cell->at_boundary(face) && !cell->has_periodic_neighbor(face)) ? 1. : 0.5;
-        for(unsigned int q = 0; q < face_quadrature.size(); ++q)
-          surface_area += face_factor * fe_face_values.JxW(q);
-
-        for(unsigned int qx = 0; qx < n_q_points_1d; ++qx)
-        {
-          // take switched coordinates xz on y faces into account
-          const unsigned int q        = (face < 2 || dim == 2) ? qx : qx * n_q_points_1d;
-          const unsigned int data_idx = (index[0] * 4 + face) * n_q_points_1d + qx;
-          const auto         jac      = fe_face_values.jacobian(q);
-          for(unsigned int d = 0; d < 2; ++d)
-            for(unsigned int e = 0; e < 2; ++e)
-              face_jacobians_xy[data_idx][d][e] = jac[d][e];
-          const auto jac_grad = fe_face_values.jacobian_grad(q);
-          for(unsigned int d = 0; d < 2; ++d)
-          {
-            face_jacobian_grads[data_idx][0][d] = jac_grad[d][0][0];
-            face_jacobian_grads[data_idx][1][d] = jac_grad[d][1][1];
-            face_jacobian_grads[data_idx][2][d] = jac_grad[d][0][1];
-            face_normal_vector_xy[data_idx][d]  = fe_face_values.normal_vector(q)[d];
-          }
-        }
-      }
-      // take the two faces in z direction into account; they are always in
-      // periodic direction so do not check for boundary
-      if(dim == 3)
-        surface_area += 2 * 0.5 * cell_volume / h_z;
-
-      ip_penalty_factors[index[0]] = surface_area / cell_volume;
-    }
-
-    {
-      quad_weights_xy.resize(n_q_points_2d);
-      QGauss<2> quad(n_q_points_1d);
-      for(unsigned int q = 0; q < quad.size(); ++q)
-        quad_weights_xy[q] = quad.weight(q);
-    }
-    {
-      quad_weights_z.resize(n_q_points_1d);
-      QGauss<1> quad(n_q_points_1d);
-      for(unsigned int q = 0; q < quad.size(); ++q)
-        quad_weights_z[q] = quad.weight(q);
-
       std::vector<Polynomials::Polynomial<double>> basis =
-        Polynomials::generate_complete_Lagrange_basis(quad.get_points());
-      interpolate_quad_to_boundary[0].resize(n_q_points_1d);
-      interpolate_quad_to_boundary[1].resize(n_q_points_1d);
+        Polynomials::generate_complete_Lagrange_basis(quadrature.get_points());
+      interpolate_quad_to_boundary[0].resize(basis.size());
+      interpolate_quad_to_boundary[1].resize(basis.size());
       std::vector<double> val_and_der(2);
       for(unsigned int i = 0; i < basis.size(); ++i)
       {
@@ -906,19 +725,23 @@ public:
       {
         for(unsigned int face = 0; face < 4; ++face)
         {
-          const unsigned int idx = face_mapping_data_index[cell][face][0][v] / n_q_points_1d / 4;
-          AssertThrow(idx < ip_penalty_factors.size(),
-                      ExcIndexRange(0, ip_penalty_factors.size(), idx));
+          const unsigned int idx =
+            mapping_info.face_mapping_data_index[cell][face][0][v] / n_q_points_1d / 4;
+          AssertThrow(idx < mapping_info.ip_penalty_factors.size(),
+                      ExcIndexRange(0, mapping_info.ip_penalty_factors.size(), idx));
           const unsigned int neigh_idx =
-            face_mapping_data_index[cell][face][1][v] / n_q_points_1d / 4;
-          AssertThrow(neigh_idx < ip_penalty_factors.size(),
-                      ExcIndexRange(0, ip_penalty_factors.size(), neigh_idx));
+            mapping_info.face_mapping_data_index[cell][face][1][v] / n_q_points_1d / 4;
+          AssertThrow(neigh_idx < mapping_info.ip_penalty_factors.size(),
+                      ExcIndexRange(0, mapping_info.ip_penalty_factors.size(), neigh_idx));
           this->penalty_parameters[cell][face][v] =
-            std::max(ip_penalty_factors[idx], ip_penalty_factors[neigh_idx]) * factor;
+            std::max(mapping_info.ip_penalty_factors[idx],
+                     mapping_info.ip_penalty_factors[neigh_idx]) *
+            factor;
         }
         for(unsigned int face = 4; face < 2 * dim; ++face)
           this->penalty_parameters[cell][face][v] =
-            ip_penalty_factors[mapping_data_index[cell][v] / Utilities::pow(n_q_points_1d, 2)] *
+            mapping_info.ip_penalty_factors[mapping_info.mapping_data_index[cell][v] /
+                                            Utilities::pow(n_q_points_1d, 2)] *
             factor;
       }
   }
@@ -1111,15 +934,7 @@ public:
            MemoryConsumption::memory_consumption(import_values) +
            MemoryConsumption::memory_consumption(export_values) +
            MemoryConsumption::memory_consumption(all_owned_faces) +
-           MemoryConsumption::memory_consumption(mapping_data_index) +
-           MemoryConsumption::memory_consumption(jacobians_xy) +
-           MemoryConsumption::memory_consumption(jacobian_grads) +
-           MemoryConsumption::memory_consumption(face_mapping_data_index) +
-           MemoryConsumption::memory_consumption(face_normal_vector_xy) +
-           MemoryConsumption::memory_consumption(face_jacobians_xy) +
-           MemoryConsumption::memory_consumption(face_jacobian_grads) +
-           MemoryConsumption::memory_consumption(quad_weights_xy) +
-           MemoryConsumption::memory_consumption(quad_weights_z) +
+           mapping_info.memory_consumption() +
            MemoryConsumption::memory_consumption(interpolate_quad_to_boundary) +
            MemoryConsumption::memory_consumption(send_data_process) +
            MemoryConsumption::memory_consumption(send_data_cell_index) +
@@ -1153,20 +968,9 @@ private:
   Number factor_mass;
   Number factor_laplace;
 
-  Number                                            h_z;
-  Number                                            h_z_inverse;
-  std::vector<std::array<unsigned int, n_lanes>>    mapping_data_index;
-  AlignedVector<Tensor<2, 2, Number>>               jacobians_xy;
-  AlignedVector<Tensor<1, 3, Tensor<1, 2, Number>>> jacobian_grads;
-  std::vector<ndarray<unsigned int, 4, 2, n_lanes>> face_mapping_data_index;
-  AlignedVector<Tensor<1, 2, Number>>               face_normal_vector_xy;
-  AlignedVector<Tensor<2, 2, Number>>               face_jacobians_xy;
-  AlignedVector<Tensor<1, 3, Tensor<1, 2, Number>>> face_jacobian_grads;
-  std::vector<Number>                               quad_weights_xy;
-  std::vector<Number>                               quad_weights_z;
+  Extruded::MappingInfo<dim, Number>                mapping_info;
   std::array<std::vector<std::array<Number, 2>>, 2> interpolate_quad_to_boundary;
 
-  std::vector<Number>                                         ip_penalty_factors;
   AlignedVector<std::array<VectorizedArray<Number>, 2 * dim>> penalty_parameters;
 
   std::vector<std::pair<unsigned int, unsigned int>> send_data_process;
@@ -2726,13 +2530,15 @@ private:
 
     std::array<unsigned int, n_lanes> shifted_data_indices;
     for(unsigned int v = 0; v < n_lanes; ++v)
-      shifted_data_indices[v] = mapping_data_index[cell][v] * 4;
+      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
     std::array<unsigned int, n_lanes> shifted_data_indices_gr;
     for(unsigned int v = 0; v < n_lanes; ++v)
-      shifted_data_indices_gr[v] = mapping_data_index[cell][v] * 6;
+      shifted_data_indices_gr[v] = mapping_info.mapping_data_index[cell][v] * 6;
 
     const Number factor_mass = this->factor_mass;
     const Number factor_lapl = this->factor_laplace;
+    const Number h_z         = mapping_info.h_z;
+    const Number h_z_inverse = mapping_info.h_z_inverse;
 
     constexpr unsigned int nn         = n_q_points_1d;
     const Number *         shape_grad = shape_data[0].shape_gradients_collocation_eo.data();
@@ -2771,14 +2577,14 @@ private:
       {
         Tensor<2, 2, VectorizedArray<Number>> jac_xy;
         vectorized_load_and_transpose(4,
-                                      &jacobians_xy[q1][0][0],
+                                      &mapping_info.jacobians_xy[q1][0][0],
                                       shifted_data_indices.data(),
                                       &jac_xy[0][0]);
         const VectorizedArray<Number>               inv_jac_det = Number(1.0) / determinant(jac_xy);
         const Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy  = transpose(invert(jac_xy));
         Tensor<1, 3, Tensor<1, 2, VectorizedArray<Number>>> jac_grad_xy;
         vectorized_load_and_transpose(6,
-                                      &jacobian_grads[q1][0][0],
+                                      &mapping_info.jacobian_grads[q1][0][0],
                                       shifted_data_indices_gr.data(),
                                       &jac_grad_xy[0][0]);
 
@@ -2833,7 +2639,7 @@ private:
 
               // multiply by det(J^{-1}) necessary in all
               // contributions above and the factors in the equation
-              grad_real[d][e] *= quad_weights_xy[q1] * factor_lapl * inv_jac_det;
+              grad_real[d][e] *= mapping_info.quad_weights_xy[q1] * factor_lapl * inv_jac_det;
             }
           }
 
@@ -2867,9 +2673,9 @@ private:
           }
 
           out_values[q1 * dim] =
-            value_tmp[0] + s0 * (inv_jac_det * factor_mass * quad_weights_xy[q1]);
+            value_tmp[0] + s0 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
           out_values[q1 * dim + 1] =
-            value_tmp[1] + s1 * (inv_jac_det * factor_mass * quad_weights_xy[q1]);
+            value_tmp[1] + s1 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
         }
         else // now to dim == 3
         {
@@ -2903,14 +2709,15 @@ private:
             val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
             val_real[2] = h_z * val[2];
 
-            const Number weight_z = quad_weights_z[qz];
+            const Number weight_z = mapping_info.quad_weights_z[qz];
             // need factors without h_z_inverse in code below because
             // it cancels with h_z
             const VectorizedArray<Number> factor_deriv_z =
-              (quad_weights_xy[q1] * inv_jac_det * factor_lapl) * weight_z;
+              (mapping_info.quad_weights_xy[q1] * inv_jac_det * factor_lapl) * weight_z;
             const VectorizedArray<Number> factor_deriv = h_z_inverse * factor_deriv_z;
             const VectorizedArray<Number> factor_ma =
-              (quad_weights_xy[q1] * h_z_inverse * inv_jac_det * factor_mass) * weight_z;
+              (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * factor_mass) *
+              weight_z;
 
             VectorizedArray<Number> grad_real[dim][dim];
             for(unsigned int d = 0; d < 2; ++d)
@@ -3055,10 +2862,11 @@ private:
 
     std::array<unsigned int, n_lanes> shifted_data_indices;
     for(unsigned int v = 0; v < n_lanes; ++v)
-      shifted_data_indices[v] = mapping_data_index[cell][v] * 4;
+      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
 
     const Number factor_mass = this->factor_mass;
-    const Number h_z_inverse = this->h_z_inverse;
+    const Number h_z_inverse = mapping_info.h_z_inverse;
+    const Number h_z         = mapping_info.h_z;
 
     constexpr unsigned int nn = n_q_points_1d;
 
@@ -3068,7 +2876,7 @@ private:
       {
         Tensor<2, 2, VectorizedArray<Number>> jac_xy;
         vectorized_load_and_transpose(4,
-                                      &jacobians_xy[q1][0][0],
+                                      &mapping_info.jacobians_xy[q1][0][0],
                                       shifted_data_indices.data(),
                                       &jac_xy[0][0]);
         const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
@@ -3081,8 +2889,10 @@ private:
           const VectorizedArray<Number> s0     = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
           const VectorizedArray<Number> s1     = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
 
-          out_values[q1 * dim]     = s0 * (inv_jac_det * factor_mass * quad_weights_xy[q1]);
-          out_values[q1 * dim + 1] = s1 * (inv_jac_det * factor_mass * quad_weights_xy[q1]);
+          out_values[q1 * dim] =
+            s0 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
+          out_values[q1 * dim + 1] =
+            s1 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
         }
         else // now to dim == 3
         {
@@ -3097,11 +2907,12 @@ private:
             val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
             val_real[2] = h_z * val[2];
 
-            const Number weight_z = quad_weights_z[qz];
+            const Number weight_z = mapping_info.quad_weights_z[qz];
             // need factors without h_z_inverse in code below because
             // it cancels with h_z
             const VectorizedArray<Number> factor_ma =
-              (quad_weights_xy[q1] * h_z_inverse * inv_jac_det * factor_mass) * weight_z;
+              (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * factor_mass) *
+              weight_z;
 
             // For the test function part, the Jacobian determinant
             // that is part of the integration factor cancels with the
@@ -3143,8 +2954,8 @@ private:
 
     constexpr unsigned int n_q_points_1d = degree + 1;
     constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
-    AssertThrow(n_q_points_2d == quad_weights_xy.size(),
-                ExcDimensionMismatch(n_q_points_2d, quad_weights_xy.size()));
+    AssertThrow(n_q_points_2d == mapping_info.quad_weights_xy.size(),
+                ExcDimensionMismatch(n_q_points_2d, mapping_info.quad_weights_xy.size()));
     constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
 
     ndarray<unsigned int, 2 * dim + 1, n_lanes> dof_indices_neighbor;
@@ -3345,8 +3156,8 @@ private:
         }
       }
 
-    const Number                  h_z         = this->h_z;
-    const Number                  h_z_inverse = this->h_z_inverse;
+    const Number                  h_z         = mapping_info.h_z;
+    const Number                  h_z_inverse = mapping_info.h_z_inverse;
     const VectorizedArray<Number> sigmaF      = penalty_parameters[cell][f] * factor_lapl;
 
     if(face_direction < 2)
@@ -3358,11 +3169,11 @@ private:
       std::array<unsigned int, n_lanes> shifted_data_indices_gr_neigh;
       for(unsigned int v = 0; v < n_lanes; ++v)
       {
-        const unsigned int idx           = face_mapping_data_index[cell][f][0][v];
+        const unsigned int idx           = mapping_info.face_mapping_data_index[cell][f][0][v];
         shifted_data_indices[v]          = idx * 4;
         shifted_data_indices_gr[v]       = idx * 6;
         shifted_data_indices_norm[v]     = idx * 2;
-        const unsigned int neighbor_idx  = face_mapping_data_index[cell][f][1][v];
+        const unsigned int neighbor_idx  = mapping_info.face_mapping_data_index[cell][f][1][v];
         shifted_data_indices_neigh[v]    = neighbor_idx * 4;
         shifted_data_indices_gr_neigh[v] = neighbor_idx * 6;
       }
@@ -3371,11 +3182,11 @@ private:
       {
         Tensor<2, 2, VectorizedArray<Number>> jac_xy[2];
         vectorized_load_and_transpose(4,
-                                      &face_jacobians_xy[q1][0][0],
+                                      &mapping_info.face_jacobians_xy[q1][0][0],
                                       shifted_data_indices.data(),
                                       &jac_xy[0][0][0]);
         vectorized_load_and_transpose(4,
-                                      &face_jacobians_xy[q1][0][0],
+                                      &mapping_info.face_jacobians_xy[q1][0][0],
                                       shifted_data_indices_neigh.data(),
                                       &jac_xy[1][0][0]);
 
@@ -3390,18 +3201,18 @@ private:
 
         Tensor<1, 3, Tensor<1, 2, VectorizedArray<Number>>> jac_grad_xy[2];
         vectorized_load_and_transpose(6,
-                                      &face_jacobian_grads[q1][0][0],
+                                      &mapping_info.face_jacobian_grads[q1][0][0],
                                       shifted_data_indices_gr.data(),
                                       &jac_grad_xy[0][0][0]);
         if(compute_exterior)
           vectorized_load_and_transpose(6,
-                                        &face_jacobian_grads[q1][0][0],
+                                        &mapping_info.face_jacobian_grads[q1][0][0],
                                         shifted_data_indices_gr_neigh.data(),
                                         &jac_grad_xy[1][0][0]);
 
         Tensor<1, 2, VectorizedArray<Number>> normal;
         vectorized_load_and_transpose(2,
-                                      &face_normal_vector_xy[q1][0],
+                                      &mapping_info.face_normal_vector_xy[q1][0],
                                       shifted_data_indices_norm.data(),
                                       &normal[0]);
 
@@ -3490,7 +3301,7 @@ private:
           // the length element h_z cancels with h_z_inverse of
           // determinant in Piola transformation for test function
           const VectorizedArray<Number> integrate_factor =
-            (quad_weights_z[q1] * area_element_xy) * quad_weights_z[qz];
+            (mapping_info.quad_weights_z[q1] * area_element_xy) * mapping_info.quad_weights_z[qz];
 
           // physical terms
           const VectorizedArray<Number> effective_factor =
@@ -3551,7 +3362,7 @@ private:
     {
       std::array<unsigned int, n_lanes> shifted_data_indices;
       for(unsigned int v = 0; v < n_lanes; ++v)
-        shifted_data_indices[v] = mapping_data_index[cell][v] * 4;
+        shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
 
       const Number normal_sign = (f % 2) ? 1 : -1;
 
@@ -3559,7 +3370,7 @@ private:
       {
         Tensor<2, 2, VectorizedArray<Number>> jac_xy;
         vectorized_load_and_transpose(4,
-                                      &jacobians_xy[q][0][0],
+                                      &mapping_info.jacobians_xy[q][0][0],
                                       shifted_data_indices.data(),
                                       &jac_xy[0][0]);
         const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
@@ -3592,7 +3403,8 @@ private:
           val_real[s][2] = inv_jac_det * val[s][2];
         }
 
-        const VectorizedArray<Number> integrate_factor = quad_weights_xy[q] * determinant(jac_xy);
+        const VectorizedArray<Number> integrate_factor =
+          mapping_info.quad_weights_xy[q] * determinant(jac_xy);
 
         // physical terms
         const VectorizedArray<Number> effective_factor =
@@ -3823,7 +3635,8 @@ private:
 
     face_flux_buffer_index.resize(dof_indices.size());
     all_left_face_fluxes_from_buffer.resize(dof_indices.size());
-    const unsigned int n_data_per_face = Utilities::pow(quad_weights_z.size(), dim - 1) * 2 * dim;
+    const unsigned int n_data_per_face =
+      Utilities::pow(mapping_info.quad_weights_z.size(), dim - 1) * 2 * dim;
 
     constexpr unsigned int     long_range_start = 16;
     std::vector<std::uint64_t> face_storage(1);

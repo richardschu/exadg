@@ -185,22 +185,40 @@ struct MappingInfo
             face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
     }
 
-    Quadrature<dim - 1>     face_quadrature(quadrature_1d);
-    Quadrature<2>           quadrature_2d(quadrature_1d);
+    quad_weights_z.resize(n_q_points_1d);
+    for(unsigned int q = 0; q < n_q_points_1d; ++q)
+      quad_weights_z[q] = quadrature_1d.weight(q);
+
+    Quadrature<dim - 1> face_quadrature(quadrature_1d);
+    Quadrature<2>       quadrature_2d(quadrature_1d);
+    quad_weights_xy.resize(quadrature_2d.size());
+    for(unsigned int q = 0; q < quadrature_2d.size(); ++q)
+      quad_weights_xy[q] = quadrature_2d.weight(q);
+
     std::vector<Point<dim>> points(quadrature_2d.size());
     for(unsigned int i = 0; i < quadrature_2d.size(); ++i)
       for(unsigned int d = 0; d < 2; ++d)
         points[i][d] = quadrature_2d.point(i)[d];
 
     FE_Nothing<dim>   dummy_fe;
-    FEValues<dim>     fe_values(mapping, dummy_fe, Quadrature<dim>(points), update_jacobians);
+    FEValues<dim>     fe_values(mapping,
+                            dummy_fe,
+                            Quadrature<dim>(points),
+                            update_jacobians | update_jacobian_grads);
     FEFaceValues<dim> fe_face_values(mapping,
                                      dummy_fe,
                                      face_quadrature,
-                                     update_jacobians | update_JxW_values | update_normal_vectors);
+                                     update_jacobians | update_JxW_values | update_normal_vectors |
+                                       update_jacobian_grads);
 
     jacobians_xy.resize(n_q_points_2d * unique_cells.size());
+    inv_jacobians_xy.resize(n_q_points_2d * unique_cells.size());
     cell_JxW_xy.resize(n_q_points_2d * unique_cells.size());
+    jacobian_grads.resize(n_q_points_2d * unique_cells.size());
+
+    face_jacobians_xy.resize(4 * n_q_points_1d * unique_cells.size());
+    face_jacobian_grads.resize(4 * n_q_points_1d * unique_cells.size());
+    face_normal_vector_xy.resize(4 * n_q_points_1d * unique_cells.size());
     face_jxn_xy.resize(4 * n_q_points_1d * unique_cells.size());
     face_JxW_xy.resize(4 * n_q_points_1d * unique_cells.size());
 
@@ -229,7 +247,18 @@ struct MappingInfo
         }
         for(unsigned int d = 0; d < 2; ++d)
           for(unsigned int e = 0; e < 2; ++e)
-            jacobians_xy[data_idx][d][e] = inv_jacobian[d][e];
+          {
+            jacobians_xy[data_idx][d][e]     = jacobian[d][e];
+            inv_jacobians_xy[data_idx][d][e] = inv_jacobian[d][e];
+          }
+
+        const auto jac_grad = fe_values.jacobian_grad(q);
+        for(unsigned int d = 0; d < 2; ++d)
+        {
+          jacobian_grads[data_idx][0][d] = jac_grad[d][0][0];
+          jacobian_grads[data_idx][1][d] = jac_grad[d][1][1];
+          jacobian_grads[data_idx][2][d] = jac_grad[d][0][1];
+        }
       }
 
       double surface_area = 0;
@@ -254,6 +283,17 @@ struct MappingInfo
           face_JxW_xy[data_idx] = std::sqrt(jac[0][1 - face / 2] * jac[0][1 - face / 2] +
                                             jac[1][1 - face / 2] * jac[1][1 - face / 2]) *
                                   quadrature_1d.weight(qx);
+          for(unsigned int d = 0; d < 2; ++d)
+            for(unsigned int e = 0; e < 2; ++e)
+              face_jacobians_xy[data_idx][d][e] = jac[d][e];
+          const auto jac_grad = fe_face_values.jacobian_grad(q);
+          for(unsigned int d = 0; d < 2; ++d)
+          {
+            face_jacobian_grads[data_idx][0][d] = jac_grad[d][0][0];
+            face_jacobian_grads[data_idx][1][d] = jac_grad[d][1][1];
+            face_jacobian_grads[data_idx][2][d] = jac_grad[d][0][1];
+            face_normal_vector_xy[data_idx][d]  = fe_face_values.normal_vector(q)[d];
+          }
         }
       }
       // take the two faces in z direction into account; they are always in
@@ -263,10 +303,6 @@ struct MappingInfo
 
       ip_penalty_factors[index[0]] = surface_area / cell_volume;
     }
-    quad_weights_h_z.resize(n_q_points_1d);
-    QGauss<1> quad(n_q_points_1d);
-    for(unsigned int q = 0; q < quad.size(); ++q)
-      quad_weights_h_z[q] = quad.weight(q) * h_z;
   }
 
   std::size_t
@@ -274,23 +310,34 @@ struct MappingInfo
   {
     return MemoryConsumption::memory_consumption(mapping_data_index) +
            MemoryConsumption::memory_consumption(jacobians_xy) +
+           MemoryConsumption::memory_consumption(inv_jacobians_xy) +
+           MemoryConsumption::memory_consumption(jacobian_grads) +
            MemoryConsumption::memory_consumption(cell_JxW_xy) +
            MemoryConsumption::memory_consumption(face_mapping_data_index) +
+           MemoryConsumption::memory_consumption(face_jacobians_xy) +
+           MemoryConsumption::memory_consumption(face_jacobian_grads) +
            MemoryConsumption::memory_consumption(face_jxn_xy) +
            MemoryConsumption::memory_consumption(face_JxW_xy) +
-           MemoryConsumption::memory_consumption(quad_weights_h_z) +
-           MemoryConsumption::memory_consumption(ip_penalty_factors);
+           MemoryConsumption::memory_consumption(quad_weights_xy) +
+           MemoryConsumption::memory_consumption(quad_weights_z) +
+           MemoryConsumption::memory_consumption(ip_penalty_factors) + sizeof(this);
   }
 
   Number                                            h_z;
   Number                                            h_z_inverse;
   std::vector<std::array<unsigned int, n_lanes>>    mapping_data_index;
   AlignedVector<Tensor<2, 2, Number>>               jacobians_xy;
+  AlignedVector<Tensor<2, 2, Number>>               inv_jacobians_xy;
   AlignedVector<Number>                             cell_JxW_xy;
+  AlignedVector<Tensor<1, 3, Tensor<1, 2, Number>>> jacobian_grads;
   std::vector<ndarray<unsigned int, 4, 2, n_lanes>> face_mapping_data_index;
+  AlignedVector<Tensor<1, 2, Number>>               face_normal_vector_xy;
+  AlignedVector<Tensor<2, 2, Number>>               face_jacobians_xy;
+  AlignedVector<Tensor<1, 3, Tensor<1, 2, Number>>> face_jacobian_grads;
   AlignedVector<Tensor<1, 2, Number>>               face_jxn_xy;
   AlignedVector<Number>                             face_JxW_xy;
-  std::vector<Number>                               quad_weights_h_z;
+  std::vector<Number>                               quad_weights_xy;
+  std::vector<Number>                               quad_weights_z;
   std::vector<Number>                               ip_penalty_factors;
 };
 
