@@ -99,27 +99,32 @@ struct MappingInfo
   static constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
 
   void
-  reinit(const Mapping<dim> &            mapping,
-         const Quadrature<1> &           quadrature_1d,
-         const MatrixFree<dim, Number> & matrix_free)
+  reinit(const Mapping<dim> &                                         mapping,
+         const Quadrature<1> &                                        quadrature_1d,
+         const Triangulation<dim> &                                   triangulation,
+         const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> cell_level_index)
   {
-    const DoFHandler<dim> &         dof_handler = matrix_free.get_dof_handler();
-    FloatingPointComparator<double> comparator(dof_handler.get_triangulation().begin()->diameter() *
-                                               1e-10);
+    underlying_quadrature = quadrature_1d;
+
+    FloatingPointComparator<double> comparator(triangulation.begin()->diameter() * 1e-10);
     std::map<Point<2>, std::array<int, 3>, FloatingPointComparator<double>> unique_cells(
       comparator);
 
-    std::vector<unsigned int> geometry_index(dof_handler.get_triangulation().n_active_cells(),
+    std::vector<unsigned int> geometry_index(triangulation.n_active_cells(),
                                              numbers::invalid_unsigned_int);
     // collect possible compression of Jacobian data due to extrusion in z
     // direction by checking the position of the first cell vertex in the xy
     // plane. First check locally owned cells in exactly the order matrix-free
     // loops visit them, then for ghosts to get the complete face data also in
     // parallel computations
-    for(unsigned int c = 0; c < matrix_free.n_cell_batches(); ++c)
-      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(c); ++v)
+    for(unsigned int c = 0; c < cell_level_index.size(); ++c)
+      for(unsigned int v = 0;
+          v < n_lanes && cell_level_index[c][v][0] != numbers::invalid_unsigned_int;
+          ++v)
       {
-        const auto cell     = matrix_free.get_cell_iterator(c, v);
+        const typename Triangulation<dim>::active_cell_iterator cell(&triangulation,
+                                                                     cell_level_index[c][v][0],
+                                                                     cell_level_index[c][v][1]);
         const auto vertices = mapping.get_vertices(cell);
         Point<2>   p(vertices[0][0], vertices[0][1]);
         const auto position = unique_cells.find(p);
@@ -132,7 +137,7 @@ struct MappingInfo
         else
           geometry_index[cell->active_cell_index()] = position->second[0];
       }
-    for(const auto & cell : dof_handler.active_cell_iterators())
+    for(const auto & cell : triangulation.active_cell_iterators())
       if(cell->is_ghost())
       {
         const auto vertices = mapping.get_vertices(cell);
@@ -150,17 +155,25 @@ struct MappingInfo
 
     const unsigned int n_q_points_1d = quadrature_1d.size();
     const unsigned int n_q_points_2d = Utilities::pow(n_q_points_1d, 2);
-    mapping_data_index.resize(matrix_free.n_cell_batches());
-    face_mapping_data_index.resize(matrix_free.n_cell_batches());
-    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
-    {
-      for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
+    mapping_data_index.resize(cell_level_index.size());
+    face_mapping_data_index.resize(cell_level_index.size());
+    for(unsigned int c = 0; c < cell_level_index.size(); ++c)
+      for(unsigned int v = 0; v < n_lanes; ++v)
       {
-        const auto dcell            = matrix_free.get_cell_iterator(cell, v);
-        mapping_data_index[cell][v] = geometry_index[dcell->active_cell_index()] * n_q_points_2d;
+        if(cell_level_index[c][v][0] == numbers::invalid_unsigned_int)
+        {
+          for(unsigned int f = 0; f < 4; ++f)
+            for(unsigned int s = 0; s < 2; ++s)
+              face_mapping_data_index[c][f][s][v] = face_mapping_data_index[c][f][s][0];
+          continue;
+        }
+        const typename Triangulation<dim>::active_cell_iterator dcell(&triangulation,
+                                                                      cell_level_index[c][v][0],
+                                                                      cell_level_index[c][v][1]);
+        mapping_data_index[c][v] = geometry_index[dcell->active_cell_index()] * n_q_points_2d;
         for(unsigned int f = 0; f < 4; ++f)
         {
-          face_mapping_data_index[cell][f][0][v] =
+          face_mapping_data_index[c][f][0][v] =
             (geometry_index[dcell->active_cell_index()] * 4 + f) * n_q_points_1d;
           const bool at_boundary           = dcell->at_boundary(f);
           const bool has_periodic_neighbor = at_boundary && dcell->has_periodic_neighbor(f);
@@ -171,19 +184,14 @@ struct MappingInfo
             const unsigned int neighbor_face_idx = has_periodic_neighbor ?
                                                      dcell->periodic_neighbor_face_no(f) :
                                                      dcell->neighbor_face_no(f);
-            face_mapping_data_index[cell][f][1][v] =
+            face_mapping_data_index[c][f][1][v] =
               (geometry_index[neighbor->active_cell_index()] * 4 + neighbor_face_idx) *
               n_q_points_1d;
           }
           else
-            face_mapping_data_index[cell][f][1][v] = face_mapping_data_index[cell][f][0][v];
+            face_mapping_data_index[c][f][1][v] = face_mapping_data_index[c][f][0][v];
         }
       }
-      for(unsigned int v = matrix_free.n_active_entries_per_cell_batch(cell); v < n_lanes; ++v)
-        for(unsigned int f = 0; f < 4; ++f)
-          for(unsigned int s = 0; s < 2; ++s)
-            face_mapping_data_index[cell][f][s][v] = face_mapping_data_index[cell][f][s][0];
-    }
 
     quad_weights_z.resize(n_q_points_1d);
     for(unsigned int q = 0; q < n_q_points_1d; ++q)
@@ -225,9 +233,7 @@ struct MappingInfo
     ip_penalty_factors.resize(unique_cells.size());
     for(const auto & [_, index] : unique_cells)
     {
-      const typename Triangulation<dim>::cell_iterator cell(&dof_handler.get_triangulation(),
-                                                            index[1],
-                                                            index[2]);
+      const typename Triangulation<dim>::cell_iterator cell(&triangulation, index[1], index[2]);
       fe_values.reinit(cell);
       AssertDimension(geometry_index[cell->active_cell_index()], index[0]);
       double cell_volume = 0;
@@ -339,6 +345,7 @@ struct MappingInfo
   std::vector<Number>                               quad_weights_xy;
   std::vector<Number>                               quad_weights_z;
   std::vector<Number>                               ip_penalty_factors;
+  Quadrature<1>                                     underlying_quadrature;
 };
 
 } // namespace Extruded

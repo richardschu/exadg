@@ -202,7 +202,8 @@ template<int dim, typename Number = double>
 class LaplaceOperatorFE : public EnableObserverPointer
 {
 public:
-  using VectorType = LinearAlgebra::distributed::Vector<Number>;
+  static constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+  using VectorType                      = LinearAlgebra::distributed::Vector<Number>;
 
   LaplaceOperatorFE() = default;
 
@@ -226,8 +227,7 @@ public:
 
     const unsigned int fe_degree = fe.degree;
     compressed_dof_indices.clear();
-    constexpr unsigned int n_lanes                   = VectorizedArray<Number>::size();
-    const unsigned int     stored_dofs_per_direction = fe_degree == 1 ? 2 : 3;
+    const unsigned int stored_dofs_per_direction = fe_degree == 1 ? 2 : 3;
     compressed_dof_indices.resize(Utilities::pow(stored_dofs_per_direction, dim) * n_lanes *
                                     matrix_free.n_cell_batches(),
                                   numbers::invalid_unsigned_int);
@@ -357,7 +357,20 @@ public:
             all_indices_unconstrained[Utilities::pow(stored_dofs_per_direction, dim) * c + i] = 0;
     }
 
-    mapping_info.reinit(mapping, quadrature, matrix_free);
+    cell_level_index.resize(matrix_free.n_cell_batches());
+    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
+      for(unsigned int lane = 0; lane < n_lanes; ++lane)
+        if(lane >= matrix_free.n_active_entries_per_cell_batch(cell))
+          cell_level_index[cell][lane] = {
+            {numbers::invalid_unsigned_int, numbers::invalid_unsigned_int}};
+        else
+        {
+          const auto iter                 = matrix_free.get_cell_iterator(cell, lane);
+          cell_level_index[cell][lane][0] = iter->level();
+          cell_level_index[cell][lane][1] = iter->index();
+        }
+
+    mapping_info.reinit(mapping, quadrature, dof_handler.get_triangulation(), cell_level_index);
 
     factor_laplace = 1.0;
     factor_mass    = 0.0;
@@ -431,7 +444,6 @@ public:
                              VectorizedArray<Number> * dof_values,
                              VectorType &              dst) const
   {
-    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
     if(degree <= 2)
     {
       constexpr unsigned int dofs_per_cell = Utilities::pow(degree + 1, dim);
@@ -526,7 +538,6 @@ private:
     constexpr unsigned int  n_q_points_1d = degree + 1;
     constexpr unsigned int  n_q_points    = Utilities::pow(n_q_points_1d, dim);
     VectorizedArray<Number> quad_values[n_q_points];
-    constexpr unsigned int  n_lanes = VectorizedArray<Number>::size();
 
     const internal::MatrixFreeFunctions::UnivariateShapeData<Number> & shape_data =
       matrix_free.get_shape_info().data[0];
@@ -679,8 +690,7 @@ private:
     VectorType & vec = const_cast<VectorType &>(vec_in);
     AssertIndexRange(cell_no * dealii::Utilities::pow(3, dim) * VectorizedArray<Number>::size(),
                      compressed_indices.size());
-    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
-    const unsigned int *   cell_indices =
+    const unsigned int * cell_indices =
       compressed_indices.data() + cell_no * n_lanes * dealii::Utilities::pow(3, dim);
     const unsigned char * cell_unconstrained =
       all_indices_unconstrained.data() + cell_no * dealii::Utilities::pow(3, dim);
@@ -902,8 +912,7 @@ private:
   {
     AssertIndexRange(cell_no * dealii::Utilities::pow(3, dim) * VectorizedArray<Number>::size(),
                      compressed_indices.size());
-    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
-    const unsigned int *   cell_indices =
+    const unsigned int * cell_indices =
       compressed_indices.data() + cell_no * n_lanes * dealii::Utilities::pow(3, dim);
     const unsigned char * cell_unconstrained =
       all_indices_unconstrained.data() + cell_no * dealii::Utilities::pow(3, dim);
@@ -1116,6 +1125,8 @@ private:
   std::vector<unsigned int>              compressed_dof_indices;
   std::vector<unsigned char>             all_indices_unconstrained;
 
+  std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> cell_level_index;
+
   Extruded::MappingInfo<dim, Number> mapping_info;
 
   Number factor_laplace;
@@ -1286,7 +1297,21 @@ public:
       export_values.resize_fast(send_data_cell_index.size() * data_per_face);
     }
 
-    mapping_info.reinit(mapping, quadrature, matrix_free);
+    cell_level_index.resize(matrix_free.n_cell_batches());
+    AssertDimension(cell_level_index.size(), dof_indices.size());
+    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
+      for(unsigned int lane = 0; lane < n_lanes; ++lane)
+        if(lane >= matrix_free.n_active_entries_per_cell_batch(cell))
+          cell_level_index[cell][lane] = {
+            {numbers::invalid_unsigned_int, numbers::invalid_unsigned_int}};
+        else
+        {
+          const auto iter                 = matrix_free.get_cell_iterator(cell, lane);
+          cell_level_index[cell][lane][0] = iter->level();
+          cell_level_index[cell][lane][1] = iter->index();
+        }
+
+    mapping_info.reinit(mapping, quadrature, dof_handler.get_triangulation(), cell_level_index);
 
     compute_vector_access_pattern();
 
@@ -1308,20 +1333,6 @@ public:
     }
 
     shape_info = matrix_free.get_shape_info();
-
-    cell_level_index.resize(matrix_free.n_cell_batches());
-    AssertDimension(cell_level_index.size(), dof_indices.size());
-    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
-      for(unsigned int lane = 0; lane < n_lanes; ++lane)
-        if(lane >= matrix_free.n_active_entries_per_cell_batch(cell))
-          cell_level_index[cell][lane] = {
-            {numbers::invalid_unsigned_int, numbers::invalid_unsigned_int}};
-        else
-        {
-          const auto iter                 = matrix_free.get_cell_iterator(cell, lane);
-          cell_level_index[cell][lane][0] = iter->level();
-          cell_level_index[cell][lane][1] = iter->index();
-        }
 
     detect_dependencies_of_face_integrals();
 
@@ -1755,23 +1766,22 @@ public:
            MemoryConsumption::memory_consumption(all_left_face_fluxes_from_buffer);
   }
 
-  void
-  verify_other_cell_level_index(
-    const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> other_cell_level_index) const
+  const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> &
+  get_cell_level_index() const
   {
-    AssertThrow(cell_level_index.size() == other_cell_level_index.size(),
-                ExcDimensionMismatch(cell_level_index.size(), other_cell_level_index.size()));
-    for(unsigned int i = 0; i < cell_level_index.size(); ++i)
-      for(unsigned int v = 0; v < n_lanes; ++v)
-        for(unsigned int d = 0; d < 2; ++d)
-          AssertThrow(cell_level_index[i][v][d] == other_cell_level_index[i][v][d],
-                      ExcMessage("Found invalid cell/level index of cells in two operators "
-                                 "for batch index " +
-                                 std::to_string(i) + " and lane " + std::to_string(v) + ": " +
-                                 std::to_string(cell_level_index[i][v][0]) + "," +
-                                 std::to_string(cell_level_index[i][v][1]) + " vs " +
-                                 std::to_string(other_cell_level_index[i][v][0]) + "," +
-                                 std::to_string(other_cell_level_index[i][v][1])));
+    return cell_level_index;
+  }
+
+  const Extruded::MappingInfo<dim, Number> &
+  get_mapping_info() const
+  {
+    return mapping_info;
+  }
+
+  const std::vector<std::array<unsigned int, n_lanes>> &
+  get_dof_indices() const
+  {
+    return dof_indices;
   }
 
 private:

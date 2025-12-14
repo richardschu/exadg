@@ -293,6 +293,7 @@ public:
          const Quadrature<1> &                  quadrature,
          const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
+    this->mapping                                       = &mapping;
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
     MatrixFree<dim, Number>                          matrix_free;
@@ -557,7 +558,21 @@ public:
       export_values.resize_fast(send_data_cell_index.size() * data_per_face);
     }
 
-    mapping_info.reinit(mapping, quadrature, matrix_free);
+    cell_level_index.resize(matrix_free.n_cell_batches());
+    AssertDimension(cell_level_index.size(), dof_indices.size());
+    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
+      for(unsigned int lane = 0; lane < n_lanes; ++lane)
+        if(lane >= matrix_free.n_active_entries_per_cell_batch(cell))
+          cell_level_index[cell][lane] = {
+            {numbers::invalid_unsigned_int, numbers::invalid_unsigned_int}};
+        else
+        {
+          const auto iter                 = matrix_free.get_cell_iterator(cell, lane);
+          cell_level_index[cell][lane][0] = iter->level();
+          cell_level_index[cell][lane][1] = iter->index();
+        }
+
+    mapping_info.reinit(mapping, quadrature, dof_handler.get_triangulation(), cell_level_index);
 
     compute_vector_access_pattern();
 
@@ -581,53 +596,30 @@ public:
     shape_info = matrix_free.get_shape_info();
 
     {
-      std::vector<Quadrature<1>> auxiliary_quadratures;
-      // quadrature for coupling terms with pressure
-      auxiliary_quadratures.push_back(QGauss<1>(fe.degree));
-      // quadrature for convective term
-      auxiliary_quadratures.push_back(QGauss<1>(quadrature.size() + 1));
+      QGauss<1> quad(fe.degree + 2);
 
-      auxiliary_mapping_info.resize(auxiliary_quadratures.size());
-      for(unsigned int i = 0; i < auxiliary_quadratures.size(); ++i)
-        auxiliary_mapping_info[i].reinit(mapping, auxiliary_quadratures[i], matrix_free);
+      convective_mapping_info.reinit(mapping,
+                                     quad,
+                                     dof_handler.get_triangulation(),
+                                     cell_level_index);
 
-      auxiliary_shape_infos.resize(auxiliary_quadratures.size());
-      for(unsigned int i = 0; i < auxiliary_quadratures.size(); ++i)
-        auxiliary_shape_infos[i].reinit(auxiliary_quadratures[i], fe);
+      convective_shape_info.reinit(quad, fe);
 
-      auxiliary_interpolate_quad_to_boundary.resize(auxiliary_quadratures.size());
-      for(unsigned int q = 0; q < auxiliary_quadratures.size(); ++q)
+      std::vector<Polynomials::Polynomial<double>> basis =
+        Polynomials::generate_complete_Lagrange_basis(quad.get_points());
+      convective_interpolate_quad_to_boundary[0].resize(basis.size());
+      convective_interpolate_quad_to_boundary[1].resize(basis.size());
+      std::vector<double> val_and_der(2);
+      for(unsigned int i = 0; i < basis.size(); ++i)
       {
-        std::vector<Polynomials::Polynomial<double>> basis =
-          Polynomials::generate_complete_Lagrange_basis(auxiliary_quadratures[q].get_points());
-        auxiliary_interpolate_quad_to_boundary[q][0].resize(basis.size());
-        auxiliary_interpolate_quad_to_boundary[q][1].resize(basis.size());
-        std::vector<double> val_and_der(2);
-        for(unsigned int i = 0; i < basis.size(); ++i)
-        {
-          basis[i].value(0., val_and_der);
-          auxiliary_interpolate_quad_to_boundary[q][0][i][0] = val_and_der[0];
-          auxiliary_interpolate_quad_to_boundary[q][0][i][1] = val_and_der[1];
-          basis[i].value(1., val_and_der);
-          auxiliary_interpolate_quad_to_boundary[q][1][i][0] = val_and_der[0];
-          auxiliary_interpolate_quad_to_boundary[q][1][i][1] = val_and_der[1];
-        }
+        basis[i].value(0., val_and_der);
+        convective_interpolate_quad_to_boundary[0][i][0] = val_and_der[0];
+        convective_interpolate_quad_to_boundary[0][i][1] = val_and_der[1];
+        basis[i].value(1., val_and_der);
+        convective_interpolate_quad_to_boundary[1][i][0] = val_and_der[0];
+        convective_interpolate_quad_to_boundary[1][i][1] = val_and_der[1];
       }
     }
-
-    cell_level_index.resize(matrix_free.n_cell_batches());
-    AssertDimension(cell_level_index.size(), dof_indices.size());
-    for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
-      for(unsigned int lane = 0; lane < n_lanes; ++lane)
-        if(lane >= matrix_free.n_active_entries_per_cell_batch(cell))
-          cell_level_index[cell][lane] = {
-            {numbers::invalid_unsigned_int, numbers::invalid_unsigned_int}};
-        else
-        {
-          const auto iter                 = matrix_free.get_cell_iterator(cell, lane);
-          cell_level_index[cell][lane][0] = iter->level();
-          cell_level_index[cell][lane][1] = iter->index();
-        }
 
     detect_dependencies_of_face_integrals();
 
@@ -961,10 +953,34 @@ public:
     }
   }
 
-  const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> &
-  get_cell_level_index() const
+  void
+  verify_other_cell_level_index(
+    const std::vector<dealii::ndarray<unsigned int, n_lanes, 2>> & other_cell_level_index) const
   {
-    return cell_level_index;
+    AssertThrow(cell_level_index.size() == other_cell_level_index.size(),
+                ExcDimensionMismatch(cell_level_index.size(), other_cell_level_index.size()));
+    for(unsigned int i = 0; i < cell_level_index.size(); ++i)
+      for(unsigned int v = 0; v < n_lanes; ++v)
+        for(unsigned int d = 0; d < 2; ++d)
+          AssertThrow(cell_level_index[i][v][d] == other_cell_level_index[i][v][d],
+                      ExcMessage("Found invalid cell/level index of cells in two operators "
+                                 "for batch index " +
+                                 std::to_string(i) + " and lane " + std::to_string(v) + ": " +
+                                 std::to_string(cell_level_index[i][v][0]) + "," +
+                                 std::to_string(cell_level_index[i][v][1]) + " vs " +
+                                 std::to_string(other_cell_level_index[i][v][0]) + "," +
+                                 std::to_string(other_cell_level_index[i][v][1])));
+  }
+
+  void
+  initialize_coupling_pressure(
+    const FiniteElement<dim> &                             fe_pressure,
+    const std::vector<std::array<unsigned int, n_lanes>> & pressure_dof_indices)
+  {
+    const FiniteElement<dim> & fe = dof_handler->get_fe();
+    QGauss<1>                  quad(fe.degree + 1);
+    pressure_shape_info.reinit(quad, fe_pressure);
+    this->pressure_dof_indices = &pressure_dof_indices;
   }
 
   std::size_t
@@ -978,6 +994,7 @@ public:
            MemoryConsumption::memory_consumption(all_owned_faces) +
            mapping_info.memory_consumption() +
            MemoryConsumption::memory_consumption(interpolate_quad_to_boundary) +
+           convective_mapping_info.memory_consumption() +
            MemoryConsumption::memory_consumption(send_data_process) +
            MemoryConsumption::memory_consumption(send_data_cell_index) +
            MemoryConsumption::memory_consumption(send_data_face_index) +
@@ -992,7 +1009,61 @@ public:
            MemoryConsumption::memory_consumption(all_left_face_fluxes_from_buffer);
   }
 
+  void
+  evaluate_momentum_rhs(const VectorType & pressure,
+                        const VectorType & velocity_old,
+                        const Number       velocity_scale,
+                        VectorType &       rhs) const
+  {
+    AssertDimension(pressure_shape_info.data[0].n_q_points_1d, shape_info.data[0].n_q_points_1d);
+    AssertDimension(pressure_shape_info.data[0].fe_degree, shape_info.data[1].fe_degree);
+
+    const unsigned int n_cell_batches = dof_indices.size();
+    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
+        range < cell_loop_pre_list_index[n_cell_batches + 1];
+        ++range)
+      std::fill(rhs.begin() + cell_loop_pre_list[range].first,
+                rhs.begin() + cell_loop_pre_list[range].second,
+                Number(0.));
+
+    velocity_old.update_ghost_values();
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      for(unsigned int range = cell_loop_mass_pre_list_index[cell];
+          range < cell_loop_mass_pre_list_index[cell + 1];
+          ++range)
+        std::fill(rhs.begin() + cell_loop_mass_pre_list[range].first,
+                  rhs.begin() + cell_loop_mass_pre_list[range].second,
+                  Number(0.));
+
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 2)
+        do_momentum_rhs_on_cell<2>(cell, pressure, velocity_old, velocity_scale, rhs);
+      else if(degree == 3)
+        do_momentum_rhs_on_cell<3>(cell, pressure, velocity_old, velocity_scale, rhs);
+      else if(degree == 4)
+        do_momentum_rhs_on_cell<4>(cell, pressure, velocity_old, velocity_scale, rhs);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_momentum_rhs_on_cell<5>(cell, pressure, velocity_old, velocity_scale, rhs);
+      else if(degree == 6)
+        do_momentum_rhs_on_cell<6>(cell, pressure, velocity_old, velocity_scale, rhs);
+      else if(degree == 7)
+        do_momentum_rhs_on_cell<7>(cell, pressure, velocity_old, velocity_scale, rhs);
+      else if(degree == 8)
+        do_momentum_rhs_on_cell<8>(cell, pressure, velocity_old, velocity_scale, rhs);
+      else if(degree == 9)
+        do_momentum_rhs_on_cell<9>(cell, pressure, velocity_old, velocity_scale, rhs);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+    rhs.compress(VectorOperation::add);
+    velocity_old.zero_out_ghost_values();
+  }
+
 private:
+  ObserverPointer<const Mapping<dim>>                              mapping;
   ObserverPointer<const DoFHandler<dim>>                           dof_handler;
   std::vector<dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes>> dof_indices;
   std::vector<dealii::ndarray<unsigned int, 2 * dim, n_lanes>>     neighbor_cells;
@@ -1012,10 +1083,12 @@ private:
   Extruded::MappingInfo<dim, Number>                mapping_info;
   std::array<std::vector<std::array<Number, 2>>, 2> interpolate_quad_to_boundary;
 
-  std::vector<internal::MatrixFreeFunctions::ShapeInfo<Number>> auxiliary_shape_infos;
-  std::vector<Extruded::MappingInfo<dim, Number>>               auxiliary_mapping_info;
-  std::vector<std::array<std::vector<std::array<Number, 2>>, 2>>
-    auxiliary_interpolate_quad_to_boundary;
+  internal::MatrixFreeFunctions::ShapeInfo<Number>       pressure_shape_info;
+  const std::vector<std::array<unsigned int, n_lanes>> * pressure_dof_indices;
+
+  internal::MatrixFreeFunctions::ShapeInfo<Number>  convective_shape_info;
+  Extruded::MappingInfo<dim, Number>                convective_mapping_info;
+  std::array<std::vector<std::array<Number, 2>>, 2> convective_interpolate_quad_to_boundary;
 
   AlignedVector<std::array<VectorizedArray<Number>, 2 * dim>> penalty_parameters;
 
@@ -2935,9 +3008,9 @@ private:
           const VectorizedArray<Number> s0     = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
           const VectorizedArray<Number> s1     = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
 
-          out_values[q1 * dim] =
+          quad_values[q1 * dim] =
             s0 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
-          out_values[q1 * dim + 1] =
+          quad_values[q1 * dim + 1] =
             s1 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
         }
         else // now to dim == 3
@@ -3603,6 +3676,189 @@ private:
             vals[i * stride + 2] += shape[i][0] * v2 + shape[i][1] * d2;
           }
         }
+  }
+
+  template<int degree>
+  void
+  do_momentum_rhs_on_cell(const unsigned int cell,
+                          const VectorType & pressure,
+                          const VectorType & velocity_old,
+                          const Number       velocity_scale,
+                          VectorType &       rhs) const
+  {
+    constexpr unsigned int n_q_points_1d   = degree + 1;
+    constexpr unsigned int n_points        = Utilities::pow(n_q_points_1d, dim);
+    const auto &           shape_data      = shape_info.data;
+    const auto &           shape_data_pres = pressure_shape_info.data[0].shape_values_eo;
+
+    VectorizedArray<Number> quad_values[dim * n_points], tmp_pressure_values[n_points],
+      pressure_values[n_points];
+    read_cell_values<degree, n_q_points_1d>(velocity_old.begin(), dof_indices[cell], quad_values);
+
+    const std::array<unsigned int, n_lanes> pressure_indices      = (*pressure_dof_indices)[cell];
+    bool                                    all_indices_available = true;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(pressure_indices[v] == numbers::invalid_unsigned_int)
+      {
+        all_indices_available = false;
+        break;
+      }
+    if(all_indices_available)
+      vectorized_load_and_transpose(Utilities::pow(degree, dim),
+                                    pressure.begin(),
+                                    pressure_indices.data(),
+                                    tmp_pressure_values);
+    else
+    {
+      // first broadcast valid entries to all lanes, then fill the remaining
+      // ones
+      for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
+        tmp_pressure_values[i] = pressure.local_element(pressure_indices[0] + i);
+      for(unsigned int v = 1; v < n_lanes && pressure_indices[v] != numbers::invalid_unsigned_int;
+          ++v)
+        for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
+          tmp_pressure_values[i][v] = pressure.local_element(pressure_indices[v] + i);
+    }
+
+    dealii::internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
+                                                  dealii::internal::EvaluatorQuantity::value,
+                                                  dim,
+                                                  degree,
+                                                  n_q_points_1d>::do_forward(1,
+                                                                             shape_data_pres,
+                                                                             tmp_pressure_values,
+                                                                             pressure_values);
+
+    constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
+
+    std::array<unsigned int, n_lanes> shifted_data_indices;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
+
+    const Number h_z_inverse = mapping_info.h_z_inverse;
+    const Number h_z         = mapping_info.h_z;
+
+    constexpr unsigned int nn = n_q_points_1d;
+
+    for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
+    {
+      for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &mapping_info.jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0]);
+        const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
+
+        if constexpr(dim == 2)
+        {
+          const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
+          const VectorizedArray<Number> t0     = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+          const VectorizedArray<Number> t1     = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+          const VectorizedArray<Number> s0     = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
+          const VectorizedArray<Number> s1     = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
+
+          quad_values[q1 * dim] =
+            s0 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
+          quad_values[q1 * dim + 1] =
+            s1 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
+        }
+        else // now to dim == 3
+        {
+          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
+          {
+            const VectorizedArray<Number> val[3] = {quad_values[q * dim],
+                                                    quad_values[q * dim + 1],
+                                                    quad_values[q * dim + 2]};
+
+            Tensor<1, dim, VectorizedArray<Number>> val_real;
+            val_real[0] = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+            val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+            val_real[2] = h_z * val[2];
+
+            const Number weight_z = mapping_info.quad_weights_z[qz];
+            // need factors without h_z_inverse in code below because
+            // it cancels with h_z
+            const VectorizedArray<Number> factor_ma =
+              (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * velocity_scale) *
+              weight_z;
+
+            // For the test function part, the Jacobian determinant
+            // that is part of the integration factor cancels with the
+            // inverse Jacobian determinant present in the factor of
+            // the derivative
+
+            // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
+            // braces as 'tmp' from above
+            VectorizedArray<Number> value_tmp[dim];
+            for(unsigned int d = 0; d < dim; ++d)
+              val_real[d] *= factor_ma;
+            for(unsigned int d = 0; d < 2; ++d)
+              value_tmp[d] = jac_xy[0][d] * val_real[0] + jac_xy[1][d] * val_real[1];
+            value_tmp[2] = h_z * val_real[2];
+
+            quad_values[q * dim]     = value_tmp[0];
+            quad_values[q * dim + 1] = value_tmp[1];
+            quad_values[q * dim + 2] = value_tmp[2];
+
+            tmp_pressure_values[q] =
+              pressure_values[q] * (mapping_info.quad_weights_xy[q1] * weight_z);
+          }
+        }
+      }
+    }
+
+    const Number * DEAL_II_RESTRICT shape_grad =
+      shape_data[0].shape_gradients_collocation_eo.data();
+    // add (div v, p)_K
+    if(dim == 3)
+      for(unsigned int i = 0; i < nn * nn; ++i)
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              nn * nn,
+                                              nn * nn * dim,
+                                              false,
+                                              true>(shape_grad,
+                                                    tmp_pressure_values + i,
+                                                    quad_values + i * dim + 2);
+    for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
+    {
+      for(unsigned int i0 = 0; i0 < nn; ++i0)
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              nn,
+                                              nn * dim,
+                                              false,
+                                              true>(shape_grad,
+                                                    tmp_pressure_values + i1 * nn * nn + i0,
+                                                    quad_values + (i1 * nn * nn + i0) * dim + 1);
+      for(unsigned int i0 = 0; i0 < nn; ++i0)
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              1,
+                                              dim,
+                                              false,
+                                              true>(shape_grad,
+                                                    tmp_pressure_values + i1 * nn * nn + i0 * nn,
+                                                    quad_values + (i1 * nn * nn + i0 * nn) * dim +
+                                                      0);
+    }
+
+    // (v \cdot normal, p)_{dK cap \Gamma_D} does not contribute, because the
+    // normal component is subject to (homogeneous) Dirichlet boundary
+    // conditions for H(div) spaces
+
+    integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
+                                                  n_active_entries_per_cell_batch(cell),
+                                                  quad_values,
+                                                  rhs.begin());
   }
 
   unsigned int

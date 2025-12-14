@@ -271,7 +271,6 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
     op_rt_float->initialize_dof_vector(rhs_float);
   }
 
-
   laplace_op = std::make_shared<LaplaceOperator::LaplaceOperatorDG<dim, Number>>();
   laplace_op->reinit(*pde_operator->get_mapping(),
                      pde_operator->get_dof_handler_p(),
@@ -281,7 +280,9 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
   laplace_op->set_penalty_parameters(
     pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 
-  laplace_op->verify_other_cell_level_index(op_rt->get_cell_level_index());
+  op_rt->verify_other_cell_level_index(laplace_op->get_cell_level_index());
+  op_rt->initialize_coupling_pressure(pde_operator->get_dof_handler_p().get_fe(),
+                                      laplace_op->get_dof_indices());
 
   poisson_preconditioner = std::make_shared<LaplaceOperator::PoissonPreconditionerMG<dim, float>>(
     *pde_operator->get_mapping(),
@@ -1013,6 +1014,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
   VectorType rhs(pressure_np);
   rhs_pressure(rhs);
 
+  const double t_rhs = timer.wall_time();
+
   if(false)
   {
     VectorType vec1, vec2;
@@ -1047,6 +1050,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
   }
 
   // extrapolate old solution to get a good initial estimate for the solver
+  dealii::Timer             timer2;
   std::pair<double, double> extrapolate_accuracy(0., 0.);
   if(this->use_extrapolation)
   {
@@ -1057,6 +1061,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
   {
     pressure_np = pressure_last_iter;
   }
+  const double t_extrapol = timer2.wall_time();
+  timer2.restart();
 
   // solve linear system of equations
   bool const update_preconditioner =
@@ -1091,6 +1097,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
   }
   iterations_pressure.first += 1;
   iterations_pressure.second += n_iter;
+  const double t_sol = timer2.wall_time();
 
   // pde_operator->apply_laplace_operator(tmp, pressure_np);
   // const double res_norm4 = std::sqrt(tmp.add_and_dot(-1.0, rhs, tmp));
@@ -1110,6 +1117,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
   if(this->print_solver_info() and not(this->is_test))
   {
     this->pcout << std::endl
+                << "Pressure step prepare: " << t_rhs << "/" << t_extrapol << " s, solve " << t_sol
+                << std::endl
                 << "Solve pressure step (projection reduced residual from "
                 << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second << "):";
     print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
@@ -1330,14 +1339,14 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::viscous_step()
   // in case we need to iteratively solve a linear or nonlinear system of equations
   if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
-    VectorType rhs;
-    rhs.reinit(velocity_np, true);
-    VectorType transport_velocity;
-
     /*
      *  Calculate the right-hand side of the linear system of equations.
      */
-    rhs_viscous(rhs, velocity_np, transport_velocity);
+    op_rt->copy_mf_to_this_vector(velocity_np, solution_rt);
+    op_rt->evaluate_momentum_rhs(pressure_np,
+                                 solution_rt,
+                                 this->bdf.get_gamma0() / this->get_time_step_size(),
+                                 rhs_rt);
 
     const double t_rhs = timer.wall_time();
 
@@ -1369,7 +1378,6 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::viscous_step()
       const Number factor_mass = this->get_scaling_factor_time_derivative_term();
       const Number factor_lapl = this->pde_operator->get_viscous_kernel_data().viscosity;
 
-      op_rt->copy_mf_to_this_vector(rhs, rhs_rt);
       op_rt_float->set_parameters(0.0, factor_lapl);
       op_rt_float->vmult(velocity_matvec[0], velocity_red[0]);
       op_rt_float->set_parameters(1.0, 0.0);
