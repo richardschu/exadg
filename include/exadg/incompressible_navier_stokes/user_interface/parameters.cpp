@@ -496,9 +496,6 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   // CONSISTENT SPLITTING SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
   {
-    AssertThrow(spatial_discretization != SpatialDiscretization::HDIV,
-                dealii::ExcMessage("Not implemented."));
-
     AssertThrow(order_extrapolation_pressure_rhs <= order_time_integrator,
                 dealii::ExcMessage("Invalid parameter order_extrapolation_pressure_rhs!"));
 
