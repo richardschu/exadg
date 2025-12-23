@@ -83,7 +83,13 @@ template<int dim, typename Number>
 void
 TimeIntBDFDualSplittingExtruded<dim, Number>::setup_derived()
 {
-  Base::setup_derived();
+  if constexpr(dim == 3)
+  {
+    op_rt->copy_mf_to_this_vector(this->get_velocity(), solution_rt);
+    op_rt->evaluate_convective_term(solution_rt, 1.0, 0.5, this->vec_convective_term[0]);
+  }
+  else
+    Base::setup_derived();
 }
 
 template<int dim, typename Number>
@@ -263,6 +269,10 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
     solutions_convective.resize(velocity.size());
     for(unsigned int i = 0; i < solutions_convective.size(); ++i)
       op_rt->initialize_dof_vector(solutions_convective[i]);
+
+    for(VectorType & vec : this->vec_convective_term)
+      op_rt->initialize_dof_vector(vec);
+    op_rt->initialize_dof_vector(this->convective_term_np);
 
     for(auto & vector : velocity_red)
       op_rt_float->initialize_dof_vector(vector);
@@ -894,6 +904,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::convective_step()
   dealii::Timer timer;
   timer.restart();
 
+  std::vector<Number> factors(this->vec_convective_term.size());
   // compute convective term and extrapolate convective term (if not Stokes equations)
   if(this->param.convective_problem())
   {
@@ -908,41 +919,47 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::convective_step()
       }
     }
 
-    velocity_np.equ(-this->extra.get_beta(0), this->vec_convective_term[0]);
-    for(unsigned int i = 1; i < this->vec_convective_term.size(); ++i)
-      velocity_np.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
+    for(unsigned int i = 0; i < factors.size(); ++i)
+      factors[i] = -this->extra.get_beta(i);
+    extrapolate_vectors(factors, this->vec_convective_term, (dim == 3) ? rhs_rt : velocity_np);
   }
   else
-    velocity_np = 0.0;
+  {
+    if(dim == 3)
+      rhs_rt = 0.0;
+    else
+      velocity_np = 0.0;
+  }
 
   // compute body force vector
   if(this->param.right_hand_side == true)
   {
-    pde_operator->evaluate_add_body_force_term(velocity_np, this->get_next_time());
+    if constexpr(dim == 3)
+      op_rt->evaluate_add_body_force(this->get_next_time(),
+                                     *pde_operator->get_field_functions()->right_hand_side,
+                                     rhs_rt);
+    else
+      pde_operator->evaluate_add_body_force_term(velocity_np, this->get_next_time());
   }
 
   // apply inverse mass operator
   unsigned int n_iter_mass = 0;
   if constexpr(dim == 3)
   {
-    op_rt->copy_mf_to_this_vector(velocity_np, rhs_rt);
-
     dealii::ReductionControl control(this->param.inverse_mass_operator.solver_data.max_iter,
                                      this->param.inverse_mass_operator.solver_data.abs_tol,
                                      this->param.inverse_mass_operator.solver_data.rel_tol);
 
     dealii::SolverCG<VectorType> solver_cg(control);
     op_rt->set_parameters(1.0, 0.0);
-    std::vector<Number> beta(velocity.size());
-    for(unsigned int i = 0; i < velocity.size(); ++i)
-      beta[i] = this->extra.get_beta(i);
-    extrapolate_vectors(beta, solutions_convective, solution_rt);
-    solver_cg.solve(*op_rt, solution_rt, rhs_rt, preconditioner_mass);
+    for(unsigned int i = 0; i < solutions_convective.size(); ++i)
+      factors[i] = this->extra.get_beta(i);
+    extrapolate_vectors(factors, solutions_convective, solutions_convective.back());
+    solver_cg.solve(*op_rt, solutions_convective.back(), rhs_rt, preconditioner_mass);
     n_iter_mass = control.last_step();
-    op_rt->copy_this_to_mf_vector(solution_rt, velocity_np);
+    op_rt->copy_this_to_mf_vector(solutions_convective.back(), velocity_np);
     for(unsigned int i = solutions_convective.size() - 1; i > 0; --i)
       solutions_convective[i].swap(solutions_convective[i - 1]);
-    solutions_convective[0].copy_locally_owned_data_from(solution_rt);
   }
   else
   {
@@ -992,9 +1009,12 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::evaluate_convective_term()
   {
     if(this->param.ale_formulation == false) // Eulerian case
     {
-      pde_operator->evaluate_convective_term(this->convective_term_np,
-                                             velocity_np,
-                                             this->get_next_time());
+      if constexpr(dim == 3)
+        op_rt->evaluate_convective_term(solution_rt, 1.0, 0.5, this->convective_term_np);
+      else
+        pde_operator->evaluate_convective_term(this->convective_term_np,
+                                               velocity_np,
+                                               this->get_next_time());
     }
   }
 
@@ -1142,28 +1162,6 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) con
   // inhomogeneous parts of boundary face integrals of velocity divergence operator
   if(this->param.divu_integrated_by_parts == true and this->param.divu_use_boundary_data == true)
   {
-    VectorType temp;
-    temp.reinit(rhs);
-
-    // sum alpha_i * u_i term
-    for(unsigned int i = 0; i < velocity.size(); ++i)
-    {
-      // note that the minus sign related to this term is already taken into account
-      // in the function rhs() of the divergence operator
-      rhs.add(this->bdf.get_alpha(i) / this->get_time_step_size(), temp);
-    }
-
-    // convective term
-    if(this->param.convective_problem())
-    {
-      for(unsigned int i = 0; i < velocity.size(); ++i)
-      {
-        temp = 0.0;
-        pde_operator->rhs_ppe_div_term_convective_term_add(temp, velocity[i]);
-        rhs.add(this->extra.get_beta(i), temp);
-      }
-    }
-
     // body force term
     if(this->param.right_hand_side)
       pde_operator->rhs_ppe_div_term_body_forces_add(rhs, this->get_next_time());
@@ -1416,6 +1414,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::viscous_step()
       for(unsigned int i = 0; i < owned_size; ++i)
       {
         const Number u_i = solution_rt.local_element(i) + velocity_red.back().local_element(i);
+        solution_rt.local_element(i)         = u_i;
         velocity_np.local_element(i)         = u_i;
         velocity_red.back().local_element(i) = u_i;
       }
@@ -1462,10 +1461,9 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::viscous_step()
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_viscous(
-  VectorType &       rhs,
-  VectorType const & velocity,
-  VectorType const & transport_velocity) const
+TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_viscous(VectorType &       rhs,
+                                                          VectorType const & velocity,
+                                                          VectorType const &) const
 {
   /*
    *  apply mass operator
@@ -1482,31 +1480,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_viscous(
     rhs -= tmp;
   }
 
-  // compensate for explicit convective term taken into account in the first sub-step of the
-  // dual-splitting scheme
-  if(this->param.non_explicit_convective_problem())
-  {
-    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
-      rhs.add(this->extra.get_beta(i), this->vec_convective_term[i]);
-  }
-
-  if(this->param.nonlinear_problem_has_to_be_solved())
-  {
-    // for a nonlinear problem, inhomogeneous contributions are taken into account when evaluating
-    // the nonlinear residual
-  }
-  else // linear problem
-  {
-    // compute inhomogeneous contributions of linearly implicit convective term
-    if(this->param.convective_problem() and
-       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-    {
-      pde_operator->rhs_add_convective_term(rhs, transport_velocity, this->get_next_time());
-    }
-
-    // inhomogeneous parts of boundary face integrals of viscous operator
-    pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
-  }
+  // inhomogeneous parts of boundary face integrals of viscous operator
+  pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
 }
 
 template<int dim, typename Number>

@@ -460,6 +460,15 @@ public:
   void
   distribute_constraint_u(VectorType & velocity) const;
 
+  /*
+   * Return the underlying functions
+   */
+  std::shared_ptr<FieldFunctions<dim> const>
+  get_field_functions() const
+  {
+    return field_functions;
+  }
+
 protected:
   /*
    * Projection step.

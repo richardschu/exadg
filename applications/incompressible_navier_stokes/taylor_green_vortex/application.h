@@ -140,7 +140,7 @@ private:
     else
       this->param.equation_type = EquationType::NavierStokes;
     this->param.formulation_viscous_term    = FormulationViscousTerm::LaplaceFormulation;
-    this->param.formulation_convective_term = FormulationConvectiveTerm::DivergenceFormulation;
+    this->param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
     if(ALE)
       this->param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
     this->param.right_hand_side = false;
@@ -157,13 +157,13 @@ private:
 
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                            = SolverType::Unsteady;
-    this->param.temporal_discretization                = TemporalDiscretization::BDFDualSplittingExtruded;
-    this->param.treatment_of_convective_term           = TreatmentOfConvectiveTerm::Explicit;
-    this->param.order_time_integrator                  = 2;
-    this->param.start_with_low_order                   = not read_restart;
-    this->param.adaptive_time_stepping                 = true;
-    this->param.calculation_of_time_step_size          = TimeStepCalculation::CFL;
+    this->param.solver_type                   = SolverType::Unsteady;
+    this->param.temporal_discretization       = TemporalDiscretization::BDFDualSplittingExtruded;
+    this->param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Explicit;
+    this->param.order_time_integrator         = 2;
+    this->param.start_with_low_order          = not read_restart;
+    this->param.adaptive_time_stepping        = true;
+    this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping_limiting_factor = 3.0;
     this->param.max_velocity                           = max_velocity;
     this->param.cfl                                    = 0.4;
@@ -250,12 +250,17 @@ private:
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting ||
-       this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded)
+       this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded ||
+       this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
       this->param.preconditioner_momentum = MomentumPreconditioner::PointJacobi;
     }
+
+    // CONSISTENT SPLITTING SCHEME
+    this->param.order_extrapolation_pressure_rhs = 2;
+    this->param.apply_leray_projection           = true;
 
     // PRESSURE-CORRECTION SCHEME
 
@@ -272,7 +277,7 @@ private:
       else
         this->param.solver_data_momentum = SolverData(1e4, ABS_TOL, REL_TOL, 100);
 
-      this->param.preconditioner_momentum        = MomentumPreconditioner::InverseMassMatrix;
+      this->param.preconditioner_momentum        = MomentumPreconditioner::PointJacobi;
       this->param.update_preconditioner_momentum = false;
     }
 
@@ -298,7 +303,7 @@ private:
     this->param.preconditioner_coupled = PreconditionerCoupled::BlockTriangular;
 
     // preconditioner velocity/momentum block
-    this->param.preconditioner_velocity_block = MomentumPreconditioner::InverseMassMatrix;
+    this->param.preconditioner_velocity_block = MomentumPreconditioner::PointJacobi;
 
     // preconditioner Schur-complement block
     this->param.preconditioner_pressure_block = SchurComplementPreconditioner::CahouetChabard;

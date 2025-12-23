@@ -212,13 +212,14 @@ struct MappingInfo
     FEValues<dim>     fe_values(mapping,
                             dummy_fe,
                             Quadrature<dim>(points),
-                            update_jacobians | update_jacobian_grads);
+                            update_jacobians | update_jacobian_grads | update_quadrature_points);
     FEFaceValues<dim> fe_face_values(mapping,
                                      dummy_fe,
                                      face_quadrature,
                                      update_jacobians | update_JxW_values | update_normal_vectors |
                                        update_jacobian_grads);
 
+    quadrature_points.resize(n_q_points_2d * unique_cells.size());
     jacobians_xy.resize(n_q_points_2d * unique_cells.size());
     inv_jacobians_xy.resize(n_q_points_2d * unique_cells.size());
     cell_JxW_xy.resize(n_q_points_2d * unique_cells.size());
@@ -257,6 +258,8 @@ struct MappingInfo
             jacobians_xy[data_idx][d][e]     = jacobian[d][e];
             inv_jacobians_xy[data_idx][d][e] = inv_jacobian[d][e];
           }
+        for(unsigned int d = 0; d < 2; ++d)
+          quadrature_points[data_idx][d] = fe_values.quadrature_point(q)[d];
 
         const auto jac_grad = fe_values.jacobian_grad(q);
         for(unsigned int d = 0; d < 2; ++d)
@@ -315,6 +318,7 @@ struct MappingInfo
   memory_consumption() const
   {
     return MemoryConsumption::memory_consumption(mapping_data_index) +
+           MemoryConsumption::memory_consumption(quadrature_points) +
            MemoryConsumption::memory_consumption(jacobians_xy) +
            MemoryConsumption::memory_consumption(inv_jacobians_xy) +
            MemoryConsumption::memory_consumption(jacobian_grads) +
@@ -332,6 +336,7 @@ struct MappingInfo
   Number                                            h_z;
   Number                                            h_z_inverse;
   std::vector<std::array<unsigned int, n_lanes>>    mapping_data_index;
+  AlignedVector<Point<2, Number>>                   quadrature_points;
   AlignedVector<Tensor<2, 2, Number>>               jacobians_xy;
   AlignedVector<Tensor<2, 2, Number>>               inv_jacobians_xy;
   AlignedVector<Number>                             cell_JxW_xy;

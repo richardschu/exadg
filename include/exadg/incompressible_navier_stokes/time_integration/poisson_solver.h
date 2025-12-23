@@ -60,9 +60,6 @@ make_zero_mean(const std::vector<unsigned int> &                    constrained_
   // set constrained entries to zero again, this should now have zero mean
   for(const unsigned int index : constrained_dofs)
     vec.local_element(index) = 0.;
-
-  Assert(std::abs(vec.mean_value()) < vec.l1_norm() * std::numeric_limits<Number>::epsilon(),
-         dealii::ExcInternalError());
 }
 
 
@@ -214,10 +211,8 @@ public:
 
       dealii::SolverCG<VectorType>        solver(control);
       dealii::internal::EigenvalueTracker eigenvalue_tracker;
-      solver.connect_eigenvalues_slot(
-        [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
-          eigenvalue_tracker.slot(eigenvalues);
-        });
+      solver.connect_eigenvalues_slot([&eigenvalue_tracker](const std::vector<double> & eigenvalues)
+                                      { eigenvalue_tracker.slot(eigenvalues); });
 
       mg_matrices[level].initialize_dof_vector(solution_update[level]);
       mg_matrices[level].initialize_dof_vector(temp_vector[level]);
@@ -262,10 +257,8 @@ public:
 
       dealii::SolverCG<VectorType>        solver(control);
       dealii::internal::EigenvalueTracker eigenvalue_tracker;
-      solver.connect_eigenvalues_slot(
-        [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
-          eigenvalue_tracker.slot(eigenvalues);
-        });
+      solver.connect_eigenvalues_slot([&eigenvalue_tracker](const std::vector<double> & eigenvalues)
+                                      { eigenvalue_tracker.slot(eigenvalues); });
 
       dg_matrix.initialize_dof_vector(solution_update_dg);
       dg_matrix.initialize_dof_vector(rhs_dg);

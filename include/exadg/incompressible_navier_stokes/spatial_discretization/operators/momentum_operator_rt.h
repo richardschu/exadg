@@ -596,7 +596,7 @@ public:
     shape_info = matrix_free.get_shape_info();
 
     {
-      QGauss<1> quad(fe.degree + 2);
+      QGauss<1> quad(fe.degree + (fe.degree + 2) / 2);
 
       convective_mapping_info.reinit(mapping,
                                      quad,
@@ -736,6 +736,155 @@ public:
     const unsigned int n_cell_batches = dof_indices.size();
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
       diagonal_operation(cell, dst);
+    dst.compress(VectorOperation::add);
+  }
+
+  void
+  evaluate_convective_term(const VectorType & src,
+                           const Number       factor_skew_symmetric,
+                           const Number       factor_flux,
+                           VectorType &       dst) const
+  {
+    const unsigned int n_cell_batches = dof_indices.size();
+
+    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
+        range < cell_loop_pre_list_index[n_cell_batches + 1];
+        ++range)
+      std::fill(dst.begin() + cell_loop_pre_list[range].first,
+                dst.begin() + cell_loop_pre_list[range].second,
+                Number());
+
+    src.update_ghost_values_start();
+
+    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches + 1];
+        range < cell_loop_pre_list_index[n_cell_batches + 2];
+        ++range)
+      std::fill(dst.begin() + cell_loop_pre_list[range].first,
+                dst.begin() + cell_loop_pre_list[range].second,
+                Number());
+
+    src.update_ghost_values_finish();
+
+    // only do the data exchange for face integral if we have Laplacian contribution
+    if(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) > 1)
+    {
+      const int n_t = shape_info.data[0].fe_degree;
+      const int n_n = n_t + 1;
+
+      // data: just exchange values on face
+      const int data_per_face =
+        Utilities::pow(n_t, dim - 1) + n_n * Utilities::pow(n_t, dim - 2) * (dim - 1);
+
+      std::vector<MPI_Request> requests(2 * send_data_process.size());
+      unsigned int             offset = 0;
+      for(unsigned int p = 0; p < send_data_process.size(); ++p)
+      {
+        MPI_Irecv(&import_values[offset * data_per_face],
+                  send_data_process[p].second * data_per_face * sizeof(Number),
+                  MPI_BYTE,
+                  send_data_process[p].first,
+                  send_data_process[p].first + 47,
+                  src.get_mpi_communicator(),
+                  &requests[p]);
+        offset += send_data_process[p].second;
+      }
+      AssertDimension(offset * data_per_face * 2, import_values.size());
+
+      if(n_t == 2)
+        vmult_pack_and_send_data<2, false>(src, requests);
+      else if(n_t == 3)
+        vmult_pack_and_send_data<3, false>(src, requests);
+      else if(n_t == 4)
+        vmult_pack_and_send_data<4, false>(src, requests);
+#ifndef DEBUG
+      else if(n_t == 5)
+        vmult_pack_and_send_data<5, false>(src, requests);
+      else if(n_t == 6)
+        vmult_pack_and_send_data<6, false>(src, requests);
+      else if(n_t == 7)
+        vmult_pack_and_send_data<7, false>(src, requests);
+      else if(n_t == 8)
+        vmult_pack_and_send_data<8, false>(src, requests);
+      else if(n_t == 9)
+        vmult_pack_and_send_data<9, false>(src, requests);
+#endif
+      else
+        AssertThrow(false, ExcNotImplemented());
+
+      if(!requests.empty())
+        MPI_Waitall(requests.size(), &requests[0], MPI_STATUSES_IGNORE);
+    }
+
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      for(unsigned int range = cell_loop_pre_list_index[cell];
+          range < cell_loop_pre_list_index[cell + 1];
+          ++range)
+        std::fill(dst.begin() + cell_loop_pre_list[range].first,
+                  dst.begin() + cell_loop_pre_list[range].second,
+                  Number());
+
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 2)
+        do_convective_on_cell<2>(cell, src, factor_skew_symmetric, factor_flux, dst);
+      else if(degree == 3)
+        do_convective_on_cell<3>(cell, src, factor_skew_symmetric, factor_flux, dst);
+      else if(degree == 4)
+        do_convective_on_cell<4>(cell, src, factor_skew_symmetric, factor_flux, dst);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_convective_on_cell<5>(cell, src, factor_skew_symmetric, factor_flux, dst);
+      else if(degree == 6)
+        do_convective_on_cell<6>(cell, src, factor_skew_symmetric, factor_flux, dst);
+      else if(degree == 7)
+        do_convective_on_cell<7>(cell, src, factor_skew_symmetric, factor_flux, dst);
+      else if(degree == 8)
+        do_convective_on_cell<8>(cell, src, factor_skew_symmetric, factor_flux, dst);
+      else if(degree == 9)
+        do_convective_on_cell<9>(cell, src, factor_skew_symmetric, factor_flux, dst);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+
+    dst.compress_start(0, VectorOperation::add);
+    src.zero_out_ghost_values();
+    dst.compress_finish(VectorOperation::add);
+  }
+
+  void
+  evaluate_add_body_force(const double                  time,
+                          const dealii::Function<dim> & rhs_function,
+                          VectorType &                  dst) const
+  {
+    const unsigned int n_cell_batches = dof_indices.size();
+    const_cast<dealii::Function<dim> &>(rhs_function).set_time(time);
+
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 2)
+        do_body_force_on_cell<2>(cell, rhs_function, dst);
+      else if(degree == 3)
+        do_body_force_on_cell<3>(cell, rhs_function, dst);
+      else if(degree == 4)
+        do_body_force_on_cell<4>(cell, rhs_function, dst);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_body_force_on_cell<5>(cell, rhs_function, dst);
+      else if(degree == 6)
+        do_body_force_on_cell<6>(cell, rhs_function, dst);
+      else if(degree == 7)
+        do_body_force_on_cell<7>(cell, rhs_function, dst);
+      else if(degree == 8)
+        do_body_force_on_cell<8>(cell, rhs_function, dst);
+      else if(degree == 9)
+        do_body_force_on_cell<9>(cell, rhs_function, dst);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+
     dst.compress(VectorOperation::add);
   }
 
@@ -1379,8 +1528,13 @@ private:
     VectorizedArray<Number> data_points[n_points_1d * n_points_1d];
     VectorizedArray<Number> data_interpolate[4 * n_n];
 
-    const Number * DEAL_II_RESTRICT shape_data_n = shape_info.data[0].shape_values_eo.data();
-    const Number * DEAL_II_RESTRICT shape_data_t = shape_info.data[1].shape_values_eo.data();
+    constexpr bool do_convective = n_points_1d > (n_t + 1);
+    const std::vector<internal::MatrixFreeFunctions::UnivariateShapeData<Number>> & sh_data =
+      do_convective ? convective_shape_info.data : shape_info.data;
+    AssertDimension(n_points_1d, sh_data[0].n_q_points_1d);
+    AssertDimension(n_points_1d, sh_data[1].n_q_points_1d);
+    const Number * DEAL_II_RESTRICT shape_data_n = sh_data[0].shape_values_eo.data();
+    const Number * DEAL_II_RESTRICT shape_data_t = sh_data[1].shape_values_eo.data();
     for(unsigned int f = 0; f < 2; ++f)
     {
       // check if indices unconstrained
@@ -1636,8 +1790,13 @@ private:
     VectorizedArray<Number> data_points[n_points_1d * n_points_1d];
     VectorizedArray<Number> data_interpolate[n_n];
 
-    const Number * DEAL_II_RESTRICT shape_data_n = shape_info.data[0].shape_values_eo.data();
-    const Number * DEAL_II_RESTRICT shape_data_t = shape_info.data[1].shape_values_eo.data();
+    constexpr bool do_convective = n_points_1d > (n_t + 1);
+    const std::vector<internal::MatrixFreeFunctions::UnivariateShapeData<Number>> & sh_data =
+      do_convective ? convective_shape_info.data : shape_info.data;
+    AssertDimension(n_points_1d, sh_data[0].n_q_points_1d);
+    AssertDimension(n_points_1d, sh_data[1].n_q_points_1d);
+    const Number * DEAL_II_RESTRICT shape_data_n = sh_data[0].shape_values_eo.data();
+    const Number * DEAL_II_RESTRICT shape_data_t = sh_data[1].shape_values_eo.data();
 
     if constexpr(dim == 3)
       for(unsigned int i = 0; i < n_points_1d * n_points_1d; ++i)
@@ -2408,15 +2567,213 @@ private:
     }
   }
 
+  void
+  write_vectorized_value(const Number              in,
+                         const unsigned int        lane,
+                         VectorizedArray<Number> & out) const
+  {
+    AssertIndexRange(lane, n_lanes);
+    out[lane] = in;
+  }
 
+  void
+  write_vectorized_value(const Number in, const unsigned int, Number & out) const
+  {
+    out = in;
+  }
 
-  template<int n_t>
+  template<int n_t, typename Number2>
+  void
+  read_face_values_only(const VectorType &                                          src,
+                        const unsigned int                                          face,
+                        const dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes> & dof_indices,
+                        const unsigned int                                          lane,
+                        Number2 *                                                   out) const
+  {
+    constexpr unsigned int n_n               = n_t + 1;
+    constexpr unsigned int hex_dofs_per_comp = Utilities::pow(n_t, dim - 1) * (n_t - 1);
+    if(face / 2 == 0)
+    {
+      unsigned int idx = dof_indices[face][lane];
+      if(idx != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < Utilities::pow(n_t, dim - 1); ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i]);
+      else
+        for(unsigned int i = 0; i < Utilities::pow(n_t, dim - 1); ++i)
+          write_vectorized_value(0.0, lane, out[i]);
+      out += Utilities::pow(n_t, dim - 1);
+
+      const unsigned int start = (face % 2) * (n_t - 1);
+      idx                      = dof_indices[2][lane] + start;
+      if(dof_indices[2][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(src.local_element(idx + i * n_t), lane, out[i * n_n]);
+      else
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(0.0, lane, out[i * n_n]);
+      idx = dof_indices[3][lane] + start;
+      if(dof_indices[3][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(src.local_element(idx + i * n_t), lane, out[i * n_n + n_t]);
+      else
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(0.0, lane, out[i * n_n + n_t]);
+      idx = dof_indices[2 * dim][lane] + hex_dofs_per_comp + start;
+      for(unsigned int i1 = 0; i1 < (dim == 3 ? n_t : 1); ++i1)
+        for(unsigned int i0 = 0; i0 < n_t - 1; ++i0)
+          write_vectorized_value(src.local_element(idx + (i1 * (n_t - 1) + i0) * n_t),
+                                 lane,
+                                 out[i1 * n_n + i0 + 1]);
+      out += Utilities::pow(n_t, dim - 2) * n_n;
+
+      if constexpr(dim == 3)
+      {
+        idx = dof_indices[4][lane] + start;
+        if(dof_indices[4][lane] != numbers::invalid_unsigned_int)
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(src.local_element(idx + i * n_t), lane, out[i]);
+        else
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(0.0, lane, out[i]);
+        idx = dof_indices[5][lane] + start;
+        if(dof_indices[5][lane] != numbers::invalid_unsigned_int)
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(src.local_element(idx + i * n_t), lane, out[n_t * n_t + i]);
+        else
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(0.0, lane, out[n_t * n_t + i]);
+        idx = dof_indices[2 * dim][lane] + 2 * hex_dofs_per_comp + start;
+        for(unsigned int i1 = 0; i1 < n_t - 1; ++i1)
+          for(unsigned int i0 = 0; i0 < n_t; ++i0)
+            write_vectorized_value(src.local_element(idx + (i1 * n_t + i0) * n_t),
+                                   lane,
+                                   out[(i1 + 1) * n_t + i0]);
+      }
+    }
+    else if(face / 2 == 1)
+    {
+      const unsigned int start = (face % 2) * (n_t - 1);
+      unsigned int       idx   = dof_indices[0][lane] + start;
+      if(dof_indices[0][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(src.local_element(idx + i * n_t), lane, out[i * n_n]);
+      else
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(0.0, lane, out[i * n_n]);
+      idx = dof_indices[1][lane] + start;
+      if(dof_indices[1][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(src.local_element(idx + i * n_t), lane, out[i * n_n + n_t]);
+      else
+        for(unsigned int i = 0; i < (dim == 3 ? n_t : 1); ++i)
+          write_vectorized_value(0.0, lane, out[i * n_n + n_t]);
+      idx = dof_indices[2 * dim][lane] + start * (n_t - 1);
+      for(unsigned int i1 = 0; i1 < (dim == 3 ? n_t : 1); ++i1)
+        for(unsigned int i0 = 0; i0 < n_t - 1; ++i0)
+          write_vectorized_value(src.local_element(idx + i1 * (n_t - 1) * n_t + i0),
+                                 lane,
+                                 out[i1 * n_n + i0 + 1]);
+      out += Utilities::pow(n_t, dim - 2) * n_n;
+
+      idx = dof_indices[face][lane];
+      if(idx != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < Utilities::pow(n_t, dim - 1); ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i]);
+      else
+        for(unsigned int i = 0; i < Utilities::pow(n_t, dim - 1); ++i)
+          write_vectorized_value(0.0, lane, out[i]);
+      out += Utilities::pow(n_t, dim - 1);
+
+      if constexpr(dim == 3)
+      {
+        idx = dof_indices[4][lane] + start * n_t;
+        if(dof_indices[4][lane] != numbers::invalid_unsigned_int)
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(src.local_element(idx + i), lane, out[i]);
+        else
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(0.0, lane, out[i]);
+        idx = dof_indices[5][lane] + start * n_t;
+        if(dof_indices[5][lane] != numbers::invalid_unsigned_int)
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(src.local_element(idx + i), lane, out[n_t * n_t + i]);
+        else
+          for(unsigned int i = 0; i < n_t; ++i)
+            write_vectorized_value(0.0, lane, out[n_t * n_t + i]);
+        idx = dof_indices[2 * dim][lane] + 2 * hex_dofs_per_comp + start * n_t;
+        for(unsigned int i1 = 0; i1 < n_t - 1; ++i1)
+          for(unsigned int i0 = 0; i0 < n_t; ++i0)
+            write_vectorized_value(src.local_element(idx + i1 * n_t * n_t + i0),
+                                   lane,
+                                   out[(i1 + 1) * n_t + i0]);
+      }
+    }
+    else
+    {
+      AssertDimension(dim, 3);
+      const unsigned int start = (face % 2) * (n_t - 1) * n_t;
+      unsigned int       idx   = dof_indices[0][lane] + start;
+      if(dof_indices[0][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i * n_n]);
+      else
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(0.0, lane, out[i * n_n]);
+      idx = dof_indices[1][lane] + start;
+      if(dof_indices[1][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i * n_n + n_t]);
+      else
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(0.0, lane, out[i * n_n + n_t]);
+      idx = dof_indices[2 * dim][lane] + start * (n_t - 1);
+      for(unsigned int i1 = 0; i1 < n_t; ++i1)
+        for(unsigned int i0 = 0; i0 < n_t - 1; ++i0)
+          write_vectorized_value(src.local_element(idx + i1 * (n_t - 1) + i0),
+                                 lane,
+                                 out[i1 * n_n + i0 + 1]);
+      out += Utilities::pow(n_t, dim - 2) * n_n;
+
+      idx = dof_indices[2][lane] + start;
+      if(dof_indices[2][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i]);
+      else
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(0.0, lane, out[i]);
+      idx = dof_indices[3][lane] + start;
+      if(dof_indices[3][lane] != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i + n_t * n_t]);
+      else
+        for(unsigned int i = 0; i < n_t; ++i)
+          write_vectorized_value(0.0, lane, out[i + n_t * n_t]);
+      idx = dof_indices[2 * dim][lane] + hex_dofs_per_comp + start * (n_t - 1);
+      for(unsigned int i1 = 0; i1 < n_t - 1; ++i1)
+        for(unsigned int i0 = 0; i0 < n_t; ++i0)
+          write_vectorized_value(src.local_element(idx + i1 * n_t + i0),
+                                 lane,
+                                 out[(i1 + 1) * n_t + i0]);
+      out += Utilities::pow(n_t, dim - 2) * n_n;
+
+      idx = dof_indices[face][lane];
+      if(idx != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < Utilities::pow(n_t, dim - 1); ++i)
+          write_vectorized_value(src.local_element(idx + i), lane, out[i]);
+      else
+        for(unsigned int i = 0; i < Utilities::pow(n_t, dim - 1); ++i)
+          write_vectorized_value(0.0, lane, out[i]);
+    }
+  }
+
+  template<int n_t, bool include_face_derivative = true>
   void
   vmult_pack_and_send_data(const VectorType & src, std::vector<MPI_Request> & requests) const
   {
     constexpr int n_n = n_t + 1;
     constexpr int data_per_face =
-      2 * (Utilities::pow(n_t, dim - 1) + n_n * Utilities::pow(n_t, dim - 2) * (dim - 1));
+      (include_face_derivative ? 2 : 1) *
+      (Utilities::pow(n_t, dim - 1) + n_n * Utilities::pow(n_t, dim - 2) * (dim - 1));
 
     std::array<VectorizedArray<Number>, dim * 3 * n_n * n_t> tmp_vec;
 
@@ -2428,44 +2785,55 @@ private:
       {
         const unsigned int face = send_data_face_index[count];
 
-        // to use vectorized code path, must check that faces are
-        // available
-        unsigned int n_faces = 1;
-        if(count + n_lanes <= offset + my_faces &&
-           send_data_face_index[count + n_lanes - 1] == face)
-          n_faces = n_lanes;
-        else
-          while(count + n_faces < offset + my_faces &&
-                send_data_face_index[count + n_faces] == face)
-            ++n_faces;
-        AssertIndexRange(n_faces, n_lanes + 1);
-
-        dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes> dof_indices_vec;
-        std::array<unsigned int, n_lanes>                   indices;
-        for(unsigned int v = 0; v < n_faces; ++v, ++count)
+        if(include_face_derivative)
         {
-          indices[v]              = count * data_per_face;
+          // to use vectorized code path, must check that faces are
+          // available
+          unsigned int n_faces = 1;
+          if(count + n_lanes <= offset + my_faces &&
+             send_data_face_index[count + n_lanes - 1] == face)
+            n_faces = n_lanes;
+          else
+            while(count + n_faces < offset + my_faces &&
+                  send_data_face_index[count + n_faces] == face)
+              ++n_faces;
+          AssertIndexRange(n_faces, n_lanes + 1);
+
+          dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes> dof_indices_vec;
+          std::array<unsigned int, n_lanes>                   indices;
+          for(unsigned int v = 0; v < n_faces; ++v, ++count)
+          {
+            indices[v]              = count * data_per_face;
+            const unsigned int cell = send_data_cell_index[count] / n_lanes;
+            const unsigned int lane = send_data_cell_index[count] % n_lanes;
+            AssertDimension(face, send_data_face_index[count]);
+            for(unsigned int f = 0; f < 2 * dim + 1; ++f)
+              dof_indices_vec[f][v] = dof_indices[cell][f][lane];
+          }
+          for(unsigned int v = n_faces; v < n_lanes; ++v)
+          {
+            for(unsigned int f = 0; f < 2 * dim + 1; ++f)
+              dof_indices_vec[f][v] = dof_indices_vec[f][0];
+          }
+          read_face_values<n_t>(src.begin(), face, dof_indices_vec, tmp_vec.data());
+
+          // copy to dedicated data field
+          if(n_faces == n_lanes)
+            vectorized_transpose_and_store(
+              false, data_per_face, tmp_vec.data(), indices.data(), export_values.data());
+          else
+            for(unsigned int v = 0; v < n_faces; ++v)
+              for(unsigned int i = 0; i < data_per_face; ++i)
+                export_values[indices[v] + i] = tmp_vec[i][v];
+        }
+        else
+        {
           const unsigned int cell = send_data_cell_index[count] / n_lanes;
           const unsigned int lane = send_data_cell_index[count] % n_lanes;
-          AssertDimension(face, send_data_face_index[count]);
-          for(unsigned int f = 0; f < 2 * dim + 1; ++f)
-            dof_indices_vec[f][v] = dof_indices[cell][f][lane];
+          read_face_values_only<n_t>(
+            src, face, dof_indices[cell], lane, export_values.data() + count * data_per_face);
+          ++count;
         }
-        for(unsigned int v = n_faces; v < n_lanes; ++v)
-        {
-          for(unsigned int f = 0; f < 2 * dim + 1; ++f)
-            dof_indices_vec[f][v] = dof_indices_vec[f][0];
-        }
-        read_face_values<n_t>(src.begin(), face, dof_indices_vec, tmp_vec.data());
-
-        // copy to dedicated data field
-        if(n_faces == n_lanes)
-          vectorized_transpose_and_store(
-            false, data_per_face, tmp_vec.data(), indices.data(), export_values.data());
-        else
-          for(unsigned int v = 0; v < n_faces; ++v)
-            for(unsigned int i = 0; i < data_per_face; ++i)
-              export_values[indices[v] + i] = tmp_vec[i][v];
       }
 
       MPI_Isend(&export_values[offset * data_per_face],
@@ -2477,7 +2845,10 @@ private:
                 &requests[send_data_process.size() + p]);
       offset += my_faces;
     }
-    AssertDimension(offset * data_per_face, export_values.size());
+    if(include_face_derivative)
+      AssertDimension(offset * data_per_face, export_values.size());
+    else
+      AssertDimension(offset * data_per_face * 2, export_values.size());
   }
 
   void
@@ -2632,13 +3003,44 @@ private:
     }
   }
 
-  template<int n_q_points_1d>
+  template<int degree>
+  void
+  do_convective_on_cell(const unsigned int cell,
+                        const VectorType & src,
+                        const Number       factor_skew_symmetric,
+                        const Number       factor_flux,
+                        VectorType &       dst) const
+  {
+    (void)factor_flux;
+    constexpr unsigned int n_q_points_1d = degree + (degree + 2) / 2;
+    constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
+    const auto &           shape_data    = convective_shape_info.data;
+
+    VectorizedArray<Number> quad_values[dim * n_points], out_values[dim * n_points];
+    read_cell_values<degree, n_q_points_1d>(src.begin(), dof_indices[cell], quad_values);
+
+    compute_cell_lapl<n_q_points_1d, true>(
+      shape_data, cell, quad_values, out_values, factor_skew_symmetric);
+
+    // Face integrals if Laplace factor is positive
+    for(unsigned int f = 0; f < 2 * dim; ++f)
+      compute_face_convective<degree, n_q_points_1d>(
+        shape_data, src, cell, f, factor_skew_symmetric, factor_flux, quad_values, out_values);
+
+    integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
+                                                  n_active_entries_per_cell_batch(cell),
+                                                  out_values,
+                                                  dst.begin());
+  }
+
+  template<int n_q_points_1d, bool do_convection = false>
   void
   compute_cell_lapl(
     const std::vector<internal::MatrixFreeFunctions::UnivariateShapeData<Number>> & shape_data,
     const unsigned int                                                              cell,
     const VectorizedArray<Number> *                                                 quad_values,
-    VectorizedArray<Number> * out_values) const
+    VectorizedArray<Number> *                                                       out_values,
+    const Number factor_skew_symmetric = 0.0) const
   {
     constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
     constexpr unsigned int n_q_points    = Utilities::pow(n_q_points_1d, dim);
@@ -2646,6 +3048,9 @@ private:
     VectorizedArray<Number> grad_y[n_q_points * dim];
     VectorizedArray<Number> grad_x[Utilities::pow(n_q_points_1d, dim - 1) * dim];
     VectorizedArray<Number> grad_z[n_q_points_1d * dim];
+
+    const Extruded::MappingInfo<dim, Number> & mapping_info =
+      do_convection ? this->convective_mapping_info : this->mapping_info;
 
     std::array<unsigned int, n_lanes> shifted_data_indices;
     for(unsigned int v = 0; v < n_lanes; ++v)
@@ -2725,12 +3130,11 @@ private:
         if constexpr(dim == 2)
         {
           const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
-          const VectorizedArray<Number> grad[2][2] = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
+          const VectorizedArray<Number> grad[2][2]  = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
                                                       {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
-          const VectorizedArray<Number> t0         = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
-          const VectorizedArray<Number> t1         = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
-          const VectorizedArray<Number> s0         = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
-          const VectorizedArray<Number> s1         = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
+          const VectorizedArray<Number> t0          = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+          const VectorizedArray<Number> t1          = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+          VectorizedArray<Number>       val_real[2] = {t0, t1};
 
           VectorizedArray<Number> grad_real[dim][dim];
           for(unsigned int d = 0; d < dim; ++d)
@@ -2753,13 +3157,32 @@ private:
             VectorizedArray<Number> tmp2 = jac_xy[d][0] * val[0] + jac_xy[d][1] * val[1];
 
             for(unsigned int e = 0; e < dim; ++e)
-            {
               grad_real[d][e] -= jac_grad_rank1[e] * tmp2;
+          }
 
-              // multiply by det(J^{-1}) necessary in all
-              // contributions above and the factors in the equation
-              grad_real[d][e] *= mapping_info.quad_weights_xy[q1] * factor_lapl * inv_jac_det;
-            }
+          if(do_convection)
+          {
+            VectorizedArray<Number> factor = inv_jac_det * inv_jac_det;
+            VectorizedArray<Number> tmp[2] = {grad_real[0][0] * t0 + grad_real[0][1] * t1,
+                                              grad_real[1][0] * t0 + grad_real[1][1] * t1};
+            for(unsigned int d = 0; d < dim; ++d)
+              for(unsigned int e = 0; e < dim; ++e)
+                grad_real[d][e] = (factor_skew_symmetric - Number(1.0)) * factor *
+                                  mapping_info.quad_weights_xy[q1] * val_real[d] * val_real[e];
+            val_real[0] =
+              tmp[0] * (factor_skew_symmetric * factor * mapping_info.quad_weights_xy[q1]);
+            val_real[1] =
+              tmp[1] * (factor_skew_symmetric * factor * mapping_info.quad_weights_xy[q1]);
+          }
+          else
+          {
+            for(unsigned int d = 0; d < dim; ++d)
+              for(unsigned int e = 0; e < dim; ++e)
+                // multiply by det(J^{-1}) necessary in all
+                // contributions above and the factors in the equation
+                grad_real[d][e] *= mapping_info.quad_weights_xy[q1] * factor_lapl * inv_jac_det;
+            val_real[0] *= inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1];
+            val_real[1] *= inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1];
           }
 
           // J * (J^{-1} * (grad_in * factor))
@@ -2792,9 +3215,9 @@ private:
           }
 
           out_values[q1 * dim] =
-            value_tmp[0] + s0 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
+            value_tmp[0] + val_real[0] * jac_xy[0][0] + val_real[1] * jac_xy[1][0];
           out_values[q1 * dim + 1] =
-            value_tmp[1] + s1 * (inv_jac_det * factor_mass * mapping_info.quad_weights_xy[q1]);
+            value_tmp[1] + val_real[0] * jac_xy[0][1] + val_real[1] * jac_xy[1][1];
         }
         else // now to dim == 3
         {
@@ -2829,14 +3252,6 @@ private:
             val_real[2] = h_z * val[2];
 
             const Number weight_z = mapping_info.quad_weights_z[qz];
-            // need factors without h_z_inverse in code below because
-            // it cancels with h_z
-            const VectorizedArray<Number> factor_deriv_z =
-              (mapping_info.quad_weights_xy[q1] * inv_jac_det * factor_lapl) * weight_z;
-            const VectorizedArray<Number> factor_deriv = h_z_inverse * factor_deriv_z;
-            const VectorizedArray<Number> factor_ma =
-              (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * factor_mass) *
-              weight_z;
 
             VectorizedArray<Number> grad_real[dim][dim];
             for(unsigned int d = 0; d < 2; ++d)
@@ -2858,22 +3273,52 @@ private:
                 grad_real[d][e] = (tmp[0] * inv_jac_xy[e][0] + tmp[1] * inv_jac_xy[e][1]);
 
               for(unsigned int e = 0; e < 2; ++e)
-              {
                 grad_real[d][e] -= jac_grad_rank1[e] * val_real[d];
-
-                // multiply by det(J^{-1}) necessary in all
-                // contributions above and the factors in the
-                // equation
-                grad_real[d][e] *= factor_deriv;
-              }
 
               const VectorizedArray<Number> tmp_z_grad2 =
                 (inv_jac_xy[d][0] * grad[2][0] + inv_jac_xy[d][1] * grad[2][1]);
 
-              grad_real[2][d] = (tmp_z_grad2 - jac_grad_rank1[d] * val[2]) * factor_deriv_z;
-              grad_real[d][2] = (h_z_inverse * tmp[2]) * factor_deriv;
+              grad_real[2][d] = (tmp_z_grad2 - jac_grad_rank1[d] * val[2]) * h_z;
+              grad_real[d][2] = h_z_inverse * tmp[2];
             }
-            grad_real[2][2] = factor_deriv * grad[2][2];
+            grad_real[2][2] = grad[2][2];
+
+            if(do_convection)
+            {
+              VectorizedArray<Number> factor =
+                inv_jac_det * inv_jac_det * h_z_inverse * h_z_inverse;
+              VectorizedArray<Number> tmp[3];
+              for(unsigned int d = 0; d < dim; ++d)
+              {
+                VectorizedArray<Number> sum = grad_real[d][0] * val_real[0];
+                for(unsigned int e = 1; e < dim; ++e)
+                  sum += grad_real[d][e] * val_real[e];
+                tmp[d] = sum;
+              }
+              for(unsigned int d = 0; d < dim; ++d)
+                for(unsigned int e = 0; e < dim; ++e)
+                  grad_real[d][e] = (factor_skew_symmetric - Number(1.0)) * factor *
+                                    mapping_info.quad_weights_xy[q1] * weight_z * val_real[d] *
+                                    val_real[e];
+              for(unsigned int d = 0; d < dim; ++d)
+                val_real[d] = tmp[d] * (factor_skew_symmetric * factor *
+                                        mapping_info.quad_weights_xy[q1] * weight_z);
+            }
+            else
+            {
+              const VectorizedArray<Number> factor_deriv =
+                (mapping_info.quad_weights_xy[q1] * inv_jac_det * factor_lapl * h_z_inverse) *
+                weight_z;
+              const VectorizedArray<Number> factor_ma =
+                (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * factor_mass) *
+                weight_z;
+
+              for(unsigned int d = 0; d < dim; ++d)
+                for(unsigned int e = 0; e < dim; ++e)
+                  grad_real[d][e] *= factor_deriv;
+              for(unsigned int d = 0; d < dim; ++d)
+                val_real[d] *= factor_ma;
+            }
 
             // For the test function part, the Jacobian determinant
             // that is part of the integration factor cancels with the
@@ -2909,8 +3354,6 @@ private:
 
             //   -(grad_in * factor) * J * (J^{-T} * jac_grad * J^{-1})
             // = -(grad_in * factor) * J * ( \------- tmp4 ---------/ )
-            for(unsigned int d = 0; d < dim; ++d)
-              val_real[d] *= factor_ma;
             for(unsigned int d = 0; d < 2; ++d)
             {
               VectorizedArray<Number> tmp2 =
@@ -3678,6 +4121,331 @@ private:
         }
   }
 
+  template<int degree, int n_q_points_1d>
+  void
+  compute_face_convective(
+    const std::vector<internal::MatrixFreeFunctions::UnivariateShapeData<Number>> & shape_data,
+    const VectorType &                                                              src,
+    const unsigned int                                                              cell,
+    const unsigned int                                                              f,
+    const Number,
+    const Number,
+    const VectorizedArray<Number> * quad_values,
+    VectorizedArray<Number> *       out_values) const
+  {
+    constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
+    AssertThrow(n_q_points_2d == convective_mapping_info.quad_weights_xy.size(),
+                ExcDimensionMismatch(n_q_points_2d,
+                                     convective_mapping_info.quad_weights_xy.size()));
+    constexpr unsigned int n_lanes = VectorizedArray<Number>::size();
+
+    ndarray<unsigned int, 2 * dim + 1, n_lanes> dof_indices_neighbor;
+    unsigned int                                lane_with_neighbor = 0;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(neighbor_cells[cell][f][v] != numbers::invalid_unsigned_int)
+      {
+        lane_with_neighbor = v;
+        break;
+      }
+
+    // TODO: 0: interior face, 1: Neumann, -1: Dirichlet, apply from actual b.c. in operator
+    VectorizedArray<Number> boundary_mask;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(neighbor_cells[cell][f][v] == numbers::invalid_unsigned_int)
+        boundary_mask[v] = -1.;
+      else
+        boundary_mask[v] = 0.;
+
+    for(unsigned int v = 0; v < n_lanes; ++v)
+    {
+      // use a dummy neighbor with nearby data for cells at boundary to make
+      // sure vectorized functions continue working
+      const unsigned int neighbor_idx =
+        neighbor_cells[cell][f][v] != numbers::invalid_unsigned_int ?
+          neighbor_cells[cell][f][v] :
+          neighbor_cells[cell][f][lane_with_neighbor];
+      if(neighbor_idx != numbers::invalid_unsigned_int)
+        for(unsigned int i = 0; i < 2 * dim + 1; ++i)
+          dof_indices_neighbor[i][v] =
+            dof_indices[neighbor_idx / n_lanes][i][neighbor_idx % n_lanes];
+      else
+        for(unsigned int i = 0; i < 2 * dim + 1; ++i)
+          dof_indices_neighbor[i][v] = dof_indices[0][i][0];
+    }
+
+    VectorizedArray<Number> face_array[dim * Utilities::pow(n_q_points_1d, dim - 1)];
+    constexpr int           n_n = degree + 1;
+    constexpr int           n_t = degree;
+
+    internal::EvaluatorTensorProduct<internal::evaluate_evenodd,
+                                     dim - 1,
+                                     degree,
+                                     n_q_points_1d,
+                                     VectorizedArray<Number>,
+                                     Number>
+      eval_iso(shape_data[1].shape_values_eo.data(), {}, {});
+    internal::EvaluatorTensorProductAnisotropic<dim - 1, degree, n_q_points_1d, true> eval_aniso;
+
+    const unsigned int      face_direction  = f / 2;
+    constexpr unsigned int  n_q_points_face = Utilities::pow(n_q_points_1d, dim - 1);
+    VectorizedArray<Number> scratch_data[n_q_points_face + 1];
+    VectorizedArray<Number> values_face[2][dim][n_q_points_face + 1];
+
+    for(unsigned int lane = 0; lane < n_lanes; ++lane)
+      read_face_values_only<degree>(
+        src, f + (f % 2 ? -1 : 1), dof_indices_neighbor, lane, face_array);
+
+    constexpr dealii::ndarray<int, 3, 3> dofs_per_direction{
+      {{{n_n, n_t, n_t}}, {{n_t, n_n, n_t}}, {{n_t, n_t, n_n}}}};
+
+    // For faces located on MPI-remote processes, we replace the dummy
+    // data read out above by the data sent to us
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(mpi_exchange_data_on_faces[cell][f][v] != numbers::invalid_unsigned_int)
+        for(unsigned int d = 0, c = 0; d < dim; ++d)
+        {
+          unsigned int dofs_on_this_face = 1;
+          for(unsigned int e = 0; e < dim; ++e)
+            if(e != d)
+              dofs_on_this_face *= dofs_per_direction[f / 2][e];
+          for(unsigned int i = 0; i < dofs_on_this_face; ++i)
+          {
+            // for convective term, we use only value, so the index offsets
+            // need to be divided by 2
+            face_array[i + c][v] =
+              import_values[mpi_exchange_data_on_faces[cell][f][v] / 2 + i + c];
+          }
+          c += dofs_on_this_face;
+        }
+
+    const VectorizedArray<Number> * values_dofs = face_array + face_direction * n_t * n_n;
+    VectorizedArray<Number> *       values      = values_face[1][face_direction];
+    eval_iso.template values<0, true, false>(values_dofs, scratch_data);
+    eval_iso.template values<1, true, false>(scratch_data, values);
+
+    if(face_direction == 0)
+    {
+      values_dofs = face_array + n_t * n_t;
+      values      = values_face[1][1];
+    }
+    else
+    {
+      values_dofs = face_array;
+      values      = values_face[1][0];
+    }
+    eval_aniso.template normal<0>(shape_data[0], values_dofs, values);
+    eval_aniso.template tangential<1, 0>(shape_data[1], values, values);
+
+    if(face_direction < 2)
+    {
+      values_dofs = face_array + n_t * n_t + n_t * n_n;
+      values      = values_face[1][2];
+    }
+    else
+    {
+      values_dofs = face_array + n_t * n_n;
+      values      = values_face[1][1];
+    }
+    eval_aniso.template normal<1>(shape_data[0], values_dofs, values);
+    eval_aniso.template tangential<0, 1>(shape_data[1], values, values);
+
+    // interpolate from interior to face
+    const std::array<Number, 2> * shape = convective_interpolate_quad_to_boundary[f % 2].data();
+
+    for(unsigned int i1 = 0; i1 < n_q_points_1d; ++i1)
+      for(unsigned int i0 = 0; i0 < n_q_points_1d; ++i0)
+      {
+        unsigned int idx = 0;
+        if(face_direction == 0)
+          idx = n_q_points_1d * (n_q_points_1d * i1 + i0);
+        else if(face_direction == 1)
+          idx = i0 + i1 * n_q_points_1d * n_q_points_1d;
+        else
+          idx = i0 + i1 * n_q_points_1d;
+
+        const VectorizedArray<Number> * my_vals = quad_values + idx * dim;
+        VectorizedArray<Number>         v0      = shape[0][0] * my_vals[0];
+        VectorizedArray<Number>         v1      = shape[0][0] * my_vals[1];
+        VectorizedArray<Number>         v2      = shape[0][0] * my_vals[2];
+        const unsigned int stride = Utilities::pow(n_q_points_1d, face_direction) * dim;
+        for(unsigned int i = 1; i < n_q_points_1d; ++i)
+        {
+          v0 += shape[i][0] * my_vals[i * stride + 0];
+          v1 += shape[i][0] * my_vals[i * stride + 1];
+          v2 += shape[i][0] * my_vals[i * stride + 2];
+        }
+        const unsigned int val_idx = i1 * n_q_points_1d + i0;
+        values_face[0][0][val_idx] = v0;
+        values_face[0][1][val_idx] = v1;
+        values_face[0][2][val_idx] = v2;
+      }
+
+    const Number h_z         = mapping_info.h_z;
+    const Number h_z_inverse = mapping_info.h_z_inverse;
+
+    if(face_direction < 2)
+    {
+      std::array<unsigned int, n_lanes> shifted_data_indices;
+      std::array<unsigned int, n_lanes> shifted_data_indices_norm;
+      std::array<unsigned int, n_lanes> shifted_data_indices_neigh;
+      for(unsigned int v = 0; v < n_lanes; ++v)
+      {
+        const unsigned int idx  = convective_mapping_info.face_mapping_data_index[cell][f][0][v];
+        shifted_data_indices[v] = idx * 4;
+        shifted_data_indices_norm[v] = idx * 2;
+        const unsigned int neighbor_idx =
+          convective_mapping_info.face_mapping_data_index[cell][f][1][v];
+        shifted_data_indices_neigh[v] = neighbor_idx * 4;
+      }
+
+      for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy[2];
+        vectorized_load_and_transpose(4,
+                                      &convective_mapping_info.face_jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0][0]);
+        vectorized_load_and_transpose(4,
+                                      &convective_mapping_info.face_jacobians_xy[q1][0][0],
+                                      shifted_data_indices_neigh.data(),
+                                      &jac_xy[1][0][0]);
+
+        const VectorizedArray<Number> area_element_xy =
+          std::sqrt(jac_xy[0][0][1 - face_direction] * jac_xy[0][0][1 - face_direction] +
+                    jac_xy[0][1][1 - face_direction] * jac_xy[0][1][1 - face_direction]);
+
+        const VectorizedArray<Number> inv_jac_det[2] = {Number(1.0) / determinant(jac_xy[0]),
+                                                        Number(1.0) / determinant(jac_xy[1])};
+
+        Tensor<1, 2, VectorizedArray<Number>> normal;
+        vectorized_load_and_transpose(2,
+                                      &convective_mapping_info.face_normal_vector_xy[q1][0],
+                                      shifted_data_indices_norm.data(),
+                                      &normal[0]);
+
+        for(unsigned int qz = 0, q = q1; qz < n_q_points_1d; ++qz, q += n_q_points_1d)
+        {
+          const VectorizedArray<Number> val[2][3] = {
+            {values_face[0][0][q], values_face[0][1][q], values_face[0][2][q]},
+            {values_face[1][0][q], values_face[1][1][q], values_face[1][2][q]}};
+
+          Tensor<1, dim, VectorizedArray<Number>> val_real[2];
+          for(unsigned int s = 0; s < 2; ++s)
+          {
+            val_real[s][0] = jac_xy[s][0][0] * val[s][0] + jac_xy[s][0][1] * val[s][1];
+            val_real[s][1] = jac_xy[s][1][0] * val[s][0] + jac_xy[s][1][1] * val[s][1];
+
+            for(unsigned int d = 0; d < 2; ++d)
+              val_real[s][d] *= inv_jac_det[s] * h_z_inverse;
+            val_real[s][2] = inv_jac_det[s] * val[s][2];
+          }
+
+          {
+            val_real[1] = (Number(1.0) - std::abs(boundary_mask)) * val_real[1];
+          }
+
+          // the length element h_z cancels with h_z_inverse of
+          // determinant in Piola transformation for test function
+          const VectorizedArray<Number> integrate_factor =
+            (convective_mapping_info.quad_weights_z[q1] * area_element_xy) *
+            convective_mapping_info.quad_weights_z[qz];
+
+          // physical terms: for normal speed use normal continuity of RT
+          // space, so only pick minus values
+          VectorizedArray<Number> normal_speed =
+            (val_real[0][0] * normal[0] + val_real[0][1] * normal[1]);
+          for(unsigned int d = 0; d < dim; ++d)
+          {
+            val_real[0][d] = integrate_factor * (std::abs(normal_speed) - normal_speed) *
+                             Number(0.5) * (val_real[0][d] - val_real[1][d]);
+          }
+
+          // apply test functions
+          const VectorizedArray<Number> tmp0 = val_real[0][0] * inv_jac_det[0];
+          const VectorizedArray<Number> tmp1 = val_real[0][1] * inv_jac_det[0];
+          values_face[0][0][q]               = jac_xy[0][0][0] * tmp0 + jac_xy[0][1][0] * tmp1;
+          values_face[0][1][q]               = jac_xy[0][0][1] * tmp0 + jac_xy[0][1][1] * tmp1;
+          values_face[0][2][q]               = h_z * inv_jac_det[0] * val_real[0][2];
+        }
+      }
+    }
+    else
+    {
+      std::array<unsigned int, n_lanes> shifted_data_indices;
+      for(unsigned int v = 0; v < n_lanes; ++v)
+        shifted_data_indices[v] = convective_mapping_info.mapping_data_index[cell][v] * 4;
+
+      const Number normal_sign = (f % 2) ? 1 : -1;
+
+      for(unsigned int q = 0; q < n_q_points_2d; ++q)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &convective_mapping_info.jacobians_xy[q][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0]);
+        const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
+
+        const VectorizedArray<Number> val[2][3] = {
+          {values_face[0][0][q], values_face[0][1][q], values_face[0][2][q]},
+          {values_face[1][0][q], values_face[1][1][q], values_face[1][2][q]}};
+
+        Tensor<1, dim, VectorizedArray<Number>> val_real[2];
+        for(unsigned int s = 0; s < 2; ++s)
+        {
+          for(unsigned int d = 0; d < 2; ++d)
+            val_real[s][d] =
+              (h_z_inverse * inv_jac_det) * (jac_xy[d][0] * val[s][0] + jac_xy[d][1] * val[s][1]);
+
+          // h_z cancels with factor h_z_inverse from Jacobian determinant
+          val_real[s][2] = inv_jac_det * val[s][2];
+        }
+
+        const VectorizedArray<Number> integrate_factor =
+          convective_mapping_info.quad_weights_xy[q] * determinant(jac_xy);
+
+        VectorizedArray<Number> normal_speed = normal_sign * val_real[0][2];
+        for(unsigned int d = 0; d < dim; ++d)
+        {
+          val_real[0][d] = integrate_factor * (std::abs(normal_speed) - normal_speed) *
+                           Number(0.5) * (val_real[0][d] - val_real[1][d]);
+        }
+
+        // transpose of evaluate part
+        for(unsigned int d = 0; d < 2; ++d)
+          values_face[0][d][q] = (h_z_inverse * inv_jac_det) *
+                                 (jac_xy[0][d] * val_real[0][0] + jac_xy[1][d] * val_real[0][1]);
+        values_face[0][2][q] = inv_jac_det * val_real[0][2];
+      }
+    }
+
+    // interpolate from face to interior
+    const unsigned int stride = Utilities::pow(n_q_points_1d, face_direction) * dim;
+    for(unsigned int i1 = 0; i1 < n_q_points_1d; ++i1)
+      for(unsigned int i0 = 0; i0 < n_q_points_1d; ++i0)
+      {
+        unsigned int idx;
+        if(face_direction == 0)
+          idx = n_q_points_1d * (n_q_points_1d * i1 + i0);
+        else if(face_direction == 1)
+          idx = i0 + i1 * n_q_points_1d * n_q_points_1d;
+        else
+          idx = i0 + i1 * n_q_points_1d;
+
+        VectorizedArray<Number> *     vals    = out_values + idx * dim;
+        const unsigned int            val_idx = i1 * n_q_points_1d + i0;
+        const VectorizedArray<Number> v0      = values_face[0][0][val_idx];
+        const VectorizedArray<Number> v1      = values_face[0][1][val_idx];
+        const VectorizedArray<Number> v2      = values_face[0][2][val_idx];
+        for(unsigned int i = 0; i < n_q_points_1d; ++i)
+        {
+          vals[i * stride + 0] += shape[i][0] * v0;
+          vals[i * stride + 1] += shape[i][0] * v1;
+          vals[i * stride + 2] += shape[i][0] * v2;
+        }
+      }
+  }
+
   template<int degree>
   void
   do_momentum_rhs_on_cell(const unsigned int cell,
@@ -3854,11 +4622,105 @@ private:
     // (v \cdot normal, p)_{dK cap \Gamma_D} does not contribute, because the
     // normal component is subject to (homogeneous) Dirichlet boundary
     // conditions for H(div) spaces
-
     integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
                                                   n_active_entries_per_cell_batch(cell),
                                                   quad_values,
                                                   rhs.begin());
+  }
+
+  template<int degree>
+  void
+  do_body_force_on_cell(const unsigned int            cell,
+                        const dealii::Function<dim> & rhs_function,
+                        VectorType &                  dst) const
+  {
+    constexpr unsigned int n_q_points_1d = degree + 1;
+    constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
+
+    VectorizedArray<Number> quad_values[dim * n_points];
+
+    constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
+
+    std::array<unsigned int, n_lanes> shifted_data_indices;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
+
+    const Number h_z = mapping_info.h_z;
+
+    constexpr unsigned int nn = n_q_points_1d;
+
+    for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
+    {
+      for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &mapping_info.jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0]);
+
+        if constexpr(dim == 2)
+        {
+          VectorizedArray<Number> f_val[dim];
+          for(unsigned int v = 0; v < n_lanes; ++v)
+          {
+            Point<dim> point =
+              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1];
+            f_val[0][v] = rhs_function.value(point, 0);
+            f_val[1][v] = rhs_function.value(point, 1);
+          }
+          const VectorizedArray<Number> s0 = jac_xy[0][0] * f_val[0] + jac_xy[1][0] * f_val[1];
+          const VectorizedArray<Number> s1 = jac_xy[0][1] * f_val[0] + jac_xy[1][1] * f_val[1];
+
+          quad_values[q1 * dim]     = s0 * (mapping_info.quad_weights_xy[q1]);
+          quad_values[q1 * dim + 1] = s1 * (mapping_info.quad_weights_xy[q1]);
+        }
+        else // now to dim == 3
+        {
+          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
+          {
+            Tensor<1, dim, VectorizedArray<Number>> val_real;
+            for(unsigned int v = 0; v < n_lanes; ++v)
+            {
+              Point<dim> point;
+              for(unsigned int d = 0; d < 2; ++d)
+                point[d] =
+                  mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
+              for(unsigned int d = 0; d < dim; ++d)
+                val_real[d][v] = rhs_function.value(point, d);
+            }
+
+            const Number weight_z = mapping_info.quad_weights_z[qz];
+            // need factors without h_z_inverse in code below because
+            // it cancels with h_z
+            const VectorizedArray<Number> factor = mapping_info.quad_weights_xy[q1] * weight_z;
+
+            // For the test function part, the Jacobian determinant
+            // that is part of the integration factor cancels with the
+            // inverse Jacobian determinant present in the factor of
+            // the derivative
+
+            // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
+            // braces as 'tmp' from above
+            VectorizedArray<Number> value_tmp[dim];
+            for(unsigned int d = 0; d < dim; ++d)
+              val_real[d] *= factor;
+            for(unsigned int d = 0; d < 2; ++d)
+              value_tmp[d] = jac_xy[0][d] * val_real[0] + jac_xy[1][d] * val_real[1];
+            value_tmp[2] = h_z * val_real[2];
+
+            quad_values[q * dim]     = value_tmp[0];
+            quad_values[q * dim + 1] = value_tmp[1];
+            quad_values[q * dim + 2] = value_tmp[2];
+          }
+        }
+      }
+    }
+
+    integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
+                                                  n_active_entries_per_cell_batch(cell),
+                                                  quad_values,
+                                                  dst.begin());
   }
 
   unsigned int

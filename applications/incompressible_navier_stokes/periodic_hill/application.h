@@ -172,7 +172,7 @@ private:
     else
       this->param.equation_type = EquationType::NavierStokes;
     this->param.formulation_viscous_term    = FormulationViscousTerm::LaplaceFormulation;
-    this->param.formulation_convective_term = FormulationConvectiveTerm::DivergenceFormulation;
+    this->param.formulation_convective_term = FormulationConvectiveTerm::ConvectiveFormulation;
     this->param.right_hand_side             = true;
 
 
@@ -206,7 +206,7 @@ private:
     this->param.degree_p                    = DegreePressure::MixedOrder;
 
     // convective term
-    this->param.upwind_factor                = 0.5;
+    this->param.upwind_factor                = 1.0;
     this->param.type_dirichlet_bc_convective = TypeDirichletBCs::Direct;
 
     // viscous term
@@ -289,13 +289,13 @@ private:
               std::shared_ptr<dealii::Mapping<dim>> &           mapping,
               std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
-                                                 std::vector<dealii::GridTools::PeriodicFacePair<
-                                                   typename dealii::Triangulation<
-                                                     dim>::cell_iterator>> & periodic_face_pairs,
-                                                 unsigned int const          global_refinements,
-                                                 std::vector<unsigned int> const &
-                                                   vector_local_refinements) {
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements)
+    {
       (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
@@ -389,7 +389,8 @@ private:
     mapping_q_cache->initialize(
       *grid.triangulation,
       [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-        -> std::vector<dealii::Point<dim>> {
+        -> std::vector<dealii::Point<dim>>
+      {
         PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
         fe_values.reinit(cell);
 
@@ -406,7 +407,8 @@ private:
       });
 
     grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-      -> std::vector<dealii::Point<dim>> {
+      -> std::vector<dealii::Point<dim>>
+    {
       PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)
