@@ -70,8 +70,15 @@ create_time_integrator(std::shared_ptr<SpatialOperatorBase<dim, Number>> pde_ope
     std::shared_ptr<OperatorDualSplitting<dim, Number>> operator_dual_splitting =
       std::dynamic_pointer_cast<OperatorDualSplitting<dim, Number>>(pde_operator);
 
-    time_integrator = std::make_shared<IncNS::TimeIntBDFDualSplittingExtruded<dim, Number>>(
-      operator_dual_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
+    if constexpr(dim == 3 && std::is_same_v<Number, double>)
+      time_integrator = std::make_shared<IncNS::TimeIntBDFDualSplittingExtruded<dim, Number>>(
+        operator_dual_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
+    else
+    {
+      AssertThrow(false,
+                  dealii::ExcMessage(
+                    "Extruded operator only implemented for dim=3 and Number=double"));
+    }
   }
   else if(parameters.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
   {

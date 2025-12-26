@@ -136,15 +136,6 @@ private:
   rhs_pressure(VectorType & rhs) const;
 
   void
-  projection_step();
-
-  void
-  rhs_projection(VectorType & rhs) const;
-
-  void
-  penalty_step();
-
-  void
   viscous_step();
 
   void
@@ -176,13 +167,15 @@ private:
 
   VectorType velocity_np;
 
-  std::vector<VectorTypeFloat> pressure;
-  std::vector<VectorTypeFloat> pressure_matvec;
-
   std::vector<VectorTypeFloat> velocity_red;
   std::vector<VectorTypeFloat> velocity_matvec;
 
   VectorType pressure_np;
+  VectorType pressure_rhs;
+
+  std::vector<VectorTypeFloat> pressure;
+  std::vector<VectorTypeFloat> pressure_matvec;
+  std::vector<VectorType>      pressure_nbc_rhs;
 
   // required for strongly-coupled partitioned FSI
   VectorType pressure_last_iter;
