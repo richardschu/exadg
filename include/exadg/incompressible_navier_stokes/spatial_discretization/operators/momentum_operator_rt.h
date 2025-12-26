@@ -418,6 +418,7 @@ public:
         dof_indices.resize(matrix_free.n_cell_batches(), default_argument);
       }
 
+      std::array<std::vector<unsigned int>, 2 * dim> cells_at_dirichlet_boundary_by_face;
       std::vector<unsigned int> cell_indices(dof_handler.get_triangulation().n_active_cells(),
                                              numbers::invalid_unsigned_int);
       for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
@@ -451,7 +452,34 @@ public:
 
           cell_indices[matrix_free.get_cell_iterator(cell, v)->active_cell_index()] =
             cell * VectorizedArray<Number>::size() + v;
+
+          for(unsigned int f = 0; f < 2 * dim; ++f)
+            if(dof_indices[cell][f][v] == numbers::invalid_unsigned_int)
+              cells_at_dirichlet_boundary_by_face[f].push_back(cell * n_lanes + v);
         }
+
+      // put cells at Dirichlet boundary together in one data structure
+      unsigned int n_batches_boundary = 0;
+      for(unsigned int f = 0; f < 2 * dim; ++f)
+        n_batches_boundary +=
+          (cells_at_dirichlet_boundary_by_face[f].size() + n_lanes - 1) / n_lanes;
+      cells_at_dirichlet_boundary.clear();
+      cells_at_dirichlet_boundary.reserve(n_batches_boundary);
+      for(unsigned int f = 0; f < 2 * dim; ++f)
+      {
+        const unsigned int n_cells = cells_at_dirichlet_boundary_by_face[f].size();
+        for(unsigned int i = 0; i < n_cells; i += n_lanes)
+        {
+          std::pair<unsigned int, std::array<unsigned int, n_lanes>> entry;
+          entry.first = f;
+          for(unsigned int v = 0; v < n_lanes; ++v)
+            if(i + v < n_cells)
+              entry.second[v] = cells_at_dirichlet_boundary_by_face[f][i + v];
+            else
+              entry.second[v] = numbers::invalid_unsigned_int;
+          cells_at_dirichlet_boundary.push_back(entry);
+        }
+      }
 
       std::map<unsigned int, std::vector<std::array<types::global_dof_index, 5>>> proc_neighbors;
       for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
@@ -596,7 +624,7 @@ public:
     shape_info = matrix_free.get_shape_info();
 
     {
-      QGauss<1> quad(fe.degree + (fe.degree + 2) / 2);
+      QGauss<1> quad(fe.degree + (fe.degree + 1) / 2);
 
       convective_mapping_info.reinit(mapping,
                                      quad,
@@ -739,10 +767,12 @@ public:
     dst.compress(VectorOperation::add);
   }
 
+  // The parameter `factor_convective` can be set to (1.0) for the convective
+  // form of the convective term, 0.5 for the skew-symmetric form and to 0.0
+  // for the divergence form.
   void
   evaluate_convective_term(const VectorType & src,
-                           const Number       factor_skew_symmetric,
-                           const Number       factor_flux,
+                           const Number       factor_convective,
                            VectorType &       dst) const
   {
     const unsigned int n_cell_batches = dof_indices.size();
@@ -826,22 +856,22 @@ public:
 
       const unsigned int degree = shape_info.data[0].fe_degree;
       if(degree == 2)
-        do_convective_on_cell<2>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<2>(cell, src, factor_convective, dst);
       else if(degree == 3)
-        do_convective_on_cell<3>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<3>(cell, src, factor_convective, dst);
       else if(degree == 4)
-        do_convective_on_cell<4>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<4>(cell, src, factor_convective, dst);
 #ifndef DEBUG
       else if(degree == 5)
-        do_convective_on_cell<5>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<5>(cell, src, factor_convective, dst);
       else if(degree == 6)
-        do_convective_on_cell<6>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<6>(cell, src, factor_convective, dst);
       else if(degree == 7)
-        do_convective_on_cell<7>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<7>(cell, src, factor_convective, dst);
       else if(degree == 8)
-        do_convective_on_cell<8>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<8>(cell, src, factor_convective, dst);
       else if(degree == 9)
-        do_convective_on_cell<9>(cell, src, factor_skew_symmetric, factor_flux, dst);
+        do_convective_on_cell<9>(cell, src, factor_convective, dst);
 #endif
       else
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
@@ -1211,6 +1241,184 @@ public:
     velocity_old.zero_out_ghost_values();
   }
 
+  void
+  evaluate_pressure_neumann_from_velocity(const VectorType & velocity,
+                                          const Number       viscosity,
+                                          VectorType &       pressure_vector) const
+  {
+    pressure_vector = 0.0;
+    velocity.update_ghost_values();
+
+    for(unsigned int cell = 0; cell < cells_at_dirichlet_boundary.size(); ++cell)
+    {
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 2)
+        do_pressure_neumann_on_cell<2>(cell, velocity, viscosity, pressure_vector);
+      else if(degree == 3)
+        do_pressure_neumann_on_cell<3>(cell, velocity, viscosity, pressure_vector);
+      else if(degree == 4)
+        do_pressure_neumann_on_cell<4>(cell, velocity, viscosity, pressure_vector);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_pressure_neumann_on_cell<5>(cell, velocity, viscosity, pressure_vector);
+      else if(degree == 6)
+        do_pressure_neumann_on_cell<6>(cell, velocity, viscosity, pressure_vector);
+      else if(degree == 7)
+        do_pressure_neumann_on_cell<7>(cell, velocity, viscosity, pressure_vector);
+      else if(degree == 8)
+        do_pressure_neumann_on_cell<8>(cell, velocity, viscosity, pressure_vector);
+      else if(degree == 9)
+        do_pressure_neumann_on_cell<9>(cell, velocity, viscosity, pressure_vector);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+    velocity.zero_out_ghost_values();
+  }
+
+  void
+  evaluate_add_pressure_neumann_from_body_force(const dealii::Function<dim> & rhs_function,
+                                                VectorType &                  pressure_rhs) const
+  {
+    const unsigned int degree   = shape_info.data[0].fe_degree;
+    const unsigned int nn       = degree + 1;
+    const unsigned int n_points = Utilities::pow(nn, dim - 1);
+    AssertDimension(degree, pressure_shape_info.data[0].fe_degree + 1);
+    const unsigned int mm = degree;
+
+    AlignedVector<VectorizedArray<Number>> pressure_values(n_points);
+
+    for(unsigned int cell = 0; cell < cells_at_dirichlet_boundary.size(); ++cell)
+    {
+      const unsigned int face           = cells_at_dirichlet_boundary[cell].first;
+      const unsigned int face_direction = face / 2;
+
+      const auto & shape_data_pres = pressure_shape_info.data[0].shape_values_eo;
+
+
+      if(face_direction < 2)
+      {
+        std::array<unsigned int, n_lanes> shifted_data_indices, data_indices;
+        for(unsigned int v = 0; v < n_lanes; ++v)
+        {
+          const unsigned int cell_index = cells_at_dirichlet_boundary[cell].second[v];
+          const unsigned int idx =
+            mapping_info
+              .face_mapping_data_index[cell_index / n_lanes][face][0][cell_index % n_lanes];
+          shifted_data_indices[v] = idx * 4;
+          data_indices[v]         = idx;
+        }
+
+        for(unsigned int q1 = 0; q1 < nn; ++q1)
+        {
+          Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+          vectorized_load_and_transpose(4,
+                                        &mapping_info.face_jacobians_xy[q1][0][0],
+                                        shifted_data_indices.data(),
+                                        &jac_xy[0][0]);
+
+          const VectorizedArray<Number> area_element_xy =
+            std::sqrt(jac_xy[0][1 - face_direction] * jac_xy[0][1 - face_direction] +
+                      jac_xy[1][1 - face_direction] * jac_xy[1][1 - face_direction]);
+          const Number h_z = mapping_info.h_z;
+
+          VectorizedArray<Number> val;
+          for(unsigned int v = 0; v < n_lanes; ++v)
+          {
+            Point<dim> point;
+            for(unsigned int d = 0; d < 2; ++d)
+              point[d] = mapping_info.face_quadrature_points[data_indices[v] + q1][d];
+            val[v] = 0;
+            for(unsigned int e = 0; e < 2; ++e)
+              val[v] += rhs_function.value(point, e) *
+                        mapping_info.face_normal_vector_xy[data_indices[v] + q1][e];
+          }
+
+          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn)
+            pressure_values[q] = (mapping_info.quad_weights_z[q1] * area_element_xy * h_z) *
+                                 mapping_info.quad_weights_z[qz] * val;
+        }
+      }
+      else
+        AssertThrow(false,
+                    ExcNotImplemented(
+                      "Face operations in extruded direction currently not supported"));
+
+      // perform interpolation within face, utilize the fact that the pressure
+      // space is the same as the tangential space in RT
+      dealii::internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
+                                                    dealii::internal::EvaluatorQuantity::value,
+                                                    dim - 1,
+                                                    0,
+                                                    0>::do_backward(1,
+                                                                    shape_data_pres,
+                                                                    false,
+                                                                    pressure_values.data(),
+                                                                    pressure_values.data(),
+                                                                    mm,
+                                                                    nn);
+      for(unsigned int v = 0; v < n_lanes; ++v)
+      {
+        const unsigned int cell_index = cells_at_dirichlet_boundary[cell].second[v];
+        if(cell_index == numbers::invalid_unsigned_int)
+          continue;
+
+        const unsigned int offset = (face % 2) * Utilities::pow(mm, face_direction) * (mm - 1);
+        const unsigned int idx =
+          (*pressure_dof_indices)[cell_index / n_lanes][cell_index % n_lanes] + offset;
+        if(face_direction == 0)
+          for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
+            pressure_rhs.local_element(idx + i * mm) += pressure_values[i][v];
+        else if(face_direction == 1)
+          for(unsigned int i1 = 0; i1 < (dim == 3 ? mm : 1); ++i1)
+            for(unsigned int i0 = 0; i0 < mm; ++i0)
+              pressure_rhs.local_element(idx + i1 * mm * mm + i0) +=
+                pressure_values[i1 * mm + i0][v];
+        else
+          for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
+            pressure_rhs.local_element(idx + i) += pressure_values[i][v];
+      }
+    }
+  }
+
+  void
+  evaluate_add_velocity_divergence(const VectorType & velocity,
+                                   const Number       velocity_scale,
+                                   VectorType &       pressure_rhs) const
+  {
+    AssertDimension(pressure_shape_info.data[0].n_q_points_1d, shape_info.data[0].n_q_points_1d);
+    AssertDimension(pressure_shape_info.data[0].fe_degree, shape_info.data[1].fe_degree);
+
+    const unsigned int n_cell_batches = dof_indices.size();
+
+    velocity.update_ghost_values();
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 2)
+        do_velocity_divergence_on_cell<2>(cell, velocity, velocity_scale, pressure_rhs);
+      else if(degree == 3)
+        do_velocity_divergence_on_cell<3>(cell, velocity, velocity_scale, pressure_rhs);
+      else if(degree == 4)
+        do_velocity_divergence_on_cell<4>(cell, velocity, velocity_scale, pressure_rhs);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_velocity_divergence_on_cell<5>(cell, velocity, velocity_scale, pressure_rhs);
+      else if(degree == 6)
+        do_velocity_divergence_on_cell<6>(cell, velocity, velocity_scale, pressure_rhs);
+      else if(degree == 7)
+        do_velocity_divergence_on_cell<7>(cell, velocity, velocity_scale, pressure_rhs);
+      else if(degree == 8)
+        do_velocity_divergence_on_cell<8>(cell, velocity, velocity_scale, pressure_rhs);
+      else if(degree == 9)
+        do_velocity_divergence_on_cell<9>(cell, velocity, velocity_scale, pressure_rhs);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+    velocity.zero_out_ghost_values();
+  }
+
 private:
   ObserverPointer<const Mapping<dim>>                              mapping;
   ObserverPointer<const DoFHandler<dim>>                           dof_handler;
@@ -1220,6 +1428,9 @@ private:
   mutable AlignedVector<Number>                                    import_values;
   mutable AlignedVector<Number>                                    export_values;
   Table<2, unsigned char>                                          all_owned_faces;
+
+  std::vector<std::pair<unsigned int, std::array<unsigned int, n_lanes>>>
+    cells_at_dirichlet_boundary;
 
   std::shared_ptr<const Utilities::MPI::Partitioner> partitioner;
 
@@ -3007,12 +3218,10 @@ private:
   void
   do_convective_on_cell(const unsigned int cell,
                         const VectorType & src,
-                        const Number       factor_skew_symmetric,
-                        const Number       factor_flux,
+                        const Number       factor_convective,
                         VectorType &       dst) const
   {
-    (void)factor_flux;
-    constexpr unsigned int n_q_points_1d = degree + (degree + 2) / 2;
+    constexpr unsigned int n_q_points_1d = degree + (degree + 1) / 2;
     constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
     const auto &           shape_data    = convective_shape_info.data;
 
@@ -3020,12 +3229,12 @@ private:
     read_cell_values<degree, n_q_points_1d>(src.begin(), dof_indices[cell], quad_values);
 
     compute_cell_lapl<n_q_points_1d, true>(
-      shape_data, cell, quad_values, out_values, factor_skew_symmetric);
+      shape_data, cell, quad_values, out_values, factor_convective);
 
     // Face integrals if Laplace factor is positive
     for(unsigned int f = 0; f < 2 * dim; ++f)
       compute_face_convective<degree, n_q_points_1d>(
-        shape_data, src, cell, f, factor_skew_symmetric, factor_flux, quad_values, out_values);
+        shape_data, src, cell, f, factor_convective, quad_values, out_values);
 
     integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
                                                   n_active_entries_per_cell_batch(cell),
@@ -3040,7 +3249,7 @@ private:
     const unsigned int                                                              cell,
     const VectorizedArray<Number> *                                                 quad_values,
     VectorizedArray<Number> *                                                       out_values,
-    const Number factor_skew_symmetric = 0.0) const
+    const Number factor_convective = 0.0) const
   {
     constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
     constexpr unsigned int n_q_points    = Utilities::pow(n_q_points_1d, dim);
@@ -3167,12 +3376,10 @@ private:
                                               grad_real[1][0] * t0 + grad_real[1][1] * t1};
             for(unsigned int d = 0; d < dim; ++d)
               for(unsigned int e = 0; e < dim; ++e)
-                grad_real[d][e] = (factor_skew_symmetric - Number(1.0)) * factor *
+                grad_real[d][e] = (factor_convective - Number(1.0)) * factor *
                                   mapping_info.quad_weights_xy[q1] * val_real[d] * val_real[e];
-            val_real[0] =
-              tmp[0] * (factor_skew_symmetric * factor * mapping_info.quad_weights_xy[q1]);
-            val_real[1] =
-              tmp[1] * (factor_skew_symmetric * factor * mapping_info.quad_weights_xy[q1]);
+            val_real[0] = tmp[0] * (factor_convective * factor * mapping_info.quad_weights_xy[q1]);
+            val_real[1] = tmp[1] * (factor_convective * factor * mapping_info.quad_weights_xy[q1]);
           }
           else
           {
@@ -3297,11 +3504,11 @@ private:
               }
               for(unsigned int d = 0; d < dim; ++d)
                 for(unsigned int e = 0; e < dim; ++e)
-                  grad_real[d][e] = (factor_skew_symmetric - Number(1.0)) * factor *
+                  grad_real[d][e] = (factor_convective - Number(1.0)) * factor *
                                     mapping_info.quad_weights_xy[q1] * weight_z * val_real[d] *
                                     val_real[e];
               for(unsigned int d = 0; d < dim; ++d)
-                val_real[d] = tmp[d] * (factor_skew_symmetric * factor *
+                val_real[d] = tmp[d] * (factor_convective * factor *
                                         mapping_info.quad_weights_xy[q1] * weight_z);
             }
             else
@@ -3326,92 +3533,107 @@ private:
             // the derivative
 
             // J * (J^{-1} * (grad_in * factor))
-            VectorizedArray<Number> tmp[2][dim];
-            for(unsigned int d = 0; d < 2; ++d)
-              for(unsigned int e = 0; e < dim; ++e)
-                tmp[d][e] =
-                  (inv_jac_xy[0][d] * grad_real[e][0] + inv_jac_xy[1][d] * grad_real[e][1]);
-
-            grad_x[ix]     = (jac_xy[0][0] * tmp[0][0] + jac_xy[1][0] * tmp[0][1]);
-            grad_x[ix + 1] = (jac_xy[0][1] * tmp[0][0] + jac_xy[1][1] * tmp[0][1]);
-            grad_x[ix + 2] = h_z * tmp[0][2];
-            grad_y[iy]     = (jac_xy[0][0] * tmp[1][0] + jac_xy[1][0] * tmp[1][1]);
-            grad_y[iy + 1] = (jac_xy[0][1] * tmp[1][0] + jac_xy[1][1] * tmp[1][1]);
-            grad_y[iy + 2] = h_z * tmp[1][2];
-            grad_z[iz]     = (jac_xy[0][0] * (grad_real[0][2] * h_z_inverse) +
-                          jac_xy[1][0] * (grad_real[1][2] * h_z_inverse));
-            grad_z[iz + 1] = (jac_xy[0][1] * (grad_real[0][2] * h_z_inverse) +
-                              jac_xy[1][1] * (grad_real[1][2] * h_z_inverse));
-            grad_z[iz + 2] = grad_real[2][2];
-
-            // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
-            // braces as 'tmp' from above
-            VectorizedArray<Number> value_tmp[dim];
-            for(unsigned int d = 0; d < 2; ++d)
-              value_tmp[d] =
-                (tmp[d][0] * jac_grad_xy[d][0] + tmp[d][1] * jac_grad_xy[d][1] +
-                 tmp[1 - d][0] * jac_grad_xy[2][0] + tmp[1 - d][1] * jac_grad_xy[2][1]);
-
-            //   -(grad_in * factor) * J * (J^{-T} * jac_grad * J^{-1})
-            // = -(grad_in * factor) * J * ( \------- tmp4 ---------/ )
-            for(unsigned int d = 0; d < 2; ++d)
+            if(!do_convection || factor_convective != Number(1.0))
             {
-              VectorizedArray<Number> tmp2 =
-                (grad_real[d][0] * jac_grad_rank1[0] + grad_real[d][1] * jac_grad_rank1[1]);
-              for(unsigned int e = 0; e < 2; ++e)
-                value_tmp[e] += jac_xy[d][e] * (val_real[d] - tmp2);
-            }
-            value_tmp[2] = h_z * (val_real[2] - grad_real[2][0] * jac_grad_rank1[0] -
-                                  grad_real[2][1] * jac_grad_rank1[1]);
+              VectorizedArray<Number> tmp[2][dim];
+              for(unsigned int d = 0; d < 2; ++d)
+                for(unsigned int e = 0; e < dim; ++e)
+                  tmp[d][e] =
+                    (inv_jac_xy[0][d] * grad_real[e][0] + inv_jac_xy[1][d] * grad_real[e][1]);
 
-            out_values[q * dim]     = value_tmp[0];
-            out_values[q * dim + 1] = value_tmp[1];
-            out_values[q * dim + 2] = value_tmp[2];
+              grad_x[ix]     = (jac_xy[0][0] * tmp[0][0] + jac_xy[1][0] * tmp[0][1]);
+              grad_x[ix + 1] = (jac_xy[0][1] * tmp[0][0] + jac_xy[1][1] * tmp[0][1]);
+              grad_x[ix + 2] = h_z * tmp[0][2];
+              grad_y[iy]     = (jac_xy[0][0] * tmp[1][0] + jac_xy[1][0] * tmp[1][1]);
+              grad_y[iy + 1] = (jac_xy[0][1] * tmp[1][0] + jac_xy[1][1] * tmp[1][1]);
+              grad_y[iy + 2] = h_z * tmp[1][2];
+              grad_z[iz]     = (jac_xy[0][0] * (grad_real[0][2] * h_z_inverse) +
+                            jac_xy[1][0] * (grad_real[1][2] * h_z_inverse));
+              grad_z[iz + 1] = (jac_xy[0][1] * (grad_real[0][2] * h_z_inverse) +
+                                jac_xy[1][1] * (grad_real[1][2] * h_z_inverse));
+              grad_z[iz + 2] = grad_real[2][2];
+
+              // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
+              // braces as 'tmp' from above
+              VectorizedArray<Number> value_tmp[dim];
+              for(unsigned int d = 0; d < 2; ++d)
+                value_tmp[d] =
+                  (tmp[d][0] * jac_grad_xy[d][0] + tmp[d][1] * jac_grad_xy[d][1] +
+                   tmp[1 - d][0] * jac_grad_xy[2][0] + tmp[1 - d][1] * jac_grad_xy[2][1]);
+
+              //   -(grad_in * factor) * J * (J^{-T} * jac_grad * J^{-1})
+              // = -(grad_in * factor) * J * ( \------- tmp4 ---------/ )
+              for(unsigned int d = 0; d < 2; ++d)
+              {
+                VectorizedArray<Number> tmp2 =
+                  (grad_real[d][0] * jac_grad_rank1[0] + grad_real[d][1] * jac_grad_rank1[1]);
+                for(unsigned int e = 0; e < 2; ++e)
+                  value_tmp[e] += jac_xy[d][e] * (val_real[d] - tmp2);
+              }
+              value_tmp[2] = h_z * (val_real[2] - grad_real[2][0] * jac_grad_rank1[0] -
+                                    grad_real[2][1] * jac_grad_rank1[1]);
+
+              out_values[q * dim]     = value_tmp[0];
+              out_values[q * dim + 1] = value_tmp[1];
+              out_values[q * dim + 2] = value_tmp[2];
+            }
+            else
+            {
+              // shortcut for convective form of convection
+              for(unsigned int d = 0; d < 2; ++d)
+              {
+                out_values[q * dim + d] = jac_xy[0][d] * val_real[0] + jac_xy[1][d] * val_real[1];
+              }
+              out_values[q * dim + 2] = h_z * val_real[2];
+            }
           }
 
+          if(!do_convection || factor_convective != Number(1.0))
+            for(unsigned int d = 0; d < dim; ++d)
+              internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                    internal::EvaluatorQuantity::gradient,
+                                                    nn,
+                                                    nn,
+                                                    dim,
+                                                    nn * nn * dim,
+                                                    false,
+                                                    true>(shape_grad,
+                                                          grad_z + d,
+                                                          out_values + q1 * dim + d);
+        }
+      }
+
+      if(!do_convection || factor_convective != Number(1.0))
+        for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
           for(unsigned int d = 0; d < dim; ++d)
             internal::apply_matrix_vector_product<internal::evaluate_evenodd,
                                                   internal::EvaluatorQuantity::gradient,
                                                   nn,
                                                   nn,
+                                                  (dim == 3 ? nn : 1) * dim,
                                                   dim,
-                                                  nn * nn * dim,
                                                   false,
                                                   true>(shape_grad,
-                                                        grad_z + d,
-                                                        out_values + q1 * dim + d);
-        }
-      }
-
-      for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
-        for(unsigned int d = 0; d < dim; ++d)
-          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                                internal::EvaluatorQuantity::gradient,
-                                                nn,
-                                                nn,
-                                                (dim == 3 ? nn : 1) * dim,
-                                                dim,
-                                                false,
-                                                true>(shape_grad,
-                                                      grad_x + i0 * dim + d,
-                                                      out_values +
-                                                        (qy * nn + i0 * n_q_points_2d) * dim + d);
+                                                        grad_x + i0 * dim + d,
+                                                        out_values +
+                                                          (qy * nn + i0 * n_q_points_2d) * dim + d);
     }
 
-    for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
-      for(unsigned int i0 = 0; i0 < nn; ++i0)
-        for(unsigned int d = 0; d < dim; ++d)
-          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
-                                                internal::EvaluatorQuantity::gradient,
-                                                nn,
-                                                nn,
-                                                Utilities::pow(nn, dim - 1) * dim,
-                                                nn * dim,
-                                                false,
-                                                true>(shape_grad,
-                                                      grad_y + (i1 * nn + i0) * dim + d,
-                                                      out_values + (i1 * n_q_points_2d + i0) * dim +
-                                                        d);
+    if(!do_convection || factor_convective != Number(1.0))
+      for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
+        for(unsigned int i0 = 0; i0 < nn; ++i0)
+          for(unsigned int d = 0; d < dim; ++d)
+            internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                  internal::EvaluatorQuantity::gradient,
+                                                  nn,
+                                                  nn,
+                                                  Utilities::pow(nn, dim - 1) * dim,
+                                                  nn * dim,
+                                                  false,
+                                                  true>(shape_grad,
+                                                        grad_y + (i1 * nn + i0) * dim + d,
+                                                        out_values +
+                                                          (i1 * n_q_points_2d + i0) * dim + d);
   }
 
   template<int n_q_points_1d>
@@ -4128,8 +4350,7 @@ private:
     const VectorType &                                                              src,
     const unsigned int                                                              cell,
     const unsigned int                                                              f,
-    const Number,
-    const Number,
+    const Number                    factor_convective,
     const VectorizedArray<Number> * quad_values,
     VectorizedArray<Number> *       out_values) const
   {
@@ -4356,8 +4577,10 @@ private:
             (val_real[0][0] * normal[0] + val_real[0][1] * normal[1]);
           for(unsigned int d = 0; d < dim; ++d)
           {
-            val_real[0][d] = integrate_factor * (std::abs(normal_speed) - normal_speed) *
-                             Number(0.5) * (val_real[0][d] - val_real[1][d]);
+            val_real[0][d] = integrate_factor *
+                             (Number(0.5) * (std::abs(normal_speed) - normal_speed) *
+                                (val_real[0][d] - val_real[1][d]) +
+                              (Number(1.0) - factor_convective) * normal_speed * val_real[0][d]);
           }
 
           // apply test functions
@@ -4407,8 +4630,10 @@ private:
         VectorizedArray<Number> normal_speed = normal_sign * val_real[0][2];
         for(unsigned int d = 0; d < dim; ++d)
         {
-          val_real[0][d] = integrate_factor * (std::abs(normal_speed) - normal_speed) *
-                           Number(0.5) * (val_real[0][d] - val_real[1][d]);
+          val_real[0][d] =
+            integrate_factor * (Number(0.5) * (std::abs(normal_speed) - normal_speed) *
+                                  (val_real[0][d] - val_real[1][d]) +
+                                (Number(1.0) - factor_convective) * normal_speed * val_real[0][d]);
         }
 
         // transpose of evaluate part
@@ -4459,8 +4684,7 @@ private:
     const auto &           shape_data      = shape_info.data;
     const auto &           shape_data_pres = pressure_shape_info.data[0].shape_values_eo;
 
-    VectorizedArray<Number> quad_values[dim * n_points], tmp_pressure_values[n_points],
-      pressure_values[n_points];
+    VectorizedArray<Number> quad_values[dim * n_points], pressure_values[n_points];
     read_cell_values<degree, n_q_points_1d>(velocity_old.begin(), dof_indices[cell], quad_values);
 
     const std::array<unsigned int, n_lanes> pressure_indices      = (*pressure_dof_indices)[cell];
@@ -4475,17 +4699,17 @@ private:
       vectorized_load_and_transpose(Utilities::pow(degree, dim),
                                     pressure.begin(),
                                     pressure_indices.data(),
-                                    tmp_pressure_values);
+                                    pressure_values);
     else
     {
       // first broadcast valid entries to all lanes, then fill the remaining
       // ones
       for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
-        tmp_pressure_values[i] = pressure.local_element(pressure_indices[0] + i);
+        pressure_values[i] = pressure.local_element(pressure_indices[0] + i);
       for(unsigned int v = 1; v < n_lanes && pressure_indices[v] != numbers::invalid_unsigned_int;
           ++v)
         for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
-          tmp_pressure_values[i][v] = pressure.local_element(pressure_indices[v] + i);
+          pressure_values[i][v] = pressure.local_element(pressure_indices[v] + i);
     }
 
     dealii::internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
@@ -4494,7 +4718,7 @@ private:
                                                   degree,
                                                   n_q_points_1d>::do_forward(1,
                                                                              shape_data_pres,
-                                                                             tmp_pressure_values,
+                                                                             pressure_values,
                                                                              pressure_values);
 
     constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
@@ -4508,71 +4732,69 @@ private:
 
     constexpr unsigned int nn = n_q_points_1d;
 
-    for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
+    for(unsigned int q1 = 0; q1 < nn * nn; ++q1)
     {
-      for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
+      Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+      vectorized_load_and_transpose(4,
+                                    &mapping_info.jacobians_xy[q1][0][0],
+                                    shifted_data_indices.data(),
+                                    &jac_xy[0][0]);
+      const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
+
+      if constexpr(dim == 2)
       {
-        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
-        vectorized_load_and_transpose(4,
-                                      &mapping_info.jacobians_xy[q1][0][0],
-                                      shifted_data_indices.data(),
-                                      &jac_xy[0][0]);
-        const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
+        const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
+        const VectorizedArray<Number> t0     = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+        const VectorizedArray<Number> t1     = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+        const VectorizedArray<Number> s0     = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
+        const VectorizedArray<Number> s1     = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
 
-        if constexpr(dim == 2)
+        quad_values[q1 * dim] =
+          s0 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
+        quad_values[q1 * dim + 1] =
+          s1 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
+
+        pressure_values[q1] *= mapping_info.quad_weights_xy[q1];
+      }
+      else // now to dim == 3
+      {
+        for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
         {
-          const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
-          const VectorizedArray<Number> t0     = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
-          const VectorizedArray<Number> t1     = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
-          const VectorizedArray<Number> s0     = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
-          const VectorizedArray<Number> s1     = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
+          const VectorizedArray<Number> val[3] = {quad_values[q * dim],
+                                                  quad_values[q * dim + 1],
+                                                  quad_values[q * dim + 2]};
 
-          quad_values[q1 * dim] =
-            s0 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
-          quad_values[q1 * dim + 1] =
-            s1 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
-        }
-        else // now to dim == 3
-        {
-          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
-          {
-            const VectorizedArray<Number> val[3] = {quad_values[q * dim],
-                                                    quad_values[q * dim + 1],
-                                                    quad_values[q * dim + 2]};
+          Tensor<1, dim, VectorizedArray<Number>> val_real;
+          val_real[0] = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+          val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+          val_real[2] = h_z * val[2];
 
-            Tensor<1, dim, VectorizedArray<Number>> val_real;
-            val_real[0] = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
-            val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
-            val_real[2] = h_z * val[2];
+          const Number weight_z = mapping_info.quad_weights_z[qz];
+          // need factors without h_z_inverse in code below because
+          // it cancels with h_z
+          const VectorizedArray<Number> factor_ma =
+            (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * velocity_scale) *
+            weight_z;
 
-            const Number weight_z = mapping_info.quad_weights_z[qz];
-            // need factors without h_z_inverse in code below because
-            // it cancels with h_z
-            const VectorizedArray<Number> factor_ma =
-              (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * velocity_scale) *
-              weight_z;
+          // For the test function part, the Jacobian determinant
+          // that is part of the integration factor cancels with the
+          // inverse Jacobian determinant present in the factor of
+          // the derivative
 
-            // For the test function part, the Jacobian determinant
-            // that is part of the integration factor cancels with the
-            // inverse Jacobian determinant present in the factor of
-            // the derivative
+          // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
+          // braces as 'tmp' from above
+          VectorizedArray<Number> value_tmp[dim];
+          for(unsigned int d = 0; d < dim; ++d)
+            val_real[d] *= factor_ma;
+          for(unsigned int d = 0; d < 2; ++d)
+            value_tmp[d] = jac_xy[0][d] * val_real[0] + jac_xy[1][d] * val_real[1];
+          value_tmp[2] = h_z * val_real[2];
 
-            // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
-            // braces as 'tmp' from above
-            VectorizedArray<Number> value_tmp[dim];
-            for(unsigned int d = 0; d < dim; ++d)
-              val_real[d] *= factor_ma;
-            for(unsigned int d = 0; d < 2; ++d)
-              value_tmp[d] = jac_xy[0][d] * val_real[0] + jac_xy[1][d] * val_real[1];
-            value_tmp[2] = h_z * val_real[2];
+          quad_values[q * dim]     = value_tmp[0];
+          quad_values[q * dim + 1] = value_tmp[1];
+          quad_values[q * dim + 2] = value_tmp[2];
 
-            quad_values[q * dim]     = value_tmp[0];
-            quad_values[q * dim + 1] = value_tmp[1];
-            quad_values[q * dim + 2] = value_tmp[2];
-
-            tmp_pressure_values[q] =
-              pressure_values[q] * (mapping_info.quad_weights_xy[q1] * weight_z);
-          }
+          pressure_values[q] *= (mapping_info.quad_weights_xy[q1] * weight_z);
         }
       }
     }
@@ -4590,7 +4812,7 @@ private:
                                               nn * nn * dim,
                                               false,
                                               true>(shape_grad,
-                                                    tmp_pressure_values + i,
+                                                    pressure_values + i,
                                                     quad_values + i * dim + 2);
     for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
     {
@@ -4603,7 +4825,7 @@ private:
                                               nn * dim,
                                               false,
                                               true>(shape_grad,
-                                                    tmp_pressure_values + i1 * nn * nn + i0,
+                                                    pressure_values + i1 * nn * nn + i0,
                                                     quad_values + (i1 * nn * nn + i0) * dim + 1);
       for(unsigned int i0 = 0; i0 < nn; ++i0)
         internal::apply_matrix_vector_product<internal::evaluate_evenodd,
@@ -4614,9 +4836,8 @@ private:
                                               dim,
                                               false,
                                               true>(shape_grad,
-                                                    tmp_pressure_values + i1 * nn * nn + i0 * nn,
-                                                    quad_values + (i1 * nn * nn + i0 * nn) * dim +
-                                                      0);
+                                                    pressure_values + i1 * nn * nn + i0 * nn,
+                                                    quad_values + (i1 * nn + i0) * nn * dim + 0);
     }
 
     // (v \cdot normal, p)_{dK cap \Gamma_D} does not contribute, because the
@@ -4630,6 +4851,125 @@ private:
 
   template<int degree>
   void
+  do_velocity_divergence_on_cell(const unsigned int cell,
+                                 const VectorType & velocity,
+                                 const Number       velocity_scale,
+                                 VectorType &       pressure_rhs) const
+  {
+    constexpr unsigned int n_q_points_1d   = degree + 1;
+    constexpr unsigned int nn              = n_q_points_1d;
+    constexpr unsigned int n_points        = Utilities::pow(n_q_points_1d, dim);
+    const auto &           shape_data      = shape_info.data;
+    const auto &           shape_data_pres = pressure_shape_info.data[0].shape_values_eo;
+
+    VectorizedArray<Number> quad_values[dim * n_points], pressure_values[n_points];
+    read_cell_values<degree, n_q_points_1d>(velocity.begin(), dof_indices[cell], quad_values);
+
+    const Number * DEAL_II_RESTRICT shape_grad =
+      shape_data[0].shape_gradients_collocation_eo.data();
+
+    for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
+    {
+      for(unsigned int i0 = 0; i0 < nn; ++i0)
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              dim,
+                                              1,
+                                              true,
+                                              false>(shape_grad,
+                                                     quad_values + (i1 * nn + i0) * nn * dim + 0,
+                                                     pressure_values + i1 * nn * nn + i0 * nn);
+      for(unsigned int i0 = 0; i0 < nn; ++i0)
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              nn * dim,
+                                              nn,
+                                              true,
+                                              true>(shape_grad,
+                                                    quad_values + (i1 * nn * nn + i0) * dim + 1,
+                                                    pressure_values + i1 * nn * nn + i0);
+    }
+    if(dim == 3)
+      for(unsigned int i = 0; i < nn * nn; ++i)
+        internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                              internal::EvaluatorQuantity::gradient,
+                                              nn,
+                                              nn,
+                                              nn * nn * dim,
+                                              nn * nn,
+                                              true,
+                                              true>(shape_grad,
+                                                    quad_values + i * dim + 2,
+                                                    pressure_values + i);
+
+
+    std::array<unsigned int, n_lanes> shifted_data_indices;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
+
+    for(unsigned int q1 = 0; q1 < nn * nn; ++q1)
+    {
+      Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+      vectorized_load_and_transpose(4,
+                                    &mapping_info.jacobians_xy[q1][0][0],
+                                    shifted_data_indices.data(),
+                                    &jac_xy[0][0]);
+
+      if constexpr(dim == 2)
+      {
+        pressure_values[q1] *= velocity_scale * mapping_info.quad_weights_xy[q1];
+      }
+      else // now to dim == 3
+      {
+        for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn * nn)
+        {
+          const Number weight_z = mapping_info.quad_weights_z[qz];
+          pressure_values[q] *= velocity_scale * mapping_info.quad_weights_xy[q1] * weight_z;
+        }
+      }
+    }
+
+    dealii::internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
+                                                  dealii::internal::EvaluatorQuantity::value,
+                                                  dim,
+                                                  degree,
+                                                  n_q_points_1d>::do_backward(1,
+                                                                              shape_data_pres,
+                                                                              false,
+                                                                              pressure_values,
+                                                                              pressure_values);
+
+    const std::array<unsigned int, n_lanes> pressure_indices      = (*pressure_dof_indices)[cell];
+    bool                                    all_indices_available = true;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(pressure_indices[v] == numbers::invalid_unsigned_int)
+      {
+        all_indices_available = false;
+        break;
+      }
+    if(all_indices_available)
+      vectorized_transpose_and_store(true,
+                                     Utilities::pow(degree, dim),
+                                     pressure_values,
+                                     pressure_indices.data(),
+                                     pressure_rhs.begin());
+    else
+    {
+      // first broadcast valid entries to all lanes, then fill the remaining
+      // ones
+      for(unsigned int v = 0; v < n_lanes && pressure_indices[v] != numbers::invalid_unsigned_int;
+          ++v)
+        for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
+          pressure_rhs.local_element(pressure_indices[v] + i) += pressure_values[i][v];
+    }
+  }
+
+  template<int degree>
+  void
   do_body_force_on_cell(const unsigned int            cell,
                         const dealii::Function<dim> & rhs_function,
                         VectorType &                  dst) const
@@ -4638,8 +4978,6 @@ private:
     constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
 
     VectorizedArray<Number> quad_values[dim * n_points];
-
-    constexpr unsigned int n_q_points_2d = n_q_points_1d * n_q_points_1d;
 
     std::array<unsigned int, n_lanes> shifted_data_indices;
     for(unsigned int v = 0; v < n_lanes; ++v)
@@ -4677,7 +5015,7 @@ private:
         }
         else // now to dim == 3
         {
-          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
+          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn * nn)
           {
             Tensor<1, dim, VectorizedArray<Number>> val_real;
             for(unsigned int v = 0; v < n_lanes; ++v)
@@ -4721,6 +5059,495 @@ private:
                                                   n_active_entries_per_cell_batch(cell),
                                                   quad_values,
                                                   dst.begin());
+  }
+
+  template<int degree>
+  void
+  do_pressure_neumann_on_cell(const unsigned int cell,
+                              const VectorType & velocity,
+                              const Number       viscosity,
+                              VectorType &       pressure_rhs) const
+  {
+    const unsigned int face           = cells_at_dirichlet_boundary[cell].first;
+    const unsigned int face_direction = face / 2;
+
+    dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes> my_dof_indices;
+    unsigned int                                        n_lanes_filled = 0;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+    {
+      const unsigned int cell_index = cells_at_dirichlet_boundary[cell].second[v];
+
+      // use a dummy neighbor with nearby data for cells at boundary to make
+      // sure vectorized functions continue working
+      if(cell_index != numbers::invalid_unsigned_int)
+      {
+        for(unsigned int i = 0; i < 2 * dim + 1; ++i)
+          my_dof_indices[i][v] = this->dof_indices[cell_index / n_lanes][i][cell_index % n_lanes];
+        ++n_lanes_filled;
+      }
+      else
+      {
+        Assert(v > 0, ExcInternalError());
+        for(unsigned int i = 0; i < 2 * dim + 1; ++i)
+          my_dof_indices[i][v] = my_dof_indices[i][n_lanes_filled - 1];
+      }
+    }
+
+    constexpr unsigned int nn              = degree + 1;
+    constexpr unsigned int n_points        = Utilities::pow(nn, dim);
+    const auto &           shape_data      = shape_info.data;
+    const auto &           shape_data_pres = pressure_shape_info.data[0].shape_values_eo;
+
+    VectorizedArray<Number> quad_values[2][dim * n_points + 1], grad_x[dim * nn * nn],
+      grad_z[dim * nn], pressure_values[Utilities::pow(nn, dim - 1)];
+    read_cell_values<degree, nn>(velocity.begin(), my_dof_indices, quad_values[0]);
+
+    // Compute gradient at quadrature points
+    std::array<unsigned int, n_lanes> shifted_data_indices;
+    std::array<unsigned int, n_lanes> shifted_data_indices_gr;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+    {
+      const unsigned int cell_index =
+        cells_at_dirichlet_boundary[cell].second[v] == numbers::invalid_unsigned_int ?
+          cells_at_dirichlet_boundary[cell].second[0] :
+          cells_at_dirichlet_boundary[cell].second[v];
+      shifted_data_indices[v] =
+        mapping_info.mapping_data_index[cell_index / n_lanes][cell_index % n_lanes] * 4;
+      shifted_data_indices_gr[v] =
+        mapping_info.mapping_data_index[cell_index / n_lanes][cell_index % n_lanes] * 6;
+    }
+
+    const Number h_z         = mapping_info.h_z;
+    const Number h_z_inverse = mapping_info.h_z_inverse;
+
+    const Number * shape_grad = shape_data[0].shape_gradients_collocation_eo.data();
+    for(unsigned int i1 = 0; i1 < (dim == 3 ? nn : 1); ++i1)
+      for(unsigned int i0 = 0; i0 < nn; ++i0)
+      {
+        const unsigned int idx = dim * (i1 * nn * nn + i0);
+        for(unsigned int d = 0; d < dim; ++d)
+          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                internal::EvaluatorQuantity::gradient,
+                                                nn,
+                                                nn,
+                                                nn * dim,
+                                                nn * dim,
+                                                true,
+                                                false>(shape_grad,
+                                                       quad_values[0] + idx + d,
+                                                       quad_values[1] + idx + d);
+      }
+
+    for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
+    {
+      for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
+        for(unsigned int d = 0; d < dim; ++d)
+          internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                internal::EvaluatorQuantity::gradient,
+                                                nn,
+                                                nn,
+                                                dim,
+                                                (dim == 3 ? nn : 1) * dim,
+                                                true,
+                                                false>(
+            shape_grad, quad_values[0] + dim * (qy * nn + i0 * nn * nn) + d, grad_x + dim * i0 + d);
+
+      for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &mapping_info.jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0]);
+        const VectorizedArray<Number>               inv_jac_det = Number(1.0) / determinant(jac_xy);
+        const Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy  = transpose(invert(jac_xy));
+        Tensor<1, 3, Tensor<1, 2, VectorizedArray<Number>>> jac_grad_xy;
+        vectorized_load_and_transpose(6,
+                                      &mapping_info.jacobian_grads[q1][0][0],
+                                      shifted_data_indices_gr.data(),
+                                      &jac_grad_xy[0][0]);
+
+        // Prepare for -(J^{-T} * jac_grad * J^{-1} * J * values *
+        // det(J^{-1})), which can be expressed as a rank-1 update tmp[d] *
+        // tmp4[e], where tmp = J * values and tmp4 = (J^{-T} * jac_grad *
+        // J^{-1})
+        VectorizedArray<Number> jac_grad_rank1[2];
+        {
+          VectorizedArray<Number> tmp[2];
+          for(unsigned int d = 0; d < 2; ++d)
+            tmp[d] =
+              (inv_jac_xy[0][d] * jac_grad_xy[d][0] + inv_jac_xy[1][d] * jac_grad_xy[d][1] +
+               inv_jac_xy[0][1 - d] * jac_grad_xy[2][0] + inv_jac_xy[1][1 - d] * jac_grad_xy[2][1]);
+          for(unsigned int d = 0; d < 2; ++d)
+            jac_grad_rank1[d] = (tmp[0] * inv_jac_xy[d][0] + tmp[1] * inv_jac_xy[d][1]);
+        }
+
+        if constexpr(dim == 2)
+        {
+          const VectorizedArray<Number> val[2]     = {quad_values[0][q1 * dim],
+                                                  quad_values[0][q1 * dim + 1]};
+          const VectorizedArray<Number> grad[2][2] = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
+                                                      {quad_values[1][q1 * dim],
+                                                       quad_values[1][q1 * dim + 1]}};
+
+          VectorizedArray<Number> grad_real[dim][dim];
+          for(unsigned int d = 0; d < dim; ++d)
+          {
+            // (J * grad_quad) * J^-1 * det(J^-1), part in braces
+            VectorizedArray<Number> tmp[dim];
+            for(unsigned int e = 0; e < dim; ++e)
+              tmp[e] = (jac_xy[d][0] * grad[0][e] + jac_xy[d][1] * grad[1][e]);
+
+            // Add (jac_grad * values) * J^{-1} * det(J^{-1}), combine
+            // terms outside braces with gradient part from above
+            tmp[0] += jac_grad_xy[0][d] * val[0];
+            tmp[0] += jac_grad_xy[2][d] * val[1];
+            tmp[1] += jac_grad_xy[1][d] * val[1];
+            tmp[1] += jac_grad_xy[2][d] * val[0];
+
+            for(unsigned int e = 0; e < dim; ++e)
+              grad_real[d][e] = (tmp[0] * inv_jac_xy[e][0] + tmp[1] * inv_jac_xy[e][1]);
+
+            VectorizedArray<Number> tmp2 = jac_xy[d][0] * val[0] + jac_xy[d][1] * val[1];
+
+            for(unsigned int e = 0; e < dim; ++e)
+              grad_real[d][e] -= jac_grad_rank1[e] * tmp2;
+          }
+          quad_values[1][q1 * dim]     = inv_jac_det * (grad_real[1][0] - grad_real[0][1]);
+          quad_values[1][q1 * dim + 1] = 0.;
+        }
+        else // now to dim == 3
+        {
+          for(unsigned int d = 0; d < dim; ++d)
+            internal::apply_matrix_vector_product<internal::evaluate_evenodd,
+                                                  internal::EvaluatorQuantity::gradient,
+                                                  nn,
+                                                  nn,
+                                                  nn * nn * dim,
+                                                  dim,
+                                                  true,
+                                                  false>(shape_grad,
+                                                         quad_values[0] + q1 * dim + d,
+                                                         grad_z + d);
+
+          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn * nn)
+          {
+            const unsigned int            ix         = dim * (qz + qx * nn);
+            const unsigned int            iz         = dim * qz;
+            const VectorizedArray<Number> val[3]     = {quad_values[0][q * dim],
+                                                    quad_values[0][q * dim + 1],
+                                                    quad_values[0][q * dim + 2]};
+            const VectorizedArray<Number> grad[3][3] = {
+              {grad_x[ix + 0], quad_values[1][q * dim + 0], grad_z[iz + 0]},
+              {grad_x[ix + 1], quad_values[1][q * dim + 1], grad_z[iz + 1]},
+              {grad_x[ix + 2], quad_values[1][q * dim + 2], grad_z[iz + 2]}};
+
+            VectorizedArray<Number> val_real[2];
+            val_real[0] = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+            val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+
+            VectorizedArray<Number> grad_real[dim][dim];
+            for(unsigned int d = 0; d < 2; ++d)
+            {
+              // (J * grad_quad) * J^-1 * det(J^-1), part in braces
+              VectorizedArray<Number> tmp[dim];
+              for(unsigned int e = 0; e < dim; ++e)
+                tmp[e] = (jac_xy[d][0] * grad[0][e] + jac_xy[d][1] * grad[1][e]);
+
+              // Add (jac_grad * values) * J^{-1} * det(J^{-1}),
+              // combine terms outside braces with gradient part from
+              // above
+              tmp[0] += jac_grad_xy[0][d] * val[0];
+              tmp[0] += jac_grad_xy[2][d] * val[1];
+              tmp[1] += jac_grad_xy[1][d] * val[1];
+              tmp[1] += jac_grad_xy[2][d] * val[0];
+
+              for(unsigned int e = 0; e < 2; ++e)
+                grad_real[d][e] = (tmp[0] * inv_jac_xy[e][0] + tmp[1] * inv_jac_xy[e][1]);
+
+              for(unsigned int e = 0; e < 2; ++e)
+                grad_real[d][e] -= jac_grad_rank1[e] * val_real[d];
+
+              const VectorizedArray<Number> tmp_z_grad2 =
+                (inv_jac_xy[d][0] * grad[2][0] + inv_jac_xy[d][1] * grad[2][1]);
+
+              grad_real[2][d] = (tmp_z_grad2 - jac_grad_rank1[d] * val[2]) * h_z;
+              grad_real[d][2] = h_z_inverse * tmp[2];
+            }
+            grad_real[2][2] = grad[2][2];
+
+            const VectorizedArray<Number> J_det = h_z_inverse * inv_jac_det;
+            quad_values[1][q * dim + 0]         = J_det * (grad_real[2][1] - grad_real[1][2]);
+            quad_values[1][q * dim + 1]         = J_det * (grad_real[0][2] - grad_real[2][0]);
+            quad_values[1][q * dim + 2]         = J_det * (grad_real[1][0] - grad_real[0][1]);
+          }
+        }
+      }
+    }
+
+    // interpolate values, gradients and values/gradients of vorticity to
+    // face; the vorticity is already set up in the collocation space, so no
+    // need for a Piola transformation for those terms, whereas the gradient
+    // for the convective term will be done here
+    const unsigned int      n_q_points_face = Utilities::pow(nn, dim - 1);
+    VectorizedArray<Number> values_face[2][dim][n_q_points_face + 1];
+    VectorizedArray<Number> grads_face[2][dim][n_q_points_face * dim + 1];
+
+    // interpolate from interior to face
+    const std::array<Number, 2> * shape = interpolate_quad_to_boundary[face % 2].data();
+
+    for(unsigned int s = 0; s < 2; ++s)
+      for(unsigned int i1 = 0; i1 < nn; ++i1)
+        for(unsigned int i0 = 0; i0 < nn; ++i0)
+        {
+          unsigned int idx = 0;
+          if(face_direction == 0)
+            idx = nn * (nn * i1 + i0);
+          else if(face_direction == 1)
+            idx = i0 + i1 * nn * nn;
+          else
+            idx = i0 + i1 * nn;
+
+          const VectorizedArray<Number> * my_vals = quad_values[s] + idx * dim;
+          VectorizedArray<Number>         v0      = shape[0][0] * my_vals[0];
+          VectorizedArray<Number>         d0      = shape[0][1] * my_vals[0];
+          VectorizedArray<Number>         v1      = shape[0][0] * my_vals[1];
+          VectorizedArray<Number>         d1      = shape[0][1] * my_vals[1];
+          VectorizedArray<Number>         v2      = shape[0][0] * my_vals[2];
+          VectorizedArray<Number>         d2      = shape[0][1] * my_vals[2];
+          const unsigned int              stride  = Utilities::pow(nn, face_direction) * dim;
+          for(unsigned int i = 1; i < nn; ++i)
+          {
+            v0 += shape[i][0] * my_vals[i * stride + 0];
+            d0 += shape[i][1] * my_vals[i * stride + 0];
+            v1 += shape[i][0] * my_vals[i * stride + 1];
+            d1 += shape[i][1] * my_vals[i * stride + 1];
+            v2 += shape[i][0] * my_vals[i * stride + 2];
+            d2 += shape[i][1] * my_vals[i * stride + 2];
+          }
+          const unsigned int val_idx   = i1 * nn + i0;
+          values_face[s][0][val_idx]   = v0;
+          values_face[s][1][val_idx]   = v1;
+          values_face[s][2][val_idx]   = v2;
+          const unsigned int deriv_idx = val_idx * dim + face_direction;
+          grads_face[s][0][deriv_idx]  = d0;
+          grads_face[s][1][deriv_idx]  = d1;
+          grads_face[s][2][deriv_idx]  = d2;
+        }
+
+    // Only need some tangential derivative in xy plane, as the domain is
+    // extruded in z direction
+    internal::EvaluatorTensorProduct<internal::evaluate_evenodd,
+                                     dim - 1,
+                                     nn,
+                                     nn,
+                                     VectorizedArray<Number>,
+                                     Number>
+      eval_g({}, shape_data[0].shape_gradients_collocation_eo.data(), {});
+    for(unsigned int s = 0; s < 2; ++s)
+    {
+      for(unsigned int d = 0; d < dim; ++d)
+      {
+        const unsigned int first  = face_direction == 0 ? 1 : 0;
+        const unsigned int second = face_direction == 1 ? 2 : first + 1;
+        eval_g.template gradients<0, true, false, dim>(values_face[s][d], grads_face[s][d] + first);
+        eval_g.template gradients<1, true, false, dim>(values_face[s][d],
+                                                       grads_face[s][d] + second);
+      }
+    }
+
+    if(face_direction < 2)
+    {
+      std::array<unsigned int, n_lanes> shifted_data_indices;
+      std::array<unsigned int, n_lanes> shifted_data_indices_gr;
+      std::array<unsigned int, n_lanes> shifted_data_indices_norm;
+      for(unsigned int v = 0; v < n_lanes; ++v)
+      {
+        const unsigned int cell_index =
+          cells_at_dirichlet_boundary[cell].second[v] == numbers::invalid_unsigned_int ?
+            cells_at_dirichlet_boundary[cell].second[0] :
+            cells_at_dirichlet_boundary[cell].second[v];
+
+        const unsigned int idx =
+          mapping_info.face_mapping_data_index[cell_index / n_lanes][face][0][cell_index % n_lanes];
+        shifted_data_indices[v]      = idx * 4;
+        shifted_data_indices_gr[v]   = idx * 6;
+        shifted_data_indices_norm[v] = idx * 2;
+      }
+
+      for(unsigned int q1 = 0; q1 < nn; ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &mapping_info.face_jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0]);
+
+        const VectorizedArray<Number> area_element_xy =
+          std::sqrt(jac_xy[0][1 - face_direction] * jac_xy[0][1 - face_direction] +
+                    jac_xy[1][1 - face_direction] * jac_xy[1][1 - face_direction]);
+
+        const VectorizedArray<Number>               inv_jac_det = Number(1.0) / determinant(jac_xy);
+        const Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy  = transpose(invert(jac_xy));
+
+        Tensor<1, 3, Tensor<1, 2, VectorizedArray<Number>>> jac_grad_xy;
+        vectorized_load_and_transpose(6,
+                                      &mapping_info.face_jacobian_grads[q1][0][0],
+                                      shifted_data_indices_gr.data(),
+                                      &jac_grad_xy[0][0]);
+
+        Tensor<1, dim, VectorizedArray<Number>> normal;
+        vectorized_load_and_transpose(2,
+                                      &mapping_info.face_normal_vector_xy[q1][0],
+                                      shifted_data_indices_norm.data(),
+                                      &normal[0]);
+
+        // Prepare for -(J^{-T} * jac_grad * J^{-1} * J * values *
+        // det(J^{-1})), which can be expressed as a rank-1 update
+        // tmp[d] * tmp4[e], where tmp = J * values and tmp4 =
+        // (J^{-T} * jac_grad * J^{-1})
+        VectorizedArray<Number> jac_grad_rank1[2];
+        {
+          VectorizedArray<Number> tmp[2];
+          for(unsigned int d = 0; d < 2; ++d)
+            tmp[d] =
+              (inv_jac_xy[0][d] * jac_grad_xy[d][0] + inv_jac_xy[1][d] * jac_grad_xy[d][1] +
+               inv_jac_xy[0][1 - d] * jac_grad_xy[2][0] + inv_jac_xy[1][1 - d] * jac_grad_xy[2][1]);
+          for(unsigned int d = 0; d < 2; ++d)
+            jac_grad_rank1[d] = (tmp[0] * inv_jac_xy[d][0] + tmp[1] * inv_jac_xy[d][1]);
+        }
+
+        for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn)
+        {
+          const VectorizedArray<Number> val[3]     = {values_face[0][0][q],
+                                                  values_face[0][1][q],
+                                                  values_face[0][2][q]};
+          const VectorizedArray<Number> grad[3][3] = {{grads_face[0][0][q * dim],
+                                                       grads_face[0][0][q * dim + 1],
+                                                       grads_face[0][0][q * dim + 2]},
+                                                      {grads_face[0][1][q * dim],
+                                                       grads_face[0][1][q * dim + 1],
+                                                       grads_face[0][1][q * dim + 2]},
+                                                      {grads_face[0][2][q * dim],
+                                                       grads_face[0][2][q * dim + 1],
+                                                       grads_face[0][2][q * dim + 2]}};
+
+          Tensor<1, dim, VectorizedArray<Number>> val_real;
+          val_real[0] = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
+          val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
+          val_real[2] = h_z * val[2];
+
+          VectorizedArray<Number> grad_real[dim][dim];
+          for(unsigned int d = 0; d < 2; ++d)
+          {
+            // (J * grad_quad) * J^-1 * det(J^-1), part in braces
+            VectorizedArray<Number> tmp[dim];
+            for(unsigned int e = 0; e < dim; ++e)
+              tmp[e] = (jac_xy[d][0] * grad[0][e] + jac_xy[d][1] * grad[1][e]);
+
+            // Add (jac_grad * values) * J^{-1} * det(J^{-1}),
+            // combine terms outside braces with gradient part from
+            // above
+            tmp[0] += jac_grad_xy[0][d] * val[0];
+            tmp[0] += jac_grad_xy[2][d] * val[1];
+            tmp[1] += jac_grad_xy[1][d] * val[1];
+            tmp[1] += jac_grad_xy[2][d] * val[0];
+
+            for(unsigned int e = 0; e < 2; ++e)
+              grad_real[d][e] = (tmp[0] * inv_jac_xy[e][0] + tmp[1] * inv_jac_xy[e][1]);
+
+            for(unsigned int e = 0; e < 2; ++e)
+              grad_real[d][e] -= jac_grad_rank1[e] * val_real[d];
+
+            const VectorizedArray<Number> tmp_z_grad2 =
+              (inv_jac_xy[d][0] * grad[2][0] + inv_jac_xy[d][1] * grad[2][1]);
+
+            grad_real[2][d] = (tmp_z_grad2 - jac_grad_rank1[d] * val[2]) * h_z;
+            grad_real[d][2] = h_z_inverse * tmp[2];
+          }
+          grad_real[2][2] = grad[2][2];
+
+          Tensor<1, dim, VectorizedArray<Number>> convective;
+          for(unsigned int d = 0; d < dim; ++d)
+          {
+            convective[d] = grad_real[d][0] * val_real[0];
+            for(unsigned int e = 1; e < dim; ++e)
+              convective[d] += grad_real[d][e] * val_real[e];
+            convective[d] *= inv_jac_det * inv_jac_det * h_z_inverse * h_z_inverse;
+          }
+
+          VectorizedArray<Number> vorticity_grad[3][3] = {{grads_face[1][0][q * dim],
+                                                           grads_face[1][0][q * dim + 1],
+                                                           grads_face[1][0][q * dim + 2]},
+                                                          {grads_face[1][1][q * dim],
+                                                           grads_face[1][1][q * dim + 1],
+                                                           grads_face[1][1][q * dim + 2]},
+                                                          {grads_face[1][2][q * dim],
+                                                           grads_face[1][2][q * dim + 1],
+                                                           grads_face[1][2][q * dim + 2]}};
+
+          for(unsigned int d = 0; d < dim; ++d)
+          {
+            const VectorizedArray<Number> tmp = vorticity_grad[d][0];
+            vorticity_grad[d][0] = inv_jac_xy[0][0] * tmp + inv_jac_xy[0][1] * vorticity_grad[d][1];
+            vorticity_grad[d][1] = inv_jac_xy[1][0] * tmp + inv_jac_xy[1][1] * vorticity_grad[d][1];
+            vorticity_grad[d][2] *= h_z_inverse;
+          }
+          Tensor<1, dim, VectorizedArray<Number>> curl_vorticity;
+          if constexpr(dim == 2)
+          {
+            curl_vorticity[0] = vorticity_grad[0][1];
+            curl_vorticity[1] = -vorticity_grad[0][0];
+          }
+          else
+          {
+            curl_vorticity[0] = vorticity_grad[2][1] - vorticity_grad[1][2];
+            curl_vorticity[1] = vorticity_grad[0][2] - vorticity_grad[2][0];
+            curl_vorticity[2] = vorticity_grad[1][0] - vorticity_grad[0][1];
+          }
+
+          const VectorizedArray<Number> h = -normal * (convective + viscosity * curl_vorticity);
+
+          pressure_values[q] = (mapping_info.quad_weights_z[q1] * area_element_xy * h_z) *
+                               mapping_info.quad_weights_z[qz] * h;
+        }
+      }
+    }
+    else
+      AssertThrow(
+        false, ExcNotImplemented("Face operations in extruded direction currently not supported"));
+
+    // perform interpolation within face, utilize the fact that the pressure
+    // space is the same as the tangential space in RT
+    dealii::internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
+                                                  dealii::internal::EvaluatorQuantity::value,
+                                                  dim - 1,
+                                                  degree,
+                                                  nn>::do_backward(1,
+                                                                   shape_data_pres,
+                                                                   false,
+                                                                   pressure_values,
+                                                                   pressure_values);
+
+    for(unsigned int v = 0; v < n_lanes_filled; ++v)
+    {
+      const unsigned int cell_index = cells_at_dirichlet_boundary[cell].second[v];
+      const unsigned int mm         = degree;
+      AssertDimension(degree, pressure_shape_info.data[0].fe_degree + 1);
+      const unsigned int offset = (face % 2) * Utilities::pow(mm, face_direction) * (mm - 1);
+      const unsigned int idx =
+        (*pressure_dof_indices)[cell_index / n_lanes][cell_index % n_lanes] + offset;
+      if(face_direction == 0)
+        for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
+          pressure_rhs.local_element(idx + i * mm) += pressure_values[i][v];
+      else if(face_direction == 1)
+        for(unsigned int i1 = 0; i1 < (dim == 3 ? mm : 1); ++i1)
+          for(unsigned int i0 = 0; i0 < mm; ++i0)
+            pressure_rhs.local_element(idx + i1 * mm * mm + i0) += pressure_values[i1 * mm + i0][v];
+      else
+        for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
+          pressure_rhs.local_element(idx + i) += pressure_values[i][v];
+    }
   }
 
   unsigned int

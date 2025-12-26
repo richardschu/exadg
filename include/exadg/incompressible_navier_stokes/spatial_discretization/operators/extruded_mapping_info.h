@@ -216,7 +216,8 @@ struct MappingInfo
     FEFaceValues<dim> fe_face_values(mapping,
                                      dummy_fe,
                                      face_quadrature,
-                                     update_jacobians | update_JxW_values | update_normal_vectors |
+                                     update_quadrature_points | update_jacobians |
+                                       update_JxW_values | update_normal_vectors |
                                        update_jacobian_grads);
 
     quadrature_points.resize(n_q_points_2d * unique_cells.size());
@@ -225,6 +226,7 @@ struct MappingInfo
     cell_JxW_xy.resize(n_q_points_2d * unique_cells.size());
     jacobian_grads.resize(n_q_points_2d * unique_cells.size());
 
+    face_quadrature_points.resize(4 * n_q_points_1d * unique_cells.size());
     face_jacobians_xy.resize(4 * n_q_points_1d * unique_cells.size());
     face_jacobian_grads.resize(4 * n_q_points_1d * unique_cells.size());
     face_normal_vector_xy.resize(4 * n_q_points_1d * unique_cells.size());
@@ -287,6 +289,8 @@ struct MappingInfo
           const auto         jac      = fe_face_values.jacobian(q);
           const auto         inv_jac  = jac.covariant_form();
           for(unsigned int d = 0; d < 2; ++d)
+            face_quadrature_points[data_idx][d] = fe_face_values.quadrature_point(q)[d];
+          for(unsigned int d = 0; d < 2; ++d)
             face_jxn_xy[data_idx][d] = inv_jac[0][d] * fe_face_values.normal_vector(q)[0] +
                                        inv_jac[1][d] * fe_face_values.normal_vector(q)[1];
           face_JxW_xy[data_idx] = std::sqrt(jac[0][1 - face / 2] * jac[0][1 - face / 2] +
@@ -324,6 +328,8 @@ struct MappingInfo
            MemoryConsumption::memory_consumption(jacobian_grads) +
            MemoryConsumption::memory_consumption(cell_JxW_xy) +
            MemoryConsumption::memory_consumption(face_mapping_data_index) +
+           MemoryConsumption::memory_consumption(face_quadrature_points) +
+           MemoryConsumption::memory_consumption(face_normal_vector_xy) +
            MemoryConsumption::memory_consumption(face_jacobians_xy) +
            MemoryConsumption::memory_consumption(face_jacobian_grads) +
            MemoryConsumption::memory_consumption(face_jxn_xy) +
@@ -342,6 +348,7 @@ struct MappingInfo
   AlignedVector<Number>                             cell_JxW_xy;
   AlignedVector<Tensor<1, 3, Tensor<1, 2, Number>>> jacobian_grads;
   std::vector<ndarray<unsigned int, 4, 2, n_lanes>> face_mapping_data_index;
+  AlignedVector<Point<2, Number>>                   face_quadrature_points;
   AlignedVector<Tensor<1, 2, Number>>               face_normal_vector_xy;
   AlignedVector<Tensor<2, 2, Number>>               face_jacobians_xy;
   AlignedVector<Tensor<1, 3, Tensor<1, 2, Number>>> face_jacobian_grads;

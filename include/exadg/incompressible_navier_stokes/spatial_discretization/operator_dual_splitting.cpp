@@ -505,7 +505,11 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_viscous_add_boundary_face(
 
   CellIntegrator<dim, dim, Number> velocity(matrix_free,
                                             dof_index_velocity,
-                                            this->get_quad_index_velocity_nodal_points());
+                                            this->get_quad_index_velocity_standard());
+
+  CellIntegrator<dim, dim, Number> velocity_scalar(matrix_free,
+                                                   this->get_dof_index_velocity_scalar(),
+                                                   quad_index);
 
   FaceIntegratorU omega(matrix_free, true, this->get_dof_index_velocity_scalar(), quad_index);
 
@@ -532,10 +536,13 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_viscous_add_boundary_face(
         const auto curl_u = velocity.get_curl(q);
         for(unsigned int d = 0; d < (dim == 2 ? 1 : dim); ++d)
           omega.begin_dof_values()[q + d * velocity.n_q_points] = curl_u[d];
-        for(unsigned int d = (dim == 2 ? 1 : dim); d < dim; ++d)
-          omega.begin_dof_values()[q + d * velocity.n_q_points] = 0;
+        if(dim == 2)
+          omega.begin_dof_values()[q + 1 * velocity.n_q_points] = 0;
       }
 
+      dealii::MatrixFreeOperators::CellwiseInverseMassMatrix<dim, -1, dim, Number> inv(
+        velocity_scalar);
+      inv.transform_from_q_points_to_basis(dim, omega.begin_dof_values(), omega.begin_dof_values());
       omega.evaluate(dealii::EvaluationFlags::gradients);
 
       for(const unsigned int q : pressure.quadrature_point_indices())

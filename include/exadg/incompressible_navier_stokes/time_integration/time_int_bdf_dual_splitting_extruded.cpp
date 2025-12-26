@@ -86,7 +86,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::setup_derived()
   if constexpr(dim == 3)
   {
     op_rt->copy_mf_to_this_vector(this->get_velocity(), solution_rt);
-    op_rt->evaluate_convective_term(solution_rt, 1.0, 0.5, this->vec_convective_term[0]);
+    op_rt->evaluate_convective_term(solution_rt, 1.0, this->vec_convective_term[0]);
   }
   else
     Base::setup_derived();
@@ -1010,7 +1010,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::evaluate_convective_term()
     if(this->param.ale_formulation == false) // Eulerian case
     {
       if constexpr(dim == 3)
-        op_rt->evaluate_convective_term(solution_rt, 1.0, 0.5, this->convective_term_np);
+        op_rt->evaluate_convective_term(solution_rt, 0.5, this->convective_term_np);
       else
         pde_operator->evaluate_convective_term(this->convective_term_np,
                                                velocity_np,
@@ -1157,6 +1157,19 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) con
   // homogeneous part of velocity divergence operator
   pde_operator->apply_velocity_divergence_term(rhs, velocity_np);
 
+  VectorType alternative;
+  alternative.reinit(rhs);
+  if constexpr(dim == 3)
+  {
+    VectorType tmp;
+    tmp.reinit(solution_rt);
+    op_rt->copy_mf_to_this_vector(velocity_np, tmp);
+    op_rt->evaluate_add_velocity_divergence(tmp, 1.0, alternative);
+    this->pcout << "Velocity div rhs " << rhs.l2_norm() << " " << alternative.l2_norm() << " ";
+    alternative -= rhs;
+    this->pcout << " diff " << alternative.l2_norm() << std::endl;
+  }
+
   rhs *= -this->bdf.get_gamma0() / this->get_time_step_size();
 
   // inhomogeneous parts of boundary face integrals of velocity divergence operator
@@ -1207,7 +1220,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) con
   {
     if(this->param.order_extrapolation_pressure_nbc > 0)
     {
-      VectorType temp(rhs);
+      VectorType temp;
+      temp.reinit(rhs, true);
       for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
       {
         temp = 0.0;
@@ -1215,6 +1229,32 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) con
         rhs.add(this->extra_pressure_nbc.get_beta(i), temp);
       }
     }
+  }
+
+  if constexpr(dim == 3)
+  {
+    VectorType tmp1, tmp2;
+    tmp1.reinit(rhs);
+    tmp2.reinit(rhs);
+    VectorType tmp;
+    tmp.reinit(solution_rt);
+    op_rt->copy_mf_to_this_vector(velocity_np, tmp);
+    pde_operator->rhs_ppe_nbc_viscous_add(tmp1, velocity_np);
+    pde_operator->rhs_ppe_nbc_convective_add(tmp1, velocity_np);
+    op_rt->evaluate_pressure_neumann_from_velocity(
+      tmp, this->pde_operator->get_viscous_kernel_data().viscosity, tmp2);
+    this->pcout << "Pressure vel NBC vectors: " << tmp1.l2_norm() << " " << tmp2.l2_norm();
+    tmp2 -= tmp1;
+    this->pcout << " " << tmp2.l2_norm() << std::endl;
+
+    tmp1 = 0;
+    tmp2 = 0;
+    pde_operator->rhs_ppe_nbc_body_force_term_add(tmp1, this->get_next_time());
+    op_rt->evaluate_add_pressure_neumann_from_body_force(
+      *pde_operator->get_field_functions()->right_hand_side, tmp2);
+    this->pcout << "Pressure bdy NBC vectors: " << tmp1.l2_norm() << " " << tmp2.l2_norm();
+    tmp2 -= tmp1;
+    this->pcout << " " << tmp2.l2_norm() << std::endl;
   }
 
   // special case: pressure level is undefined
