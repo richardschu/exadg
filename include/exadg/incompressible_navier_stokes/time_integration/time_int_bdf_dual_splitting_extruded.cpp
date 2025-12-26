@@ -1082,16 +1082,18 @@ void
 TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) const
 {
   /*
-   * Pressure Neumann boundary terms
+   * I. Pressure Neumann boundary terms
    */
   rhs.equ(this->extra_pressure_nbc.get_beta(0), pressure_nbc_rhs[0]);
   for(unsigned int i = 1; i < extra_pressure_nbc.get_order(); ++i)
     rhs.add(this->extra_pressure_nbc.get_beta(i), pressure_nbc_rhs[i]);
-  op_rt->evaluate_add_pressure_neumann_from_body_force(
-    *pde_operator->get_field_functions()->right_hand_side, rhs);
+
+  if(this->param.right_hand_side)
+    op_rt->evaluate_add_pressure_neumann_from_body_force(
+      *pde_operator->get_field_functions()->right_hand_side, rhs);
 
   /*
-   *  I. calculate divergence term
+   * II. calculate divergence term
    */
   op_rt->evaluate_add_velocity_divergence(solution_rt,
                                           -this->bdf.get_gamma0() / this->get_time_step_size(),
