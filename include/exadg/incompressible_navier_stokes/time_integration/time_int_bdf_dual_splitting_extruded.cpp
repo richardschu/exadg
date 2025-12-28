@@ -764,7 +764,7 @@ compute_least_squares_fit(std::vector<VectorType1> const & vectors_matvec,
   }
   for(; k < regular_size; k += n_lanes)
   {
-    dealii::VectorizedArray<double> rhs_k;
+    dealii::VectorizedArray<double> rhs_k = 0;
     for(unsigned int i = 0; i < n_vectors; ++i)
     {
       dealii::VectorizedArray<double> v_k, tmp;

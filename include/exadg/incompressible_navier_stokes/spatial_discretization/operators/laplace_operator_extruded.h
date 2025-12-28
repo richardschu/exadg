@@ -1162,12 +1162,7 @@ public:
     mf_data.overlap_communication_computation    = false;
     mf_data.initialize_mapping                   = false;
     matrix_free.reinit(MappingQ1<dim>(), dof_handler, constraints, quadrature, mf_data);
-    {
-      std::array<unsigned int, n_lanes> default_dof_indices;
-      for(unsigned int & a : default_dof_indices)
-        a = numbers::invalid_unsigned_int;
-      dof_indices.resize(matrix_free.n_cell_batches(), default_dof_indices);
-    }
+    dof_indices.resize(matrix_free.n_cell_batches());
     for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
       for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
         dof_indices[cell][v] =
@@ -1190,7 +1185,7 @@ public:
       std::vector<unsigned int> cell_indices(dof_handler.get_triangulation().n_active_cells(),
                                              numbers::invalid_unsigned_int);
       for(unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
-        for(unsigned int v = 0; v < n_lanes; ++v)
+        for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
           cell_indices[matrix_free.get_cell_iterator(cell, v)->active_cell_index()] =
             cell * VectorizedArray<Number>::size() + v;
 
@@ -1252,7 +1247,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -1273,7 +1269,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -2260,6 +2257,7 @@ private:
         AssertIndexRange(n_faces, n_lanes + 1);
 
         std::array<unsigned int, n_lanes> dof_indices_vec;
+        dof_indices_vec[0] = 0;
         std::array<unsigned int, n_lanes> indices;
         for(unsigned int v = 0; v < n_faces; ++v, ++count)
         {
@@ -2917,7 +2915,8 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position) {
+          const auto add_entry = [&](const unsigned int position)
+          {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 

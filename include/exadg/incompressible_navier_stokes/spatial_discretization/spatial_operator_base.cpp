@@ -158,7 +158,6 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_and_constraints()
     // again with this new numbering
     dealii::DoFRenumbering::matrix_free_data_locality(dof_handler_u, constraint_u, mf_data);
 
-
     constraint_u.reinit(dof_handler_u.locally_owned_dofs(),
                         dealii::DoFTools::extract_locally_relevant_dofs(dof_handler_u));
 

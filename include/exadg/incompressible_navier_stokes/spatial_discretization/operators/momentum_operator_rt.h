@@ -163,7 +163,7 @@ distribute_local_to_global_rt_compressed(
         for(unsigned int v = 0; v < n_filled_lanes; ++v)
         {
           for(unsigned int i = 0; i < degree * (degree - 1); ++i)
-            dst_ptr[i] += data[i][v];
+            dst_ptr[dof_indices[2 * dim][v] + i] += data[i][v];
         }
     }
 
@@ -178,7 +178,7 @@ distribute_local_to_global_rt_compressed(
     for(unsigned int v = 0; v < n_filled_lanes; ++v)
     {
       for(unsigned int i = 0; i < dofs_per_comp - 2 * dofs_per_face; ++i)
-        dst_ptr[i] += my_data[i][v];
+        dst_ptr[dof_indices[2 * dim][v] + i] += my_data[i][v];
     }
 }
 
@@ -263,7 +263,9 @@ allocate_shared_recv_data(MemorySpace::MemorySpaceData<Number, MemorySpace::Host
   // Kokkos will not free the memory because the memory is
   // unmanaged. Instead we use a shared pointer to take care of
   // that.
-  data.values_sm_ptr = {ptr_aligned, [mpi_window](Number *) mutable {
+  data.values_sm_ptr = {ptr_aligned,
+                        [mpi_window](Number *) mutable
+                        {
                           // note: we are creating here a copy of
                           // the window other approaches led to
                           // segmentation faults
@@ -541,7 +543,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -562,7 +565,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -3340,7 +3344,7 @@ private:
         {
           const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
           const VectorizedArray<Number> grad[2][2]  = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
-                                                      {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
+                                                       {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
           const VectorizedArray<Number> t0          = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
           const VectorizedArray<Number> t1          = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
           VectorizedArray<Number>       val_real[2] = {t0, t1};
@@ -3446,8 +3450,8 @@ private:
             const unsigned int            iy         = dim * (qz * nn + qy * nn * nn + qx);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[q * dim],
-                                                    quad_values[q * dim + 1],
-                                                    quad_values[q * dim + 2]};
+                                                        quad_values[q * dim + 1],
+                                                        quad_values[q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], grad_y[iy + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], grad_y[iy + 1], grad_z[iz + 1]},
@@ -5185,7 +5189,7 @@ private:
         if constexpr(dim == 2)
         {
           const VectorizedArray<Number> val[2]     = {quad_values[0][q1 * dim],
-                                                  quad_values[0][q1 * dim + 1]};
+                                                      quad_values[0][q1 * dim + 1]};
           const VectorizedArray<Number> grad[2][2] = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
                                                       {quad_values[1][q1 * dim],
                                                        quad_values[1][q1 * dim + 1]}};
@@ -5235,8 +5239,8 @@ private:
             const unsigned int            ix         = dim * (qz + qx * nn);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[0][q * dim],
-                                                    quad_values[0][q * dim + 1],
-                                                    quad_values[0][q * dim + 2]};
+                                                        quad_values[0][q * dim + 1],
+                                                        quad_values[0][q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], quad_values[1][q * dim + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], quad_values[1][q * dim + 1], grad_z[iz + 1]},
@@ -5420,8 +5424,8 @@ private:
         for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn)
         {
           const VectorizedArray<Number> val[3]     = {values_face[0][0][q],
-                                                  values_face[0][1][q],
-                                                  values_face[0][2][q]};
+                                                      values_face[0][1][q],
+                                                      values_face[0][2][q]};
           const VectorizedArray<Number> grad[3][3] = {{grads_face[0][0][q * dim],
                                                        grads_face[0][0][q * dim + 1],
                                                        grads_face[0][0][q * dim + 2]},
@@ -5652,7 +5656,8 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position) {
+          const auto add_entry = [&](const unsigned int position)
+          {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 
