@@ -155,7 +155,7 @@ StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress_symmetrize(tensor 
   }
 
   // Since we return a dealii::SymmetricTensor, we only need to set symmetric entries once.
-  if(dim == 3)
+  if constexpr(dim == 3)
   {
     S[0][0] = f0 * strain[0][0] + f1 * (strain[1][1] + strain[2][2]);
     S[1][1] = f0 * strain[1][1] + f1 * (strain[0][0] + strain[2][2]);
