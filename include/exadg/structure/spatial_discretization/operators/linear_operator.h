@@ -40,7 +40,7 @@ private:
   typedef typename Base::IntegratorFace IntegratorFace;
 
   typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> vector;
-  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
 
   /*
    * Calculates the integral

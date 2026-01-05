@@ -103,6 +103,22 @@ ElasticityOperatorBase<dim, Number>::get_data() const
 }
 
 template<int dim, typename Number>
+Material<dim, Number> const &
+ElasticityOperatorBase<dim, Number>::get_material_in_cell(
+  dealii::MatrixFree<dim, Number> const & matrix_free_in,
+  unsigned int const                      cell) const
+{
+  AssertThrow(
+    &matrix_free_in == &(*this->matrix_free),
+    dealii::ExcMessage(
+      "`MatrixFree` object underlying this `ElasticityOperatorBase` does not match the one provided."));
+
+  material_handler.reinit(matrix_free_in, cell);
+
+  return *(material_handler.get_material());
+}
+
+template<int dim, typename Number>
 void
 ElasticityOperatorBase<dim, Number>::set_scaling_factor_mass_operator(
   double const scaling_factor) const
