@@ -28,7 +28,7 @@
 
 namespace Helper
 {
-void
+inline void
 print_time(const double        time,
            const std::string & name,
            const MPI_Comm      communicator,
@@ -56,7 +56,7 @@ print_time(const double        time,
 // using the vectors, we set up a sparsity-pattern like structure where
 // one index specifies the start index (range_list_index), and the other
 // the actual ranges (range_list).
-void
+inline void
 convert_map_to_range_list(const unsigned int                                        n_partitions,
                           const unsigned int                                        chunk_size,
                           const std::map<unsigned int, std::vector<unsigned int>> & ranges_in,

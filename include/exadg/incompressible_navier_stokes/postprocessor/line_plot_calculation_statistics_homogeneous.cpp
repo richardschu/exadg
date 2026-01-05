@@ -161,7 +161,9 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     // Save all cells and corresponding points on unit cell
     // that are relevant for a given point along the line.
 
-    // use a tolerance to check whether a point is inside the unit cell
+    // use a tolerance to check whether a point is inside the unit cell; this
+    // is modified near the boundary to take into account deviations due to
+    // curved boundaries
     double const tolerance = 1.e-10;
 
     // For velocity quantities:
@@ -200,7 +202,15 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               // If the new point lies in the current cell, we have to take the current cell into
               // account
               dealii::Point<dim> const p_unit = find_unit_point(mapping, cell, translated_point);
-              if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, tolerance))
+
+              // Use a relaxed tolerance if we are at the boundary in a certain direction
+              double modified_tolerance = tolerance;
+              for(unsigned int d = 0; d < dim; ++d)
+                if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
+                   (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
+                  modified_tolerance = 1e-2;
+
+              if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
               {
                 if(not found_a_point_on_this_cell)
                 {
@@ -208,7 +218,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                     cell, std::vector<std::pair<unsigned int, dealii::Point<dim>>>());
                   found_a_point_on_this_cell = true;
                 }
-                cells_and_ref_points_velocity[line_iterator].back().second.emplace_back(p, p_unit);
+                cells_and_ref_points_velocity[line_iterator].back().second.emplace_back(
+                  p, dealii::GeometryInfo<dim>::project_to_unit_cell(p_unit));
               }
             }
           }
@@ -356,7 +367,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       for(unsigned int i = 0; i < (n_t + 1) / 2; ++i)
         for(unsigned int j = 0; j < (n_n + 1) / 2; ++j)
         {
-          if(i == n_cols - 1 && n_n % 2 == 1)
+          if(i == n_cols - 1 && n_t % 2 == 1)
             shape_values_eo_t[2 * i][j] = 0.5 * shape_info.data[1].shape_values[i * n_n + j];
           else
             shape_values_eo_t[2 * i][j] =
