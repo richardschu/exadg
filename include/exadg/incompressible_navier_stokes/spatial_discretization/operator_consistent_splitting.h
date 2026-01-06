@@ -96,6 +96,12 @@ public:
   void
   apply_helmholtz_operator(VectorType & dst, VectorType const & src) const;
 
+  const Operators::ViscousKernelData &
+  get_viscous_kernel_data() const
+  {
+    return this->viscous_kernel_data;
+  }
+
 private:
   /*
    * rhs pressure Poisson equation
