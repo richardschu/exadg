@@ -211,8 +211,10 @@ public:
 
       dealii::SolverCG<VectorType>        solver(control);
       dealii::internal::EigenvalueTracker eigenvalue_tracker;
-      solver.connect_eigenvalues_slot([&eigenvalue_tracker](const std::vector<double> & eigenvalues)
-                                      { eigenvalue_tracker.slot(eigenvalues); });
+      solver.connect_eigenvalues_slot(
+        [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
+          eigenvalue_tracker.slot(eigenvalues);
+        });
 
       mg_matrices[level].initialize_dof_vector(solution_update[level]);
       mg_matrices[level].initialize_dof_vector(temp_vector[level]);
@@ -257,8 +259,10 @@ public:
 
       dealii::SolverCG<VectorType>        solver(control);
       dealii::internal::EigenvalueTracker eigenvalue_tracker;
-      solver.connect_eigenvalues_slot([&eigenvalue_tracker](const std::vector<double> & eigenvalues)
-                                      { eigenvalue_tracker.slot(eigenvalues); });
+      solver.connect_eigenvalues_slot(
+        [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
+          eigenvalue_tracker.slot(eigenvalues);
+        });
 
       dg_matrix.initialize_dof_vector(solution_update_dg);
       dg_matrix.initialize_dof_vector(rhs_dg);

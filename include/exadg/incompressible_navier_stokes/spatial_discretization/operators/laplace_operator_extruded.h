@@ -1247,8 +1247,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -1269,8 +1268,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -2915,8 +2913,7 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position)
-          {
+          const auto add_entry = [&](const unsigned int position) {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 

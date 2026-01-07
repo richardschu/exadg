@@ -109,6 +109,7 @@ public:
     {
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
+      prm.add_parameter("TriangulationType", triangulation_type, "Type of triangulation");
       prm.add_parameter("TemporalDiscretization",
                         temporal_discretization,
                         "Temporal discretization");
@@ -200,7 +201,7 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.spatial_discretization      = spatial_discretization;
-    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.grid.triangulation_type     = triangulation_type;
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
     this->param.degree_p                    = DegreePressure::MixedOrder;
@@ -289,13 +290,13 @@ private:
               std::shared_ptr<dealii::Mapping<dim>> &           mapping,
               std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    auto const lambda_create_triangulation =
-      [&](dealii::Triangulation<dim, dim> &                        tria,
-          std::vector<dealii::GridTools::PeriodicFacePair<
-            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
-          unsigned int const                                       global_refinements,
-          std::vector<unsigned int> const &                        vector_local_refinements)
-    {
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
       (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
@@ -389,8 +390,7 @@ private:
     mapping_q_cache->initialize(
       *grid.triangulation,
       [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-        -> std::vector<dealii::Point<dim>>
-      {
+        -> std::vector<dealii::Point<dim>> {
         PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
         fe_values.reinit(cell);
 
@@ -407,8 +407,7 @@ private:
       });
 
     grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-      -> std::vector<dealii::Point<dim>>
-    {
+      -> std::vector<dealii::Point<dim>> {
       PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)
@@ -656,6 +655,7 @@ private:
 
   // dicretization
   TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
+  TriangulationType triangulation_type           = TriangulationType::Distributed;
   SpatialDiscretization  spatial_discretization  = SpatialDiscretization::L2;
 
   // postprocessing

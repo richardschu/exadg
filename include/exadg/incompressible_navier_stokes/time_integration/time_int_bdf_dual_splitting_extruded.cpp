@@ -917,7 +917,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::convective_step()
       }
     }
 
-    for(unsigned int i = 0; i < factors.size(); ++i)
+    for(unsigned int i = 0; i < this->extra.get_order(); ++i)
       factors[i] = -this->extra.get_beta(i);
     extrapolate_vectors(factors, this->vec_convective_term, rhs_rt);
   }
@@ -942,7 +942,7 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::convective_step()
 
   dealii::SolverCG<VectorType> solver_cg(control);
   op_rt->set_parameters(1.0, 0.0);
-  for(unsigned int i = 0; i < solutions_convective.size(); ++i)
+  for(unsigned int i = 0; i < this->extra.get_order(); ++i)
     factors[i] = this->extra.get_beta(i);
   extrapolate_vectors(factors, solutions_convective, solutions_convective.back());
   solver_cg.solve(*op_rt, solutions_convective.back(), rhs_rt, preconditioner_mass);
