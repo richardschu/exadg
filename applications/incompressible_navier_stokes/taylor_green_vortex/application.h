@@ -157,13 +157,13 @@ private:
 
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                   = SolverType::Unsteady;
-    this->param.temporal_discretization       = TemporalDiscretization::BDFDualSplittingExtruded;
-    this->param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Explicit;
-    this->param.order_time_integrator         = 2;
-    this->param.start_with_low_order          = not read_restart;
-    this->param.adaptive_time_stepping        = true;
-    this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
+    this->param.solver_type             = SolverType::Unsteady;
+    this->param.temporal_discretization = TemporalDiscretization::BDFConsistentSplittingExtruded;
+    this->param.treatment_of_convective_term           = TreatmentOfConvectiveTerm::Explicit;
+    this->param.order_time_integrator                  = 3;
+    this->param.start_with_low_order                   = not read_restart;
+    this->param.adaptive_time_stepping                 = true;
+    this->param.calculation_of_time_step_size          = TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping_limiting_factor = 3.0;
     this->param.max_velocity                           = max_velocity;
     this->param.cfl                                    = 0.4;
@@ -214,9 +214,10 @@ private:
     this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Weak;
 
     // div-div and continuity penalty
-    this->param.use_divergence_penalty                     = false;
+    this->param.use_divergence_penalty =
+      this->param.spatial_discretization == SpatialDiscretization::L2;
     this->param.divergence_penalty_factor                  = 1.0e0;
-    this->param.use_continuity_penalty                     = false;
+    this->param.use_continuity_penalty                     = this->param.use_divergence_penalty;
     this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
     this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
     this->param.apply_penalty_terms_in_postprocessing_step = true;
@@ -251,11 +252,19 @@ private:
 
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting ||
        this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded ||
-       this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+       this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting ||
+       this->param.temporal_discretization ==
+         TemporalDiscretization::BDFConsistentSplittingExtruded)
     {
-      this->param.solver_momentum         = SolverMomentum::CG;
-      this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
-      this->param.preconditioner_momentum = MomentumPreconditioner::PointJacobi;
+      if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+        this->param.solver_momentum = SolverMomentum::CG;
+      else
+        this->param.solver_momentum = SolverMomentum::GMRES;
+      this->param.solver_data_momentum = SolverData(1000, ABS_TOL, REL_TOL);
+      this->param.preconditioner_momentum =
+        this->param.spatial_discretization == SpatialDiscretization::L2 ?
+          MomentumPreconditioner::InverseMassMatrix :
+          MomentumPreconditioner::PointJacobi;
     }
 
     // CONSISTENT SPLITTING SCHEME
@@ -271,7 +280,10 @@ private:
       this->param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
 
       // linear solver
-      this->param.solver_momentum = SolverMomentum::GMRES;
+      if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+        this->param.solver_momentum = SolverMomentum::CG;
+      else
+        this->param.solver_momentum = SolverMomentum::GMRES;
       if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
         this->param.solver_data_momentum = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
       else

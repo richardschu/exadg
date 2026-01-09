@@ -214,7 +214,7 @@ private:
 
     // velocity pressure coupling terms
     this->param.gradp_formulation = FormulationPressureGradientTerm::Weak;
-    this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Strong;
+    this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Weak;
 
     // div-div and continuity penalty
     this->param.use_divergence_penalty        = spatial_discretization == SpatialDiscretization::L2;
@@ -282,6 +282,10 @@ private:
     this->param.inverse_mass_operator.implementation_type = InverseMassType::GlobalKrylovSolver;
     this->param.inverse_mass_operator.preconditioner      = PreconditionerMass::PointJacobi;
     this->param.inverse_mass_operator.solver_data         = SolverData(1000, 1e-12, 1e-4);
+
+    // CONSISTENT SPLITTING SCHEME
+    this->param.order_extrapolation_pressure_rhs = 2;
+    this->param.apply_leray_projection           = true;
   }
 
   void
@@ -289,13 +293,13 @@ private:
               std::shared_ptr<dealii::Mapping<dim>> &           mapping,
               std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    auto const lambda_create_triangulation =
-      [&](dealii::Triangulation<dim, dim> &                        tria,
-          std::vector<dealii::GridTools::PeriodicFacePair<
-            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
-          unsigned int const                                       global_refinements,
-          std::vector<unsigned int> const &                        vector_local_refinements)
-    {
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
       (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
@@ -389,8 +393,7 @@ private:
     mapping_q_cache->initialize(
       *grid.triangulation,
       [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-        -> std::vector<dealii::Point<dim>>
-      {
+        -> std::vector<dealii::Point<dim>> {
         PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
         fe_values.reinit(cell);
 
@@ -407,8 +410,7 @@ private:
       });
 
     grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-      -> std::vector<dealii::Point<dim>>
-    {
+      -> std::vector<dealii::Point<dim>> {
       PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)
