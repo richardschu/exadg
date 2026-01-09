@@ -776,6 +776,11 @@ public:
   {
     const unsigned int n_cell_batches = dof_indices.size();
 
+    src.update_ghost_values();
+
+    exchange_data_for_face_integrals<false>(src);
+
+    // since we just zero out the dst vector, can use the mass list
     for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
         range < cell_loop_pre_list_index[n_cell_batches + 1];
         ++range)
@@ -783,26 +788,13 @@ public:
                 dst.begin() + cell_loop_pre_list[range].second,
                 Number());
 
-    src.update_ghost_values_start();
-
-    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches + 1];
-        range < cell_loop_pre_list_index[n_cell_batches + 2];
-        ++range)
-      std::fill(dst.begin() + cell_loop_pre_list[range].first,
-                dst.begin() + cell_loop_pre_list[range].second,
-                Number());
-
-    src.update_ghost_values_finish();
-
-    exchange_data_for_face_integrals<false>(src);
-
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
     {
-      for(unsigned int range = cell_loop_pre_list_index[cell];
-          range < cell_loop_pre_list_index[cell + 1];
+      for(unsigned int range = cell_loop_mass_pre_list_index[cell];
+          range < cell_loop_mass_pre_list_index[cell + 1];
           ++range)
-        std::fill(dst.begin() + cell_loop_pre_list[range].first,
-                  dst.begin() + cell_loop_pre_list[range].second,
+        std::fill(dst.begin() + cell_loop_mass_pre_list[range].first,
+                  dst.begin() + cell_loop_mass_pre_list[range].second,
                   Number());
 
       const unsigned int degree = shape_info.data[0].fe_degree;
@@ -844,13 +836,21 @@ public:
 
     exchange_data_for_face_integrals<true>(src);
 
+    // since we just zero out the dst vector, can use the mass list
+    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
+        range < cell_loop_pre_list_index[n_cell_batches + 1];
+        ++range)
+      std::fill(velocity_dst.begin() + cell_loop_pre_list[range].first,
+                velocity_dst.begin() + cell_loop_pre_list[range].second,
+                Number());
+
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
     {
-      for(unsigned int range = cell_loop_pre_list_index[cell];
-          range < cell_loop_pre_list_index[cell + 1];
+      for(unsigned int range = cell_loop_mass_pre_list_index[cell];
+          range < cell_loop_mass_pre_list_index[cell + 1];
           ++range)
-        std::fill(velocity_dst.begin() + cell_loop_pre_list[range].first,
-                  velocity_dst.begin() + cell_loop_pre_list[range].second,
+        std::fill(velocity_dst.begin() + cell_loop_mass_pre_list[range].first,
+                  velocity_dst.begin() + cell_loop_mass_pre_list[range].second,
                   Number());
 
       const unsigned int degree = shape_info.data[0].fe_degree;
@@ -875,6 +875,10 @@ public:
       else
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
     }
+
+    velocity_dst.compress_start(0, VectorOperation::add);
+    src.zero_out_ghost_values();
+    velocity_dst.compress_finish(VectorOperation::add);
   }
 
   void
