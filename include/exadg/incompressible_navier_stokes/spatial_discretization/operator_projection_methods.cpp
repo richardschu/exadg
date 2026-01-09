@@ -77,6 +77,10 @@ template<int dim, typename Number>
 void
 OperatorProjectionMethods<dim, Number>::setup_preconditioners_and_solvers()
 {
+  if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded or
+     this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplittingExtruded)
+    return;
+
   setup_preconditioner_pressure_poisson();
   setup_solver_pressure_poisson();
 
@@ -117,6 +121,8 @@ OperatorProjectionMethods<dim, Number>::initialize_laplace_operator()
   if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
      this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded or
      this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
+     this->param.temporal_discretization ==
+       TemporalDiscretization::BDFConsistentSplittingExtruded or
      this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
   {
     /*

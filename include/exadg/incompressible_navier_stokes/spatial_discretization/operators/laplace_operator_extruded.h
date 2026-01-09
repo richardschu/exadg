@@ -3,7 +3,7 @@
  *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
  *
  *  Copyright (C) 2025 by Martin Kronbichler, Shubham Goswami,
- *  Schussnig
+ *  Richard Schussnig
  *
  *  This file is dual-licensed under the Apache-2.0 with LLVM Exception (see
  *  https://spdx.org/licenses/Apache-2.0.html and
@@ -1247,8 +1247,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -1269,8 +1268,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -1735,6 +1733,40 @@ public:
     {
       timings[13] += time.wall_time();
       timings[14] += total_timer.wall_time();
+    }
+  }
+
+  void
+  evaluate_add_divergence_body_force(const double                  time,
+                                     const dealii::Function<dim> & rhs_function,
+                                     VectorType &                  dst) const
+  {
+    const unsigned int n_cell_batches = dof_indices.size();
+    const_cast<dealii::Function<dim> &>(rhs_function).set_time(time);
+
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 1)
+        do_body_force_on_cell<1>(cell, rhs_function, dst);
+      else if(degree == 2)
+        do_body_force_on_cell<2>(cell, rhs_function, dst);
+      else if(degree == 3)
+        do_body_force_on_cell<3>(cell, rhs_function, dst);
+#ifndef DEBUG
+      else if(degree == 4)
+        do_body_force_on_cell<4>(cell, rhs_function, dst);
+      else if(degree == 5)
+        do_body_force_on_cell<5>(cell, rhs_function, dst);
+      else if(degree == 6)
+        do_body_force_on_cell<6>(cell, rhs_function, dst);
+      else if(degree == 7)
+        do_body_force_on_cell<7>(cell, rhs_function, dst);
+      else if(degree == 8)
+        do_body_force_on_cell<8>(cell, rhs_function, dst);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
     }
   }
 
@@ -2647,7 +2679,6 @@ private:
                                     (Number(1.0) - std::abs(boundary_mask)) * normal_derivatives[1];
           }
 
-
           const VectorizedArray<Number> integrate_factor =
             (JxW_xy * h_z) * mapping_info.quad_weights_z[qz];
 
@@ -2813,6 +2844,205 @@ private:
         }
   }
 
+  template<int degree>
+  void
+  do_body_force_on_cell(const unsigned int            cell,
+                        const dealii::Function<dim> & rhs_function,
+                        VectorType &                  dst) const
+  {
+    constexpr unsigned int n_q_points_1d = degree + 1;
+    constexpr unsigned int nn            = n_q_points_1d;
+    constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
+
+    VectorizedArray<Number> quad_values[dim * n_points];
+
+    std::array<unsigned int, n_lanes> shifted_data_indices;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
+
+    const Number h_z         = mapping_info.h_z;
+    const Number h_z_inverse = mapping_info.h_z_inverse;
+
+    for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
+    {
+      for(unsigned int qx = 0; qx < nn; ++qx, ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> inv_jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &mapping_info.inv_jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &inv_jac_xy[0][0]);
+        VectorizedArray<Number> JxW_xy;
+        JxW_xy.gather(&mapping_info.cell_JxW_xy[q1], mapping_info.mapping_data_index[cell].data());
+
+        if constexpr(dim == 2)
+        {
+          VectorizedArray<Number> f_val[dim];
+          for(unsigned int v = 0; v < n_lanes; ++v)
+          {
+            Point<dim> point =
+              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1];
+            f_val[0][v] = rhs_function.value(point, 0);
+            f_val[1][v] = rhs_function.value(point, 1);
+          }
+          const VectorizedArray<Number> s0 =
+            inv_jac_xy[0][0] * f_val[0] + inv_jac_xy[1][0] * f_val[1];
+          const VectorizedArray<Number> s1 =
+            inv_jac_xy[0][1] * f_val[0] + inv_jac_xy[1][1] * f_val[1];
+
+          quad_values[q1 * dim]     = s0 * JxW_xy;
+          quad_values[q1 * dim + 1] = s1 * JxW_xy;
+        }
+        else // now to dim == 3
+        {
+          for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn * nn)
+          {
+            Tensor<1, dim, VectorizedArray<Number>> val_real;
+            for(unsigned int v = 0; v < n_lanes; ++v)
+            {
+              Point<dim> point;
+              for(unsigned int d = 0; d < 2; ++d)
+                point[d] =
+                  mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
+              for(unsigned int d = 0; d < dim; ++d)
+                val_real[d][v] = rhs_function.value(point, d);
+            }
+
+            const Number                  weight_z = mapping_info.quad_weights_z[qz];
+            const VectorizedArray<Number> factor   = JxW_xy * h_z * weight_z;
+
+            VectorizedArray<Number> value_tmp[dim];
+            for(unsigned int d = 0; d < dim; ++d)
+              val_real[d] *= factor;
+            for(unsigned int d = 0; d < 2; ++d)
+              value_tmp[d] = inv_jac_xy[0][d] * val_real[0] + inv_jac_xy[1][d] * val_real[1];
+            value_tmp[2] = h_z_inverse * val_real[2];
+
+            quad_values[q + 0 * n_points] = value_tmp[0];
+            quad_values[q + 1 * n_points] = value_tmp[1];
+            quad_values[q + 2 * n_points] = value_tmp[2];
+          }
+        }
+      }
+    }
+
+    {
+      AssertThrow(shape_info.data[0].n_q_points_1d == n_q_points_1d, ExcInternalError());
+      internal::EvaluatorTensorProduct<internal::evaluate_evenodd,
+                                       dim,
+                                       n_q_points_1d,
+                                       n_q_points_1d,
+                                       VectorizedArray<Number>,
+                                       Number>
+        eval_g({}, shape_info.data[0].shape_gradients_collocation_eo.data(), {});
+      eval_g.template gradients<0, false, false, 1>(quad_values, quad_values);
+      eval_g.template gradients<1, false, true, 1>(quad_values + 1 * n_points, quad_values);
+      if constexpr(dim == 3)
+        eval_g.template gradients<2, false, true, 1>(quad_values + 2 * n_points, quad_values);
+    }
+
+    for(unsigned int face = 0; face < 4; ++face)
+    {
+      const unsigned int face_direction = face / 2;
+
+      VectorizedArray<Number> boundary_mask;
+      for(unsigned int v = 0; v < n_lanes; ++v)
+        if(neighbor_cells[cell][face][v] == numbers::invalid_unsigned_int)
+          boundary_mask[v] = 0.;
+        else
+          boundary_mask[v] = 1.;
+
+      std::array<unsigned int, n_lanes> shifted_data_indices, data_indices;
+      for(unsigned int v = 0; v < n_lanes; ++v)
+      {
+        const unsigned int idx  = mapping_info.face_mapping_data_index[cell][face][0][v];
+        shifted_data_indices[v] = idx * 4;
+        data_indices[v]         = idx;
+      }
+
+      const std::array<Number, 2> * shape = interpolate_quad_to_boundary[face % 2].data();
+
+      for(unsigned int q1 = 0; q1 < nn; ++q1)
+      {
+        Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+        vectorized_load_and_transpose(4,
+                                      &mapping_info.face_jacobians_xy[q1][0][0],
+                                      shifted_data_indices.data(),
+                                      &jac_xy[0][0]);
+
+        const VectorizedArray<Number> area_element_xy =
+          std::sqrt(jac_xy[0][1 - face_direction] * jac_xy[0][1 - face_direction] +
+                    jac_xy[1][1 - face_direction] * jac_xy[1][1 - face_direction]);
+        const Number h_z = mapping_info.h_z;
+
+        VectorizedArray<Number> val;
+        for(unsigned int v = 0; v < n_lanes; ++v)
+        {
+          Point<dim> point;
+          for(unsigned int d = 0; d < 2; ++d)
+            point[d] = mapping_info.face_quadrature_points[data_indices[v] + q1][d];
+          val[v] = 0;
+          for(unsigned int e = 0; e < 2; ++e)
+            val[v] += rhs_function.value(point, e) *
+                      mapping_info.face_normal_vector_xy[data_indices[v] + q1][e];
+        }
+
+        for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn)
+        {
+          const VectorizedArray<Number> flux_term =
+            (mapping_info.quad_weights_z[q1] * area_element_xy * h_z) *
+            mapping_info.quad_weights_z[qz] * val * boundary_mask;
+
+          unsigned int idx = 0;
+          if(face_direction == 0)
+            idx = n_q_points_1d * (n_q_points_1d * qz + q1);
+          else // if(face_direction == 1)
+            idx = q1 + qz * n_q_points_1d * n_q_points_1d;
+          const unsigned int stride = Utilities::pow(n_q_points_1d, face_direction);
+          for(unsigned int i = 0; i < n_q_points_1d; ++i)
+          {
+            quad_values[idx + i * stride] -= shape[i][0] * flux_term;
+          }
+        }
+      }
+    }
+    for(unsigned int face = 4; face < 2 * dim; ++face)
+    {
+      VectorizedArray<Number> boundary_mask;
+      for(unsigned int v = 0; v < n_lanes; ++v)
+        if(neighbor_cells[cell][face][v] == numbers::invalid_unsigned_int)
+          boundary_mask[v] = 0.;
+        else
+          boundary_mask[v] = 1.;
+      const std::array<Number, 2> * shape = interpolate_quad_to_boundary[face % 2].data();
+      for(unsigned int q = 0; q < nn * nn; ++q)
+      {
+        VectorizedArray<Number> JxW_xy;
+        JxW_xy.gather(&mapping_info.cell_JxW_xy[q], mapping_info.mapping_data_index[cell].data());
+        VectorizedArray<Number> flux_term;
+        for(unsigned int v = 0; v < n_lanes; ++v)
+        {
+          Point<dim> point;
+          for(unsigned int d = 0; d < 2; ++d)
+            point[d] =
+              mapping_info.face_quadrature_points[mapping_info.mapping_data_index[cell][v] + q][d];
+          flux_term[v] = rhs_function.value(point, 2);
+        }
+        flux_term *= JxW_xy * mapping_info.quad_weights_xy[q] * boundary_mask;
+        const unsigned int stride = nn * nn;
+        for(unsigned int i = 0; i < n_q_points_1d; ++i)
+        {
+          quad_values[q + i * stride] -= shape[i][0] * flux_term;
+        }
+      }
+    }
+
+    integrate_cell_scatter<degree + 1, n_q_points_1d>(dof_indices[cell],
+                                                      n_active_entries_per_cell_batch(cell),
+                                                      quad_values,
+                                                      dst.begin());
+  }
+
   unsigned int
   find_first_zero_bit(const std::uint64_t x)
   {
@@ -2915,8 +3145,7 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position)
-          {
+          const auto add_entry = [&](const unsigned int position) {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 

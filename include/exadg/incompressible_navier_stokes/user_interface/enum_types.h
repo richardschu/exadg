@@ -127,6 +127,7 @@ enum class TemporalDiscretization
   BDFDualSplitting,
   BDFDualSplittingExtruded,
   BDFConsistentSplitting,
+  BDFConsistentSplittingExtruded,
   BDFPressureCorrection,
   BDFCoupledSolution,
   InterpolateAnalyticalSolution

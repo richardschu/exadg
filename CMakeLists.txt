@@ -147,6 +147,7 @@ SET(TARGET_SRC
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_consistent_splitting.cpp
+     include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_consistent_splitting_extruded.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting_extruded.cpp
      include/exadg/incompressible_navier_stokes/time_integration/time_int_bdf_pressure_correction.cpp

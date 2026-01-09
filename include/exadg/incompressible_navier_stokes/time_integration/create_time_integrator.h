@@ -25,6 +25,7 @@
 // ExaDG
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_consistent_splitting.h>
+#include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_consistent_splitting_extruded.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting_extruded.h>
@@ -87,6 +88,22 @@ create_time_integrator(std::shared_ptr<SpatialOperatorBase<dim, Number>> pde_ope
 
     time_integrator = std::make_shared<IncNS::TimeIntBDFConsistentSplitting<dim, Number>>(
       operator_consistent_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
+  }
+  else if(parameters.temporal_discretization ==
+          TemporalDiscretization::BDFConsistentSplittingExtruded)
+  {
+    std::shared_ptr<OperatorConsistentSplitting<dim, Number>> operator_consistent_splitting =
+      std::dynamic_pointer_cast<OperatorConsistentSplitting<dim, Number>>(pde_operator);
+
+    if constexpr(dim == 3 && std::is_same_v<Number, double>)
+      time_integrator = std::make_shared<IncNS::TimeIntBDFConsistentSplittingExtruded<dim, Number>>(
+        operator_consistent_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
+    else
+    {
+      AssertThrow(false,
+                  dealii::ExcMessage(
+                    "Extruded operator only implemented for dim=3 and Number=double"));
+    }
   }
   else if(parameters.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
   {

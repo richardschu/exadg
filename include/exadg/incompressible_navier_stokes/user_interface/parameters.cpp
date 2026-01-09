@@ -682,7 +682,6 @@ Parameters::involves_h_multigrid() const
   // to write a separate class SpatialOperatorInterpolateAnalyticalSolution that does not create
   // preconditioners (including multigrid)
   else if(temporal_discretization == TemporalDiscretization::BDFDualSplitting or
-          temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded or
           temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
           temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
           temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
@@ -710,6 +709,11 @@ Parameters::involves_h_multigrid() const
         involves_h_mg = true;
       }
     }
+  }
+  else if(temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded or
+          temporal_discretization == TemporalDiscretization::BDFConsistentSplittingExtruded)
+  {
+    // do not set up any multigrid here because it is done in a base class
   }
   else
   {
