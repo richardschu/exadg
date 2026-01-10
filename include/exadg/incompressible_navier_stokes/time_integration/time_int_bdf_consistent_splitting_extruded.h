@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef EXADG_INCOMPRESSIBLE_NAVIER_STOKES_TIME_INTEGRATION_TIME_INT_BDF_DUAL_SPLITTING_EXTRUDED_H_
-#define EXADG_INCOMPRESSIBLE_NAVIER_STOKES_TIME_INTEGRATION_TIME_INT_BDF_DUAL_SPLITTING_EXTRUDED_H_
+#ifndef EXADG_INCOMPRESSIBLE_NAVIER_STOKES_TIME_INTEGRATION_TIME_INT_BDF_CONSISTENT_SPLITTING_EXTRUDED_H_
+#define EXADG_INCOMPRESSIBLE_NAVIER_STOKES_TIME_INTEGRATION_TIME_INT_BDF_CONSISTENT_SPLITTING_EXTRUDED_H_
 
 // ExaDG
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
@@ -47,10 +47,10 @@ namespace IncNS
 {
 // forward declarations
 template<int dim, typename Number>
-class OperatorDualSplitting;
+class OperatorConsistentSplitting;
 
 template<int dim, typename Number>
-class TimeIntBDFDualSplittingExtruded : public TimeIntBDF<dim, Number>
+class TimeIntBDFConsistentSplittingExtruded : public TimeIntBDF<dim, Number>
 {
 private:
   using BoostInputArchiveType  = TimeIntBase::BoostInputArchiveType;
@@ -61,17 +61,18 @@ private:
   typedef typename Base::VectorType VectorType;
   using VectorTypeFloat = dealii::LinearAlgebra::distributed::Vector<float>;
 
-  typedef OperatorDualSplitting<dim, Number> Operator;
+  typedef OperatorConsistentSplitting<dim, Number> Operator;
 
 public:
-  TimeIntBDFDualSplittingExtruded(std::shared_ptr<Operator>                       operator_in,
-                                  std::shared_ptr<HelpersALE<dim, Number> const>  helpers_ale_in,
-                                  std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
-                                  Parameters const &                              param_in,
-                                  MPI_Comm const &                                mpi_comm_in,
-                                  bool const                                      is_test_in);
+  TimeIntBDFConsistentSplittingExtruded(
+    std::shared_ptr<Operator>                       operator_in,
+    std::shared_ptr<HelpersALE<dim, Number> const>  helpers_ale_in,
+    std::shared_ptr<PostProcessorInterface<Number>> postprocessor_in,
+    Parameters const &                              param_in,
+    MPI_Comm const &                                mpi_comm_in,
+    bool const                                      is_test_in);
 
-  virtual ~TimeIntBDFDualSplittingExtruded()
+  virtual ~TimeIntBDFConsistentSplittingExtruded()
   {
   }
 
@@ -97,18 +98,6 @@ private:
   void
   setup_derived() final;
 
-  unsigned int
-  get_size_velocity() const final;
-
-  unsigned int
-  get_size_pressure() const final;
-
-  void
-  copy_to_vec_convective_term_for_restart(unsigned int const i) const final;
-
-  void
-  copy_from_vec_convective_term_for_restart(unsigned int const i) final;
-
   void
   get_vectors_serialization(std::vector<VectorType const *> & vectors_velocity,
                             std::vector<VectorType const *> & vectors_pressure) const final;
@@ -122,9 +111,6 @@ private:
 
   void
   prepare_vectors_for_next_timestep() final;
-
-  void
-  convective_step();
 
   void
   evaluate_convective_term();
@@ -148,7 +134,7 @@ private:
   rhs_pressure(VectorType & rhs) const;
 
   void
-  viscous_step();
+  momentum_step();
 
   void
   solve_steady_problem() final;
@@ -172,24 +158,19 @@ private:
 
   std::vector<VectorType> velocity;
 
-  VectorType velocity_np; // standard mf vector
+  VectorType velocity_np;
 
-  std::vector<VectorTypeFloat> velocity_red;    // op_rt vector
-  std::vector<VectorTypeFloat> velocity_matvec; // op_rt vector
+  std::vector<VectorTypeFloat> velocity_red;
+  std::vector<VectorTypeFloat> velocity_matvec;
 
-  VectorType pressure_np;  // standard mf vector
-  VectorType pressure_rhs; // standard mf vector, not to be deserialized
+  VectorType pressure_np;
+  VectorType pressure_rhs;
 
-  std::vector<VectorTypeFloat> pressure;         // op_rt vector
-  std::vector<VectorTypeFloat> pressure_matvec;  // standard mf vector, but initialized differently?
-  std::vector<VectorType>      pressure_nbc_rhs; // op_rt vector
-
-  mutable std::vector<VectorType> velocity_for_restart; // standard mf vector
-  mutable std::vector<VectorType> pressure_for_restart; // standard mf vector
-
-  mutable std::vector<VectorType> velocity_red_for_restart;    // standard mf vector
-  mutable std::vector<VectorType> velocity_matvec_for_restart; // standard mf vector
-  mutable std::vector<VectorType> pressure_matvec_for_restart; // standard mf vector
+  std::vector<VectorTypeFloat> pressure;
+  std::vector<VectorTypeFloat> pressure_matvec;
+  std::vector<VectorType>      convective_divergence_rhs;
+  std::vector<VectorType>      divergences;
+  std::vector<VectorType>      pressure_nbc_rhs;
 
   // required for strongly-coupled partitioned FSI
   VectorType pressure_last_iter;
@@ -224,6 +205,7 @@ private:
 
   // time integrator constants: extrapolation scheme
   ExtrapolationConstants extra_pressure_nbc;
+  ExtrapolationConstants extra_pressure_rhs;
 };
 
 } // namespace IncNS

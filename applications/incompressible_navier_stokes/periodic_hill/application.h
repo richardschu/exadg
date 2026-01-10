@@ -216,7 +216,7 @@ private:
 
     // velocity pressure coupling terms
     this->param.gradp_formulation = FormulationPressureGradientTerm::Weak;
-    this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Strong;
+    this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Weak;
 
     // div-div and continuity penalty
     this->param.use_divergence_penalty        = spatial_discretization == SpatialDiscretization::L2;
@@ -286,6 +286,10 @@ private:
     this->param.inverse_mass_operator.implementation_type = InverseMassType::GlobalKrylovSolver;
     this->param.inverse_mass_operator.preconditioner      = PreconditionerMass::PointJacobi;
     this->param.inverse_mass_operator.solver_data         = SolverData(1000, 1e-12, 1e-4);
+
+    // CONSISTENT SPLITTING SCHEME
+    this->param.order_extrapolation_pressure_rhs = 2;
+    this->param.apply_leray_projection           = true;
   }
 
   void

@@ -3,7 +3,7 @@
  *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
  *
  *  Copyright (C) 2025 by Martin Kronbichler, Shubham Goswami,
- *  Schussnig
+ *  Richard Schussnig
  *
  *  This file is dual-licensed under the Apache-2.0 with LLVM Exception (see
  *  https://spdx.org/licenses/Apache-2.0.html and

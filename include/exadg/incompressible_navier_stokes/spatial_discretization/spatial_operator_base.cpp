@@ -982,6 +982,8 @@ SpatialOperatorBase<dim, Number>::prescribe_initial_conditions(VectorType & velo
                         pressure,
                         field_functions->initial_solution_pressure,
                         time);
+  for(unsigned int i : matrix_free->get_constrained_dofs(get_dof_index_velocity()))
+    velocity.local_element(i) = 0.0;
 
   // Compute initial variable viscosity using the initial velocity field.
   if(this->param.viscous_problem() and this->param.viscosity_is_variable())
