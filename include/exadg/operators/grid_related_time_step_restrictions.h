@@ -257,13 +257,14 @@ calculate_time_step_cfl_local(
   // find minimum over all processors
   new_time_step = dealii::Utilities::MPI::min(new_time_step, mpi_comm);
 
-  // Cut time step size after, e.g., 4 digits of accuracy in order to make sure that there is no
+  // Cut time step size after, e.g., 4 digits of accuracy in order to reduce the probability
+  // that there is a
   // drift in the time step size depending on the number of processors when using adaptive time
   // stepping. This effect can occur since the velocity field and the time step size are coupled
   // (there is some form of feedback loop in case of adaptive time stepping, i.e., a minor change
   // in the time step size due to round-off errors implies that the velocity field is evaluated
-  // at a slightly different time in the next time step and so on). This way, it can be ensured
-  // that the sequence of time step sizes is exactly reproducible with the results being
+  // at a slightly different time in the next time step and so on). By truncating, we increase
+  // the chances that time step sizes are reproducible with the results being
   // independent of the number of processors, which is important for code verification in a
   // parallel setting.
   new_time_step = dealii::Utilities::truncate_to_n_digits(new_time_step, 4);
