@@ -24,6 +24,7 @@
 
 // deal.II
 #include <deal.II/base/point.h>
+#include <deal.II/grid/manifold.h>
 
 // ExaDG
 #include <exadg/postprocessor/time_control_statistics.h>
@@ -82,6 +83,7 @@ struct QuantitySkinFriction : Quantity
       normal_vector(dealii::Tensor<1, dim, double>()),
       tangent_vector(dealii::Tensor<1, dim, double>())
   {
+    this->type = QuantityType::SkinFriction;
   }
 
   double                         viscosity;
@@ -92,7 +94,7 @@ struct QuantitySkinFriction : Quantity
 template<int dim>
 struct Line
 {
-  Line() : n_points(2), name("line")
+  Line() : n_points(2), name("line"), manifold(nullptr)
   {
   }
 
@@ -120,6 +122,12 @@ struct Line
    *  Specify for which fields/quantities to write output
    */
   std::vector<std::shared_ptr<Quantity>> quantities;
+
+  /*
+   * Manifold in case the points along a line should be subject to a
+   * deformation
+   */
+  std::shared_ptr<const dealii::ChartManifold<dim>> manifold;
 };
 
 /*

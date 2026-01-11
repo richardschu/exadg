@@ -153,6 +153,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       {
         dealii::Point<dim> point =
           line->begin + double(i) / double(line->n_points - 1) * (line->end - line->begin);
+        if(line->manifold.get() != nullptr)
+          point = line->manifold->push_forward(point);
         global_points[line_iterator].push_back(point);
       }
       ++line_iterator;
@@ -208,7 +210,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               for(unsigned int d = 0; d < dim; ++d)
                 if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
                    (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
-                  modified_tolerance = 1e-2;
+                  modified_tolerance = 1e-1;
 
               if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
               {
@@ -257,7 +259,14 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                 // If the new point lies in the current cell, we have to take the current cell into
                 // account
                 dealii::Point<dim> const p_unit = find_unit_point(mapping, cell, translated_point);
-                if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, tolerance))
+
+                // Use a relaxed tolerance if we are at the boundary in a certain direction
+                double modified_tolerance = tolerance;
+                for(unsigned int d = 0; d < dim; ++d)
+                  if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
+                     (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
+                    modified_tolerance = 1e-1;
+                if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
                 {
                   if(not found_a_point_on_this_cell)
                   {
@@ -265,8 +274,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                       cell, std::vector<std::pair<unsigned int, dealii::Point<dim>>>());
                     found_a_point_on_this_cell = true;
                   }
-                  cells_and_ref_points_pressure[line_iterator].back().second.emplace_back(p,
-                                                                                          p_unit);
+                  cells_and_ref_points_pressure[line_iterator].back().second.emplace_back(
+                    p, dealii::GeometryInfo<dim>::project_to_unit_cell(p_unit));
                 }
               }
             }
@@ -756,6 +765,25 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               for(unsigned int e = 0; e < dim; ++e)
                 inv_jac[d][e][v] = inv_jac_v[d][e];
           }
+          Tensor<1, dim, VectorizedArray<Number>> normal;
+          Tensor<1, dim, VectorizedArray<Number>> tangent;
+          for(const std::shared_ptr<Quantity> & quantity : line.quantities)
+            if(quantity->type == QuantityType::SkinFriction)
+            {
+              std::shared_ptr<QuantitySkinFriction<dim>> quantity_skin_friction =
+                std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(quantity);
+              Tensor<2, dim, VectorizedArray<Number>> jac = invert(transpose(inv_jac));
+              tangent = jac * quantity_skin_friction->tangent_vector;
+              tangent /= tangent.norm();
+              if(averaging_direction == 2)
+              {
+                normal[0] = tangent[1];
+                normal[1] = -tangent[0];
+              }
+              else
+                AssertThrow(false, ExcNotImplemented());
+            }
+
           VectorizedArray<Number> const det =
             1.0 / std::abs(inv_jac[averaging_direction][averaging_direction]);
           dealii::internal::compute_values_of_array(shapes_2d.data(),
@@ -804,12 +832,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               }
               else if(quantity->type == QuantityType::SkinFriction)
               {
-                std::shared_ptr<QuantitySkinFriction<dim>> quantity_skin_friction =
-                  std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(quantity);
-
-                dealii::Tensor<1, dim, double> normal  = quantity_skin_friction->normal_vector;
-                dealii::Tensor<1, dim, double> tangent = quantity_skin_friction->tangent_vector;
-
                 for(unsigned int d = 0; d < dim; ++d)
                   for(unsigned int e = 0; e < dim; ++e)
                     skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);

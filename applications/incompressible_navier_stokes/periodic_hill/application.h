@@ -293,13 +293,13 @@ private:
               std::shared_ptr<dealii::Mapping<dim>> &           mapping,
               std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    auto const lambda_create_triangulation =
-      [&](dealii::Triangulation<dim, dim> &                        tria,
-          std::vector<dealii::GridTools::PeriodicFacePair<
-            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
-          unsigned int const                                       global_refinements,
-          std::vector<unsigned int> const &                        vector_local_refinements)
-    {
+    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
+                                                 std::vector<dealii::GridTools::PeriodicFacePair<
+                                                   typename dealii::Triangulation<
+                                                     dim>::cell_iterator>> & periodic_face_pairs,
+                                                 unsigned int const          global_refinements,
+                                                 std::vector<unsigned int> const &
+                                                   vector_local_refinements) {
       (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
@@ -367,12 +367,21 @@ private:
       tria.refine_global(global_refinements);
     };
 
-    GridUtilities::create_triangulation_with_multigrid<dim>(grid,
-                                                            this->mpi_comm,
-                                                            this->param.grid,
-                                                            this->param.involves_h_multigrid(),
-                                                            lambda_create_triangulation,
-                                                            {} /* no local refinements */);
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingExtruded ||
+       this->param.temporal_discretization ==
+         TemporalDiscretization::BDFConsistentSplittingExtruded)
+      GridUtilities::create_triangulation<dim>(grid,
+                                               this->mpi_comm,
+                                               this->param.grid,
+                                               lambda_create_triangulation,
+                                               {} /* no local refinements */);
+    else
+      GridUtilities::create_triangulation_with_multigrid<dim>(grid,
+                                                              this->mpi_comm,
+                                                              this->param.grid,
+                                                              this->param.involves_h_multigrid(),
+                                                              lambda_create_triangulation,
+                                                              {} /* no local refinements */);
 
     // mappings
     AssertThrow(get_element_type(*grid.triangulation) == ElementType::Hypercube,
@@ -393,8 +402,7 @@ private:
     mapping_q_cache->initialize(
       *grid.triangulation,
       [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-        -> std::vector<dealii::Point<dim>>
-      {
+        -> std::vector<dealii::Point<dim>> {
         PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
         fe_values.reinit(cell);
 
@@ -411,8 +419,7 @@ private:
       });
 
     grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-      -> std::vector<dealii::Point<dim>>
-    {
+      -> std::vector<dealii::Point<dim>> {
       PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)
@@ -498,7 +505,7 @@ private:
 
     // lines
     std::shared_ptr<LineHomogeneousAveraging<dim>> vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, vel_6,
-      vel_7, vel_8;
+      vel_7, vel_8, vel_9, vel_10;
     vel_0.reset(new LineHomogeneousAveraging<dim>());
     vel_1.reset(new LineHomogeneousAveraging<dim>());
     vel_2.reset(new LineHomogeneousAveraging<dim>());
@@ -508,26 +515,32 @@ private:
     vel_6.reset(new LineHomogeneousAveraging<dim>());
     vel_7.reset(new LineHomogeneousAveraging<dim>());
     vel_8.reset(new LineHomogeneousAveraging<dim>());
+    vel_9.reset(new LineHomogeneousAveraging<dim>());
+    vel_10.reset(new LineHomogeneousAveraging<dim>());
 
-    vel_0->average_homogeneous_direction = true;
-    vel_1->average_homogeneous_direction = true;
-    vel_2->average_homogeneous_direction = true;
-    vel_3->average_homogeneous_direction = true;
-    vel_4->average_homogeneous_direction = true;
-    vel_5->average_homogeneous_direction = true;
-    vel_6->average_homogeneous_direction = true;
-    vel_7->average_homogeneous_direction = true;
-    vel_8->average_homogeneous_direction = true;
+    vel_0->average_homogeneous_direction  = true;
+    vel_1->average_homogeneous_direction  = true;
+    vel_2->average_homogeneous_direction  = true;
+    vel_3->average_homogeneous_direction  = true;
+    vel_4->average_homogeneous_direction  = true;
+    vel_5->average_homogeneous_direction  = true;
+    vel_6->average_homogeneous_direction  = true;
+    vel_7->average_homogeneous_direction  = true;
+    vel_8->average_homogeneous_direction  = true;
+    vel_9->average_homogeneous_direction  = true;
+    vel_10->average_homogeneous_direction = true;
 
-    vel_0->averaging_direction = 2;
-    vel_1->averaging_direction = 2;
-    vel_2->averaging_direction = 2;
-    vel_3->averaging_direction = 2;
-    vel_4->averaging_direction = 2;
-    vel_5->averaging_direction = 2;
-    vel_6->averaging_direction = 2;
-    vel_7->averaging_direction = 2;
-    vel_8->averaging_direction = 2;
+    vel_0->averaging_direction  = 2;
+    vel_1->averaging_direction  = 2;
+    vel_2->averaging_direction  = 2;
+    vel_3->averaging_direction  = 2;
+    vel_4->averaging_direction  = 2;
+    vel_5->averaging_direction  = 2;
+    vel_6->averaging_direction  = 2;
+    vel_7->averaging_direction  = 2;
+    vel_8->averaging_direction  = 2;
+    vel_9->averaging_direction  = 2;
+    vel_10->averaging_direction = 2;
 
     // begin and end points of all lines
     double const eps = 1.e-10;
@@ -549,17 +562,25 @@ private:
     vel_7->end       = dealii::Point<dim>(7 * H, H + height - eps, 0);
     vel_8->begin     = dealii::Point<dim>(8 * H, H + f(8 * H, H, length) + eps, 0);
     vel_8->end       = dealii::Point<dim>(8 * H, H + height - eps, 0);
+    vel_9->begin     = dealii::Point<dim>(0 * H, H + height - eps, 0);
+    vel_9->end       = dealii::Point<dim>(9 * H, H + height - eps, 0);
+    vel_10->begin    = dealii::Point<dim>(0 * H, H + eps, 0);
+    vel_10->end      = dealii::Point<dim>(9 * H, H + eps, 0);
+    vel_10->manifold =
+      std::make_shared<PeriodicHillManifold<dim>>(H, length, height, grid_stretch_factor);
 
     // set the number of points along the lines
-    vel_0->n_points = points_per_line;
-    vel_1->n_points = points_per_line;
-    vel_2->n_points = points_per_line;
-    vel_3->n_points = points_per_line;
-    vel_4->n_points = points_per_line;
-    vel_5->n_points = points_per_line;
-    vel_6->n_points = points_per_line;
-    vel_7->n_points = points_per_line;
-    vel_8->n_points = points_per_line;
+    vel_0->n_points  = points_per_line;
+    vel_1->n_points  = points_per_line;
+    vel_2->n_points  = points_per_line;
+    vel_3->n_points  = points_per_line;
+    vel_4->n_points  = points_per_line;
+    vel_5->n_points  = points_per_line;
+    vel_6->n_points  = points_per_line;
+    vel_7->n_points  = points_per_line;
+    vel_8->n_points  = points_per_line;
+    vel_9->n_points  = 2 * points_per_line;
+    vel_10->n_points = 2 * points_per_line;
 
     // set the quantities that we want to compute along the lines
     vel_0->quantities.push_back(quantity_velocity);
@@ -581,16 +602,32 @@ private:
     vel_8->quantities.push_back(quantity_velocity);
     vel_8->quantities.push_back(quantity_reynolds);
 
+    vel_9->quantities.push_back(quantity_velocity);
+    vel_9->quantities.push_back(quantity_reynolds);
+    auto quantity_skin_friction_top               = std::make_shared<QuantitySkinFriction<dim>>();
+    quantity_skin_friction_top->tangent_vector[0] = -1;
+    quantity_skin_friction_top->normal_vector[1]  = 1;
+    vel_9->quantities.push_back(quantity_skin_friction_top);
+
+    vel_10->quantities.push_back(quantity_velocity);
+    vel_10->quantities.push_back(quantity_reynolds);
+    auto quantity_skin_friction_bottom = std::make_shared<QuantitySkinFriction<dim>>();
+    quantity_skin_friction_bottom->tangent_vector[0] = 1;
+    quantity_skin_friction_bottom->normal_vector[1]  = -1;
+    vel_10->quantities.push_back(quantity_skin_friction_bottom);
+
     // set line names
-    vel_0->name = this->output_parameters.filename + "_x_0";
-    vel_1->name = this->output_parameters.filename + "_x_1";
-    vel_2->name = this->output_parameters.filename + "_x_2";
-    vel_3->name = this->output_parameters.filename + "_x_3";
-    vel_4->name = this->output_parameters.filename + "_x_4";
-    vel_5->name = this->output_parameters.filename + "_x_5";
-    vel_6->name = this->output_parameters.filename + "_x_6";
-    vel_7->name = this->output_parameters.filename + "_x_7";
-    vel_8->name = this->output_parameters.filename + "_x_8";
+    vel_0->name  = this->output_parameters.filename + "_x_0";
+    vel_1->name  = this->output_parameters.filename + "_x_1";
+    vel_2->name  = this->output_parameters.filename + "_x_2";
+    vel_3->name  = this->output_parameters.filename + "_x_3";
+    vel_4->name  = this->output_parameters.filename + "_x_4";
+    vel_5->name  = this->output_parameters.filename + "_x_5";
+    vel_6->name  = this->output_parameters.filename + "_x_6";
+    vel_7->name  = this->output_parameters.filename + "_x_7";
+    vel_8->name  = this->output_parameters.filename + "_x_8";
+    vel_9->name  = this->output_parameters.filename + "_top";
+    vel_10->name = this->output_parameters.filename + "_bottom";
 
     // insert lines
     my_pp_data.line_plot_data.lines.push_back(vel_0);
@@ -602,6 +639,8 @@ private:
     my_pp_data.line_plot_data.lines.push_back(vel_6);
     my_pp_data.line_plot_data.lines.push_back(vel_7);
     my_pp_data.line_plot_data.lines.push_back(vel_8);
+    my_pp_data.line_plot_data.lines.push_back(vel_9);
+    my_pp_data.line_plot_data.lines.push_back(vel_10);
 
     my_pp_data.line_plot_data.time_control_data_statistics.time_control_data.is_active =
       calculate_statistics;
