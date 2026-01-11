@@ -189,7 +189,7 @@ private:
     this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping          = true;
     this->param.max_velocity                    = bulk_velocity;
-    this->param.cfl                             = 0.32; // 0.375;
+    this->param.cfl                             = 0.36; // 0.375;
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
     this->param.time_step_size                  = 1.0e-1;
     this->param.order_time_integrator           = 2;
@@ -293,13 +293,13 @@ private:
               std::shared_ptr<dealii::Mapping<dim>> &           mapping,
               std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings) final
   {
-    auto const lambda_create_triangulation = [&](dealii::Triangulation<dim, dim> & tria,
-                                                 std::vector<dealii::GridTools::PeriodicFacePair<
-                                                   typename dealii::Triangulation<
-                                                     dim>::cell_iterator>> & periodic_face_pairs,
-                                                 unsigned int const          global_refinements,
-                                                 std::vector<unsigned int> const &
-                                                   vector_local_refinements) {
+    auto const lambda_create_triangulation =
+      [&](dealii::Triangulation<dim, dim> &                        tria,
+          std::vector<dealii::GridTools::PeriodicFacePair<
+            typename dealii::Triangulation<dim>::cell_iterator>> & periodic_face_pairs,
+          unsigned int const                                       global_refinements,
+          std::vector<unsigned int> const &                        vector_local_refinements)
+    {
       (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
@@ -393,7 +393,8 @@ private:
     mapping_q_cache->initialize(
       *grid.triangulation,
       [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-        -> std::vector<dealii::Point<dim>> {
+        -> std::vector<dealii::Point<dim>>
+      {
         PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
         fe_values.reinit(cell);
 
@@ -410,7 +411,8 @@ private:
       });
 
     grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
-      -> std::vector<dealii::Point<dim>> {
+      -> std::vector<dealii::Point<dim>>
+    {
       PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)

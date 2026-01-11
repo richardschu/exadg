@@ -263,7 +263,9 @@ allocate_shared_recv_data(MemorySpace::MemorySpaceData<Number, MemorySpace::Host
   // Kokkos will not free the memory because the memory is
   // unmanaged. Instead we use a shared pointer to take care of
   // that.
-  data.values_sm_ptr = {ptr_aligned, [mpi_window](Number *) mutable {
+  data.values_sm_ptr = {ptr_aligned,
+                        [mpi_window](Number *) mutable
+                        {
                           // note: we are creating here a copy of
                           // the window other approaches led to
                           // segmentation faults
@@ -541,7 +543,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -562,7 +565,8 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b) {
+                     const std::array<types::global_dof_index, 5> & b)
+                  {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -825,10 +829,11 @@ public:
     dst.compress_finish(VectorOperation::add);
   }
 
-  void
+  Number
   evaluate_convective_and_divergence_term(const VectorType & src,
                                           VectorType &       velocity_dst,
-                                          VectorType &       pressure_dst) const
+                                          VectorType &       convective_divergence,
+                                          VectorType &       divergence) const
   {
     const unsigned int n_cell_batches = dof_indices.size();
 
@@ -844,6 +849,7 @@ public:
                 velocity_dst.begin() + cell_loop_pre_list[range].second,
                 Number());
 
+    Number cfl_factor = 0.;
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
     {
       for(unsigned int range = cell_loop_mass_pre_list_index[cell];
@@ -853,32 +859,46 @@ public:
                   velocity_dst.begin() + cell_loop_mass_pre_list[range].second,
                   Number());
 
-      const unsigned int degree = shape_info.data[0].fe_degree;
+      VectorizedArray<Number> convective_cfl = 0.;
+      const unsigned int      degree         = shape_info.data[0].fe_degree;
       if(degree == 2)
-        do_convective_and_divergence_on_cell<2>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<2>(
+          cell, src, velocity_dst, convective_divergence, divergence);
       else if(degree == 3)
-        do_convective_and_divergence_on_cell<3>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<3>(
+          cell, src, velocity_dst, convective_divergence, divergence);
       else if(degree == 4)
-        do_convective_and_divergence_on_cell<4>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<4>(
+          cell, src, velocity_dst, convective_divergence, divergence);
 #ifndef DEBUG
       else if(degree == 5)
-        do_convective_and_divergence_on_cell<5>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<5>(
+          cell, src, velocity_dst, convective_divergence, divergence);
       else if(degree == 6)
-        do_convective_and_divergence_on_cell<6>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<6>(
+          cell, src, velocity_dst, convective_divergence, divergence);
       else if(degree == 7)
-        do_convective_and_divergence_on_cell<7>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<7>(
+          cell, src, velocity_dst, convective_divergence, divergence);
       else if(degree == 8)
-        do_convective_and_divergence_on_cell<8>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<8>(
+          cell, src, velocity_dst, convective_divergence, divergence);
       else if(degree == 9)
-        do_convective_and_divergence_on_cell<9>(cell, src, velocity_dst, pressure_dst);
+        convective_cfl = do_convective_and_divergence_on_cell<9>(
+          cell, src, velocity_dst, convective_divergence, divergence);
 #endif
       else
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+
+      for(unsigned int v = 0; v < n_active_entries_per_cell_batch(cell); ++v)
+        cfl_factor = std::max(cfl_factor, convective_cfl[v]);
     }
 
     velocity_dst.compress_start(0, VectorOperation::add);
     src.zero_out_ghost_values();
     velocity_dst.compress_finish(VectorOperation::add);
+
+    return Utilities::MPI::max(cfl_factor, divergence.get_mpi_communicator());
   }
 
   void
@@ -3262,17 +3282,18 @@ private:
   }
 
   template<int degree>
-  void
+  VectorizedArray<Number>
   do_convective_and_divergence_on_cell(const unsigned int cell,
                                        const VectorType & src,
                                        VectorType &       velocity_dst,
-                                       VectorType &       pressure_dst) const
+                                       VectorType &       convective_divergence,
+                                       VectorType &       divergence) const
   {
     constexpr unsigned int n_q_points_1d = degree + (degree + 1) / 2;
     constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
     const auto &           shape_data    = convective_shape_info.data;
 
-    VectorizedArray<Number> quad_values[dim * n_points], out_values[dim * n_points * 2];
+    VectorizedArray<Number> quad_values[dim * n_points], out_values[(2 * dim + 1) * n_points + 1];
     read_cell_values<degree, n_q_points_1d>(src.begin(), dof_indices[cell], quad_values);
 
     compute_cell<CellOperation::convective_and_divergence, n_q_points_1d>(shape_data,
@@ -3280,9 +3301,43 @@ private:
                                                                           quad_values,
                                                                           out_values);
 
-    // integrate pressure in collocation space (to be merged later with face
-    // integrals)
-    VectorizedArray<Number> * pressure_values = out_values + dim * n_points;
+    // integrate divergences
+    VectorizedArray<Number> * div_values = out_values + 2 * dim * n_points;
+    internal::FEEvaluationImplBasisChange<dealii::internal::evaluate_evenodd,
+                                          dealii::internal::EvaluatorQuantity::value,
+                                          dim,
+                                          degree,
+                                          n_q_points_1d>::do_backward(1,
+                                                                      shape_data[1].shape_values_eo,
+                                                                      false,
+                                                                      div_values,
+                                                                      div_values);
+
+    const std::array<unsigned int, n_lanes> pressure_indices      = (*pressure_dof_indices)[cell];
+    bool                                    all_indices_available = true;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(pressure_indices[v] == numbers::invalid_unsigned_int)
+      {
+        all_indices_available = false;
+        break;
+      }
+    if(all_indices_available)
+      vectorized_transpose_and_store(false,
+                                     Utilities::pow(degree, dim),
+                                     div_values,
+                                     pressure_indices.data(),
+                                     divergence.begin());
+    else
+    {
+      for(unsigned int v = 0; v < n_lanes && pressure_indices[v] != numbers::invalid_unsigned_int;
+          ++v)
+        for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
+          divergence.local_element(pressure_indices[v] + i) = div_values[i][v];
+    }
+
+    // integrate convective divergence in collocation space (to be merged
+    // later with face integrals)
+    VectorizedArray<Number> * convective_div_values = out_values + dim * n_points;
     {
       internal::EvaluatorTensorProduct<internal::evaluate_evenodd,
                                        dim,
@@ -3291,13 +3346,15 @@ private:
                                        VectorizedArray<Number>,
                                        Number>
         eval_g({}, shape_data[1].shape_gradients_collocation_eo.data(), {});
-      eval_g.template gradients<0, false, false, 1>(pressure_values, pressure_values);
-      eval_g.template gradients<1, false, true, 1>(pressure_values + 1 * n_points, pressure_values);
+      eval_g.template gradients<0, false, false, 1>(convective_div_values, convective_div_values);
+      eval_g.template gradients<1, false, true, 1>(convective_div_values + 1 * n_points,
+                                                   convective_div_values);
       if constexpr(dim == 3)
-        eval_g.template gradients<2, false, true, 1>(pressure_values + 2 * n_points,
-                                                     pressure_values);
+        eval_g.template gradients<2, false, true, 1>(convective_div_values + 2 * n_points,
+                                                     convective_div_values);
     }
 
+    // face integrals
     for(unsigned int f = 0; f < 2 * dim; ++f)
       compute_face_convective<true, degree, n_q_points_1d>(
         shape_data, src, cell, f, 1.0, quad_values, out_values);
@@ -3314,32 +3371,25 @@ private:
                                           n_q_points_1d>::do_backward(1,
                                                                       shape_data[1].shape_values_eo,
                                                                       false,
-                                                                      pressure_values,
-                                                                      pressure_values);
+                                                                      convective_div_values,
+                                                                      convective_div_values);
 
-    const std::array<unsigned int, n_lanes> pressure_indices      = (*pressure_dof_indices)[cell];
-    bool                                    all_indices_available = true;
-    for(unsigned int v = 0; v < n_lanes; ++v)
-      if(pressure_indices[v] == numbers::invalid_unsigned_int)
-      {
-        all_indices_available = false;
-        break;
-      }
     if(all_indices_available)
       vectorized_transpose_and_store(false,
                                      Utilities::pow(degree, dim),
-                                     pressure_values,
+                                     convective_div_values,
                                      pressure_indices.data(),
-                                     pressure_dst.begin());
+                                     convective_divergence.begin());
     else
     {
-      // first broadcast valid entries to all lanes, then fill the remaining
-      // ones
       for(unsigned int v = 0; v < n_lanes && pressure_indices[v] != numbers::invalid_unsigned_int;
           ++v)
         for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
-          pressure_dst.local_element(pressure_indices[v] + i) = pressure_values[i][v];
+          convective_divergence.local_element(pressure_indices[v] + i) =
+            convective_div_values[i][v];
     }
+
+    return out_values[(2 * dim + 1) * n_points];
   }
 
   template<CellOperation cell_operation, int n_q_points_1d>
@@ -3393,6 +3443,8 @@ private:
                                                          dim * (i1 * n_q_points_2d + i0) + d,
                                                        grad_y + dim * (i1 * nn + i0) + d);
 
+    VectorizedArray<Number> cfl_velocity = 0;
+
     for(unsigned int qy = 0, q1 = 0; qy < nn; ++qy)
     {
       for(unsigned int i0 = 0; i0 < (dim == 3 ? nn : 1); ++i0)
@@ -3443,7 +3495,7 @@ private:
         {
           const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
           const VectorizedArray<Number> grad[2][2]  = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
-                                                      {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
+                                                       {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
           const VectorizedArray<Number> t0          = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
           const VectorizedArray<Number> t1          = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
           VectorizedArray<Number>       val_real[2] = {t0, t1};
@@ -3486,6 +3538,11 @@ private:
           }
           else if(cell_operation == CellOperation::convective_and_divergence)
           {
+            Tensor<1, dim, VectorizedArray<Number>> scaled_velocity;
+            for(unsigned int d = 0; d < dim; ++d)
+              scaled_velocity[d] = inv_jac_xy[0][d] * val_real[0] + inv_jac_xy[1][d] * val_real[1];
+            cfl_velocity =
+              std::max(cfl_velocity, scaled_velocity.norm_square() * (inv_jac_det * inv_jac_det));
             VectorizedArray<Number> tmp[2] = {grad_real[0][0] * t0 + grad_real[0][1] * t1,
                                               grad_real[1][0] * t0 + grad_real[1][1] * t1};
             for(unsigned int d = 0; d < dim; ++d)
@@ -3493,6 +3550,10 @@ private:
             for(unsigned int d = 0; d < dim; ++d)
               out_values[(dim + d) * n_q_points + q1] =
                 tmp[d] * (-inv_jac_det * mapping_info.quad_weights_xy[q1]);
+
+            // divergence
+            out_values[2 * dim * n_q_points + q1] =
+              mapping_info.quad_weights_xy[q1] * (grad[0][0] + grad[1][1]);
           }
           else
           {
@@ -3571,8 +3632,8 @@ private:
             const unsigned int            iy         = dim * (qz * nn + qy * nn * nn + qx);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[q * dim],
-                                                    quad_values[q * dim + 1],
-                                                    quad_values[q * dim + 2]};
+                                                        quad_values[q * dim + 1],
+                                                        quad_values[q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], grad_y[iy + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], grad_y[iy + 1], grad_z[iz + 1]},
@@ -3639,7 +3700,16 @@ private:
             else if(cell_operation == CellOperation::convective_and_divergence)
             {
               const VectorizedArray<Number> inv_jac_det_3d = inv_jac_det * h_z_inverse;
-              VectorizedArray<Number>       tmp[3];
+
+              Tensor<1, dim, VectorizedArray<Number>> scaled_velocity;
+              for(unsigned int d = 0; d < 2; ++d)
+                scaled_velocity[d] =
+                  inv_jac_xy[0][d] * val_real[0] + inv_jac_xy[1][d] * val_real[1];
+              scaled_velocity[2] = val[2]; // h_z_inverse * val_real[2];
+              cfl_velocity =
+                std::max(cfl_velocity,
+                         scaled_velocity.norm_square() * (inv_jac_det_3d * inv_jac_det_3d));
+              VectorizedArray<Number> tmp[3];
               for(unsigned int d = 0; d < dim; ++d)
               {
                 tmp[d] = grad_real[d][0] * val_real[0];
@@ -3657,6 +3727,10 @@ private:
               out_values[(dim + 1) * n_q_points + q] =
                 inv_jac_xy[0][1] * tmp[0] + inv_jac_xy[1][1] * tmp[1];
               out_values[(dim + 2) * n_q_points + q] = h_z_inverse * tmp[2];
+
+              // divergence
+              out_values[2 * dim * n_q_points + q] = (grad[0][0] + grad[1][1] + grad[2][2]) *
+                                                     mapping_info.quad_weights_xy[q1] * weight_z;
             }
             else
             {
@@ -3769,6 +3843,9 @@ private:
                                                         out_values +
                                                           (qy * nn + i0 * n_q_points_2d) * dim + d);
     }
+
+    if(cell_operation == CellOperation::convective_and_divergence)
+      out_values[(2 * dim + 1) * n_q_points] = std::sqrt(cfl_velocity);
 
     if(cell_operation == CellOperation::helmholtz ||
        (cell_operation == CellOperation::convective && factor_convective != Number(1.0)))
@@ -5351,19 +5428,8 @@ private:
                                                     quad_values + i * dim + 2,
                                                     pressure_values + i);
 
-
-    std::array<unsigned int, n_lanes> shifted_data_indices;
-    for(unsigned int v = 0; v < n_lanes; ++v)
-      shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
-
     for(unsigned int q1 = 0; q1 < nn * nn; ++q1)
     {
-      Tensor<2, 2, VectorizedArray<Number>> jac_xy;
-      vectorized_load_and_transpose(4,
-                                    &mapping_info.jacobians_xy[q1][0][0],
-                                    shifted_data_indices.data(),
-                                    &jac_xy[0][0]);
-
       if constexpr(dim == 2)
       {
         pressure_values[q1] *= velocity_scale * mapping_info.quad_weights_xy[q1];
@@ -5404,8 +5470,6 @@ private:
                                      pressure_rhs.begin());
     else
     {
-      // first broadcast valid entries to all lanes, then fill the remaining
-      // ones
       for(unsigned int v = 0; v < n_lanes && pressure_indices[v] != numbers::invalid_unsigned_int;
           ++v)
         for(unsigned int i = 0; i < Utilities::pow(degree, dim); ++i)
@@ -5631,7 +5695,7 @@ private:
         if constexpr(dim == 2)
         {
           const VectorizedArray<Number> val[2]     = {quad_values[0][q1 * dim],
-                                                  quad_values[0][q1 * dim + 1]};
+                                                      quad_values[0][q1 * dim + 1]};
           const VectorizedArray<Number> grad[2][2] = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
                                                       {quad_values[1][q1 * dim],
                                                        quad_values[1][q1 * dim + 1]}};
@@ -5681,8 +5745,8 @@ private:
             const unsigned int            ix         = dim * (qz + qx * nn);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[0][q * dim],
-                                                    quad_values[0][q * dim + 1],
-                                                    quad_values[0][q * dim + 2]};
+                                                        quad_values[0][q * dim + 1],
+                                                        quad_values[0][q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], quad_values[1][q * dim + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], quad_values[1][q * dim + 1], grad_z[iz + 1]},
@@ -5870,8 +5934,8 @@ private:
           for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn)
           {
             const VectorizedArray<Number> val[3]     = {values_face[0][0][q],
-                                                    values_face[0][1][q],
-                                                    values_face[0][2][q]};
+                                                        values_face[0][1][q],
+                                                        values_face[0][2][q]};
             const VectorizedArray<Number> grad[3][3] = {{grads_face[0][0][q * dim],
                                                          grads_face[0][0][q * dim + 1],
                                                          grads_face[0][0][q * dim + 2]},
@@ -6187,7 +6251,8 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position) {
+          const auto add_entry = [&](const unsigned int position)
+          {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 

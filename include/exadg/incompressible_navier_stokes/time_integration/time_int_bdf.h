@@ -175,10 +175,10 @@ private:
   initialize_vec_convective_term();
 
   double
-  calculate_time_step_size() final;
+  calculate_time_step_size() override;
 
   double
-  recalculate_time_step_size() const final;
+  recalculate_time_step_size() const override;
 
   virtual VectorType const &
   get_velocity(unsigned int i /* t_{n-i} */) const = 0;

@@ -56,11 +56,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
     convective_divergence_rhs(this->param.order_extrapolation_pressure_nbc),
     divergences(this->order),
     pressure_nbc_rhs(this->param.order_extrapolation_pressure_nbc),
+    factor_cfl(-1.0),
     iterations_pressure({0, 0}),
-    iterations_projection({0, 0}),
     iterations_viscous({0, {0, 0}}),
-    iterations_penalty({0, 0}),
-    iterations_mass({0, 0}),
     extra_pressure_nbc(this->param.order_extrapolation_pressure_nbc,
                        this->param.start_with_low_order),
     extra_pressure_rhs(this->param.order_extrapolation_pressure_rhs,
@@ -224,11 +222,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::initialize_current_solution(
   op_rt->copy_mf_to_this_vector(velocity_np, velocity[0]);
   velocity_red[0].copy_locally_owned_data_from(velocity[0]);
 
-  op_rt->evaluate_convective_and_divergence_term(velocity[0],
-                                                 this->vec_convective_term[0],
-                                                 convective_divergence_rhs[0]);
-  divergences[0] = 0;
-  op_rt->evaluate_add_velocity_divergence(velocity[0], 1.0, divergences[0]);
+  factor_cfl = op_rt->evaluate_convective_and_divergence_term(velocity[0],
+                                                              this->vec_convective_term[0],
+                                                              convective_divergence_rhs[0],
+                                                              divergences[0]);
   op_rt->evaluate_pressure_neumann_from_velocity(
     velocity[0],
     false,
@@ -340,22 +337,20 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::evaluate_convective_term()
   {
     if(this->param.ale_formulation == false) // Eulerian case
     {
-      op_rt->evaluate_convective_and_divergence_term(solution_rt,
-                                                     this->vec_convective_term.back(),
-                                                     convective_divergence_rhs.back());
+      factor_cfl = op_rt->evaluate_convective_and_divergence_term(solution_rt,
+                                                                  this->vec_convective_term.back(),
+                                                                  convective_divergence_rhs.back(),
+                                                                  divergences.back());
 
       op_rt->evaluate_pressure_neumann_from_velocity(
         solution_rt,
         false,
         this->pde_operator->get_viscous_kernel_data().viscosity,
         pressure_nbc_rhs.back());
-
-      divergences.back() = 0;
-      op_rt->evaluate_add_velocity_divergence(solution_rt, 1.0, divergences.back());
     }
   }
 
-  this->timer_tree->insert({"Timeloop", "Convective step"}, timer.wall_time());
+  this->timer_tree->insert({"Timeloop", "Evaluate convection"}, timer.wall_time());
 }
 
 
@@ -600,9 +595,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::prepare_vectors_for_next_tim
   velocity[0].swap(solution_rt);
 
   swap_back_one_step(pressure);
-  pressure[0] = pressure_np;
-
+  pressure[0].copy_locally_owned_data_from(pressure_np);
   swap_back_one_step(pressure_matvec);
+
   swap_back_one_step(velocity_red);
 
   swap_back_one_step(this->vec_convective_term);
@@ -613,6 +608,102 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::prepare_vectors_for_next_tim
   // swap two steps because we keep viscous and mass vectors for viscosity
   swap_back_one_step(velocity_matvec);
   swap_back_one_step(velocity_matvec);
+}
+
+template<int dim, typename Number>
+double
+TimeIntBDFConsistentSplittingExtruded<dim, Number>::calculate_time_step_size()
+{
+  double time_step = 1.0;
+
+  if(this->param.calculation_of_time_step_size == TimeStepCalculation::CFL)
+  {
+    double time_step_global = this->operator_base->calculate_time_step_cfl_global();
+    time_step_global *= this->cfl;
+
+    this->pcout << std::endl
+                << "Calculation of time step size according to CFL condition:" << std::endl
+                << std::endl;
+    print_parameter(this->pcout, "CFL", this->cfl);
+    print_parameter(this->pcout, "Time step size (global)", time_step_global);
+
+    if(this->adaptive_time_stepping == true)
+    {
+      // if u(x,t=0)=0, this time step size will tend to infinity
+      // Note that in the ALE case there is no possibility to know the grid velocity at this point
+      // and to use it for the calculation of the time step size.
+      AssertThrow(factor_cfl > 0, dealii::ExcNotInitialized());
+      double time_step_adap = dealii::Utilities::truncate_to_n_digits(
+        1.0 / (std::pow(this->param.degree_u, this->param.cfl_exponent_fe_degree_velocity) *
+               factor_cfl),
+        4);
+      time_step_adap *= this->cfl;
+
+      // use adaptive time step size only if it is smaller, otherwise use temporary time step size
+      time_step = std::min(time_step_adap, time_step_global);
+
+      // make sure that the maximum allowable time step size is not exceeded
+      time_step = std::min(time_step, this->param.time_step_size_max);
+
+      print_parameter(this->pcout, "Time step size (adaptive)", time_step);
+    }
+    else
+    {
+      time_step = adjust_time_step_to_hit_end_time(this->param.start_time,
+                                                   this->param.end_time,
+                                                   time_step_global);
+
+      this->pcout << std::endl
+                  << "Adjust time step size to hit end time:" << std::endl
+                  << std::endl;
+      print_parameter(this->pcout, "Time step size", time_step);
+    }
+  }
+  else
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Specified type of time step calculation is not implemented."));
+  }
+
+  return time_step;
+}
+
+template<int dim, typename Number>
+double
+TimeIntBDFConsistentSplittingExtruded<dim, Number>::recalculate_time_step_size() const
+{
+  AssertThrow(this->param.calculation_of_time_step_size == TimeStepCalculation::CFL,
+              dealii::ExcMessage(
+                "Adaptive time step is not implemented for this type of time step calculation."));
+
+  double new_time_step_size;
+  if(this->param.ale_formulation == true)
+  {
+    AssertThrow(false, dealii::ExcNotImplemented());
+  }
+  else
+  {
+    AssertThrow(factor_cfl > 0, dealii::ExcNotInitialized());
+    new_time_step_size = dealii::Utilities::truncate_to_n_digits(
+      1.0 /
+        (std::pow(this->param.degree_u, this->param.cfl_exponent_fe_degree_velocity) * factor_cfl),
+      4);
+  }
+
+  new_time_step_size *= this->cfl;
+
+  // make sure that time step size does not exceed maximum allowable time step size
+  new_time_step_size = std::min(new_time_step_size, this->param.time_step_size_max);
+
+  bool use_limiter = true;
+  if(use_limiter)
+  {
+    double last_time_step_size = this->get_time_step_size();
+    double factor              = this->param.adaptive_time_stepping_limiting_factor;
+    limit_time_step_change(new_time_step_size, last_time_step_size, factor);
+  }
+
+  return new_time_step_size;
 }
 
 template<int dim, typename Number>
@@ -633,54 +724,17 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::print_iterations() const
 
   if(this->param.nonlinear_problem_has_to_be_solved())
   {
-    names = {"Convective step",
-             "Pressure step",
-             "Projection step",
-             "Viscous step (nonlinear)",
-             "Viscous step (accumulated)",
-             "Viscous step (linear per nonlinear)"};
-
-    iterations_avg.resize(6);
-    iterations_avg[0] = 0.0; // explicit convective step
-    iterations_avg[1] =
-      (double)iterations_pressure.second / std::max(1., (double)iterations_pressure.first);
-    iterations_avg[2] =
-      (double)iterations_projection.second / std::max(1., (double)iterations_projection.first);
-    iterations_avg[3] = (double)std::get<0>(iterations_viscous.second) /
-                        std::max(1., (double)iterations_viscous.first);
-    iterations_avg[4] = (double)std::get<1>(iterations_viscous.second) /
-                        std::max(1., (double)iterations_viscous.first);
-
-    if(iterations_avg[3] > std::numeric_limits<double>::min())
-      iterations_avg[5] = iterations_avg[4] / iterations_avg[3];
-    else
-      iterations_avg[5] = iterations_avg[4];
+    AssertThrow(false, dealii::ExcNotImplemented());
   }
   else
   {
-    names = {"Convective step", "Pressure step", "Projection step", "Viscous step"};
+    names = {"Pressure step", "Viscous step"};
 
-    iterations_avg.resize(4);
-    iterations_avg[0] = 0.0; // explicit convective step
-    iterations_avg[1] =
+    iterations_avg.resize(2);
+    iterations_avg[0] =
       (double)iterations_pressure.second / std::max(1., (double)iterations_pressure.first);
-    iterations_avg[2] =
-      (double)iterations_projection.second / std::max(1., (double)iterations_projection.first);
-    iterations_avg[3] = (double)std::get<1>(iterations_viscous.second) /
+    iterations_avg[1] = (double)std::get<1>(iterations_viscous.second) /
                         std::max(1., (double)iterations_viscous.first);
-  }
-
-  if(this->param.spatial_discretization == SpatialDiscretization::HDIV)
-  {
-    names.push_back("Mass solver");
-    iterations_avg.push_back(iterations_mass.second / std::max(1., (double)iterations_mass.first));
-  }
-
-  if(this->param.apply_penalty_terms_in_postprocessing_step)
-  {
-    names.push_back("Penalty step");
-    iterations_avg.push_back((double)iterations_penalty.second /
-                             std::max(1., (double)iterations_penalty.first));
   }
 
   print_list_of_iterations(this->pcout, names, iterations_avg);
