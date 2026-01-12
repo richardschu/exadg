@@ -60,8 +60,14 @@ public:
       my_pp_data(my_pp_data_in),
       length(length_in),
       flow_rate_controller(flow_rate_controller_in),
-      consistent_splitting_operator(nullptr)
+      consistent_splitting_operator(nullptr),
+      clear_files(true)
   {
+  }
+
+  ~MyPostProcessor()
+  {
+    write_flow_rate_output(-1., -1., true);
   }
 
   void
@@ -113,6 +119,11 @@ public:
           compute_velocity_integral() / length :
           mean_velocity_calculator->calculate_flow_rate_volume(velocity, time, length);
 
+      // if done manually in our function rather than
+      // mean_velocity_calculator, need to write the file here
+      if(consistent_splitting_operator)
+        write_flow_rate_output(flow_rate, time, false);
+
       // update body force
       flow_rate_controller.update_body_force(flow_rate, time, time_step_number);
     }
@@ -153,6 +164,9 @@ private:
 
   const OperatorConsistentSplittingExtruded<dim, Number> * consistent_splitting_operator;
 
+  mutable bool                                   clear_files;
+  mutable std::vector<std::pair<double, double>> accumulated_flow_rate_results;
+
   Number
   compute_velocity_integral()
   {
@@ -185,6 +199,42 @@ private:
     consistent_splitting_operator->velocity_vector->zero_out_ghost_values();
     return dealii::Utilities::MPI::sum(
       sum, consistent_splitting_operator->velocity_vector->get_mpi_communicator());
+  }
+
+  void
+  write_flow_rate_output(Number const & value, double const & time, bool const force_write) const
+  {
+    // write output file
+    if(consistent_splitting_operator and my_pp_data.mean_velocity_data.write_to_file == true and
+       dealii::Utilities::MPI::this_mpi_process(this->mpi_comm) == 0)
+    {
+      if(force_write || accumulated_flow_rate_results.size() > 1000)
+      {
+        std::string filename =
+          my_pp_data.mean_velocity_data.directory + my_pp_data.mean_velocity_data.filename;
+
+        std::ofstream f;
+        if(clear_files == true)
+        {
+          f.open(filename.c_str(), std::ios::trunc);
+          f << std::endl << "  Time                Mean velocity [m/s]" << std::endl;
+
+          clear_files = false;
+        }
+        else
+        {
+          f.open(filename.c_str(), std::ios::app);
+        }
+
+        unsigned int precision = 12;
+        for(std::pair<double, double> const & data : accumulated_flow_rate_results)
+          f << std::scientific << std::setprecision(precision) << std::setw(precision + 8)
+            << data.first << std::setw(precision + 8) << data.second << std::endl;
+        accumulated_flow_rate_results.clear();
+      }
+
+      accumulated_flow_rate_results.emplace_back(time, value);
+    }
   }
 };
 
