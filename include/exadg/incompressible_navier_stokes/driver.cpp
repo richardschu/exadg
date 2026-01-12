@@ -186,9 +186,7 @@ Driver<dim, Number>::setup()
 
   if(not is_throughput_study)
   {
-    // setup postprocessor
     postprocessor = application->create_postprocessor();
-    postprocessor->setup(*pde_operator);
 
     if(application->get_parameters().solver_type == SolverType::Unsteady)
     {
@@ -212,6 +210,9 @@ Driver<dim, Number>::setup()
     {
       AssertThrow(false, dealii::ExcMessage("Not implemented."));
     }
+
+    // set up postprocessor
+    postprocessor->setup(*pde_operator);
   }
 
   timer_tree.insert({"Incompressible flow", "Setup"}, timer.wall_time());

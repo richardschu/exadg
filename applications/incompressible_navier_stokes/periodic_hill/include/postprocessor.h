@@ -25,6 +25,8 @@
 // ExaDG
 #include <exadg/incompressible_navier_stokes/postprocessor/line_plot_calculation_statistics_homogeneous.h>
 #include <exadg/incompressible_navier_stokes/postprocessor/mean_velocity_calculator.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting_extruded.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
 
 #include "flow_rate_controller.h"
 
@@ -57,7 +59,8 @@ public:
     : Base(my_pp_data_in.pp_data, mpi_comm),
       my_pp_data(my_pp_data_in),
       length(length_in),
-      flow_rate_controller(flow_rate_controller_in)
+      flow_rate_controller(flow_rate_controller_in),
+      consistent_splitting_operator(nullptr)
   {
   }
 
@@ -67,13 +70,18 @@ public:
     // call setup function of base class
     Base::setup(pde_operator);
 
-    // calculation of mean velocity
-    mean_velocity_calculator.reset(
-      new MeanVelocityCalculator<dim, Number>(pde_operator.get_matrix_free(),
-                                              pde_operator.get_dof_index_velocity(),
-                                              pde_operator.get_quad_index_velocity_standard(),
-                                              my_pp_data.mean_velocity_data,
-                                              this->mpi_comm));
+    consistent_splitting_operator =
+      dynamic_cast<const OperatorConsistentSplittingExtruded<dim, Number> *>(&pde_operator);
+    if(not consistent_splitting_operator)
+    {
+      // calculation of mean velocity
+      mean_velocity_calculator.reset(
+        new MeanVelocityCalculator<dim, Number>(pde_operator.get_matrix_free(),
+                                                pde_operator.get_dof_index_velocity(),
+                                                pde_operator.get_quad_index_velocity_standard(),
+                                                my_pp_data.mean_velocity_data,
+                                                this->mpi_comm));
+    }
 
     // evaluation of characteristic quantities along lines
     line_plot_calculator_statistics.reset(
@@ -82,7 +90,11 @@ public:
                                                                *pde_operator.get_mapping(),
                                                                this->mpi_comm));
 
-    line_plot_calculator_statistics->setup(my_pp_data.line_plot_data);
+    if(consistent_splitting_operator)
+      line_plot_calculator_statistics->setup(my_pp_data.line_plot_data,
+                                             *consistent_splitting_operator->momentum_operator);
+    else
+      line_plot_calculator_statistics->setup(my_pp_data.line_plot_data);
   }
 
   void
@@ -97,7 +109,9 @@ public:
     {
       // calculation of flow rate
       double const flow_rate =
-        mean_velocity_calculator->calculate_flow_rate_volume(velocity, time, length);
+        consistent_splitting_operator ?
+          compute_velocity_integral() / length :
+          mean_velocity_calculator->calculate_flow_rate_volume(velocity, time, length);
 
       // update body force
       flow_rate_controller.update_body_force(flow_rate, time, time_step_number);
@@ -107,7 +121,11 @@ public:
     if(line_plot_calculator_statistics->time_control_statistics.time_control.needs_evaluation(
          time, time_step_number))
     {
-      line_plot_calculator_statistics->evaluate(velocity, pressure);
+      if(consistent_splitting_operator)
+        line_plot_calculator_statistics->evaluate(*consistent_splitting_operator->velocity_vector,
+                                                  pressure);
+      else
+        line_plot_calculator_statistics->evaluate(velocity, pressure);
     }
 
     if(line_plot_calculator_statistics->time_control_statistics.write_preliminary_results(
@@ -132,6 +150,42 @@ private:
   // line plot statistics with averaging in homogeneous direction
   std::shared_ptr<LinePlotCalculatorStatisticsHomogeneous<dim, Number>>
     line_plot_calculator_statistics;
+
+  const OperatorConsistentSplittingExtruded<dim, Number> * consistent_splitting_operator;
+
+  Number
+  compute_velocity_integral()
+  {
+    AssertThrow(consistent_splitting_operator != nullptr, dealii::ExcNotImplemented());
+    AssertThrow(consistent_splitting_operator->momentum_operator.get() != nullptr,
+                dealii::ExcNotImplemented());
+    const auto & momentum_op = *consistent_splitting_operator->momentum_operator;
+    std::array<unsigned int, dealii::VectorizedArray<Number>::size()>              indices;
+    dealii::AlignedVector<dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>> velocities;
+    Number                                                                         sum = 0;
+    consistent_splitting_operator->velocity_vector->update_ghost_values();
+    for(unsigned int batch = 0; batch < momentum_op.get_cell_level_index().size(); ++batch)
+    {
+      for(unsigned int v = 0; v < indices.size(); ++v)
+        if(momentum_op.get_cell_level_index()[batch][v][0] != dealii::numbers::invalid_unsigned_int)
+          indices[v] = batch * dealii::VectorizedArray<Number>::size() + v;
+        else
+          indices[v] = batch * dealii::VectorizedArray<Number>::size();
+      momentum_op.evaluate_field(*consistent_splitting_operator->velocity_vector,
+                                 indices,
+                                 velocities,
+                                 true);
+      dealii::VectorizedArray<Number> cell_sum = 0;
+      for(const auto & velocity : velocities)
+        cell_sum += velocity[0];
+      for(unsigned int v = 0; v < indices.size(); ++v)
+        if(momentum_op.get_cell_level_index()[batch][v][0] != dealii::numbers::invalid_unsigned_int)
+          sum += cell_sum[v];
+    }
+    consistent_splitting_operator->velocity_vector->zero_out_ghost_values();
+    return dealii::Utilities::MPI::sum(
+      sum, consistent_splitting_operator->velocity_vector->get_mpi_communicator());
+  }
 };
 
 } // namespace IncNS

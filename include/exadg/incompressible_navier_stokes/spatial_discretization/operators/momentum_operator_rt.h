@@ -31,6 +31,7 @@
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tensor_product_kernels.h>
 
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/extruded_mapping_info.h>
 
 namespace RTOperator
 {
@@ -263,9 +264,7 @@ allocate_shared_recv_data(MemorySpace::MemorySpaceData<Number, MemorySpace::Host
   // Kokkos will not free the memory because the memory is
   // unmanaged. Instead we use a shared pointer to take care of
   // that.
-  data.values_sm_ptr = {ptr_aligned,
-                        [mpi_window](Number *) mutable
-                        {
+  data.values_sm_ptr = {ptr_aligned, [mpi_window](Number *) mutable {
                           // note: we are creating here a copy of
                           // the window other approaches led to
                           // segmentation faults
@@ -295,6 +294,7 @@ public:
          const Quadrature<1> &                  quadrature,
          const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
+    (void)communicator_shared; // TODO: not yet implemented
     this->mapping                                       = &mapping;
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
@@ -543,8 +543,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[4] < b[4])
                       return true;
                     else if(a[4] == b[4] && a[3] < b[3])
@@ -565,8 +564,7 @@ public:
         std::sort(it->second.begin(),
                   it->second.end(),
                   [](const std::array<types::global_dof_index, 5> & a,
-                     const std::array<types::global_dof_index, 5> & b)
-                  {
+                     const std::array<types::global_dof_index, 5> & b) {
                     if(a[1] < b[1])
                       return true;
                     else if(a[1] == b[1] && a[2] < b[2])
@@ -1121,6 +1119,12 @@ public:
                                  std::to_string(other_cell_level_index[i][v][1])));
   }
 
+  const std::vector<dealii::ndarray<unsigned int, VectorizedArray<Number>::size(), 2>> &
+  get_cell_level_index() const
+  {
+    return cell_level_index;
+  }
+
   void
   initialize_coupling_pressure(
     const FiniteElement<dim> &                             fe_pressure,
@@ -1387,6 +1391,35 @@ public:
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
     }
     velocity.zero_out_ghost_values();
+  }
+
+  void
+  evaluate_field(const VectorType &                                       velocity_vector,
+                 const std::array<unsigned int, n_lanes> &                cell_indices,
+                 AlignedVector<Tensor<1, dim, VectorizedArray<Number>>> & velocities,
+                 const bool multiply_by_JxW = false) const
+  {
+    const unsigned int degree = shape_info.data[0].fe_degree;
+    if(degree == 2)
+      do_evaluate_field_on_cells<2>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+    else if(degree == 3)
+      do_evaluate_field_on_cells<3>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+    else if(degree == 4)
+      do_evaluate_field_on_cells<4>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+#ifndef DEBUG
+    else if(degree == 5)
+      do_evaluate_field_on_cells<5>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+    else if(degree == 6)
+      do_evaluate_field_on_cells<6>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+    else if(degree == 7)
+      do_evaluate_field_on_cells<7>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+    else if(degree == 8)
+      do_evaluate_field_on_cells<8>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+    else if(degree == 9)
+      do_evaluate_field_on_cells<9>(velocity_vector, cell_indices, velocities, multiply_by_JxW);
+#endif
+    else
+      AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
   }
 
 private:
@@ -3495,7 +3528,7 @@ private:
         {
           const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
           const VectorizedArray<Number> grad[2][2]  = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
-                                                       {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
+                                                      {grad_y[q1 * dim], grad_y[q1 * dim + 1]}};
           const VectorizedArray<Number> t0          = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
           const VectorizedArray<Number> t1          = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
           VectorizedArray<Number>       val_real[2] = {t0, t1};
@@ -3632,8 +3665,8 @@ private:
             const unsigned int            iy         = dim * (qz * nn + qy * nn * nn + qx);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[q * dim],
-                                                        quad_values[q * dim + 1],
-                                                        quad_values[q * dim + 2]};
+                                                    quad_values[q * dim + 1],
+                                                    quad_values[q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], grad_y[iy + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], grad_y[iy + 1], grad_z[iz + 1]},
@@ -5695,7 +5728,7 @@ private:
         if constexpr(dim == 2)
         {
           const VectorizedArray<Number> val[2]     = {quad_values[0][q1 * dim],
-                                                      quad_values[0][q1 * dim + 1]};
+                                                  quad_values[0][q1 * dim + 1]};
           const VectorizedArray<Number> grad[2][2] = {{grad_x[qx * dim], grad_x[qx * dim + 1]},
                                                       {quad_values[1][q1 * dim],
                                                        quad_values[1][q1 * dim + 1]}};
@@ -5745,8 +5778,8 @@ private:
             const unsigned int            ix         = dim * (qz + qx * nn);
             const unsigned int            iz         = dim * qz;
             const VectorizedArray<Number> val[3]     = {quad_values[0][q * dim],
-                                                        quad_values[0][q * dim + 1],
-                                                        quad_values[0][q * dim + 2]};
+                                                    quad_values[0][q * dim + 1],
+                                                    quad_values[0][q * dim + 2]};
             const VectorizedArray<Number> grad[3][3] = {
               {grad_x[ix + 0], quad_values[1][q * dim + 0], grad_z[iz + 0]},
               {grad_x[ix + 1], quad_values[1][q * dim + 1], grad_z[iz + 1]},
@@ -5934,8 +5967,8 @@ private:
           for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn)
           {
             const VectorizedArray<Number> val[3]     = {values_face[0][0][q],
-                                                        values_face[0][1][q],
-                                                        values_face[0][2][q]};
+                                                    values_face[0][1][q],
+                                                    values_face[0][2][q]};
             const VectorizedArray<Number> grad[3][3] = {{grads_face[0][0][q * dim],
                                                          grads_face[0][0][q * dim + 1],
                                                          grads_face[0][0][q * dim + 2]},
@@ -6149,6 +6182,86 @@ private:
     }
   }
 
+  template<int degree>
+  void
+  do_evaluate_field_on_cells(const VectorType &                        velocity_vector,
+                             const std::array<unsigned int, n_lanes> & cell_indices,
+                             AlignedVector<Tensor<1, dim, VectorizedArray<Number>>> & velocities,
+                             const bool multiply_by_JxW) const
+  {
+    dealii::ndarray<unsigned int, 2 * dim + 1, n_lanes> my_dof_indices;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+    {
+      for(unsigned int i = 0; i < 2 * dim + 1; ++i)
+        my_dof_indices[i][v] =
+          this->dof_indices[cell_indices[v] / n_lanes][i][cell_indices[v] % n_lanes];
+    }
+    constexpr unsigned int n_q_points_1d = degree + 1;
+    constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
+    velocities.resize_fast(n_points);
+
+    VectorizedArray<Number> quad_values[dim * n_points];
+    read_cell_values<degree, n_q_points_1d>(velocity_vector.begin(), my_dof_indices, quad_values);
+
+    constexpr unsigned int            n_q_points_2d = n_q_points_1d * n_q_points_1d;
+    std::array<unsigned int, n_lanes> shifted_data_indices;
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      shifted_data_indices[v] =
+        mapping_info.mapping_data_index[cell_indices[v] / n_lanes][cell_indices[v] % n_lanes] * 4;
+
+    const Number h_z_inverse = mapping_info.h_z_inverse;
+
+    constexpr unsigned int nn = n_q_points_1d;
+
+    for(unsigned int q1 = 0; q1 < n_q_points_2d; ++q1)
+    {
+      Tensor<2, 2, VectorizedArray<Number>> jac_xy;
+      vectorized_load_and_transpose(4,
+                                    &mapping_info.jacobians_xy[q1][0][0],
+                                    shifted_data_indices.data(),
+                                    &jac_xy[0][0]);
+      const VectorizedArray<Number> inv_jac_det = Number(1.0) / (determinant(jac_xy));
+
+      if constexpr(dim == 2)
+      {
+        const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
+        if(multiply_by_JxW)
+          for(unsigned int d = 0; d < 2; ++d)
+            velocities[q1][d] =
+              mapping_info.quad_weights_xy[q1] * (jac_xy[d][0] * val[0] + jac_xy[d][1] * val[1]);
+        else
+          for(unsigned int d = 0; d < 2; ++d)
+            velocities[q1][d] = inv_jac_det * (jac_xy[d][0] * val[0] + jac_xy[d][1] * val[1]);
+      }
+      else // now to dim == 3
+      {
+        for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += n_q_points_2d)
+        {
+          const VectorizedArray<Number> val[3] = {quad_values[q * dim],
+                                                  quad_values[q * dim + 1],
+                                                  quad_values[q * dim + 2]};
+
+          if(multiply_by_JxW)
+          {
+            for(unsigned int d = 0; d < 2; ++d)
+              velocities[q][d] = mapping_info.quad_weights_xy[q1] *
+                                 mapping_info.quad_weights_z[qz] *
+                                 (jac_xy[d][0] * val[0] + jac_xy[d][1] * val[1]);
+            velocities[q][2] =
+              mapping_info.quad_weights_xy[q1] * mapping_info.quad_weights_z[qz] * val[2];
+          }
+          else
+          {
+            const VectorizedArray<Number> inv_jac_det_3d = inv_jac_det * h_z_inverse;
+            for(unsigned int d = 0; d < 2; ++d)
+              velocities[q][d] = inv_jac_det_3d * (jac_xy[d][0] * val[0] + jac_xy[d][1] * val[1]);
+            velocities[q][2] = inv_jac_det * val[2];
+          }
+        }
+      }
+    }
+  }
+
   unsigned int
   find_first_zero_bit(const std::uint64_t x)
   {
@@ -6251,8 +6364,7 @@ private:
           }
           const unsigned int face_idx = cell->face(2 * d + 1)->index();
 
-          const auto add_entry = [&](const unsigned int position)
-          {
+          const auto add_entry = [&](const unsigned int position) {
             const unsigned int entry_within_vector = position / 64;
             const unsigned int bit_within_entry    = position % 64;
 

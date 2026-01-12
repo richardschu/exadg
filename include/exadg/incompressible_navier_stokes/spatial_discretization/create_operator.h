@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting_extruded.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_pressure_correction.h>
@@ -73,9 +74,7 @@ create_operator(std::shared_ptr<Grid<dim> const>                      grid,
                                                                         field,
                                                                         mpi_comm);
   }
-  else if(parameters.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
-          parameters.temporal_discretization ==
-            TemporalDiscretization::BDFConsistentSplittingExtruded)
+  else if(parameters.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
   {
     pde_operator = std::make_shared<OperatorConsistentSplitting<dim, Number>>(grid,
                                                                               mapping,
@@ -85,6 +84,19 @@ create_operator(std::shared_ptr<Grid<dim> const>                      grid,
                                                                               parameters,
                                                                               field,
                                                                               mpi_comm);
+  }
+  else if(parameters.temporal_discretization ==
+          TemporalDiscretization::BDFConsistentSplittingExtruded)
+  {
+    pde_operator =
+      std::make_shared<OperatorConsistentSplittingExtruded<dim, Number>>(grid,
+                                                                         mapping,
+                                                                         multigrid_mappings,
+                                                                         boundary_descriptor,
+                                                                         field_functions,
+                                                                         parameters,
+                                                                         field,
+                                                                         mpi_comm);
   }
   else if(parameters.temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
           // we can not instantiate the base class and instantiate an arbitrary deriving

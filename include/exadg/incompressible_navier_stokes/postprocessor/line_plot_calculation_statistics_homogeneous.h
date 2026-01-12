@@ -35,6 +35,12 @@
 #include <exadg/incompressible_navier_stokes/postprocessor/line_plot_data.h>
 #include <exadg/postprocessor/time_control.h>
 
+namespace RTOperator
+{
+template<int, typename>
+class RaviartThomasOperatorBase;
+}
+
 namespace ExaDG
 {
 namespace IncNS
@@ -65,6 +71,10 @@ public:
 
   void
   setup(LinePlotDataStatistics<dim> const & data_in);
+
+  void
+  setup(LinePlotDataStatistics<dim> const &                        data_in,
+        RTOperator::RaviartThomasOperatorBase<dim, Number> const & rt_operator);
 
   void
   evaluate(VectorType const & velocity, VectorType const & pressure);
@@ -160,6 +170,12 @@ private:
   dealii::AlignedVector<dealii::VectorizedArray<Number>> shape_values_eo_n;
   dealii::AlignedVector<dealii::VectorizedArray<Number>> shape_values_eo_t;
   dealii::AlignedVector<Number>                          shape_values_eo_dgq;
+
+  RTOperator::RaviartThomasOperatorBase<dim, Number> const * rt_operator;
+  std::vector<std::array<unsigned int, dealii::VectorizedArray<Number>::size()>>
+                                                   list_of_cells_to_evaluate;
+  dealii::Table<2, dealii::Tensor<1, dim, Number>> evaluated_dg_values_on_cells;
+  std::vector<unsigned int>                        active_cell_index_to_evaluate_index;
 
   // polynomials for FE_DGQ representing Lagrange polynomials in node points
   // of FE_DGQ, which is the basis for the computation along the lines

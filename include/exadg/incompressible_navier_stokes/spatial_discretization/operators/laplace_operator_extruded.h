@@ -216,6 +216,7 @@ public:
          const Quadrature<1> &                  quadrature,
          const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
+    (void)communicator_shared; // TODO: not yet implemented
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
     typename MatrixFree<dim, Number>::AdditionalData mf_data;
@@ -1154,6 +1155,7 @@ public:
          const Quadrature<1> &                  quadrature,
          const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
+    (void)communicator_shared; // TODO: not yet implemented
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
     typename MatrixFree<dim, Number>::AdditionalData mf_data;

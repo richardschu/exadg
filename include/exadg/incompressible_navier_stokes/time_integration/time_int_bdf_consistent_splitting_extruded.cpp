@@ -22,7 +22,7 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/numerics/vector_tools_mean_value.h>
 
-#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting_extruded.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/laplace_operator_extruded.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
 #include <exadg/incompressible_navier_stokes/time_integration/helper_functions.h>
@@ -64,6 +64,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
     extra_pressure_rhs(this->param.order_extrapolation_pressure_rhs,
                        this->param.start_with_low_order)
 {
+  op_rt = std::make_shared<RTOperator::RaviartThomasOperatorBase<dim, Number>>();
+
+  pde_operator->momentum_operator = op_rt;
+  pde_operator->velocity_vector   = &velocity[0];
 }
 
 template<int dim, typename Number>
@@ -135,7 +139,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
   // do test for matrix-free operator of optimized kind
   const std::vector<unsigned int> cell_vectorization_category =
     Helper::compute_vectorization_category(pde_operator->get_dof_handler_u().get_triangulation());
-  op_rt = std::make_shared<RTOperator::RaviartThomasOperatorBase<dim, Number>>();
   op_rt->reinit(*pde_operator->get_mapping(),
                 pde_operator->get_dof_handler_u(),
                 pde_operator->get_constraint_u(),

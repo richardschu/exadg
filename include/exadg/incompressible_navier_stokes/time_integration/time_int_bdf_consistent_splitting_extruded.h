@@ -61,7 +61,7 @@ private:
   typedef typename Base::VectorType VectorType;
   using VectorTypeFloat = dealii::LinearAlgebra::distributed::Vector<float>;
 
-  typedef OperatorConsistentSplitting<dim, Number> Operator;
+  typedef OperatorConsistentSplittingExtruded<dim, Number> Operator;
 
 public:
   TimeIntBDFConsistentSplittingExtruded(

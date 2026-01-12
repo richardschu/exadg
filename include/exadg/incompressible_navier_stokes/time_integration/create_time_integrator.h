@@ -92,12 +92,14 @@ create_time_integrator(std::shared_ptr<SpatialOperatorBase<dim, Number>> pde_ope
   else if(parameters.temporal_discretization ==
           TemporalDiscretization::BDFConsistentSplittingExtruded)
   {
-    std::shared_ptr<OperatorConsistentSplitting<dim, Number>> operator_consistent_splitting =
-      std::dynamic_pointer_cast<OperatorConsistentSplitting<dim, Number>>(pde_operator);
-
     if constexpr(dim == 3 && std::is_same_v<Number, double>)
+    {
+      std::shared_ptr<OperatorConsistentSplittingExtruded<dim, Number>>
+        operator_consistent_splitting =
+          std::dynamic_pointer_cast<OperatorConsistentSplittingExtruded<dim, Number>>(pde_operator);
       time_integrator = std::make_shared<IncNS::TimeIntBDFConsistentSplittingExtruded<dim, Number>>(
         operator_consistent_splitting, helpers_ale, postprocessor, parameters, mpi_comm, is_test);
+    }
     else
     {
       AssertThrow(false,
