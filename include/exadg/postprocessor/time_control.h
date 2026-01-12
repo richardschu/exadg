@@ -71,6 +71,12 @@ public:
   bool
   needs_evaluation(double const time, types::time_step const time_step_number) const;
 
+  // As opposed to needs_evaluation, do not change any internal counters while
+  // in the function, necessary to query the state without actually doing the
+  // increment
+  bool
+  check_for_evaluation(double const time, types::time_step const time_step_number) const;
+
   unsigned int
   get_counter() const;
 

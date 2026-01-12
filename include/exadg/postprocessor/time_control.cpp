@@ -151,6 +151,70 @@ TimeControl::needs_evaluation(double const time, types::time_step const time_ste
   return evaluate;
 }
 
+bool
+TimeControl::check_for_evaluation(double const time, types::time_step const time_step_number) const
+{
+  if(time_control_data.is_active == false)
+    return false;
+
+  // steady case
+  if(not Utilities::is_unsteady_timestep(time_step_number))
+  {
+    return true;
+  }
+
+  // unsteady evaluation
+  AssertThrow(get_unsteady_evaluation_type(time_control_data) !=
+                TimeControlData::UnsteadyEvalType::None,
+              dealii::ExcMessage(
+                "Unsteady evaluation not possible since it is not specified when to evaluate."));
+
+  if(time < time_control_data.start_time - EPSILON)
+    return false;
+
+  if(time > time_control_data.end_time - EPSILON)
+    end_time_reached = true;
+
+  if(time > time_control_data.end_time + EPSILON)
+    return false;
+
+  bool evaluate = false;
+  if(get_unsteady_evaluation_type(time_control_data) == TimeControlData::UnsteadyEvalType::Timestep)
+  {
+    if((time_step_number - 1) % time_control_data.trigger_every_time_steps == 0)
+    {
+      evaluate = true;
+    }
+  }
+  else if(get_unsteady_evaluation_type(time_control_data) ==
+          TimeControlData::UnsteadyEvalType::Interval)
+  {
+    // In case of a restart, time might be significantly larger than start_time in the first time
+    // step of the restarted simulation. Hence, we have to reconstruct the counter at the end of the
+    // previous simulation, in order to obtain the correct behavior at the beginning of the
+    // restarted simulation.
+    unsigned int counter_value = counter;
+    if(reset_counter)
+    {
+      counter_value += static_cast<unsigned int>((time - time_control_data.start_time + EPSILON) /
+                                                 time_control_data.trigger_interval);
+    }
+
+    if((time > (time_control_data.start_time + counter_value * time_control_data.trigger_interval -
+                EPSILON)))
+    {
+      evaluate = true;
+    }
+  }
+  else
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Not implemented for given TimeControlData::UnsteadyEvalType"));
+  }
+
+  return evaluate;
+}
+
 unsigned int
 TimeControl::get_counter() const
 {

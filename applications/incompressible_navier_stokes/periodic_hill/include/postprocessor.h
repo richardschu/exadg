@@ -110,7 +110,7 @@ public:
     // if we have the consistent splitting operator, we do not need to take
     // care of constraints as we use the matrix-free operator directly
     return consistent_splitting_operator == nullptr ||
-           this->output_generator.time_control.needs_evaluation(time, time_step_number);
+           this->output_generator.time_control.check_for_evaluation(time, time_step_number);
   }
 
   void
@@ -218,7 +218,9 @@ private:
     if(consistent_splitting_operator and my_pp_data.mean_velocity_data.write_to_file == true and
        dealii::Utilities::MPI::this_mpi_process(this->mpi_comm) == 0)
     {
-      if(force_write || accumulated_flow_rate_results.size() > 1000)
+      if(force_write || accumulated_flow_rate_results.size() >
+                          my_pp_data.line_plot_data.time_control_data_statistics
+                            .write_preliminary_results_every_nth_time_step)
       {
         std::string filename =
           my_pp_data.mean_velocity_data.directory + my_pp_data.mean_velocity_data.filename;
