@@ -993,6 +993,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                                                 dealii::update_values | dealii::update_jacobians |
                                                   dealii::update_quadrature_points |
                                                   dealii::update_gradients);
+
+  const unsigned int n_points_in_plane = dealii::Utilities::pow(n_q_points_1d, dim - 1);
+  std::vector<Tensor<1, dim, Number>> cell_averaged_velocity(n_points_in_plane);
+  std::vector<Tensor<2, dim, Number>> cell_averaged_reynolds(n_points_in_plane);
+
   if(rt_operator == nullptr)
     velocity.update_ghost_values();
   pressure.update_ghost_values();
@@ -1013,6 +1018,13 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         evaluate_velocity = true;
       }
     }
+
+    // Do we want to perform averaging on the cell with tensor product first
+    // (leads to small aliasing errors for Reynolds stresses, but is faster),
+    // and then perform interpolation from 2D data, or do we rather want to
+    // evaluate on the plane including the averaging direction first and then
+    // perform averaging (more accurate, but also more expensive).
+    constexpr unsigned int evaluate_averaging_by_tensor_product = true;
 
     if(evaluate_velocity == true)
     {
@@ -1064,16 +1076,36 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         {
           eval_ptr = &evaluated_dg_values_on_cells(
             active_cell_index_to_evaluate_index[cell->active_cell_index()], 0);
+          if constexpr(evaluate_averaging_by_tensor_product)
+          {
+            double h_z =
+              1.0 /
+              inverse_jacobians_on_lines[counter_line][averaging_direction][averaging_direction];
+            std::fill(cell_averaged_velocity.begin(),
+                      cell_averaged_velocity.end(),
+                      Tensor<1, dim>());
+            std::fill(cell_averaged_reynolds.begin(),
+                      cell_averaged_reynolds.end(),
+                      Tensor<2, dim>());
+            for(unsigned int iz = 0, i = 0; iz < n_q_points_1d; ++iz)
+              for(unsigned int i1 = 0; i1 < cell_averaged_velocity.size(); ++i1, ++i)
+              {
+                const Number JxW = (h_z * gauss_1d.weight(iz));
+                cell_averaged_velocity[i1] += eval_ptr[i] * JxW;
+                for(unsigned int d = 0; d < dim; ++d)
+                  for(unsigned int e = 0; e < dim; ++e)
+                    cell_averaged_reynolds[i1][d][e] += eval_ptr[i][d] * JxW * eval_ptr[i][e];
+              }
+          }
         }
 
         // perform averaging in homogeneous direction. Currently, some
         // directions are hardcoded, so we can only support the last direction
         // here
         AssertThrow(averaging_direction == dim - 1, dealii::ExcNotImplemented());
-        const unsigned int n_points_in_plane = dealii::Utilities::pow(n_q_points_1d, dim - 1);
-        const unsigned int n_lanes           = VectorizedArray<Number>::size();
-        const unsigned int n_points          = point_list.size();
-        const unsigned int n_chunks          = (n_points + n_lanes - 1) / n_lanes;
+        const unsigned int n_lanes  = VectorizedArray<Number>::size();
+        const unsigned int n_points = point_list.size();
+        const unsigned int n_chunks = (n_points + n_lanes - 1) / n_lanes;
         for(unsigned int p1_v = 0; p1_v < n_chunks; ++p1_v)
         {
           dealii::Point<dim - 1, VectorizedArray<Number>> point_on_line;
@@ -1119,13 +1151,66 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                                                     polynomials_nodal,
                                                     point_on_line);
 
-          VectorizedArray<Number>                 length = 0;
+          VectorizedArray<Number>                 length = det;
           Tensor<1, dim, VectorizedArray<Number>> vel;
           Tensor<2, dim, VectorizedArray<Number>> reynolds;
           VectorizedArray<Number>                 skin_friction = 0;
-          Tensor<1, dim, VectorizedArray<Number>> velocity;
-          Tensor<2, dim, VectorizedArray<Number>> velocity_gradient;
-          for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1)
+          if constexpr(!evaluate_averaging_by_tensor_product)
+          {
+            Tensor<1, dim, VectorizedArray<Number>> velocity;
+            Tensor<2, dim, VectorizedArray<Number>> velocity_gradient;
+            for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1)
+            {
+              if(need_skin_friction)
+              {
+                auto const val_grad = internal::evaluate_tensor_product_value_and_gradient_shapes<
+                  dim - 1,
+                  Tensor<1, dim, Number>,
+                  VectorizedArray<Number>>(shapes_2d.data(),
+                                           polynomials_nodal.size(),
+                                           eval_ptr + q1 * n_points_in_plane);
+                velocity = val_grad[dim - 1];
+                for(unsigned int d = 0; d < dim; ++d)
+                {
+                  for(unsigned int e = 0; e < dim - 1; ++e)
+                    velocity_gradient[d][e] = val_grad[e][d];
+                  velocity_gradient[d] = inv_jac * velocity_gradient[d];
+                }
+              }
+              else
+                velocity = internal::evaluate_tensor_product_value_shapes<dim - 1,
+                                                                          Tensor<1, dim, Number>,
+                                                                          VectorizedArray<Number>>(
+                  shapes_2d.data(), polynomials_nodal.size(), eval_ptr + q1 * n_points_in_plane);
+
+              VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
+
+              // calculate integrals in homogeneous direction
+              length += JxW;
+
+              for(const std::shared_ptr<Quantity> & quantity : line.quantities)
+              {
+                if(quantity->type == QuantityType::Velocity)
+                {
+                  for(unsigned int d = 0; d < dim; ++d)
+                    vel[d] += velocity[d] * JxW;
+                }
+                else if(quantity->type == QuantityType::ReynoldsStresses)
+                {
+                  for(unsigned int d = 0; d < dim; ++d)
+                    for(unsigned int e = 0; e < dim; ++e)
+                      reynolds[d][e] += (velocity[d] * JxW) * velocity[e];
+                }
+                else if(quantity->type == QuantityType::SkinFriction)
+                {
+                  for(unsigned int d = 0; d < dim; ++d)
+                    for(unsigned int e = 0; e < dim; ++e)
+                      skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);
+                }
+              }
+            }
+          }
+          else
           {
             if(need_skin_friction)
             {
@@ -1134,46 +1219,28 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                 Tensor<1, dim, Number>,
                 VectorizedArray<Number>>(shapes_2d.data(),
                                          polynomials_nodal.size(),
-                                         eval_ptr + q1 * n_points_in_plane);
-              velocity = val_grad[dim - 1];
+                                         cell_averaged_velocity.data());
+              vel = val_grad[dim - 1];
+              Tensor<2, dim, VectorizedArray<Number>> grad;
               for(unsigned int d = 0; d < dim; ++d)
               {
                 for(unsigned int e = 0; e < dim - 1; ++e)
-                  velocity_gradient[d][e] = val_grad[e][d];
-                velocity_gradient[d] = inv_jac * velocity_gradient[d];
+                  grad[d][e] = val_grad[e][d];
+                grad[d] = inv_jac * grad[d];
               }
+              for(unsigned int d = 0; d < dim; ++d)
+                for(unsigned int e = 0; e < dim; ++e)
+                  skin_friction += tangent[d] * grad[d][e] * normal[e];
             }
             else
-              velocity = internal::evaluate_tensor_product_value_shapes<dim - 1,
-                                                                        Tensor<1, dim, Number>,
-                                                                        VectorizedArray<Number>>(
-                shapes_2d.data(), polynomials_nodal.size(), eval_ptr + q1 * n_points_in_plane);
-
-            VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
-
-            // calculate integrals in homogeneous direction
-            length += JxW;
-
-            for(const std::shared_ptr<Quantity> & quantity : line.quantities)
-            {
-              if(quantity->type == QuantityType::Velocity)
-              {
-                for(unsigned int d = 0; d < dim; ++d)
-                  vel[d] += velocity[d] * JxW;
-              }
-              else if(quantity->type == QuantityType::ReynoldsStresses)
-              {
-                for(unsigned int d = 0; d < dim; ++d)
-                  for(unsigned int e = 0; e < dim; ++e)
-                    reynolds[d][e] += (velocity[d] * JxW) * velocity[e];
-              }
-              else if(quantity->type == QuantityType::SkinFriction)
-              {
-                for(unsigned int d = 0; d < dim; ++d)
-                  for(unsigned int e = 0; e < dim; ++e)
-                    skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);
-              }
-            }
+              vel = internal::evaluate_tensor_product_value_shapes<dim - 1,
+                                                                   Tensor<1, dim, Number>,
+                                                                   VectorizedArray<Number>>(
+                shapes_2d.data(), polynomials_nodal.size(), cell_averaged_velocity.data());
+            reynolds = internal::evaluate_tensor_product_value_shapes<dim - 1,
+                                                                      Tensor<2, dim, Number>,
+                                                                      VectorizedArray<Number>>(
+              shapes_2d.data(), polynomials_nodal.size(), cell_averaged_reynolds.data());
           }
 
           for(unsigned int p1 = p1_v * n_lanes, v = 0;
