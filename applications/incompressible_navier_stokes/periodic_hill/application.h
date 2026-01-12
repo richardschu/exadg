@@ -96,8 +96,6 @@ public:
   Application(std::string input_file, MPI_Comm const & comm)
     : ApplicationBase<dim, Number>(input_file, comm)
   {
-    flow_rate_controller.reset(
-      new FlowRateController(bulk_velocity, target_flow_rate, H, start_time));
   }
 
   void
@@ -160,6 +158,17 @@ private:
 
     // sample end time is equal to end time, which is read from the input file
     sample_end_time = end_time;
+
+    // need to recompute the width, since we make it dependent on the number of elements in z
+    // direction, or rather, the ratio between elements in x and z direction
+    width = length * coarse_mesh_refinements[2] / coarse_mesh_refinements[0];
+
+    // recompute target flow rate as it depends on the width
+    target_flow_rate = bulk_velocity * width * height;
+
+    // finally refresh the flow rate controller
+    flow_rate_controller.reset(
+      new FlowRateController(bulk_velocity, target_flow_rate, H, start_time));
   }
 
   void
@@ -674,13 +683,13 @@ private:
   double Re       = 5600.0; // 700, 1400, 5600, 10595, 19000
 
   double const                H      = 0.028;
-  double const                width  = 4.5 * H;
+  double                      width  = 4.5 * H;
   double const                length = 9.0 * H;
   double const                height = 2.036 * H;
   std::array<unsigned int, 3> coarse_mesh_refinements{{2, 1, 1}};
 
   double const bulk_velocity     = 5.6218;
-  double const target_flow_rate  = bulk_velocity * width * height;
+  double       target_flow_rate  = bulk_velocity * width * height;
   double const flow_through_time = length / bulk_velocity;
 
   // RE_H = u_b * H / nu
