@@ -43,6 +43,13 @@ public:
   {
   }
 
+  virtual bool
+  needs_constraints_distributed(double const /*          time */,
+                                types::time_step const /*time_step_number*/) const
+  {
+    return true;
+  }
+
   /*
    * This function has to be called to apply the postprocessing tools.
    */

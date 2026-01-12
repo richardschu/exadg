@@ -112,9 +112,11 @@ private:
   TimeControl                time_control_mean_velocity;
   SolutionField<dim, Number> mean_velocity; // velocity field averaged over time
 
+protected:
   // write output for visualization of results (e.g., using paraview)
   OutputGenerator<dim, Number> output_generator;
 
+private:
   // writes output at certain points in space
   PointwiseOutputGenerator<dim, Number> pointwise_output_generator;
 

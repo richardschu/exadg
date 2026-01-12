@@ -612,7 +612,8 @@ TimeIntBDF<dim, Number>::postprocessing() const
   // `dealii::VectorTools::integrate_difference()` does not take constraints into account like
   // `dealii::MatrixFree` does, hence reading the wrong values. `distribute_constraint_u()` updates
   // the constrained values for the velocity.
-  operator_base->distribute_constraint_u(const_cast<VectorType &>(get_velocity(0)));
+  if(postprocessor->needs_constraints_distributed(this->get_time(), this->get_time_step_number()))
+    operator_base->distribute_constraint_u(const_cast<VectorType &>(get_velocity(0)));
 
   bool constexpr postprocess_solution_else_error = true;
   if(postprocess_solution_else_error)

@@ -103,6 +103,16 @@ public:
       line_plot_calculator_statistics->setup(my_pp_data.line_plot_data);
   }
 
+  bool
+  needs_constraints_distributed(double const           time,
+                                types::time_step const time_step_number) const override
+  {
+    // if we have the consistent splitting operator, we do not need to take
+    // care of constraints as we use the matrix-free operator directly
+    return consistent_splitting_operator == nullptr ||
+           this->output_generator.time_control.needs_evaluation(time, time_step_number);
+  }
+
   void
   do_postprocessing(VectorType const &     velocity,
                     VectorType const &     pressure,
