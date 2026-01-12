@@ -1092,6 +1092,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               for(unsigned int e = 0; e < dim; ++e)
                 inv_jac[d][e][v] = inv_jac_v[d][e];
           }
+          bool                                    need_skin_friction = false;
           Tensor<1, dim, VectorizedArray<Number>> normal;
           Tensor<1, dim, VectorizedArray<Number>> tangent;
           for(const std::shared_ptr<Quantity> & quantity : line.quantities)
@@ -1109,6 +1110,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               }
               else
                 AssertThrow(false, ExcNotImplemented());
+              need_skin_friction = true;
             }
 
           VectorizedArray<Number> const det =
@@ -1121,21 +1123,31 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           Tensor<1, dim, VectorizedArray<Number>> vel;
           Tensor<2, dim, VectorizedArray<Number>> reynolds;
           VectorizedArray<Number>                 skin_friction = 0;
+          Tensor<1, dim, VectorizedArray<Number>> velocity;
+          Tensor<2, dim, VectorizedArray<Number>> velocity_gradient;
           for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1)
           {
-            auto const val_grad =
-              internal::evaluate_tensor_product_value_and_gradient_shapes<dim - 1,
-                                                                          Tensor<1, dim, Number>,
-                                                                          VectorizedArray<Number>>(
-                shapes_2d.data(), polynomials_nodal.size(), eval_ptr + q1 * n_points_in_plane);
-            const Tensor<1, dim, VectorizedArray<Number>> velocity = val_grad[dim - 1];
-            Tensor<2, dim, VectorizedArray<Number>>       velocity_gradient;
-            for(unsigned int d = 0; d < dim; ++d)
+            if(need_skin_friction)
             {
-              for(unsigned int e = 0; e < dim - 1; ++e)
-                velocity_gradient[d][e] = val_grad[e][d];
-              velocity_gradient[d] = inv_jac * velocity_gradient[d];
+              auto const val_grad = internal::evaluate_tensor_product_value_and_gradient_shapes<
+                dim - 1,
+                Tensor<1, dim, Number>,
+                VectorizedArray<Number>>(shapes_2d.data(),
+                                         polynomials_nodal.size(),
+                                         eval_ptr + q1 * n_points_in_plane);
+              velocity = val_grad[dim - 1];
+              for(unsigned int d = 0; d < dim; ++d)
+              {
+                for(unsigned int e = 0; e < dim - 1; ++e)
+                  velocity_gradient[d][e] = val_grad[e][d];
+                velocity_gradient[d] = inv_jac * velocity_gradient[d];
+              }
             }
+            else
+              velocity = internal::evaluate_tensor_product_value_shapes<dim - 1,
+                                                                        Tensor<1, dim, Number>,
+                                                                        VectorizedArray<Number>>(
+                shapes_2d.data(), polynomials_nodal.size(), eval_ptr + q1 * n_points_in_plane);
 
             VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
 
@@ -1153,7 +1165,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               {
                 for(unsigned int d = 0; d < dim; ++d)
                   for(unsigned int e = 0; e < dim; ++e)
-                    reynolds[d][e] += velocity[d] * velocity[e] * JxW;
+                    reynolds[d][e] += (velocity[d] * JxW) * velocity[e];
               }
               else if(quantity->type == QuantityType::SkinFriction)
               {
