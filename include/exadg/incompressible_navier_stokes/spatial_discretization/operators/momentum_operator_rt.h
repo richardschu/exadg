@@ -26,6 +26,7 @@
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_nothing.h>
+#include <deal.II/fe/fe_raviart_thomas.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/matrix_free/matrix_free.h>
@@ -295,9 +296,12 @@ public:
          const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
     (void)communicator_shared; // TODO: not yet implemented
-    this->mapping                                       = &mapping;
-    this->dof_handler                                   = &dof_handler;
-    const FiniteElement<dim> &                       fe = dof_handler.get_fe();
+    this->mapping                 = &mapping;
+    this->dof_handler             = &dof_handler;
+    const FiniteElement<dim> & fe = dof_handler.get_fe();
+    AssertThrow(dynamic_cast<const FE_RaviartThomasNodal<dim> *>(&fe),
+                ExcMessage("This class only works for Raviart-Thomas elements. Set "
+                           "spatial discretization to HDIV"));
     MatrixFree<dim, Number>                          matrix_free;
     typename MatrixFree<dim, Number>::AdditionalData mf_data;
     mf_data.cell_vectorization_category          = cell_vectorization_category;
