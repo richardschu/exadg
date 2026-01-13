@@ -87,10 +87,28 @@ PostProcessor<dim, Number>::do_postprocessing(VectorType const &     solution,
       additional_fields_vtu.push_back(&displacement_jacobian);
     }
 
-   if(pp_data.output_data.write_max_principal_stress)
+    if(pp_data.output_data.write_max_principal_stress)
     {
       max_principal_stress.evaluate(solution);
       additional_fields_vtu.push_back(&max_principal_stress);
+    }
+
+    if(pp_data.output_data.write_traction_local_full)
+    {
+      traction_local_full.evaluate(solution);
+      additional_fields_vtu.push_back(&traction_local_full);
+    }
+
+    if(pp_data.output_data.write_traction_local_normal)
+    {
+      traction_local_normal.evaluate(solution);
+      additional_fields_vtu.push_back(&traction_local_normal);
+    }
+
+    if(pp_data.output_data.write_traction_local_inplane)
+    {
+      traction_local_inplane.evaluate(solution);
+      additional_fields_vtu.push_back(&traction_local_inplane);
     }
 
     output_generator.evaluate(solution,
@@ -160,6 +178,57 @@ PostProcessor<dim, Number>::initialize_derived_fields()
 
     max_principal_stress.reinit();
   }
+
+  // Stress in local coordinates: full
+  if(pp_data.output_data.write_traction_local_full)
+  {
+    traction_local_full.type              = SolutionFieldType::vector;
+    traction_local_full.name              = "traction_local_full";
+    traction_local_full.dof_handler       = &pde_operator->get_dof_handler();
+    traction_local_full.initialize_vector = [&](VectorType & dst) {
+      pde_operator->initialize_dof_vector(dst);
+    };
+    traction_local_full.recompute_solution_field = [&](VectorType &       dst_vector_valued,
+                                                       const VectorType & src_vector_valued) {
+      pde_operator->compute_traction_local_full(dst_vector_valued, src_vector_valued);
+    };
+
+    traction_local_full.reinit();
+  }
+
+  // Stress in local coordinates: normal
+  if(pp_data.output_data.write_traction_local_normal)
+  {
+    traction_local_normal.type              = SolutionFieldType::vector;
+    traction_local_normal.name              = "traction_local_normal";
+    traction_local_normal.dof_handler       = &pde_operator->get_dof_handler();
+    traction_local_normal.initialize_vector = [&](VectorType & dst) {
+      pde_operator->initialize_dof_vector(dst);
+    };
+    traction_local_normal.recompute_solution_field = [&](VectorType &       dst_vector_valued,
+                                                         const VectorType & src_vector_valued) {
+      pde_operator->compute_traction_local_normal(dst_vector_valued, src_vector_valued);
+    };
+
+    traction_local_normal.reinit();
+  }
+
+  // Stress in local coordinates: in-plane
+  if(pp_data.output_data.write_traction_local_inplane)
+  {
+    traction_local_inplane.type              = SolutionFieldType::vector;
+    traction_local_inplane.name              = "traction_local_inplane";
+    traction_local_inplane.dof_handler       = &pde_operator->get_dof_handler();
+    traction_local_inplane.initialize_vector = [&](VectorType & dst) {
+      pde_operator->initialize_dof_vector(dst);
+    };
+    traction_local_inplane.recompute_solution_field = [&](VectorType &       dst_vector_valued,
+                                                          const VectorType & src_vector_valued) {
+      pde_operator->compute_traction_local_inplane(dst_vector_valued, src_vector_valued);
+    };
+
+    traction_local_inplane.reinit();
+  }
 }
 
 template<int dim, typename Number>
@@ -169,6 +238,9 @@ PostProcessor<dim, Number>::invalidate_derived_fields()
   displacement_magnitude.invalidate();
   displacement_jacobian.invalidate();
   max_principal_stress.invalidate();
+  traction_local_full.invalidate();
+  traction_local_normal.invalidate();
+  traction_local_inplane.invalidate();
 }
 
 template class PostProcessor<2, float>;

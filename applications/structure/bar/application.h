@@ -709,6 +709,9 @@ private:
     pp_data.output_data.write_displacement_magnitude = true;
     pp_data.output_data.write_displacement_jacobian  = true;
     pp_data.output_data.write_max_principal_stress   = true;
+    pp_data.output_data.write_traction_local_full    = true;
+    pp_data.output_data.write_traction_local_normal  = true;
+    pp_data.output_data.write_traction_local_inplane = true;
     pp_data.output_data.write_higher_order           = true;
     pp_data.output_data.degree                       = this->param.degree;
 

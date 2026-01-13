@@ -242,6 +242,9 @@ public:
   tensor
   gradient_displacement(unsigned int const cell, unsigned int const q) const final;
 
+  std::vector<vector>
+  get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const final;
+
 private:
   /*
    * Store factors involving (potentially variable) shear modulus.

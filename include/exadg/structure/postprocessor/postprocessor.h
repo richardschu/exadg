@@ -80,6 +80,9 @@ private:
   SolutionField<dim, Number> displacement_magnitude;
   SolutionField<dim, Number> displacement_jacobian;
   SolutionField<dim, Number> max_principal_stress;
+  SolutionField<dim, Number> traction_local_full;
+  SolutionField<dim, Number> traction_local_normal;
+  SolutionField<dim, Number> traction_local_inplane;
 
   // write output for visualization of results (e.g., using paraview)
   OutputGenerator<dim, Number> output_generator;

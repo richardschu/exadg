@@ -394,6 +394,21 @@ public:
   compute_max_principal_stress(VectorType &       dst_scalar_valued,
                                VectorType const & src_vector_valued) const;
 
+  // compute local traction component: full
+  void
+  compute_traction_local_full(VectorType &       dst_vector_valued,
+                              VectorType const & src_vector_valued) const;
+
+  // compute local traction component: normal
+  void
+  compute_traction_local_normal(VectorType &       dst_vector_valued,
+                                VectorType const & src_vector_valued) const;
+
+  // compute local traction component: in-plane
+  void
+  compute_traction_local_inplane(VectorType &       dst_vector_valued,
+                                 VectorType const & src_vector_valued) const;
+
 private:
   /*
    * Initializes dealii::DoFHandler.
@@ -596,9 +611,10 @@ private:
   /*
    * Mass (inverse) operator(s) and solvers
    */
-  std::shared_ptr<PreconditionerBase<Number>>            mass_preconditioner;
-  std::shared_ptr<Krylov::SolverBase<VectorType>>        mass_solver;
-  InverseMassOperator<dim, 1 /* n_components */, Number> inverse_mass_scalar;
+  std::shared_ptr<PreconditionerBase<Number>>              mass_preconditioner;
+  std::shared_ptr<Krylov::SolverBase<VectorType>>          mass_solver;
+  InverseMassOperator<dim, 1 /* n_components */, Number>   inverse_mass_scalar;
+  InverseMassOperator<dim, dim /* n_components */, Number> inverse_mass_vector;
 
   /*
    * Calculators to obtain derived quantities.
@@ -608,6 +624,10 @@ private:
   DisplacementJacobianCalculator<dim, Number> displacement_jacobian_calculator;
 
   MaxPrincipalStressCalculator<dim, Number> max_principal_stress_calculator;
+
+  LocalStressCalculator<dim, Number> traction_local_full_calculator;
+  LocalStressCalculator<dim, Number> traction_local_normal_calculator;
+  LocalStressCalculator<dim, Number> traction_local_inplane_calculator;
 
   /*
    * MPI communicator

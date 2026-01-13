@@ -262,7 +262,7 @@ Operator<dim, Number>::setup_operators()
   operator_data.quad_index              = get_quad_index();
   operator_data.dof_index_inhomogeneous = get_dof_index_periodicity_and_hanging_node_constraints();
   operator_data.use_matrix_based_vmult  = param.use_matrix_based_implementation;
-  operator_data.sparse_matrix_type              = param.sparse_matrix_type;
+  operator_data.sparse_matrix_type      = param.sparse_matrix_type;
 
   if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
@@ -280,7 +280,7 @@ Operator<dim, Number>::setup_operators()
   operator_data.stable_formulation  = param.stable_formulation;
   if(param.large_deformation)
   {
-    operator_data.pull_back_traction = param.pull_back_traction;
+    operator_data.pull_back_traction      = param.pull_back_traction;
     operator_data.spatial_integration     = param.spatial_integration;
     operator_data.force_material_residual = param.force_material_residual;
     operator_data.cache_level             = param.cache_level;
@@ -288,7 +288,7 @@ Operator<dim, Number>::setup_operators()
   }
   else
   {
-    operator_data.pull_back_traction = false;
+    operator_data.pull_back_traction  = false;
     operator_data.spatial_integration = false;
   }
 
@@ -328,6 +328,20 @@ Operator<dim, Number>::setup_operators()
     boundary_mass_operator.initialize(*matrix_free, affine_constraints, boundary_mass_data);
   }
 
+  // vector inverse mass operator
+  {
+    InverseMassOperatorData<Number> inverse_mass_operator_data_vector;
+    inverse_mass_operator_data_vector.parameters.solver_data = param.solver_data;
+    inverse_mass_operator_data_vector.dof_index              = get_dof_index();
+    inverse_mass_operator_data_vector.quad_index             = get_quad_index();
+    inverse_mass_operator_data_vector.parameters.implementation_type =
+      inverse_mass_operator_data_vector.get_optimal_inverse_mass_type(*fe, param.grid.element_type);
+
+    inverse_mass_vector.initialize(*matrix_free,
+                                   inverse_mass_operator_data_vector,
+                                   &affine_constraints_periodicity_and_hanging_nodes);
+  }
+
   // scalar inverse mass operator
   if(setup_scalar_field)
   {
@@ -336,7 +350,8 @@ Operator<dim, Number>::setup_operators()
     inverse_mass_operator_data_scalar.dof_index              = get_dof_index_scalar();
     inverse_mass_operator_data_scalar.quad_index             = get_quad_index();
     inverse_mass_operator_data_scalar.parameters.implementation_type =
-      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar, param.grid.element_type);
+      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar,
+                                                                      param.grid.element_type);
 
     inverse_mass_scalar.initialize(*matrix_free,
                                    inverse_mass_operator_data_scalar,
@@ -359,6 +374,11 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::setup_calculators_for_derived_quantities()
 {
+  ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
+    param.large_deformation ?
+      static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
+      static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
+
   if(setup_scalar_field)
   {
     vector_magnitude_calculator.initialize(*matrix_free,
@@ -371,17 +391,30 @@ Operator<dim, Number>::setup_calculators_for_derived_quantities()
                                                 get_dof_index_scalar(),
                                                 get_quad_index());
 
-    ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
-      param.large_deformation ?
-        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
-        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
-
     max_principal_stress_calculator.initialize(*matrix_free,
                                                get_dof_index(),
                                                get_dof_index_scalar(),
                                                get_quad_index(),
                                                elasticity_operator_base);
   }
+
+  traction_local_full_calculator.initialize(*matrix_free,
+                                            get_dof_index(),
+                                            get_quad_index(),
+                                            LocalStressDirection::Full,
+                                            elasticity_operator_base);
+
+  traction_local_normal_calculator.initialize(*matrix_free,
+                                              get_dof_index(),
+                                              get_quad_index(),
+                                              LocalStressDirection::Normal,
+                                              elasticity_operator_base);
+
+  traction_local_inplane_calculator.initialize(*matrix_free,
+                                               get_dof_index(),
+                                               get_quad_index(),
+                                               LocalStressDirection::InPlane,
+                                               elasticity_operator_base);
 }
 
 template<int dim, typename Number>
@@ -747,7 +780,7 @@ Operator<dim, Number>::compute_displacement_magnitude(VectorType &       dst_sca
 
   vector_magnitude_calculator.compute(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar.apply(dst_scalar_valued, src_vector_valued);
 }
 
 template<int dim, typename Number>
@@ -761,7 +794,7 @@ Operator<dim, Number>::compute_displacement_jacobian(VectorType &       dst_scal
 
   displacement_jacobian_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar.apply(dst_scalar_valued, src_vector_valued);
 }
 
 template<int dim, typename Number>
@@ -775,7 +808,37 @@ Operator<dim, Number>::compute_max_principal_stress(VectorType &       dst_scala
 
   max_principal_stress_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar.apply(dst_scalar_valued, src_vector_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_full(VectorType &       dst_vector_valued,
+                                                   VectorType const & src_vector_valued) const
+{
+  traction_local_full_calculator.compute_projection_rhs(dst_vector_valued, src_vector_valued);
+
+  inverse_mass_vector.apply(dst_vector_valued, src_vector_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_normal(VectorType &       dst_vector_valued,
+                                                     VectorType const & src_vector_valued) const
+{
+  traction_local_normal_calculator.compute_projection_rhs(dst_vector_valued, src_vector_valued);
+
+  inverse_mass_vector.apply(dst_vector_valued, src_vector_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_inplane(VectorType &       dst_vector_valued,
+                                                      VectorType const & src_vector_valued) const
+{
+  traction_local_inplane_calculator.compute_projection_rhs(dst_vector_valued, src_vector_valued);
+
+  inverse_mass_vector.apply(dst_vector_valued, src_vector_valued);
 }
 
 template<int dim, typename Number>
