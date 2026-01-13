@@ -107,8 +107,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     AssertThrow(data.lines.size() > 0, dealii::ExcMessage("Empty data"));
 
     global_points.resize(data.lines.size());
-    cells_and_ref_points_velocity.resize(data.lines.size());
-    cells_and_ref_points_pressure.resize(data.lines.size());
+    cells_and_ref_points.resize(data.lines.size());
     cells_and_ref_points_ref_pressure.resize(data.lines.size());
 
     velocity_global.resize(data.lines.size());
@@ -170,7 +169,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     // curved boundaries
     double const tolerance = 1.e-10;
 
-    // For velocity quantities:
+    pressure_dof_indices_on_cell.resize(dof_handler_velocity.get_triangulation().n_active_cells(),
+                                        dealii::numbers::invalid_unsigned_int);
+    std::vector<dealii::types::global_dof_index> pressure_dof_indices(
+      dof_handler_pressure.get_fe().dofs_per_cell);
+    // For velocity and pressure quantities:
     for(auto const & cell : dof_handler_velocity.active_cell_iterators())
     {
       if(cell->is_locally_owned())
@@ -182,6 +185,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                       dealii::ExcMessage("No quantities specified for line."));
 
           bool velocity_has_to_be_evaluated = false;
+          bool pressure_has_to_be_evaluated = false;
           for(const std::shared_ptr<Quantity> & quantity : line->quantities)
           {
             if(quantity->type == QuantityType::Velocity or
@@ -190,9 +194,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
             {
               velocity_has_to_be_evaluated = true;
             }
+
+            if(quantity->type == QuantityType::Pressure)
+              pressure_has_to_be_evaluated = true;
           }
 
-          if(velocity_has_to_be_evaluated == true)
+          if(velocity_has_to_be_evaluated == true || pressure_has_to_be_evaluated == true)
           {
             bool found_a_point_on_this_cell = false;
             // cells and reference points for all points along a line
@@ -218,14 +225,23 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               {
                 if(not found_a_point_on_this_cell)
                 {
-                  cells_and_ref_points_velocity[line_iterator].emplace_back(
+                  cells_and_ref_points[line_iterator].emplace_back(
                     cell, std::vector<std::pair<unsigned int, dealii::Point<dim>>>());
                   found_a_point_on_this_cell = true;
                 }
-                cells_and_ref_points_velocity[line_iterator].back().second.emplace_back(
+                cells_and_ref_points[line_iterator].back().second.emplace_back(
                   p, dealii::GeometryInfo<dim>::project_to_unit_cell(p_unit));
               }
             }
+          }
+
+          if(pressure_has_to_be_evaluated)
+          {
+            typename dealii::DoFHandler<dim>::active_cell_iterator cell_p =
+              cell->as_dof_handler_iterator(dof_handler_pressure);
+            cell_p->get_dof_indices(pressure_dof_indices);
+            pressure_dof_indices_on_cell[cell_p->active_cell_index()] =
+              dof_handler_pressure.locally_owned_dofs().index_within_set(pressure_dof_indices[0]);
           }
           ++line_iterator;
         }
@@ -233,8 +249,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     }
 
     // Save all cells and corresponding points on unit cell that are relevant for a given point
-    // along the line. We have to do the same for the pressure because the dealii::DoFHandlers for
-    // velocity and pressure are different.
+    // along the line.
     for(auto const & cell : dof_handler_pressure.active_cell_iterators())
     {
       if(cell->is_locally_owned())
@@ -244,44 +259,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         {
           AssertThrow(line->quantities.size() > 0,
                       dealii::ExcMessage("No quantities specified for line."));
-          for(const std::shared_ptr<Quantity> & quantity : line->quantities)
-          {
-            // evaluate quantities that involve pressure
-            bool found_a_point_on_this_cell = false;
-            if(quantity->type == QuantityType::Pressure)
-            {
-              // cells and reference points for all points along a line
-              for(unsigned int p = 0; p < line->n_points; ++p)
-              {
-                // First, we move the line to the position of the current cell (vertex 0) in
-                // averaging direction and check whether this new point is inside the current cell
-                dealii::Point<dim> translated_point   = global_points[line_iterator][p];
-                translated_point[averaging_direction] = cell->vertex(0)[averaging_direction];
-
-                // If the new point lies in the current cell, we have to take the current cell into
-                // account
-                dealii::Point<dim> const p_unit = find_unit_point(mapping, cell, translated_point);
-
-                // Use a relaxed tolerance if we are at the boundary in a certain direction
-                double modified_tolerance = tolerance;
-                for(unsigned int d = 0; d < dim; ++d)
-                  if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
-                     (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
-                    modified_tolerance = 1e-1;
-                if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
-                {
-                  if(not found_a_point_on_this_cell)
-                  {
-                    cells_and_ref_points_pressure[line_iterator].emplace_back(
-                      cell, std::vector<std::pair<unsigned int, dealii::Point<dim>>>());
-                    found_a_point_on_this_cell = true;
-                  }
-                  cells_and_ref_points_pressure[line_iterator].back().second.emplace_back(
-                    p, dealii::GeometryInfo<dim>::project_to_unit_cell(p_unit));
-                }
-              }
-            }
-          }
 
           // cells and reference points for reference pressure (only one point for each line)
           for(const std::shared_ptr<Quantity> & quantity : line->quantities)
@@ -322,7 +299,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     dealii::FE_DGQ<dim>     fe_dummy(0);
     dealii::FEValues<dim>   fe_values(mapping, fe_dummy, quadrature_cell, dealii::update_jacobians);
     unsigned int            n_cells = 0, n_points = 0;
-    for(const auto & line_points : cells_and_ref_points_velocity)
+    for(const auto & line_points : cells_and_ref_points)
       for(const auto & [_, pts] : line_points)
       {
         ++n_cells;
@@ -334,7 +311,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     dealii::FEPointEvaluation<1, dim> fe_point_eval(mapping, fe_dummy, dealii::update_jacobians);
     unsigned int                      cell_index = 0;
     std::vector<dealii::Point<dim>>   points;
-    for(const auto & line_points : cells_and_ref_points_velocity)
+    for(const auto & line_points : cells_and_ref_points)
       for(const auto & [cell, pts] : line_points)
       {
         fe_values.reinit(typename dealii::Triangulation<dim>::cell_iterator(cell));
@@ -397,6 +374,35 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     polynomials_nodal =
       dealii::Polynomials::generate_complete_Lagrange_basis(gauss_1d.get_points());
 
+    // Initialize non-matching mapping info
+    nonmatching_mapping_info = std::make_shared<dealii::NonMatching::MappingInfo<dim, dim, Number>>(
+      mapping, dealii::update_values | dealii::update_jacobians | dealii::update_gradients);
+    std::vector<typename dealii::DoFHandler<dim>::active_cell_iterator> cells;
+    std::vector<std::vector<dealii::Point<dim>>>                        unit_points;
+    for(unsigned int line_index = 0; line_index < cells_and_ref_points.size(); ++line_index)
+    {
+      for(const std::shared_ptr<Quantity> & quantity : data.lines[line_index]->quantities)
+        if(quantity->type == QuantityType::Pressure)
+        {
+          for(const auto & cell_and_pts : cells_and_ref_points[line_index])
+          {
+            cells.push_back(cell_and_pts.first);
+            unit_points.emplace_back();
+            unit_points.back().resize(cell_and_pts.second.size() * gauss_1d.size());
+            for(unsigned int p = 0, idx = 0; p < cell_and_pts.second.size(); ++p)
+              for(unsigned int q = 0; q < gauss_1d.size(); ++q, ++idx)
+                for(unsigned int d = 0; d < dim; ++d)
+                  unit_points.back()[idx][d] = (d == averaging_direction) ?
+                                                 gauss_1d.point(q)[0] :
+                                                 cell_and_pts.second[p].second[d];
+          }
+        }
+    }
+    nonmatching_mapping_info->reinit_cells(cells, unit_points);
+    evaluator_p = std::make_shared<dealii::FEPointEvaluation<1, dim, dim, Number>>(
+      *nonmatching_mapping_info, dof_handler_pressure.get_fe());
+
+
     create_directories(data.directory, mpi_comm);
   }
 }
@@ -423,8 +429,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     AssertThrow(data.lines.size() > 0, dealii::ExcMessage("Empty data"));
 
     global_points.resize(data.lines.size());
-    cells_and_ref_points_velocity.resize(data.lines.size());
-    cells_and_ref_points_pressure.resize(data.lines.size());
+    cells_and_ref_points.resize(data.lines.size());
     cells_and_ref_points_ref_pressure.resize(data.lines.size());
 
     velocity_global.resize(data.lines.size());
@@ -491,7 +496,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     active_cell_index_to_evaluate_index.clear();
     active_cell_index_to_evaluate_index.resize(tria.n_active_cells(),
                                                dealii::numbers::invalid_unsigned_int);
-    // For velocity quantities:
+    pressure_dof_indices_on_cell.resize(tria.n_active_cells(),
+                                        dealii::numbers::invalid_unsigned_int);
+    std::vector<dealii::types::global_dof_index> pressure_dof_indices(
+      dof_handler_pressure.get_fe().dofs_per_cell);
+    // For velocity and pressure quantities:
     for(unsigned int ic = 0; ic < rt_operator.get_cell_level_index().size(); ++ic)
       for(unsigned int il = 0; il < dealii::VectorizedArray<Number>::size(); ++il)
         if(rt_operator.get_cell_level_index()[ic][il][0] != dealii::numbers::invalid_unsigned_int)
@@ -511,6 +520,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                         dealii::ExcMessage("No quantities specified for line."));
 
             bool velocity_has_to_be_evaluated = false;
+            bool pressure_has_to_be_evaluated = false;
             for(const std::shared_ptr<Quantity> & quantity : line->quantities)
             {
               if(quantity->type == QuantityType::Velocity or
@@ -519,9 +529,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               {
                 velocity_has_to_be_evaluated = true;
               }
+
+              if(quantity->type == QuantityType::Pressure)
+                pressure_has_to_be_evaluated = true;
             }
 
-            if(velocity_has_to_be_evaluated == true)
+            if(velocity_has_to_be_evaluated == true || pressure_has_to_be_evaluated == true)
             {
               bool found_a_point_on_this_cell = false;
               // cells and reference points for all points along a line
@@ -547,15 +560,16 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                 {
                   if(not found_a_point_on_this_cell)
                   {
-                    cells_and_ref_points_velocity[line_iterator].emplace_back(
+                    cells_and_ref_points[line_iterator].emplace_back(
                       cell, std::vector<std::pair<unsigned int, dealii::Point<dim>>>());
                     found_a_point_on_this_cell = true;
                   }
-                  cells_and_ref_points_velocity[line_iterator].back().second.emplace_back(
+                  cells_and_ref_points[line_iterator].back().second.emplace_back(
                     p, dealii::GeometryInfo<dim>::project_to_unit_cell(p_unit));
                 }
               }
-              if(found_a_point_on_this_cell && cell_was_not_yet_considered)
+              if(velocity_has_to_be_evaluated && found_a_point_on_this_cell &&
+                 cell_was_not_yet_considered)
               {
                 active_cell_index_to_evaluate_index[cell->active_cell_index()] =
                   tmp_list_of_cells_to_evaluate.size();
@@ -563,6 +577,18 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                   ic * dealii::VectorizedArray<Number>::size() + il);
                 cell_was_not_yet_considered = false;
               }
+            }
+
+            if(pressure_has_to_be_evaluated)
+            {
+              typename dealii::DoFHandler<dim>::active_cell_iterator cell_p(
+                &tria,
+                rt_operator.get_cell_level_index()[ic][il][0],
+                rt_operator.get_cell_level_index()[ic][il][1],
+                &dof_handler_pressure);
+              cell_p->get_dof_indices(pressure_dof_indices);
+              pressure_dof_indices_on_cell[cell_p->active_cell_index()] =
+                dof_handler_pressure.locally_owned_dofs().index_within_set(pressure_dof_indices[0]);
             }
             ++line_iterator;
           }
@@ -579,8 +605,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       dealii::Utilities::pow(dof_handler_velocity.get_fe().degree + 1, dim));
 
     // Save all cells and corresponding points on unit cell that are relevant for a given point
-    // along the line. We have to do the same for the pressure because the dealii::DoFHandlers for
-    // velocity and pressure are different.
+    // along the line.
     for(auto const & cell : dof_handler_pressure.active_cell_iterators())
     {
       if(cell->is_locally_owned())
@@ -590,51 +615,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         {
           AssertThrow(line->quantities.size() > 0,
                       dealii::ExcMessage("No quantities specified for line."));
-          for(const std::shared_ptr<Quantity> & quantity : line->quantities)
-          {
-            // evaluate quantities that involve pressure
-            bool found_a_point_on_this_cell = false;
-            if(quantity->type == QuantityType::Pressure)
-            {
-              // cells and reference points for all points along a line
-              for(unsigned int p = 0; p < line->n_points; ++p)
-              {
-                // First, we move the line to the position of the current cell (vertex 0) in
-                // averaging direction and check whether this new point is inside the current cell
-                dealii::Point<dim> translated_point   = global_points[line_iterator][p];
-                translated_point[averaging_direction] = cell->vertex(0)[averaging_direction];
-
-                // If the new point lies in the current cell, we have to take the current cell into
-                // account
-                dealii::Point<dim> const p_unit = find_unit_point(mapping, cell, translated_point);
-
-                // Use a relaxed tolerance if we are at the boundary in a certain direction
-                double modified_tolerance = tolerance;
-                for(unsigned int d = 0; d < dim; ++d)
-                  if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
-                     (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
-                    modified_tolerance = 1e-1;
-                if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
-                {
-                  if(not found_a_point_on_this_cell)
-                  {
-                    cells_and_ref_points_pressure[line_iterator].emplace_back(
-                      cell, std::vector<std::pair<unsigned int, dealii::Point<dim>>>());
-                    found_a_point_on_this_cell = true;
-                  }
-                  cells_and_ref_points_pressure[line_iterator].back().second.emplace_back(
-                    p, dealii::GeometryInfo<dim>::project_to_unit_cell(p_unit));
-                }
-              }
-            }
-          }
 
           // cells and reference points for reference pressure (only one point for each line)
           for(const std::shared_ptr<Quantity> & quantity : line->quantities)
           {
-            AssertThrow(line->quantities.size() > 0,
-                        dealii::ExcMessage("No quantities specified for line."));
-
             // evaluate quantities that involve pressure
             if(quantity->type == QuantityType::PressureCoefficient)
             {
@@ -666,7 +650,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     dealii::QGauss<1>   gauss_1d(degree_dgq + 1);
     dealii::FE_DGQ<dim> fe_dummy(0);
     unsigned int        n_points = 0;
-    for(const auto & line_points : cells_and_ref_points_velocity)
+    for(const auto & line_points : cells_and_ref_points)
       for(const auto & [_, pts] : line_points)
       {
         n_points += pts.size();
@@ -675,7 +659,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     inverse_jacobians_on_lines.reserve(n_points);
     dealii::FEPointEvaluation<1, dim> fe_point_eval(mapping, fe_dummy, dealii::update_jacobians);
     std::vector<dealii::Point<dim>>   points;
-    for(const auto & line_points : cells_and_ref_points_velocity)
+    for(const auto & line_points : cells_and_ref_points)
       for(const auto & [cell, pts] : line_points)
       {
         points.clear();
@@ -689,6 +673,34 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
 
     polynomials_nodal =
       dealii::Polynomials::generate_complete_Lagrange_basis(gauss_1d.get_points());
+
+    // Initialize non-matching mapping info
+    nonmatching_mapping_info = std::make_shared<dealii::NonMatching::MappingInfo<dim, dim, Number>>(
+      mapping, dealii::update_values | dealii::update_jacobians | dealii::update_gradients);
+    std::vector<typename dealii::DoFHandler<dim>::active_cell_iterator> cells;
+    std::vector<std::vector<dealii::Point<dim>>>                        unit_points;
+    for(unsigned int line_index = 0; line_index < cells_and_ref_points.size(); ++line_index)
+    {
+      for(const std::shared_ptr<Quantity> & quantity : data.lines[line_index]->quantities)
+        if(quantity->type == QuantityType::Pressure)
+        {
+          for(const auto & cell_and_pts : cells_and_ref_points[line_index])
+          {
+            cells.push_back(cell_and_pts.first);
+            unit_points.emplace_back();
+            unit_points.back().resize(cell_and_pts.second.size() * gauss_1d.size());
+            for(unsigned int p = 0, idx = 0; p < cell_and_pts.second.size(); ++p)
+              for(unsigned int q = 0; q < gauss_1d.size(); ++q, ++idx)
+                for(unsigned int d = 0; d < dim; ++d)
+                  unit_points.back()[idx][d] = (d == averaging_direction) ?
+                                                 gauss_1d.point(q)[0] :
+                                                 cell_and_pts.second[p].second[d];
+          }
+        }
+    }
+    nonmatching_mapping_info->reinit_cells(cells, unit_points);
+    evaluator_p = std::make_shared<dealii::FEPointEvaluation<1, dim, dim, Number>>(
+      *nonmatching_mapping_info, dof_handler_pressure.get_fe());
 
     create_directories(data.directory, mpi_comm);
   }
@@ -950,7 +962,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
     dof_indices_on_cell.reserve(jacobians_at_nodal_points.size(0));
     std::vector<dealii::types::global_dof_index> dof_indices(fe_u.dofs_per_cell);
     const bool is_rt_element = fe_u.get_name().find("RaviartThomas") != std::string::npos;
-    for(const auto & line_points : cells_and_ref_points_velocity)
+    for(const auto & line_points : cells_and_ref_points)
       for(const auto & [cell, _] : line_points)
       {
         cell->get_dof_indices(dof_indices);
@@ -968,12 +980,16 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
       }
   }
 
-  std::vector<std::vector<double>>                         length_local(data.lines.size());
-  std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_local(data.lines.size());
-  std::vector<std::vector<double>>                         wall_shear_local(data.lines.size());
-  std::vector<std::vector<dealii::Tensor<2, dim, double>>> reynolds_local(data.lines.size());
-  std::vector<std::vector<double>>                         pressure_local(data.lines.size());
-  std::vector<double> reference_pressure_local(data.lines.size());
+  unsigned int total_length = 0;
+  for(auto const & line : data.lines)
+    total_length += line->n_points;
+
+  std::vector<double>                                  length_local(total_length);
+  std::vector<dealii::Tensor<1, dim, double>>          velocity_local(total_length);
+  std::vector<double>                                  wall_shear_local(total_length);
+  std::vector<dealii::SymmetricTensor<2, dim, double>> reynolds_local(total_length);
+  std::vector<double>                                  pressure_local(total_length);
+  std::vector<double>                                  reference_pressure_local(data.lines.size());
 
   // use quadrature for averaging in homogeneous direction
   const unsigned int              n_q_points_1d = fe_u.degree + 1;
@@ -985,25 +1001,19 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
   std::vector<Number>                                                  tmp_array;
   std::array<dealii::ndarray<VectorizedArray<Number>, 2, dim - 1>, 20> shapes_2d;
 
-  dealii::FiniteElement<dim> const &           fe_p = dof_handler_pressure.get_fe();
-  std::vector<double>                          pressure_on_cell(fe_p.dofs_per_cell);
-  std::vector<dealii::types::global_dof_index> dof_indices_p(fe_p.dofs_per_cell);
-  dealii::FEPointEvaluation<1, dim>            evaluator_p(mapping,
-                                                fe_p,
-                                                dealii::update_values | dealii::update_jacobians |
-                                                  dealii::update_quadrature_points |
-                                                  dealii::update_gradients);
-
   const unsigned int n_points_in_plane = dealii::Utilities::pow(n_q_points_1d, dim - 1);
-  std::vector<Tensor<1, dim, Number>> cell_averaged_velocity(n_points_in_plane);
-  std::vector<Tensor<2, dim, Number>> cell_averaged_reynolds(n_points_in_plane);
+  std::vector<Tensor<1, dim, Number>>          cell_averaged_velocity;
+  std::vector<SymmetricTensor<2, dim, Number>> cell_averaged_reynolds;
 
   if(rt_operator == nullptr)
     velocity.update_ghost_values();
-  pressure.update_ghost_values();
+  if(dof_handler_pressure.get_fe().dofs_per_vertex > 0)
+    pressure.update_ghost_values();
 
+  unsigned int counter_cells_p   = 0;
   unsigned int counter_all_cells = 0;
   unsigned int counter_line      = 0;
+  unsigned int offset_arrays     = 0;
   for(unsigned int index = 0; index < data.lines.size(); ++index)
   {
     Line<dim> & line = *data.lines[index];
@@ -1024,16 +1034,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
     // and then perform interpolation from 2D data, or do we rather want to
     // evaluate on the plane including the averaging direction first and then
     // perform averaging (more accurate, but also more expensive).
-    constexpr unsigned int evaluate_averaging_by_tensor_product = true;
+    constexpr unsigned int evaluate_averaging_by_tensor_product = false;
 
     if(evaluate_velocity == true)
     {
-      length_local[index].resize(line.n_points);
-      velocity_local[index].resize(line.n_points);
-      reynolds_local[index].resize(line.n_points);
-      wall_shear_local[index].resize(line.n_points);
-
-      for(auto const & [cell, point_list] : cells_and_ref_points_velocity[index])
+      for(auto const & [cell, point_list] : cells_and_ref_points[index])
       {
         Tensor<1, dim, Number> * eval_ptr = nullptr;
         if(rt_operator == nullptr)
@@ -1078,22 +1083,24 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
             active_cell_index_to_evaluate_index[cell->active_cell_index()], 0);
           if constexpr(evaluate_averaging_by_tensor_product)
           {
+            cell_averaged_velocity.resize(n_points_in_plane);
+            cell_averaged_reynolds.resize(n_points_in_plane);
             double h_z =
               1.0 /
               inverse_jacobians_on_lines[counter_line][averaging_direction][averaging_direction];
             std::fill(cell_averaged_velocity.begin(),
                       cell_averaged_velocity.end(),
-                      Tensor<1, dim>());
+                      dealii::Tensor<1, dim>());
             std::fill(cell_averaged_reynolds.begin(),
                       cell_averaged_reynolds.end(),
-                      Tensor<2, dim>());
+                      dealii::SymmetricTensor<2, dim>());
             for(unsigned int iz = 0, i = 0; iz < n_q_points_1d; ++iz)
               for(unsigned int i1 = 0; i1 < cell_averaged_velocity.size(); ++i1, ++i)
               {
                 const Number JxW = (h_z * gauss_1d.weight(iz));
                 cell_averaged_velocity[i1] += eval_ptr[i] * JxW;
                 for(unsigned int d = 0; d < dim; ++d)
-                  for(unsigned int e = 0; e < dim; ++e)
+                  for(unsigned int e = d; e < dim; ++e)
                     cell_averaged_reynolds[i1][d][e] += eval_ptr[i][d] * JxW * eval_ptr[i][e];
               }
           }
@@ -1151,10 +1158,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                                                     polynomials_nodal,
                                                     point_on_line);
 
-          VectorizedArray<Number>                 length = det;
-          Tensor<1, dim, VectorizedArray<Number>> vel;
-          Tensor<2, dim, VectorizedArray<Number>> reynolds;
-          VectorizedArray<Number>                 skin_friction = 0;
+          const VectorizedArray<Number>                    length = det;
+          Tensor<1, dim, VectorizedArray<Number>>          vel;
+          SymmetricTensor<2, dim, VectorizedArray<Number>> reynolds;
+          VectorizedArray<Number>                          skin_friction = 0;
           if constexpr(!evaluate_averaging_by_tensor_product)
           {
             Tensor<1, dim, VectorizedArray<Number>> velocity;
@@ -1185,9 +1192,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
 
               VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
 
-              // calculate integrals in homogeneous direction
-              length += JxW;
-
               for(const std::shared_ptr<Quantity> & quantity : line.quantities)
               {
                 if(quantity->type == QuantityType::Velocity)
@@ -1198,7 +1202,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                 else if(quantity->type == QuantityType::ReynoldsStresses)
                 {
                   for(unsigned int d = 0; d < dim; ++d)
-                    for(unsigned int e = 0; e < dim; ++e)
+                    for(unsigned int e = d; e < dim; ++e)
                       reynolds[d][e] += (velocity[d] * JxW) * velocity[e];
                 }
                 else if(quantity->type == QuantityType::SkinFriction)
@@ -1237,10 +1241,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                                                                    Tensor<1, dim, Number>,
                                                                    VectorizedArray<Number>>(
                 shapes_2d.data(), polynomials_nodal.size(), cell_averaged_velocity.data());
-            reynolds = internal::evaluate_tensor_product_value_shapes<dim - 1,
-                                                                      Tensor<2, dim, Number>,
-                                                                      VectorizedArray<Number>>(
-              shapes_2d.data(), polynomials_nodal.size(), cell_averaged_reynolds.data());
+            reynolds =
+              internal::evaluate_tensor_product_value_shapes<dim - 1,
+                                                             SymmetricTensor<2, dim, Number>,
+                                                             VectorizedArray<Number>>(
+                shapes_2d.data(), polynomials_nodal.size(), cell_averaged_reynolds.data());
           }
 
           for(unsigned int p1 = p1_v * n_lanes, v = 0;
@@ -1249,24 +1254,24 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           {
             const unsigned int p = point_list[p1].first;
             // calculate integrals in homogeneous direction
-            length_local[index][p] += length[v];
+            length_local[offset_arrays + p] += length[v];
 
             for(const std::shared_ptr<Quantity> & quantity : line.quantities)
             {
               if(quantity->type == QuantityType::Velocity)
               {
                 for(unsigned int d = 0; d < dim; ++d)
-                  velocity_local[index][p][d] += vel[d][v];
+                  velocity_local[offset_arrays + p][d] += vel[d][v];
               }
               else if(quantity->type == QuantityType::ReynoldsStresses)
               {
                 for(unsigned int d = 0; d < dim; ++d)
-                  for(unsigned int e = 0; e < dim; ++e)
-                    reynolds_local[index][p][d][e] += reynolds[d][e][v];
+                  for(unsigned int e = d; e < dim; ++e)
+                    reynolds_local[offset_arrays + p][d][e] += reynolds[d][e][v];
               }
               else if(quantity->type == QuantityType::SkinFriction)
               {
-                wall_shear_local[index][p] += skin_friction[v];
+                wall_shear_local[offset_arrays + p] += skin_friction[v];
               }
             }
           }
@@ -1280,26 +1285,15 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
       // evaluate quantities that involve velocity
       if(quantity->type == QuantityType::Pressure)
       {
-        const bool must_collect_line = length_local[index].empty();
-        if(must_collect_line)
-          length_local[index].resize(line.n_points);
-        pressure_local[index].resize(line.n_points);
-
-        for(auto const & [cell, point_list] : cells_and_ref_points_pressure[index])
+        for(auto const & [cell, point_list] : cells_and_ref_points[index])
         {
-          points.resize(point_list.size() * gauss_1d.size());
-          for(unsigned int p = 0, idx = 0; p < point_list.size(); ++p)
-            for(unsigned int q = 0; q < gauss_1d.size(); ++q, ++idx)
-              for(unsigned int d = 0; d < dim; ++d)
-                points[idx][d] =
-                  (d == averaging_direction) ? gauss_1d.point(q)[0] : point_list[p].second[d];
-
-          evaluator_p.reinit(cell, points);
-          cell->get_dof_indices(dof_indices_p);
-
-          for(unsigned int j = 0; j < dof_indices_p.size(); ++j)
-            pressure_on_cell[j] = pressure(dof_indices_p[j]);
-          evaluator_p.evaluate(pressure_on_cell, dealii::EvaluationFlags::values);
+          evaluator_p->reinit(counter_cells_p);
+          ++counter_cells_p;
+          evaluator_p->evaluate(dealii::ArrayView<const Number>(
+                                  pressure.begin() +
+                                    pressure_dof_indices_on_cell[cell->active_cell_index()],
+                                  dof_handler_pressure.get_fe().dofs_per_cell),
+                                dealii::EvaluationFlags::values);
 
           for(unsigned int p1 = 0, q = 0; p1 < point_list.size(); ++p1)
             for(unsigned int q1 = 0; q1 < gauss_1d.size(); ++q1, ++q)
@@ -1307,12 +1301,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               unsigned int const p = point_list[p1].first;
 
               double det =
-                std::abs(evaluator_p.jacobian(q)[averaging_direction][averaging_direction]);
-              double JxW = det * gauss_1d.weight(q);
+                std::abs(evaluator_p->jacobian(q)[averaging_direction][averaging_direction]);
+              double JxW = det * gauss_1d.weight(q1);
 
-              if(must_collect_line)
-                length_local[index][p] += JxW;
-              pressure_local[index][p] += evaluator_p.get_value(q) * JxW;
+              if(not evaluate_velocity)
+                length_local[offset_arrays + p] += JxW;
+              pressure_local[offset_arrays + p] += evaluator_p->get_value(q) * JxW;
             }
         }
       }
@@ -1336,59 +1330,69 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         reference_pressure_global[index] += pressure_local / length_local;
       }
     }
+    offset_arrays += line.n_points;
   }
 
   velocity.zero_out_ghost_values();
-  pressure.zero_out_ghost_values();
+  if(dof_handler_pressure.get_fe().dofs_per_vertex > 0)
+    pressure.zero_out_ghost_values();
+
+  offset_arrays = 0;
   for(unsigned int line = 0; line < data.lines.size(); ++line)
   {
-    mpi_sum_at_root(length_local[line].data(), length_local[line].size(), mpi_comm);
+    const unsigned int n_points_on_line = data.lines[line]->n_points;
+    mpi_sum_at_root(length_local.data() + offset_arrays, n_points_on_line, mpi_comm);
     for(const std::shared_ptr<Quantity> & quantity : data.lines[line]->quantities)
     {
       // Cells are distributed over processors, therefore we need
       // to sum the contributions of every single processor.
       if(quantity->type == QuantityType::Velocity)
       {
-        mpi_sum_at_root(&velocity_local[line][0][0], velocity_local[line].size() * dim, mpi_comm);
+        mpi_sum_at_root(&velocity_local[offset_arrays][0], n_points_on_line * dim, mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
-          for(unsigned int p = 0; p < data.lines[line]->n_points; ++p)
+          for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
-            velocity_global[line][p] += velocity_local[line][p] / length_local[line][p];
+            velocity_global[line][p] +=
+              velocity_local[offset_arrays + p] / length_local[offset_arrays + p];
           }
       }
       else if(quantity->type == QuantityType::ReynoldsStresses)
       {
-        mpi_sum_at_root(&reynolds_local[line][0][0][0],
-                        reynolds_local[line].size() * dim * dim,
+        mpi_sum_at_root(&reynolds_local[offset_arrays][0][0],
+                        n_points_on_line * dim * (dim + 1) / 2,
                         mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
-          for(unsigned int p = 0; p < data.lines[line]->n_points; ++p)
+          for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
-            reynolds_global[line][p] += reynolds_local[line][p] / length_local[line][p];
+            reynolds_global[line][p] +=
+              reynolds_local[offset_arrays + p] / length_local[offset_arrays + p];
           }
       }
       else if(quantity->type == QuantityType::SkinFriction)
       {
-        mpi_sum_at_root(wall_shear_local[line].data(), wall_shear_local[line].size(), mpi_comm);
+        mpi_sum_at_root(wall_shear_local.data() + offset_arrays, n_points_on_line, mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
-          for(unsigned int p = 0; p < data.lines[line]->n_points; ++p)
+          for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
-            wall_shear_global[line][p] += wall_shear_local[line][p] / length_local[line][p];
+            wall_shear_global[line][p] +=
+              wall_shear_local[offset_arrays + p] / length_local[offset_arrays + p];
           }
       }
       else if(quantity->type == QuantityType::Pressure)
       {
-        mpi_sum_at_root(pressure_local[line].data(), pressure_local[line].size(), mpi_comm);
+        mpi_sum_at_root(pressure_local.data() + offset_arrays, n_points_on_line, mpi_comm);
 
         // averaging in space (over homogeneous direction)
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
-          for(unsigned int p = 0; p < data.lines[line]->n_points; ++p)
-            pressure_global[line][p] += pressure_local[line][p] / length_local[line][p];
+          for(unsigned int p = 0; p < n_points_on_line; ++p)
+            pressure_global[line][p] +=
+              pressure_local[offset_arrays + p] / length_local[offset_arrays + p];
       }
     }
+    offset_arrays += n_points_on_line;
   }
 
   time_all += time.wall_time();
@@ -1530,7 +1534,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
 
           for(unsigned int i = 0; i < dim; ++i)
           {
-            for(unsigned int j = 0; j < dim; ++j)
+            for(unsigned int j = i; j < dim; ++j)
             {
               f << std::setw(precision + 8) << std::left
                 << "u_" + dealii::Utilities::int_to_string(i + 1) + "u_" +
@@ -1549,7 +1553,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
 
             for(unsigned int i = 0; i < dim; ++i)
             {
-              for(unsigned int j = 0; j < dim; ++j)
+              for(unsigned int j = i; j < dim; ++j)
               {
                 // equation <u_i' u_j'> = <u_i*u_j> - <u_i> * <u_j>
                 f << std::setw(precision + 8) << std::left

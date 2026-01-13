@@ -507,6 +507,10 @@ private:
     quantity_velocity.reset(new Quantity());
     quantity_velocity->type = QuantityType::Velocity;
 
+    std::shared_ptr<Quantity> quantity_pressure;
+    quantity_pressure.reset(new Quantity());
+    quantity_pressure->type = QuantityType::Pressure;
+
     // Reynolds stresses
     std::shared_ptr<Quantity> quantity_reynolds;
     quantity_reynolds.reset(new Quantity());
@@ -600,8 +604,8 @@ private:
     vel_6->n_points   = points_per_line;
     vel_7->n_points   = points_per_line;
     vel_8->n_points   = points_per_line;
-    vel_9->n_points   = 2 * points_per_line;
-    vel_10->n_points  = 2 * points_per_line;
+    vel_9->n_points   = points_per_line;
+    vel_10->n_points  = points_per_line;
 
     // set the quantities that we want to compute along the lines
     vel_0->quantities.push_back(quantity_velocity);
@@ -629,6 +633,7 @@ private:
 
     vel_9->quantities.push_back(quantity_velocity);
     vel_9->quantities.push_back(quantity_reynolds);
+    vel_9->quantities.push_back(quantity_pressure);
     auto quantity_skin_friction_top               = std::make_shared<QuantitySkinFriction<dim>>();
     quantity_skin_friction_top->tangent_vector[0] = -1;
     quantity_skin_friction_top->normal_vector[1]  = 1;
@@ -636,6 +641,7 @@ private:
 
     vel_10->quantities.push_back(quantity_velocity);
     vel_10->quantities.push_back(quantity_reynolds);
+    vel_10->quantities.push_back(quantity_pressure);
     auto quantity_skin_friction_bottom = std::make_shared<QuantitySkinFriction<dim>>();
     quantity_skin_friction_bottom->tangent_vector[0] = 1;
     quantity_skin_friction_bottom->normal_vector[1]  = -1;

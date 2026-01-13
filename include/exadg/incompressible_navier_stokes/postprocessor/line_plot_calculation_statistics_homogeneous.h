@@ -29,6 +29,7 @@
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/lac/la_parallel_vector.h>
+#include <deal.II/matrix_free/fe_point_evaluation.h>
 #include <deal.II/non_matching/mapping_info.h>
 
 // ExaDG
@@ -114,13 +115,9 @@ private:
 
   // For all lines: list of all relevant cells and list of points in ref
   // coordinates on that cell
-  using LineCellData =
-    std::vector<std::vector<std::pair<typename dealii::DoFHandler<dim>::active_cell_iterator,
-                                      std::vector<std::pair<unsigned int, dealii::Point<dim>>>>>>;
-
-  LineCellData cells_and_ref_points_velocity;
-
-  LineCellData cells_and_ref_points_pressure;
+  std::vector<std::vector<std::pair<typename dealii::DoFHandler<dim>::active_cell_iterator,
+                                    std::vector<std::pair<unsigned int, dealii::Point<dim>>>>>>
+    cells_and_ref_points;
 
   // For all lines: for pressure reference point: list of all relevant cells and points in ref
   // coordinates
@@ -144,7 +141,7 @@ private:
 
   // Reynolds Stress quantities
   // For all lines: for all points along the line
-  std::vector<std::vector<dealii::Tensor<2, dim, double>>> reynolds_global;
+  std::vector<std::vector<dealii::SymmetricTensor<2, dim, double>>> reynolds_global;
 
   // Pressure quantities
   // For all lines: for all points along the line
@@ -180,6 +177,11 @@ private:
   // polynomials for FE_DGQ representing Lagrange polynomials in node points
   // of FE_DGQ, which is the basis for the computation along the lines
   std::vector<dealii::Polynomials::Polynomial<double>> polynomials_nodal;
+
+  // evaluator for the pressure
+  std::shared_ptr<dealii::FEPointEvaluation<1, dim, dim, Number>>     evaluator_p;
+  std::shared_ptr<dealii::NonMatching::MappingInfo<dim, dim, Number>> nonmatching_mapping_info;
+  std::vector<unsigned int>                                           pressure_dof_indices_on_cell;
 
   // timer results
   double time_all;
