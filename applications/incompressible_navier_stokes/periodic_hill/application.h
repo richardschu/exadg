@@ -198,10 +198,10 @@ private:
     this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping          = true;
     this->param.max_velocity                    = bulk_velocity;
-    this->param.cfl                             = 0.36; // 0.375;
+    this->param.cfl                             = 0.32; // 0.375;
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
     this->param.time_step_size                  = 1.0e-1;
-    this->param.order_time_integrator           = 2;
+    this->param.order_time_integrator           = 3;
     this->param.start_with_low_order            = read_restart ? false : true;
 
     // output of solver information
@@ -513,9 +513,11 @@ private:
     quantity_reynolds->type = QuantityType::ReynoldsStresses;
 
     // lines
-    std::shared_ptr<LineHomogeneousAveraging<dim>> vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, vel_6,
-      vel_7, vel_8, vel_9, vel_10;
+    std::shared_ptr<LineHomogeneousAveraging<dim>> vel_0, vel_005, vel_05, vel_1, vel_2, vel_3,
+      vel_4, vel_5, vel_6, vel_7, vel_8, vel_9, vel_10;
     vel_0.reset(new LineHomogeneousAveraging<dim>());
+    vel_005.reset(new LineHomogeneousAveraging<dim>());
+    vel_05.reset(new LineHomogeneousAveraging<dim>());
     vel_1.reset(new LineHomogeneousAveraging<dim>());
     vel_2.reset(new LineHomogeneousAveraging<dim>());
     vel_3.reset(new LineHomogeneousAveraging<dim>());
@@ -527,34 +529,42 @@ private:
     vel_9.reset(new LineHomogeneousAveraging<dim>());
     vel_10.reset(new LineHomogeneousAveraging<dim>());
 
-    vel_0->average_homogeneous_direction  = true;
-    vel_1->average_homogeneous_direction  = true;
-    vel_2->average_homogeneous_direction  = true;
-    vel_3->average_homogeneous_direction  = true;
-    vel_4->average_homogeneous_direction  = true;
-    vel_5->average_homogeneous_direction  = true;
-    vel_6->average_homogeneous_direction  = true;
-    vel_7->average_homogeneous_direction  = true;
-    vel_8->average_homogeneous_direction  = true;
-    vel_9->average_homogeneous_direction  = true;
-    vel_10->average_homogeneous_direction = true;
+    vel_0->average_homogeneous_direction   = true;
+    vel_005->average_homogeneous_direction = true;
+    vel_05->average_homogeneous_direction  = true;
+    vel_1->average_homogeneous_direction   = true;
+    vel_2->average_homogeneous_direction   = true;
+    vel_3->average_homogeneous_direction   = true;
+    vel_4->average_homogeneous_direction   = true;
+    vel_5->average_homogeneous_direction   = true;
+    vel_6->average_homogeneous_direction   = true;
+    vel_7->average_homogeneous_direction   = true;
+    vel_8->average_homogeneous_direction   = true;
+    vel_9->average_homogeneous_direction   = true;
+    vel_10->average_homogeneous_direction  = true;
 
-    vel_0->averaging_direction  = 2;
-    vel_1->averaging_direction  = 2;
-    vel_2->averaging_direction  = 2;
-    vel_3->averaging_direction  = 2;
-    vel_4->averaging_direction  = 2;
-    vel_5->averaging_direction  = 2;
-    vel_6->averaging_direction  = 2;
-    vel_7->averaging_direction  = 2;
-    vel_8->averaging_direction  = 2;
-    vel_9->averaging_direction  = 2;
-    vel_10->averaging_direction = 2;
+    vel_0->averaging_direction   = 2;
+    vel_005->averaging_direction = 2;
+    vel_05->averaging_direction  = 2;
+    vel_1->averaging_direction   = 2;
+    vel_2->averaging_direction   = 2;
+    vel_3->averaging_direction   = 2;
+    vel_4->averaging_direction   = 2;
+    vel_5->averaging_direction   = 2;
+    vel_6->averaging_direction   = 2;
+    vel_7->averaging_direction   = 2;
+    vel_8->averaging_direction   = 2;
+    vel_9->averaging_direction   = 2;
+    vel_10->averaging_direction  = 2;
 
     // begin and end points of all lines
-    double const eps = 1.e-10;
-    vel_0->begin     = dealii::Point<dim>(0 * H, H + f(0 * H, H, length) + eps, 0);
-    vel_0->end       = dealii::Point<dim>(0 * H, H + height - eps, 0);
+    double const eps = 1.e-12;
+    vel_0->begin     = dealii::Point<dim>(0.0 * H, H + f(0.0 * H, H, length) + eps, 0);
+    vel_0->end       = dealii::Point<dim>(0.0 * H, H + height - eps, 0);
+    vel_005->begin   = dealii::Point<dim>(0.05 * H, H + f(0.05 * H, H, length) + eps, 0);
+    vel_005->end     = dealii::Point<dim>(0.05 * H, H + height - eps, 0);
+    vel_05->begin    = dealii::Point<dim>(0.5 * H, H + f(0.5 * H, H, length) + eps, 0);
+    vel_05->end      = dealii::Point<dim>(0.5 * H, H + height - eps, 0);
     vel_1->begin     = dealii::Point<dim>(1 * H, H + f(1 * H, H, length) + eps, 0);
     vel_1->end       = dealii::Point<dim>(1 * H, H + height - eps, 0);
     vel_2->begin     = dealii::Point<dim>(2 * H, H + f(2 * H, H, length) + eps, 0);
@@ -579,21 +589,27 @@ private:
       std::make_shared<PeriodicHillManifold<dim>>(H, length, height, grid_stretch_factor);
 
     // set the number of points along the lines
-    vel_0->n_points  = points_per_line;
-    vel_1->n_points  = points_per_line;
-    vel_2->n_points  = points_per_line;
-    vel_3->n_points  = points_per_line;
-    vel_4->n_points  = points_per_line;
-    vel_5->n_points  = points_per_line;
-    vel_6->n_points  = points_per_line;
-    vel_7->n_points  = points_per_line;
-    vel_8->n_points  = points_per_line;
-    vel_9->n_points  = 2 * points_per_line;
-    vel_10->n_points = 2 * points_per_line;
+    vel_0->n_points   = points_per_line;
+    vel_005->n_points = points_per_line;
+    vel_05->n_points  = points_per_line;
+    vel_1->n_points   = points_per_line;
+    vel_2->n_points   = points_per_line;
+    vel_3->n_points   = points_per_line;
+    vel_4->n_points   = points_per_line;
+    vel_5->n_points   = points_per_line;
+    vel_6->n_points   = points_per_line;
+    vel_7->n_points   = points_per_line;
+    vel_8->n_points   = points_per_line;
+    vel_9->n_points   = 2 * points_per_line;
+    vel_10->n_points  = 2 * points_per_line;
 
     // set the quantities that we want to compute along the lines
     vel_0->quantities.push_back(quantity_velocity);
     vel_0->quantities.push_back(quantity_reynolds);
+    vel_005->quantities.push_back(quantity_velocity);
+    vel_005->quantities.push_back(quantity_reynolds);
+    vel_05->quantities.push_back(quantity_velocity);
+    vel_05->quantities.push_back(quantity_reynolds);
     vel_1->quantities.push_back(quantity_velocity);
     vel_1->quantities.push_back(quantity_reynolds);
     vel_2->quantities.push_back(quantity_velocity);
@@ -626,20 +642,24 @@ private:
     vel_10->quantities.push_back(quantity_skin_friction_bottom);
 
     // set line names
-    vel_0->name  = this->output_parameters.filename + "_x_0";
-    vel_1->name  = this->output_parameters.filename + "_x_1";
-    vel_2->name  = this->output_parameters.filename + "_x_2";
-    vel_3->name  = this->output_parameters.filename + "_x_3";
-    vel_4->name  = this->output_parameters.filename + "_x_4";
-    vel_5->name  = this->output_parameters.filename + "_x_5";
-    vel_6->name  = this->output_parameters.filename + "_x_6";
-    vel_7->name  = this->output_parameters.filename + "_x_7";
-    vel_8->name  = this->output_parameters.filename + "_x_8";
-    vel_9->name  = this->output_parameters.filename + "_top";
-    vel_10->name = this->output_parameters.filename + "_bottom";
+    vel_0->name   = this->output_parameters.filename + "_x_0";
+    vel_005->name = this->output_parameters.filename + "_x_005";
+    vel_05->name  = this->output_parameters.filename + "_x_05";
+    vel_1->name   = this->output_parameters.filename + "_x_1";
+    vel_2->name   = this->output_parameters.filename + "_x_2";
+    vel_3->name   = this->output_parameters.filename + "_x_3";
+    vel_4->name   = this->output_parameters.filename + "_x_4";
+    vel_5->name   = this->output_parameters.filename + "_x_5";
+    vel_6->name   = this->output_parameters.filename + "_x_6";
+    vel_7->name   = this->output_parameters.filename + "_x_7";
+    vel_8->name   = this->output_parameters.filename + "_x_8";
+    vel_9->name   = this->output_parameters.filename + "_top";
+    vel_10->name  = this->output_parameters.filename + "_bottom";
 
     // insert lines
     my_pp_data.line_plot_data.lines.push_back(vel_0);
+    my_pp_data.line_plot_data.lines.push_back(vel_005);
+    my_pp_data.line_plot_data.lines.push_back(vel_05);
     my_pp_data.line_plot_data.lines.push_back(vel_1);
     my_pp_data.line_plot_data.lines.push_back(vel_2);
     my_pp_data.line_plot_data.lines.push_back(vel_3);
