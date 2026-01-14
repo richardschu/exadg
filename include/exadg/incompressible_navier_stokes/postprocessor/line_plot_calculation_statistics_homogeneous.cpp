@@ -164,10 +164,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     // Save all cells and corresponding points on unit cell
     // that are relevant for a given point along the line.
 
-    // use a tolerance to check whether a point is inside the unit cell; this
-    // is modified near the boundary to take into account deviations due to
-    // curved boundaries
-    double const tolerance = 1.e-10;
+    // use a tolerance to check whether a point is inside the unit cell; we
+    // also use this as bias to make sure exactly one cell finds points
+    // located at the cell boundary
+    double const tolerance = 1.e-8;
 
     pressure_dof_indices_on_cell.resize(dof_handler_velocity.get_triangulation().n_active_cells(),
                                         dealii::numbers::invalid_unsigned_int);
@@ -215,13 +215,19 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
               dealii::Point<dim> const p_unit = find_unit_point(mapping, cell, translated_point);
 
               // Use a relaxed tolerance if we are at the boundary in a certain direction
-              double modified_tolerance = tolerance;
+              bool point_within_cell = true;
               for(unsigned int d = 0; d < dim; ++d)
-                if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
-                   (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
-                  modified_tolerance = 1e-1;
+                if(d != averaging_direction)
+                {
+                  if(p_unit[d] <= -tolerance && !cell->at_boundary(2 * d))
+                    point_within_cell = false;
+                  // bias to always consider point on one cell, should be
+                  // stable also with multiple MPI ranks
+                  if(p_unit[d] >= 1. - tolerance && !cell->at_boundary(2 * d + 1))
+                    point_within_cell = false;
+                }
 
-              if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
+              if(point_within_cell)
               {
                 if(not found_a_point_on_this_cell)
                 {
@@ -486,10 +492,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     // Save all cells and corresponding points on unit cell
     // that are relevant for a given point along the line.
 
-    // use a tolerance to check whether a point is inside the unit cell; this
-    // is modified near the boundary to take into account deviations due to
-    // curved boundaries
-    double const tolerance = 1.e-10;
+    // use a tolerance to check whether a point is inside the unit cell; we
+    // also use this as bias to make sure exactly one cell finds points
+    // located at the cell boundary
+    double const tolerance = 1.e-8;
 
     const dealii::Triangulation<dim> & tria = dof_handler_velocity.get_triangulation();
     std::vector<unsigned int>          tmp_list_of_cells_to_evaluate;
@@ -549,14 +555,19 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
                 // account
                 dealii::Point<dim> const p_unit = find_unit_point(mapping, cell, translated_point);
 
-                // Use a relaxed tolerance if we are at the boundary in a certain direction
-                double modified_tolerance = tolerance;
+                bool point_within_cell = true;
                 for(unsigned int d = 0; d < dim; ++d)
-                  if((p_unit[d] < 0. && cell->at_boundary(2 * d)) ||
-                     (p_unit[d] < 1. && cell->at_boundary(2 * d + 1)))
-                    modified_tolerance = 1e-1;
+                  if(d != averaging_direction)
+                  {
+                    if(p_unit[d] <= -tolerance && !cell->at_boundary(2 * d))
+                      point_within_cell = false;
+                    // bias to always consider point on one cell, should be
+                    // stable also with multiple MPI ranks
+                    if(p_unit[d] >= 1. - tolerance && !cell->at_boundary(2 * d + 1))
+                      point_within_cell = false;
+                  }
 
-                if(dealii::GeometryInfo<dim>::is_inside_unit_cell(p_unit, modified_tolerance))
+                if(point_within_cell)
                 {
                   if(not found_a_point_on_this_cell)
                   {
