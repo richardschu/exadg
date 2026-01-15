@@ -107,6 +107,7 @@ public:
     {
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
+      prm.add_parameter("TriangulationType", triangulation_type, "Type of triangulation");
       prm.add_parameter("TemporalDiscretization",
                         temporal_discretization,
                         "Temporal discretization");
@@ -209,7 +210,7 @@ private:
 
     // SPATIAL DISCRETIZATION
     this->param.spatial_discretization      = spatial_discretization;
-    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.grid.triangulation_type     = triangulation_type;
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
     this->param.degree_p                    = DegreePressure::MixedOrder;
@@ -734,6 +735,7 @@ private:
 
   // dicretization
   TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
+  TriangulationType triangulation_type           = TriangulationType::Distributed;
   SpatialDiscretization  spatial_discretization  = SpatialDiscretization::L2;
 
   // postprocessing
