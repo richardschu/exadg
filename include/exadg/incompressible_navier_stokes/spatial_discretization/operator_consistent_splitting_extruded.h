@@ -28,7 +28,8 @@
 
 namespace RTOperator
 {
-  template <int, typename> class RaviartThomasOperatorBase;
+template<int, typename>
+class RaviartThomasOperatorBase;
 }
 
 namespace ExaDG
@@ -51,12 +52,19 @@ public:
     Parameters const &                                    parameters,
     std::string const &                                   field,
     MPI_Comm const &                                      mpi_comm)
-  :
-    OperatorConsistentSplitting<dim, Number>(grid, mapping, multigrid_mappings, boundary_descriptor, field_functions, parameters, field, mpi_comm)
-  {}
+    : OperatorConsistentSplitting<dim, Number>(grid,
+                                               mapping,
+                                               multigrid_mappings,
+                                               boundary_descriptor,
+                                               field_functions,
+                                               parameters,
+                                               field,
+                                               mpi_comm)
+  {
+  }
 
   std::shared_ptr<const RTOperator::RaviartThomasOperatorBase<dim, Number>> momentum_operator;
-  dealii::LinearAlgebra::distributed::Vector<Number> const *velocity_vector;
+  dealii::LinearAlgebra::distributed::Vector<Number> const *                velocity_vector;
 };
 
 } // namespace IncNS
