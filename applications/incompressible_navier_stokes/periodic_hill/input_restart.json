@@ -5,23 +5,23 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "5",
-        "DegreeMax": "5",
-        "RefineSpaceMin": "3",
-        "RefineSpaceMax": "3"
+        "DegreeMin": "4",
+        "DegreeMax": "4",
+        "RefineSpaceMin": "1",
+        "RefineSpaceMax": "1"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
         "RefineTimeMax": "0"
     },
     "Application": {
-        "TriangulationType": "Distributed",
-        "ReadRestart": "false",
+        "TriangulationType": "Serial",
+        "ReadRestart": "true",
         "WriteRestart": "false",
         "TemporalDiscretization": "BDFDualSplittingExtruded",
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
-        "ReynoldsNumber": "5600.0-3",
+        "ReynoldsNumber": "5600.0e-3",
         "EndTime": "1",
         "GridStretchFactor": "2.0",
         "CalculateStatistics": "true",
