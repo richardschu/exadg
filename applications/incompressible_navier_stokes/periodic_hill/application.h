@@ -735,7 +735,7 @@ private:
 
   // dicretization
   TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
-  TriangulationType triangulation_type           = TriangulationType::Distributed;
+  TriangulationType      triangulation_type      = TriangulationType::Distributed;
   SpatialDiscretization  spatial_discretization  = SpatialDiscretization::L2;
 
   // postprocessing
