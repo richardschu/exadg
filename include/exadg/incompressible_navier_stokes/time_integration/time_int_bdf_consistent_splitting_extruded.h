@@ -105,6 +105,21 @@ private:
   setup_derived() final;
 
   void
+  write_vector_norms() const;
+
+  unsigned int
+  get_size_velocity() const final;
+
+  unsigned int
+  get_size_pressure() const final;
+
+  void
+  copy_to_vec_convective_term_for_restart(unsigned int const i) const final;
+
+  void
+  copy_from_vec_convective_term_for_restart(unsigned int const i) final;
+
+  void
   get_vectors_serialization(std::vector<VectorType const *> & vectors_velocity,
                             std::vector<VectorType const *> & vectors_pressure) const final;
 
@@ -162,21 +177,33 @@ private:
 
   std::shared_ptr<Operator> pde_operator;
 
-  std::vector<VectorType> velocity;
+  std::vector<VectorType> velocity; // op_rt vector
 
-  VectorType velocity_np;
+  VectorType velocity_np; // mf vector, do not serialize ##+
 
-  std::vector<VectorTypeFloat> velocity_red;
-  std::vector<VectorTypeFloat> velocity_matvec;
+  std::vector<VectorTypeFloat> velocity_red;    // op_rt_float vector
+  std::vector<VectorTypeFloat> velocity_matvec; // op_rt_float vector
 
-  VectorType pressure_np;
-  VectorType pressure_rhs;
+  VectorType pressure_np;  // mf vector, do not serialize ##+
+  VectorType pressure_rhs; // mf vector, do not serialize ##+
 
-  std::vector<VectorTypeFloat> pressure;
-  std::vector<VectorTypeFloat> pressure_matvec;
-  std::vector<VectorType>      convective_divergence_rhs;
-  std::vector<VectorType>      divergences;
-  std::vector<VectorType>      pressure_nbc_rhs;
+  std::vector<VectorTypeFloat> pressure;                  // dg_matrix vector
+  std::vector<VectorTypeFloat> pressure_matvec;           // dg_matrix vector
+  std::vector<VectorType>      convective_divergence_rhs; // mf vector
+  std::vector<VectorType>      divergences;               // mf vector
+  std::vector<VectorType>      pressure_nbc_rhs;          // mf vector
+
+  // vectors required for restart, all standard matrix-free vectors, but might feature DoF
+  // reordering compared to the default one.
+  mutable std::vector<VectorType> velocity_for_restart;        // mf vector
+  mutable std::vector<VectorType> velocity_red_for_restart;    // mf vector
+  mutable std::vector<VectorType> velocity_matvec_for_restart; // mf vector
+
+  mutable std::vector<VectorType> pressure_for_restart;                  // mf vector
+  mutable std::vector<VectorType> pressure_matvec_for_restart;           // mf vector
+  mutable std::vector<VectorType> convective_divergence_rhs_for_restart; // mf vector
+  mutable std::vector<VectorType> divergences_for_restart;               // mf vector
+  mutable std::vector<VectorType> pressure_nbc_rhs_for_restart;          // mf vector
 
   // required for strongly-coupled partitioned FSI
   VectorType pressure_last_iter;

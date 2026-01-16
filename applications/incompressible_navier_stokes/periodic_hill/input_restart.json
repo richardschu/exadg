@@ -18,7 +18,7 @@
         "TriangulationType": "Serial",
         "ReadRestart": "true",
         "WriteRestart": "false",
-        "TemporalDiscretization": "BDFDualSplittingExtruded",
+        "TemporalDiscretization": "BDFConsistentSplittingExtruded",
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
         "ReynoldsNumber": "5600.0e-3",
