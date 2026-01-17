@@ -328,7 +328,6 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
   {
     vectors_velocity_ptr.push_back(&vectors_velocity[i]);
   }
-
   for(unsigned int i = 0; i < this->get_size_pressure(); i++)
   {
     vectors_pressure_ptr.push_back(&vectors_pressure[i]);
@@ -395,7 +394,7 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
     {
       for(unsigned int i = 0; i < this->order; i++)
       {
-        this->copy_from_vec_convective_term_for_restart(i);
+        copy_from_vec_convective_term_for_restart(i);
       }
     }
   }
@@ -470,7 +469,7 @@ TimeIntBDF<dim, Number>::write_restart_vectors() const
       for(unsigned int i = 0; i < this->order; i++)
       {
         // Copy the vector to the standard matrix-free format.
-        this->copy_to_vec_convective_term_for_restart(i);
+        copy_to_vec_convective_term_for_restart(i);
         vectors_velocity.push_back(&vec_convective_term_for_restart[i]);
       }
     }

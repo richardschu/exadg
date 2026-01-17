@@ -61,9 +61,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
     velocity_matvec_for_restart(4 * 2),
     pressure_for_restart(4),
     pressure_matvec_for_restart(4),
-    convective_divergence_rhs_for_restart(this->param.order_extrapolation_pressure_nbc),
-    divergences_for_restart(this->order),
-    pressure_nbc_rhs_for_restart(this->param.order_extrapolation_pressure_nbc),
     factor_cfl(-1.0),
     iterations_pressure({0, 0}),
     iterations_viscous({0, {0, 0}}),
@@ -111,16 +108,45 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_vectors_serialization(
   std::vector<VectorType const *> & vectors_velocity,
   std::vector<VectorType const *> & vectors_pressure) const
 {
-  // vectors_velocity.push_back(&velocity_np); // not needed ##+
-  // velocity_red
-  // velocity_matvec
+  // We need to hand over vectors in the standard matrix-free format.
+  // The reordering is accounted for in
+  // `IncNS::SpatialOperatorBase::serialize_vectors()`.
 
-  // vectors_pressure.push_back(&pressure_np); // not needed ##+
-  // pressure
-  // pressure_matvec
-  // convective_divergence_rhs
-  // divergences
-  // pressure_nbc_rhs
+  // `velocity_red` needs to be converted to standard matrix-free vector
+  for(unsigned int i = 0; i < velocity_red_for_restart.size(); ++i)
+  {
+    // copy entries converting float to Number
+    op_rt_float->copy_this_to_mf_vector(velocity_red[i], velocity_red_for_restart[i]);
+
+    vectors_velocity.push_back(&velocity_red_for_restart[i]);
+  }
+
+  // `velocity_matvec` needs to be converted to standard matrix-free vector
+  for(unsigned int i = 0; i < velocity_matvec_for_restart.size(); ++i)
+  {
+    // copy entries converting float to Number
+    op_rt_float->copy_this_to_mf_vector(velocity_matvec[i], velocity_matvec_for_restart[i]);
+
+    vectors_velocity.push_back(&velocity_matvec_for_restart[i]);
+  }
+
+  // `pressure_matvec` data type needs to be converted
+  for(unsigned int i = 0; i < pressure_matvec_for_restart.size(); ++i)
+  {
+    pressure_matvec_for_restart[i].copy_locally_owned_data_from(pressure_matvec[i]);
+
+    vectors_pressure.push_back(&pressure_matvec_for_restart[i]);
+  }
+
+  // the remaining vectors can be copied as is
+  for(unsigned int i = 0; i < convective_divergence_rhs.size(); ++i)
+    vectors_pressure.push_back(&convective_divergence_rhs[i]);
+
+  for(unsigned int i = 0; i < divergences.size(); ++i)
+    vectors_pressure.push_back(&divergences[i]);
+
+  for(unsigned int i = 0; i < pressure_nbc_rhs.size(); ++i)
+    vectors_pressure.push_back(&pressure_nbc_rhs[i]);
 
   write_vector_norms();
 }
@@ -131,16 +157,52 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::set_vectors_deserialization(
   std::vector<VectorType> const & vectors_velocity,
   std::vector<VectorType> const & vectors_pressure)
 {
-  // velocity_np = vectors_velocity[0]; // not needed ##+
-  // velocity_red
-  // velocity_matvec
+  // We are given vectors in the standard matrix-free format.
+  // The reordering is accounted for in
+  // `IncNS::SpatialOperatorBase::serialize_vectors()`.
 
-  // pressure_np = vectors_pressure[0]; // not needed ##+
-  // pressure
-  // pressure_matvec
-  // convective_divergence_rhs
-  // divergences
-  // pressure_nbc_rhs
+  // `velocity_red` needs to be converted from standard matrix-free vector
+  for(unsigned int i = 0; i < velocity_red.size(); ++i)
+  {
+    // copy entries converting Number to float
+    op_rt_float->copy_mf_to_this_vector(vectors_velocity[i], velocity_red[i]);
+  }
+
+  // `velocity_matvec` needs to be converted from standard matrix-free vector
+  for(unsigned int i = 0; i < velocity_matvec.size(); ++i)
+  {
+    // copy entries converting Number to float
+    op_rt_float->copy_mf_to_this_vector(vectors_velocity[velocity_red.size() + i],
+                                        velocity_matvec[i]);
+  }
+
+  // `pressure_matvec` data type needs to be conerted
+  unsigned int idx_pressure = 0;
+  for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
+  {
+    // copy entries converting Number to float
+    pressure_matvec[i].copy_locally_owned_data_from(vectors_pressure[idx_pressure]);
+    idx_pressure += 1;
+  }
+
+  // the remaining vectors can be copied as is
+  for(unsigned int i = 0; i < convective_divergence_rhs.size(); ++i)
+  {
+    convective_divergence_rhs[i].copy_locally_owned_data_from(vectors_pressure[idx_pressure]);
+    idx_pressure += 1;
+  }
+
+  for(unsigned int i = 0; i < divergences.size(); ++i)
+  {
+    divergences[i].copy_locally_owned_data_from(vectors_pressure[idx_pressure]);
+    idx_pressure += 1;
+  }
+
+  for(unsigned int i = 0; i < pressure_nbc_rhs.size(); ++i)
+  {
+    pressure_nbc_rhs[i].copy_locally_owned_data_from(vectors_pressure[idx_pressure]);
+    idx_pressure += 1;
+  }
 
   write_vector_norms();
 }
@@ -159,40 +221,40 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::write_vector_norms() const
   {
     this->pcout << "velocity[" << i << "].l2_norm() = " << velocity[i].l2_norm() << "\n";
   }
-  // for(unsigned int i = 0; i < velocity_red.size(); ++i)
-  // {
-  //   this->pcout << "velocity_red[" << i << "].l2_norm() = " << velocity_red[i].l2_norm() << "\n";
-  // }
-  // for(unsigned int i = 0; i < velocity_matvec.size(); ++i)
-  // {
-  //   this->pcout << "velocity_matvec[" << i << "].l2_norm() = " << velocity_matvec[i].l2_norm()
-  //               << "\n";
-  // }
+  for(unsigned int i = 0; i < velocity_red.size(); ++i)
+  {
+    this->pcout << "velocity_red[" << i << "].l2_norm() = " << velocity_red[i].l2_norm() << "\n";
+  }
+  for(unsigned int i = 0; i < velocity_matvec.size(); ++i)
+  {
+    this->pcout << "velocity_matvec[" << i << "].l2_norm() = " << velocity_matvec[i].l2_norm()
+                << "\n";
+  }
 
   this->pcout << "pressure_np.l2_norm() = " << pressure_np.l2_norm() << "\n";
   for(unsigned int i = 0; i < pressure.size(); ++i)
   {
     this->pcout << "pressure[" << i << "].l2_norm() = " << pressure[i].l2_norm() << "\n";
   }
-  // for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
-  // {
-  //   this->pcout << "pressure_matvec[" << i << "].l2_norm() = " << pressure_matvec[i].l2_norm()
-  //               << "\n";
-  // }
-  // for(unsigned int i = 0; i < convective_divergence_rhs.size(); ++i)
-  // {
-  //   this->pcout << "convective_divergence_rhs[" << i
-  //               << "].l2_norm() = " << convective_divergence_rhs[i].l2_norm() << "\n";
-  // }
-  // for(unsigned int i = 0; i < divergences.size(); ++i)
-  // {
-  //   this->pcout << "divergences[" << i << "].l2_norm() = " << divergences[i].l2_norm() << "\n";
-  // }
-  // for(unsigned int i = 0; i < pressure_nbc_rhs.size(); ++i)
-  // {
-  //   this->pcout << "pressure_nbc_rhs[" << i << "].l2_norm() = " << pressure_nbc_rhs[i].l2_norm()
-  //               << "\n";
-  // }
+  for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
+  {
+    this->pcout << "pressure_matvec[" << i << "].l2_norm() = " << pressure_matvec[i].l2_norm()
+                << "\n";
+  }
+  for(unsigned int i = 0; i < convective_divergence_rhs.size(); ++i)
+  {
+    this->pcout << "convective_divergence_rhs[" << i
+                << "].l2_norm() = " << convective_divergence_rhs[i].l2_norm() << "\n";
+  }
+  for(unsigned int i = 0; i < divergences.size(); ++i)
+  {
+    this->pcout << "divergences[" << i << "].l2_norm() = " << divergences[i].l2_norm() << "\n";
+  }
+  for(unsigned int i = 0; i < pressure_nbc_rhs.size(); ++i)
+  {
+    this->pcout << "pressure_nbc_rhs[" << i << "].l2_norm() = " << pressure_nbc_rhs[i].l2_norm()
+                << "\n";
+  }
 
   this->pcout << "\n";
 }
@@ -291,7 +353,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
   for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
     poisson_preconditioner->get_dg_matrix().initialize_dof_vector(pressure_matvec[i]);
 
-  // restart vectors, these are all standard matrix-free vectors.
+  // Restart vectors are all standard matrix-free vectors and might be needed to convert from the
+  // format used in `op_rt` of type `RTOperator::RaviartThomasOperatorBase` or to perform type
+  // conversions of the individual entries.
   if(this->param.restarted_simulation or this->param.restart_data.write_restart)
   {
     std::vector<std::vector<VectorType> *> velocity_vectors = {&velocity_for_restart,
@@ -301,12 +365,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
       for(unsigned int j = 0; j < velocity_vectors[i]->size(); ++j)
         pde_operator->initialize_vector_velocity(velocity_vectors[i]->at(j));
 
-    std::vector<std::vector<VectorType> *> pressure_vectors = {
-      &pressure_for_restart,
-      &pressure_matvec_for_restart,
-      &convective_divergence_rhs_for_restart,
-      &divergences_for_restart,
-      &pressure_nbc_rhs_for_restart};
+    std::vector<std::vector<VectorType> *> pressure_vectors = {&pressure_for_restart,
+                                                               &pressure_matvec_for_restart};
     for(unsigned int i = 0; i < pressure_vectors.size(); ++i)
       for(unsigned int j = 0; j < pressure_vectors[i]->size(); ++j)
         pde_operator->initialize_vector_pressure(pressure_vectors[i]->at(j));
@@ -419,16 +479,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_pressure(const unsigned 
 
   // Convert entries in `VectorTypeFloat` to entry type of `VectorType` if necessary.
   pressure_for_restart[i].copy_locally_owned_data_from(pressure[i]);
-
-  double max_abs_diff = 0.0;
-  for(unsigned int j = 0; j < pressure_for_restart[i].locally_owned_size(); ++j)
-  {
-    double abs_diff =
-      std::abs(pressure_for_restart[i].local_element(j) - pressure[i].local_element(j));
-    if(abs_diff > max_abs_diff)
-      max_abs_diff = abs_diff;
-  }
-  this->pcout << "pressure copy: max_abs_diff = " << max_abs_diff << "\n";
 
   return pressure_for_restart[i];
 }

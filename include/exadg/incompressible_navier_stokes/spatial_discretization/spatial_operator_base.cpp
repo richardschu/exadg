@@ -1114,7 +1114,7 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
   // We use `dealii::DoFRenumbering::matrix_free_data_locality()` such that the DoF ordering depends
   // on the MPI ranks used, operator and constraints. Therefore, we need to de-/serialize using an
   // unordered `dealii::DoFHandler`. An element-wise continuous space with support points in Gauss
-  // points yields a diagonal mass matrix.
+  // points yields a diagonal mass matrix and is hence a good candidate.
 
   // Go from the current FE and ordering to the one to be de-serialized.
   if(dof_handler_restart_setup_for_writing == false)
@@ -1208,8 +1208,6 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                                                  dof_handlers,
                                                  vectors_per_dof_handler);
   }
-
-  AssertThrow(false, dealii::ExcMessage("ENDPOINT REACHED, SOLUTION WRITTEN."));
 }
 
 template<int dim, typename Number>
@@ -1231,7 +1229,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
                                    deserialization_parameters.triangulation_type,
                                    mpi_comm);
 
-  // Set up DoFHandlers *as checkpointed*, sequence matches `this->serialize_vectors()`.
+  // Set up `DoFHandlers` *as checkpointed*, sequence matches `this->serialize_vectors()`.
   initialize_dof_handler_restart(deserialization_parameters.degree_u,
                                  deserialization_parameters.degree_p,
                                  *checkpoint_triangulation);
@@ -1258,7 +1256,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
   if(param.restart_data.discretization_identical)
   {
     AssertThrow(param.restart_data.discretization_identical,
-                dealii::ExcMessage("Since we project onto `FE_DGQArbitraryNodes`, we require"
+                dealii::ExcMessage("Since we project onto `FE_DGQArbitraryNodes`, we require "
                                    "the projection onto the currently used FE space."));
   }
   else

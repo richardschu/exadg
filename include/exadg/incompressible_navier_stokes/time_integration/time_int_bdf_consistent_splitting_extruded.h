@@ -177,18 +177,18 @@ private:
 
   std::shared_ptr<Operator> pde_operator;
 
-  std::vector<VectorType> velocity; // op_rt vector
+  std::vector<VectorType> velocity; // `op_rt` vector
 
-  VectorType velocity_np; // mf vector, do not serialize ##+
+  VectorType velocity_np; // mf vector, do not serialize
 
-  std::vector<VectorTypeFloat> velocity_red;    // op_rt_float vector
-  std::vector<VectorTypeFloat> velocity_matvec; // op_rt_float vector
+  std::vector<VectorTypeFloat> velocity_red;    // `op_rt_float` vector
+  std::vector<VectorTypeFloat> velocity_matvec; // `op_rt_float` vector
 
-  VectorType pressure_np;  // mf vector, do not serialize ##+
-  VectorType pressure_rhs; // mf vector, do not serialize ##+
+  VectorType pressure_np;  // mf vector, do not serialize
+  VectorType pressure_rhs; // mf vector, do not serialize
 
-  std::vector<VectorTypeFloat> pressure;                  // dg_matrix vector
-  std::vector<VectorTypeFloat> pressure_matvec;           // dg_matrix vector
+  std::vector<VectorTypeFloat> pressure;                  // `dg_matrix` vector
+  std::vector<VectorTypeFloat> pressure_matvec;           // `dg_matrix` vector
   std::vector<VectorType>      convective_divergence_rhs; // mf vector
   std::vector<VectorType>      divergences;               // mf vector
   std::vector<VectorType>      pressure_nbc_rhs;          // mf vector
@@ -199,11 +199,8 @@ private:
   mutable std::vector<VectorType> velocity_red_for_restart;    // mf vector
   mutable std::vector<VectorType> velocity_matvec_for_restart; // mf vector
 
-  mutable std::vector<VectorType> pressure_for_restart;                  // mf vector
-  mutable std::vector<VectorType> pressure_matvec_for_restart;           // mf vector
-  mutable std::vector<VectorType> convective_divergence_rhs_for_restart; // mf vector
-  mutable std::vector<VectorType> divergences_for_restart;               // mf vector
-  mutable std::vector<VectorType> pressure_nbc_rhs_for_restart;          // mf vector
+  mutable std::vector<VectorType> pressure_for_restart;        // mf vector
+  mutable std::vector<VectorType> pressure_matvec_for_restart; // mf vector
 
   // required for strongly-coupled partitioned FSI
   VectorType pressure_last_iter;
