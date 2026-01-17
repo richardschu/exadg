@@ -111,11 +111,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_vectors_serialization(
   std::vector<VectorType const *> & vectors_velocity,
   std::vector<VectorType const *> & vectors_pressure) const
 {
-  vectors_velocity.push_back(&velocity_np); // not needed ##+
+  // vectors_velocity.push_back(&velocity_np); // not needed ##+
   // velocity_red
   // velocity_matvec
 
-  vectors_pressure.push_back(&pressure_np); // not needed ##+
+  // vectors_pressure.push_back(&pressure_np); // not needed ##+
   // pressure
   // pressure_matvec
   // convective_divergence_rhs
@@ -131,11 +131,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::set_vectors_deserialization(
   std::vector<VectorType> const & vectors_velocity,
   std::vector<VectorType> const & vectors_pressure)
 {
-  velocity_np = vectors_velocity[0]; // not needed ##+
+  // velocity_np = vectors_velocity[0]; // not needed ##+
   // velocity_red
   // velocity_matvec
 
-  pressure_np = vectors_pressure[0]; // not needed ##+
+  // pressure_np = vectors_pressure[0]; // not needed ##+
   // pressure
   // pressure_matvec
   // convective_divergence_rhs
@@ -449,6 +449,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_velocity(unsigned int i)
 
   // We need to copy since the vector sizes are different.
   op_rt->copy_this_to_mf_vector(velocity[i], velocity_for_restart[i]);
+
+  // Distibute the constraints to check the output visually. Note that the constraints are constant
+  // in time.
+  pde_operator->get_constraint_u().distribute(velocity_for_restart[i]);
+
   return velocity_for_restart[i];
 }
 

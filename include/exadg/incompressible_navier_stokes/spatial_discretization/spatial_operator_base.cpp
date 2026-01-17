@@ -93,7 +93,8 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_restart(
   dealii::Triangulation<dim> const & triangulation) const
 {
   AssertThrow(triangulation.all_reference_cells_are_hyper_cube(),
-              dealii::ExcMessage("Only hypercube cells supported."));
+              dealii::ExcMessage("Only hypercube cells supported; "
+                                 "restart relies on `FE_DGQArbitraryNodes`."));
 
   fe_u_restart = std::make_shared<dealii::FESystem<dim>>(
     dealii::FE_DGQArbitraryNodes<dim>(dealii::QGauss<1>(degree_u + 1)), dim /*n_components*/);
@@ -1135,13 +1136,12 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                   dof_handler_p_restart->get_mpi_communicator());
 
   // Project standard to restart function space.
-  this->pcout << "PROJECT VELOCITIES ##+ \n";
   for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
     project_standard_to_restart(*vectors_velocity[i],
                                 dof_handler_u,
                                 vectors_u_restart[i],
                                 *dof_handler_u_restart);
-  this->pcout << "PROJECT PRESSURES ##+ \n";
+
   for(unsigned int i = 0; i < vectors_pressure.size(); ++i)
     project_standard_to_restart(*vectors_pressure[i],
                                 dof_handler_p,
@@ -1149,12 +1149,12 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                                 *dof_handler_p_restart);
 
   // OUTPUT THE VECTORS
-  if constexpr(std::is_same<Number, double>::value)
+  if constexpr(false)
   {
-    this->pcout << "OUTPUT VECTORS FOR COMPARISON ##+ \n";
+    this->pcout << "OUTPUT VECTORS FOR COMPARISON\n";
     OutputDataBase output_data;
     output_data.directory = "output/";
-    output_data.filename  = "projected_vectors";
+    output_data.filename  = "projected_vectors_write";
     output_data.degree    = param.degree_u;
     VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
 
@@ -1208,6 +1208,8 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                                                  dof_handlers,
                                                  vectors_per_dof_handler);
   }
+
+  AssertThrow(false, dealii::ExcMessage("ENDPOINT REACHED, SOLUTION WRITTEN."));
 }
 
 template<int dim, typename Number>
@@ -1215,8 +1217,6 @@ void
 SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> & vectors_velocity,
                                                       std::vector<VectorType *> & vectors_pressure)
 {
-  // SETUP AND PROJECT ONTO L2 SPACE.
-
   // Store ghost state to recover after deserialization.
   std::vector<bool> const has_ghost_elements_velocity = get_ghost_state(vectors_velocity);
   std::vector<bool> const has_ghost_elements_pressure = get_ghost_state(vectors_pressure);
@@ -1232,27 +1232,12 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
                                    mpi_comm);
 
   // Set up DoFHandlers *as checkpointed*, sequence matches `this->serialize_vectors()`.
-  dealii::DoFHandler<dim> checkpoint_dof_handler_u(*checkpoint_triangulation);
-  dealii::DoFHandler<dim> checkpoint_dof_handler_p(*checkpoint_triangulation);
+  initialize_dof_handler_restart(deserialization_parameters.degree_u,
+                                 deserialization_parameters.degree_p,
+                                 *checkpoint_triangulation);
 
-  ElementType const checkpoint_element_type = get_element_type(*checkpoint_triangulation);
-
-  std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_u =
-    setup_fe_u(deserialization_parameters.spatial_discretization,
-               checkpoint_element_type,
-               deserialization_parameters.degree_u);
-
-  std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_p =
-    create_finite_element<dim>(checkpoint_element_type,
-                               true /* is_dg */,
-                               1 /* n_components */,
-                               deserialization_parameters.degree_p);
-
-  checkpoint_dof_handler_u.distribute_dofs(*checkpoint_fe_u);
-  checkpoint_dof_handler_p.distribute_dofs(*checkpoint_fe_p);
-
-  std::vector<dealii::DoFHandler<dim> const *> checkpoint_dof_handlers{&checkpoint_dof_handler_u,
-                                                                       &checkpoint_dof_handler_p};
+  std::vector<dealii::DoFHandler<dim> const *> checkpoint_dof_handlers{dof_handler_u_restart.get(),
+                                                                       dof_handler_p_restart.get()};
 
   // Deserialize vectors stored in triangulation, sequence matches `this->serialize_vectors()`.
   std::vector<VectorType>                checkpoint_vectors_velocity(vectors_velocity.size());
@@ -1261,28 +1246,20 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
 
   for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
   {
-    checkpoint_vectors_velocity[i].reinit(checkpoint_dof_handler_u.locally_owned_dofs(), mpi_comm);
+    checkpoint_vectors_velocity[i].reinit(dof_handler_u_restart->locally_owned_dofs(), mpi_comm);
     checkpoint_vectors[0 /* velocity */].push_back(&checkpoint_vectors_velocity[i]);
   }
   for(unsigned int i = 0; i < vectors_pressure.size(); ++i)
   {
-    checkpoint_vectors_pressure[i].reinit(checkpoint_dof_handler_p.locally_owned_dofs(), mpi_comm);
+    checkpoint_vectors_pressure[i].reinit(dof_handler_p_restart->locally_owned_dofs(), mpi_comm);
     checkpoint_vectors[1 /* pressure */].push_back(&checkpoint_vectors_pressure[i]);
   }
 
   if(param.restart_data.discretization_identical)
   {
-    // DoFHandlers need to be setup with `checkpoint_triangulation`, otherwise
-    // they are identical. We can simply copy the vector contents.
-    load_vectors(checkpoint_vectors, checkpoint_dof_handlers);
-    for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
-    {
-      vectors_velocity[i]->copy_locally_owned_data_from(checkpoint_vectors_velocity[i]);
-    }
-    for(unsigned int i = 0; i < vectors_pressure.size(); ++i)
-    {
-      vectors_pressure[i]->copy_locally_owned_data_from(checkpoint_vectors_pressure[i]);
-    }
+    AssertThrow(param.restart_data.discretization_identical,
+                dealii::ExcMessage("Since we project onto `FE_DGQArbitraryNodes`, we require"
+                                   "the projection onto the currently used FE space."));
   }
   else
   {
@@ -1310,7 +1287,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
     {
       dealii::DoFHandler<dim> checkpoint_dof_handler_mapping(*checkpoint_triangulation);
       std::shared_ptr<dealii::FiniteElement<dim>> checkpoint_fe_mapping =
-        create_finite_element<dim>(checkpoint_element_type,
+        create_finite_element<dim>(get_element_type(*checkpoint_triangulation),
                                    true /* is_dg */,
                                    dim /* n_components */,
                                    deserialization_parameters.mapping_degree);
@@ -1348,11 +1325,58 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
       *matrix_free,
       vectors_per_dof_handler,
       data);
+
+    // `dealii::MatrixFree` does not enforce the periodic constraints on the vector;
+    // enforce the constraints for visual comparison purposes.
+    for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
+      distribute_constraint_u(*vectors_velocity[i]);
   }
 
   // Recover ghost vector state.
   set_ghost_state(vectors_velocity, has_ghost_elements_velocity);
   set_ghost_state(vectors_pressure, has_ghost_elements_pressure);
+
+  // OUTPUT THE VECTORS
+  if constexpr(false)
+  {
+    this->pcout << "OUTPUT VECTORS FOR COMPARISON\n";
+    OutputDataBase output_data;
+    output_data.directory = "output/";
+    output_data.degree    = param.degree_u;
+    std::vector<bool> component_is_part_of_vector(dim, true);
+
+    // `dealii::Triangulation`s do not match; we need to create two `VectorWriter`s.
+    {
+      output_data.filename = "projected_vectors_read_restart";
+      VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
+
+      std::vector<std::string> names_u_restart(dim, "velocity_restart");
+      vector_writer.add_data_vector(checkpoint_vectors_velocity[0],
+                                    *dof_handler_u_restart,
+                                    names_u_restart,
+                                    component_is_part_of_vector);
+
+      vector_writer.add_data_vector(checkpoint_vectors_pressure[0],
+                                    *dof_handler_p_restart,
+                                    {"pressure_restart"});
+
+      vector_writer.write_pvtu(this->get_mapping().get());
+    }
+    {
+      output_data.filename = "projected_vectors_read_standard";
+      VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
+
+      std::vector<std::string> names_u(dim, "velocity");
+      vector_writer.add_data_vector(*vectors_velocity[0],
+                                    dof_handler_u,
+                                    names_u,
+                                    component_is_part_of_vector);
+
+      vector_writer.add_data_vector(*vectors_pressure[0], dof_handler_p, {"pressure"});
+
+      vector_writer.write_pvtu(this->get_mapping().get());
+    }
+  }
 }
 
 template<int dim, typename Number>
