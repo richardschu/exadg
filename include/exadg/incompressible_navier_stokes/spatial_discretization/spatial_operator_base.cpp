@@ -30,12 +30,14 @@
 #include <exadg/operators/grid_related_time_step_restrictions.h>
 #include <exadg/operators/quadrature.h>
 #include <exadg/operators/solution_projection_between_triangulations.h>
+#include <exadg/postprocessor/write_output.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/block_jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/inverse_mass_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/jacobi_preconditioner.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/utilities/exceptions.h>
 
+// deal.II
 #include <deal.II/dofs/dof_renumbering.h>
 
 namespace ExaDG
@@ -81,6 +83,105 @@ SpatialOperatorBase<dim, Number>::SpatialOperatorBase(
   initialization_pure_dirichlet_bc();
 
   pcout << std::endl << "... done!" << std::endl << std::flush;
+}
+
+template<int dim, typename Number>
+void
+SpatialOperatorBase<dim, Number>::initialize_dof_handler_restart(
+  unsigned int const                 degree_u,
+  unsigned int const                 degree_p,
+  dealii::Triangulation<dim> const & triangulation) const
+{
+  AssertThrow(triangulation.all_reference_cells_are_hyper_cube(),
+              dealii::ExcMessage("Only hypercube cells supported."));
+
+  fe_u_restart = std::make_shared<dealii::FESystem<dim>>(
+    dealii::FE_DGQArbitraryNodes<dim>(dealii::QGauss<1>(degree_u + 1)), dim /*n_components*/);
+  fe_p_restart = std::make_shared<dealii::FESystem<dim>>(
+    dealii::FE_DGQArbitraryNodes<dim>(dealii::QGauss<1>(degree_p + 1)), 1 /*n_components*/);
+
+  dof_handler_u_restart = std::make_shared<dealii::DoFHandler<dim>>(triangulation);
+  dof_handler_p_restart = std::make_shared<dealii::DoFHandler<dim>>(triangulation);
+  dof_handler_u_restart->distribute_dofs(*fe_u_restart);
+  dof_handler_p_restart->distribute_dofs(*fe_p_restart);
+}
+
+template<int dim, typename Number>
+void
+SpatialOperatorBase<dim, Number>::project_standard_to_restart(
+  VectorType const &              src_standard,
+  dealii::DoFHandler<dim> const & src_dof_handler_standard,
+  VectorType &                    dst_restart,
+  dealii::DoFHandler<dim> const & dst_dof_handler_restart) const
+{
+  // The mass matrix for projecting from the standard function space to the
+  // restart function space is diagonal, see `initialize_dof_handler_restart()`.
+
+  // vector with relevant DoFs needed for interpolation
+  dealii::IndexSet const rel_dofs_src =
+    dealii::DoFTools::extract_locally_relevant_dofs(src_dof_handler_standard);
+  VectorType rel_src_standard(src_dof_handler_standard.locally_owned_dofs(),
+                              rel_dofs_src,
+                              mpi_comm);
+  rel_src_standard = src_standard;
+  rel_src_standard.update_ghost_values();
+
+  // setup ``dealii::FEValues``
+  dealii::FiniteElement<dim> const & fe_src = src_dof_handler_standard.get_fe();
+  dealii::FiniteElement<dim> const & fe_dst = dst_dof_handler_restart.get_fe();
+  dealii::FEValues<dim>              fe_values_src(*this->get_mapping(),
+                                      fe_src,
+                                      dealii::QGauss<dim>(fe_dst.degree + 1),
+                                      dealii::update_values);
+
+  unsigned int const                           n_components  = fe_src.n_components();
+  unsigned int const                           dofs_per_cell = fe_dst.dofs_per_cell;
+  std::vector<dealii::types::global_dof_index> dof_indices_dst(fe_dst.dofs_per_cell);
+  std::vector<dealii::Tensor<1, dim>>          vector_values(fe_values_src.n_quadrature_points);
+  std::vector<double>                          scalar_values(fe_values_src.n_quadrature_points);
+
+  dealii::FEValuesExtractors::Vector const vector(0);
+  dealii::FEValuesExtractors::Scalar const scalar(0);
+
+  typename dealii::DoFHandler<dim>::active_cell_iterator cell_dst =
+                                                           dst_dof_handler_restart.begin_active(),
+                                                         cell_src =
+                                                           src_dof_handler_standard.begin_active(),
+                                                         endc_dst = dst_dof_handler_restart.end();
+  for(; cell_dst != endc_dst; ++cell_dst, ++cell_src)
+  {
+    if(cell_dst->is_locally_owned())
+    {
+      fe_values_src.reinit(cell_src);
+      cell_dst->get_dof_indices(dof_indices_dst);
+
+      if(n_components == dim)
+        fe_values_src[vector].get_function_values(rel_src_standard, vector_values);
+      else
+        fe_values_src[scalar].get_function_values(rel_src_standard, scalar_values);
+
+      for(unsigned int i = 0; i < dofs_per_cell; ++i)
+      {
+        // We assume that the sequence of support points provided for
+        // `dealii::FE_DGQArbitraryNodes` is unchanged from the ones passed
+        // in `initialize_dof_handler_restart()`.
+        if(dst_restart.get_partitioner()->in_local_range(dof_indices_dst[i]))
+        {
+          if(n_components == dim)
+          {
+            unsigned int const comp_i = fe_dst.system_to_component_index(i).first;
+            // We assume that the DoFs are sorted component-wise per cell.
+            unsigned int const q            = i % fe_values_src.n_quadrature_points;
+            dst_restart[dof_indices_dst[i]] = vector_values[q][comp_i];
+          }
+          else
+            dst_restart[dof_indices_dst[i]] = scalar_values[i /* q */];
+        }
+      }
+    }
+  }
+
+  dst_restart.compress(dealii::VectorOperation::insert);
 }
 
 template<int dim, typename Number>
@@ -1009,10 +1110,89 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
   deserialization_parameters.spatial_discretization = param.spatial_discretization;
   write_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
+  // We use `dealii::DoFRenumbering::matrix_free_data_locality()` such that the DoF ordering depends
+  // on the MPI ranks used, operator and constraints. Therefore, we need to de-/serialize using an
+  // unordered `dealii::DoFHandler`. An element-wise continuous space with support points in Gauss
+  // points yields a diagonal mass matrix.
+
+  // Go from the current FE and ordering to the one to be de-serialized.
+  if(dof_handler_restart_setup_for_writing == false)
+  {
+    dof_handler_restart_setup_for_writing = true;
+    initialize_dof_handler_restart(deserialization_parameters.degree_u,
+                                   deserialization_parameters.degree_p,
+                                   *grid->triangulation);
+  }
+
+  // Setup vectors for de-/serialization.
+  std::vector<VectorType> vectors_u_restart(vectors_velocity.size());
+  std::vector<VectorType> vectors_p_restart(vectors_pressure.size());
+  for(VectorType & vector : vectors_u_restart)
+    vector.reinit(dof_handler_u_restart->locally_owned_dofs(),
+                  dof_handler_u_restart->get_mpi_communicator());
+  for(VectorType & vector : vectors_p_restart)
+    vector.reinit(dof_handler_p_restart->locally_owned_dofs(),
+                  dof_handler_p_restart->get_mpi_communicator());
+
+  // Project standard to restart function space.
+  this->pcout << "PROJECT VELOCITIES ##+ \n";
+  for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
+    project_standard_to_restart(*vectors_velocity[i],
+                                dof_handler_u,
+                                vectors_u_restart[i],
+                                *dof_handler_u_restart);
+  this->pcout << "PROJECT PRESSURES ##+ \n";
+  for(unsigned int i = 0; i < vectors_pressure.size(); ++i)
+    project_standard_to_restart(*vectors_pressure[i],
+                                dof_handler_p,
+                                vectors_p_restart[i],
+                                *dof_handler_p_restart);
+
+  // OUTPUT THE VECTORS
+  if constexpr(std::is_same<Number, double>::value)
+  {
+    this->pcout << "OUTPUT VECTORS FOR COMPARISON ##+ \n";
+    OutputDataBase output_data;
+    output_data.directory = "output/";
+    output_data.filename  = "projected_vectors";
+    output_data.degree    = param.degree_u;
+    VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
+
+    std::vector<std::string> names_u_restart(dim, "velocity_restart");
+    std::vector<bool>        component_is_part_of_vector(dim, true);
+    vector_writer.add_data_vector(vectors_u_restart[0],
+                                  *dof_handler_u_restart,
+                                  names_u_restart,
+                                  component_is_part_of_vector);
+
+    std::vector<std::string> names_u(dim, "velocity");
+    vector_writer.add_data_vector(*vectors_velocity[0],
+                                  dof_handler_u,
+                                  names_u,
+                                  component_is_part_of_vector);
+
+    vector_writer.add_data_vector(vectors_p_restart[0],
+                                  *dof_handler_p_restart,
+                                  {"pressure_restart"});
+
+    vector_writer.add_data_vector(*vectors_pressure[0], dof_handler_p, {"pressure"});
+
+    vector_writer.write_pvtu(this->get_mapping().get());
+  }
+
+  // Bundle restart vectors.
+  std::vector<VectorType const *> vectors_velocity_restart;
+  std::vector<VectorType const *> vectors_pressure_restart;
+  for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
+    vectors_velocity_restart.push_back(&vectors_u_restart[i]);
+  for(unsigned int i = 0; i < vectors_pressure.size(); ++i)
+    vectors_pressure_restart.push_back(&vectors_p_restart[i]);
+
   // Attach vectors to triangulation and serialize.
-  std::vector<dealii::DoFHandler<dim> const *> dof_handlers{&dof_handler_u, &dof_handler_p};
-  std::vector<std::vector<VectorType const *>> vectors_per_dof_handler{vectors_velocity,
-                                                                       vectors_pressure};
+  std::vector<dealii::DoFHandler<dim> const *> dof_handlers{dof_handler_u_restart.get(),
+                                                            dof_handler_p_restart.get()};
+  std::vector<std::vector<VectorType const *>> vectors_per_dof_handler{vectors_velocity_restart,
+                                                                       vectors_pressure_restart};
   if(param.restart_data.consider_mapping_write)
   {
     store_vectors_in_triangulation_and_serialize(param.restart_data,
@@ -1035,6 +1215,8 @@ void
 SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> & vectors_velocity,
                                                       std::vector<VectorType *> & vectors_pressure)
 {
+  // SETUP AND PROJECT ONTO L2 SPACE.
+
   // Store ghost state to recover after deserialization.
   std::vector<bool> const has_ghost_elements_velocity = get_ghost_state(vectors_velocity);
   std::vector<bool> const has_ghost_elements_pressure = get_ghost_state(vectors_pressure);

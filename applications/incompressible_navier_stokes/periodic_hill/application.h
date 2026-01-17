@@ -424,7 +424,7 @@ private:
         {
           // need to adjust for hierarchic numbering of
           // dealii::MappingQCache
-          points_moved[i] = manifold.push_forward(
+          points_moved[i] = ( // manifold.push_forward(
             fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
         }
 
@@ -439,7 +439,7 @@ private:
       {
         // need to adjust for hierarchic numbering of
         // dealii::MappingQCache
-        points_moved[i] = manifold.push_forward(cell->vertex(i));
+        points_moved[i] = cell->vertex(i); // manifold.push_forward(cell->vertex(i));
       }
 
       return points_moved;
