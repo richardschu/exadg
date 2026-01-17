@@ -179,12 +179,12 @@ private:
 
   std::vector<VectorType> velocity; // `op_rt` vector
 
-  VectorType velocity_np; // mf vector, do not serialize
+  VectorType velocity_np; // mf vector
 
   std::vector<VectorTypeFloat> velocity_red;    // `op_rt_float` vector
   std::vector<VectorTypeFloat> velocity_matvec; // `op_rt_float` vector
 
-  VectorType pressure_np;  // mf vector, do not serialize
+  VectorType pressure_np;  // mf vector
   VectorType pressure_rhs; // mf vector, do not serialize
 
   std::vector<VectorTypeFloat> pressure;                  // `dg_matrix` vector

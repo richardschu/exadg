@@ -206,13 +206,12 @@ private:
     this->param.start_with_low_order            = read_restart ? false : true;
 
     // output of solver information
-    this->param.solver_info_data.interval_time = flow_through_time / 10000000000000.0;
+    this->param.solver_info_data.interval_time = flow_through_time / 100.0;
 
     // SPATIAL DISCRETIZATION
-    this->param.spatial_discretization                 = spatial_discretization;
-    this->param.grid.triangulation_type                = triangulation_type;
-    bool constexpr stable_restart_fixed_mapping_degree = true;
-    this->param.mapping_degree = stable_restart_fixed_mapping_degree ? 3 : this->param.degree_u;
+    this->param.spatial_discretization      = spatial_discretization;
+    this->param.grid.triangulation_type     = triangulation_type;
+    this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
     this->param.degree_p                    = DegreePressure::MixedOrder;
 
@@ -423,7 +422,7 @@ private:
         {
           // need to adjust for hierarchic numbering of
           // dealii::MappingQCache
-          points_moved[i] = ( // manifold.push_forward(
+          points_moved[i] = manifold.push_forward(
             fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
         }
 
@@ -438,7 +437,7 @@ private:
       {
         // need to adjust for hierarchic numbering of
         // dealii::MappingQCache
-        points_moved[i] = cell->vertex(i); // manifold.push_forward(cell->vertex(i));
+        points_moved[i] = manifold.push_forward(cell->vertex(i));
       }
 
       return points_moved;

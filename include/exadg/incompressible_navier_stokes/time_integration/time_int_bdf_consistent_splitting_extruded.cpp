@@ -112,6 +112,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_vectors_serialization(
   // The reordering is accounted for in
   // `IncNS::SpatialOperatorBase::serialize_vectors()`.
 
+  vectors_velocity.push_back(&velocity_np);
+
   // `velocity_red` needs to be converted to standard matrix-free vector
   for(unsigned int i = 0; i < velocity_red_for_restart.size(); ++i)
   {
@@ -129,6 +131,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_vectors_serialization(
 
     vectors_velocity.push_back(&velocity_matvec_for_restart[i]);
   }
+
+  vectors_pressure.push_back(&pressure_np);
 
   // `pressure_matvec` data type needs to be converted
   for(unsigned int i = 0; i < pressure_matvec_for_restart.size(); ++i)
@@ -161,23 +165,29 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::set_vectors_deserialization(
   // The reordering is accounted for in
   // `IncNS::SpatialOperatorBase::serialize_vectors()`.
 
+  velocity_np = vectors_velocity[0];
+
   // `velocity_red` needs to be converted from standard matrix-free vector
+  unsigned int idx_velocity = 1;
   for(unsigned int i = 0; i < velocity_red.size(); ++i)
   {
     // copy entries converting Number to float
-    op_rt_float->copy_mf_to_this_vector(vectors_velocity[i], velocity_red[i]);
+    op_rt_float->copy_mf_to_this_vector(vectors_velocity[idx_velocity], velocity_red[i]);
+    idx_velocity += 1;
   }
 
   // `velocity_matvec` needs to be converted from standard matrix-free vector
   for(unsigned int i = 0; i < velocity_matvec.size(); ++i)
   {
     // copy entries converting Number to float
-    op_rt_float->copy_mf_to_this_vector(vectors_velocity[velocity_red.size() + i],
-                                        velocity_matvec[i]);
+    op_rt_float->copy_mf_to_this_vector(vectors_velocity[idx_velocity], velocity_matvec[i]);
+    idx_velocity += 1;
   }
 
+  pressure_np = vectors_pressure[0];
+
   // `pressure_matvec` data type needs to be conerted
-  unsigned int idx_pressure = 0;
+  unsigned int idx_pressure = 1;
   for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
   {
     // copy entries converting Number to float
