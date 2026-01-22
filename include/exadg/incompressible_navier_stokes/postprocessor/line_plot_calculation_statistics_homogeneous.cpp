@@ -334,8 +334,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
           points.push_back(a.second);
         fe_point_eval.reinit(cell, points);
         for(unsigned int i = 0; i < pts.size(); ++i)
-          inverse_jacobians_on_lines.push_back(
-            fe_point_eval.jacobian(i).covariant_form().transpose());
+          inverse_jacobians_on_lines.push_back(fe_point_eval.jacobian(i).covariant_form());
       }
 
     dof_indices_on_cell.clear();
@@ -686,8 +685,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
           points.push_back(a.second);
         fe_point_eval.reinit(cell, points);
         for(unsigned int i = 0; i < pts.size(); ++i)
-          inverse_jacobians_on_lines.push_back(
-            fe_point_eval.jacobian(i).covariant_form().transpose());
+          inverse_jacobians_on_lines.push_back(fe_point_eval.jacobian(i).covariant_form());
       }
 
     polynomials_nodal =
@@ -1039,20 +1037,22 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
   {
     Line<dim> & line = *data.lines[index];
 
-    bool evaluate_velocity = false;
+    bool evaluate_velocity      = false;
     bool need_velocity_gradient = false;
-    bool need_skin_friction = false;
-    bool need_dissipation = false;
+    bool need_skin_friction     = false;
+    bool need_dissipation       = false;
 
     for(const std::shared_ptr<Quantity> & quantity : line.quantities)
     {
       // evaluate quantities that involve velocity
       if(quantity->type == QuantityType::Velocity or quantity->type == QuantityType::SkinFriction or
-         quantity->type == QuantityType::ReynoldsStresses or quantity->type == QuantityType::Dissipation)
+         quantity->type == QuantityType::ReynoldsStresses or
+         quantity->type == QuantityType::Dissipation)
       {
         evaluate_velocity = true;
       }
-      if(quantity->type == QuantityType::SkinFriction or quantity->type == QuantityType::Dissipation)
+      if(quantity->type == QuantityType::SkinFriction or
+         quantity->type == QuantityType::Dissipation)
       {
         need_velocity_gradient = true;
       }
@@ -1074,7 +1074,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           has_skin_friction_quantity = true;
 
       AssertThrow(has_skin_friction_quantity,
-      ExcMessage("Dissipation requires QuantitySkinFriction to provide viscosity."));
+                  ExcMessage("Dissipation requires QuantitySkinFriction to provide viscosity."));
     }
 
 
@@ -1194,11 +1194,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               {
                 auto q = std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(quantity);
                 AssertThrow(q, ExcInternalError());
-                
+
                 Tensor<2, dim, VectorizedArray<Number>> jac = invert(transpose(inv_jac));
-                tangent = jac * q->tangent_vector;
+                tangent                                     = jac * q->tangent_vector;
                 tangent /= tangent.norm();
-                
+
                 if(averaging_direction == 2)
                 {
                   normal[0] = tangent[1];
@@ -1206,11 +1206,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                 }
                 else
                   AssertThrow(false, ExcNotImplemented());
-                  
-                viscosity = q->viscosity;
+
+                viscosity           = q->viscosity;
                 found_skin_friction = true;
               }
-            AssertThrow(found_skin_friction, ExcMessage("Dissipation/SkinFriction requires QuantitySkinFriction"));
+            AssertThrow(found_skin_friction,
+                        ExcMessage("Dissipation/SkinFriction requires QuantitySkinFriction"));
           }
 
 
@@ -1224,7 +1225,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           Tensor<1, dim, VectorizedArray<Number>>          vel;
           SymmetricTensor<2, dim, VectorizedArray<Number>> reynolds;
           VectorizedArray<Number>                          skin_friction = 0;
-          VectorizedArray<Number> dissipation = 0.0;
+          VectorizedArray<Number>                          dissipation   = 0.0;
           if constexpr(!evaluate_averaging_by_tensor_product)
           {
             Tensor<1, dim, VectorizedArray<Number>> velocity;
@@ -1358,7 +1359,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               else if(quantity->type == QuantityType::Dissipation)
               {
                 dissipation_local[offset_arrays + p] += dissipation[v];
-                VectorizedArray<Number> local_he = std::pow(Number(1.0) / std::abs(determinant(inv_jac)), Number(1.0 / 3.0));
+                VectorizedArray<Number> local_he =
+                  std::pow(Number(1.0) / std::abs(determinant(inv_jac)), Number(1.0 / 3.0));
 
                 grid_size_local[offset_arrays + p] += local_he[v] * det[v];
               }
@@ -1764,7 +1766,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
           f.close();
         }
 
-        if (quantity->type == QuantityType::Dissipation)
+        if(quantity->type == QuantityType::Dissipation)
         {
           std::string   filename = filename_prefix + "_dissipation" + ".txt";
           std::ofstream f;
@@ -1798,7 +1800,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             // write dissipation and average over time
             f << std::setw(precision + 8) << std::left
               << dissipation_global[line_iterator][p] / number_of_samples;
-            
+
             // write grid size and average over time
             f << std::setw(precision + 8) << std::left
               << grid_size_global[line_iterator][p] / number_of_samples;

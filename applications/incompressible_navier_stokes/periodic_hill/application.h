@@ -518,12 +518,12 @@ private:
     quantity_reynolds->type = QuantityType::ReynoldsStresses;
 
     // dissipation rate epsilon
-    auto quantity_dissipation = std::make_shared<QuantityDissipation<dim>>();
-    quantity_dissipation->type = QuantityType::Dissipation;
+    auto quantity_dissipation       = std::make_shared<QuantityDissipation<dim>>();
+    quantity_dissipation->type      = QuantityType::Dissipation;
     quantity_dissipation->viscosity = viscosity;
 
-    auto quantity_skin_friction_bulk = std::make_shared<QuantitySkinFriction<dim>>();
-    quantity_skin_friction_bulk->type = QuantityType::SkinFriction;
+    auto quantity_skin_friction_bulk       = std::make_shared<QuantitySkinFriction<dim>>();
+    quantity_skin_friction_bulk->type      = QuantityType::SkinFriction;
     quantity_skin_friction_bulk->viscosity = viscosity;
     // dummy directions (never used away from walls)
     quantity_skin_friction_bulk->tangent_vector[0] = 1.0;
@@ -672,6 +672,7 @@ private:
     auto quantity_skin_friction_top               = std::make_shared<QuantitySkinFriction<dim>>();
     quantity_skin_friction_top->tangent_vector[0] = -1;
     quantity_skin_friction_top->normal_vector[1]  = 1;
+    quantity_skin_friction_top->viscosity         = viscosity;
     vel_9->quantities.push_back(quantity_skin_friction_top);
 
     vel_10->quantities.push_back(quantity_velocity);
@@ -680,6 +681,7 @@ private:
     auto quantity_skin_friction_bottom = std::make_shared<QuantitySkinFriction<dim>>();
     quantity_skin_friction_bottom->tangent_vector[0] = 1;
     quantity_skin_friction_bottom->normal_vector[1]  = -1;
+    quantity_skin_friction_bottom->viscosity         = viscosity;
     vel_10->quantities.push_back(quantity_skin_friction_bottom);
 
     // set line names
