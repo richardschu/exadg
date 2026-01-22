@@ -44,7 +44,8 @@ enum class QuantityType
   Pressure,
   SkinFriction,
   ReynoldsStresses,
-  PressureCoefficient
+  PressureCoefficient,
+  Dissipation
 };
 
 struct Quantity
@@ -89,6 +90,19 @@ struct QuantitySkinFriction : Quantity
   double                         viscosity;
   dealii::Tensor<1, dim, double> normal_vector;
   dealii::Tensor<1, dim, double> tangent_vector;
+};
+
+template<int dim>
+struct QuantityDissipation : Quantity
+{
+  QuantityDissipation()
+    : Quantity(),
+      viscosity(1.0)
+  {
+    this->type = QuantityType::Dissipation;
+  }
+
+  double viscosity;
 };
 
 template<int dim>

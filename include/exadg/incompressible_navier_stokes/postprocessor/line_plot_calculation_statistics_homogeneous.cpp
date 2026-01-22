@@ -115,6 +115,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     reynolds_global.resize(data.lines.size());
     pressure_global.resize(data.lines.size());
     reference_pressure_global.resize(data.lines.size());
+    dissipation_global.resize(data.lines.size());
+    grid_size_global.resize(data.lines.size());
 
     // make sure that line type is correct
     std::shared_ptr<LineHomogeneousAveraging<dim>> line_hom =
@@ -146,6 +148,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         pressure_global[line_iterator].resize(line->n_points);
         wall_shear_global[line_iterator].resize(line->n_points);
         reynolds_global[line_iterator].resize(line->n_points);
+        dissipation_global[line_iterator].resize(line->n_points);
+        grid_size_global[line_iterator].resize(line->n_points);
       }
 
       // initialize global_points: use equidistant points along line
@@ -443,6 +447,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     reynolds_global.resize(data.lines.size());
     pressure_global.resize(data.lines.size());
     reference_pressure_global.resize(data.lines.size());
+    dissipation_global.resize(data.lines.size());
+    grid_size_global.resize(data.lines.size());
 
     // make sure that line type is correct
     std::shared_ptr<LineHomogeneousAveraging<dim>> line_hom =
@@ -474,6 +480,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         pressure_global[line_iterator].resize(line->n_points);
         wall_shear_global[line_iterator].resize(line->n_points);
         reynolds_global[line_iterator].resize(line->n_points);
+        dissipation_global[line_iterator].resize(line->n_points);
+        grid_size_global[line_iterator].resize(line->n_points);
       }
 
       // initialize global_points: use equidistant points along line
@@ -1001,6 +1009,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
   std::vector<dealii::SymmetricTensor<2, dim, double>> reynolds_local(total_length);
   std::vector<double>                                  pressure_local(total_length);
   std::vector<double>                                  reference_pressure_local(data.lines.size());
+  std::vector<double>                                  dissipation_local(total_length);
+  std::vector<double>                                  grid_size_local(total_length);
 
   // use quadrature for averaging in homogeneous direction
   const unsigned int              n_q_points_1d = fe_u.degree + 1;
@@ -1030,15 +1040,43 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
     Line<dim> & line = *data.lines[index];
 
     bool evaluate_velocity = false;
+    bool need_velocity_gradient = false;
+    bool need_skin_friction = false;
+    bool need_dissipation = false;
+
     for(const std::shared_ptr<Quantity> & quantity : line.quantities)
     {
       // evaluate quantities that involve velocity
       if(quantity->type == QuantityType::Velocity or quantity->type == QuantityType::SkinFriction or
-         quantity->type == QuantityType::ReynoldsStresses)
+         quantity->type == QuantityType::ReynoldsStresses or quantity->type == QuantityType::Dissipation)
       {
         evaluate_velocity = true;
       }
+      if(quantity->type == QuantityType::SkinFriction or quantity->type == QuantityType::Dissipation)
+      {
+        need_velocity_gradient = true;
+      }
+      if(quantity->type == QuantityType::SkinFriction)
+      {
+        need_skin_friction = true;
+      }
+      if(quantity->type == QuantityType::Dissipation)
+      {
+        need_dissipation = true;
+      }
     }
+
+    if(need_dissipation)
+    {
+      bool has_skin_friction_quantity = false;
+      for(const auto & quantity : line.quantities)
+        if(quantity->type == QuantityType::SkinFriction)
+          has_skin_friction_quantity = true;
+
+      AssertThrow(has_skin_friction_quantity,
+      ExcMessage("Dissipation requires QuantitySkinFriction to provide viscosity."));
+    }
+
 
     // Do we want to perform averaging on the cell with tensor product first
     // (leads to small aliasing errors for Reynolds stresses, but is faster),
@@ -1142,26 +1180,39 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               for(unsigned int e = 0; e < dim; ++e)
                 inv_jac[d][e][v] = inv_jac_v[d][e];
           }
-          bool                                    need_skin_friction = false;
+          // bool                                    need_skin_friction = false;
+
           Tensor<1, dim, VectorizedArray<Number>> normal;
           Tensor<1, dim, VectorizedArray<Number>> tangent;
-          for(const std::shared_ptr<Quantity> & quantity : line.quantities)
-            if(quantity->type == QuantityType::SkinFriction)
-            {
-              std::shared_ptr<QuantitySkinFriction<dim>> quantity_skin_friction =
-                std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(quantity);
-              Tensor<2, dim, VectorizedArray<Number>> jac = invert(transpose(inv_jac));
-              tangent = jac * quantity_skin_friction->tangent_vector;
-              tangent /= tangent.norm();
-              if(averaging_direction == 2)
+
+          Number viscosity = 0.0;
+          if(need_skin_friction || need_dissipation)
+          {
+            bool found_skin_friction = false;
+            for(const auto & quantity : line.quantities)
+              if(quantity->type == QuantityType::SkinFriction)
               {
-                normal[0] = tangent[1];
-                normal[1] = -tangent[0];
+                auto q = std::dynamic_pointer_cast<QuantitySkinFriction<dim>>(quantity);
+                AssertThrow(q, ExcInternalError());
+                
+                Tensor<2, dim, VectorizedArray<Number>> jac = invert(transpose(inv_jac));
+                tangent = jac * q->tangent_vector;
+                tangent /= tangent.norm();
+                
+                if(averaging_direction == 2)
+                {
+                  normal[0] = tangent[1];
+                  normal[1] = -tangent[0];
+                }
+                else
+                  AssertThrow(false, ExcNotImplemented());
+                  
+                viscosity = q->viscosity;
+                found_skin_friction = true;
               }
-              else
-                AssertThrow(false, ExcNotImplemented());
-              need_skin_friction = true;
-            }
+            AssertThrow(found_skin_friction, ExcMessage("Dissipation/SkinFriction requires QuantitySkinFriction"));
+          }
+
 
           VectorizedArray<Number> const det =
             1.0 / std::abs(inv_jac[averaging_direction][averaging_direction]);
@@ -1173,13 +1224,15 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           Tensor<1, dim, VectorizedArray<Number>>          vel;
           SymmetricTensor<2, dim, VectorizedArray<Number>> reynolds;
           VectorizedArray<Number>                          skin_friction = 0;
+          VectorizedArray<Number> dissipation = 0.0;
           if constexpr(!evaluate_averaging_by_tensor_product)
           {
             Tensor<1, dim, VectorizedArray<Number>> velocity;
             Tensor<2, dim, VectorizedArray<Number>> velocity_gradient;
             for(unsigned int q1 = 0; q1 < n_q_points_1d; ++q1)
             {
-              if(need_skin_friction)
+              VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
+              if(need_velocity_gradient)
               {
                 auto const val_grad = internal::evaluate_tensor_product_value_and_gradient_shapes<
                   dim - 1,
@@ -1194,14 +1247,29 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                     velocity_gradient[d][e] = val_grad[e][d];
                   velocity_gradient[d] = inv_jac * velocity_gradient[d];
                 }
+
+                if(need_dissipation)
+                {
+                  VectorizedArray<Number> epsilon_q = 0.0;
+                  for(unsigned int i = 0; i < dim; ++i)
+                    for(unsigned int j = 0; j < dim; ++j)
+                      epsilon_q += velocity_gradient[i][j] * velocity_gradient[i][j];
+                  epsilon_q *= viscosity;
+                  dissipation += epsilon_q * JxW;
+                }
+
+                if(need_skin_friction)
+                {
+                  for(unsigned int d = 0; d < dim; ++d)
+                    for(unsigned int e = 0; e < dim; ++e)
+                      skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);
+                }
               }
               else
                 velocity = internal::evaluate_tensor_product_value_shapes<dim - 1,
                                                                           Tensor<1, dim, Number>,
                                                                           VectorizedArray<Number>>(
                   shapes_2d.data(), polynomials_nodal.size(), eval_ptr + q1 * n_points_in_plane);
-
-              VectorizedArray<Number> const JxW = det * gauss_1d.weight(q1);
 
               for(const std::shared_ptr<Quantity> & quantity : line.quantities)
               {
@@ -1216,18 +1284,18 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                     for(unsigned int e = d; e < dim; ++e)
                       reynolds[d][e] += (velocity[d] * JxW) * velocity[e];
                 }
-                else if(quantity->type == QuantityType::SkinFriction)
-                {
-                  for(unsigned int d = 0; d < dim; ++d)
-                    for(unsigned int e = 0; e < dim; ++e)
-                      skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);
-                }
+                // else if(quantity->type == QuantityType::SkinFriction)
+                // {
+                //   for(unsigned int d = 0; d < dim; ++d)
+                //     for(unsigned int e = 0; e < dim; ++e)
+                //       skin_friction += tangent[d] * velocity_gradient[d][e] * (normal[e] * JxW);
+                // }
               }
             }
           }
           else
           {
-            if(need_skin_friction)
+            if(need_velocity_gradient)
             {
               auto const val_grad = internal::evaluate_tensor_product_value_and_gradient_shapes<
                 dim - 1,
@@ -1243,9 +1311,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
                   grad[d][e] = val_grad[e][d];
                 grad[d] = inv_jac * grad[d];
               }
-              for(unsigned int d = 0; d < dim; ++d)
-                for(unsigned int e = 0; e < dim; ++e)
-                  skin_friction += tangent[d] * grad[d][e] * normal[e];
+              if(need_skin_friction)
+              {
+                for(unsigned int d = 0; d < dim; ++d)
+                  for(unsigned int e = 0; e < dim; ++e)
+                    skin_friction += tangent[d] * grad[d][e] * normal[e];
+              }
             }
             else
               vel = internal::evaluate_tensor_product_value_shapes<dim - 1,
@@ -1283,6 +1354,13 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
               else if(quantity->type == QuantityType::SkinFriction)
               {
                 wall_shear_local[offset_arrays + p] += skin_friction[v];
+              }
+              else if(quantity->type == QuantityType::Dissipation)
+              {
+                dissipation_local[offset_arrays + p] += dissipation[v];
+                VectorizedArray<Number> local_he = std::pow(Number(1.0) / std::abs(determinant(inv_jac)), Number(1.0 / 3.0));
+
+                grid_size_local[offset_arrays + p] += local_he[v] * det[v];
               }
             }
           }
@@ -1401,6 +1479,20 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           for(unsigned int p = 0; p < n_points_on_line; ++p)
             pressure_global[line][p] +=
               pressure_local[offset_arrays + p] / length_local[offset_arrays + p];
+      }
+      else if(quantity->type == QuantityType::Dissipation)
+      {
+        mpi_sum_at_root(dissipation_local.data() + offset_arrays, n_points_on_line, mpi_comm);
+        mpi_sum_at_root(grid_size_local.data() + offset_arrays, n_points_on_line, mpi_comm);
+
+        if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+          for(unsigned int p = 0; p < n_points_on_line; ++p)
+          {
+            dissipation_global[line][p] +=
+              dissipation_local[offset_arrays + p] / length_local[offset_arrays + p];
+            grid_size_global[line][p] +=
+              grid_size_local[offset_arrays + p] / length_local[offset_arrays + p];
+          }
       }
     }
     offset_arrays += n_points_on_line;
@@ -1667,6 +1759,50 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
                 << (pressure_global[line_iterator][p] - reference_pressure_global[line_iterator]) /
                      number_of_samples;
             }
+            f << std::endl;
+          }
+          f.close();
+        }
+
+        if (quantity->type == QuantityType::Dissipation)
+        {
+          std::string   filename = filename_prefix + "_dissipation" + ".txt";
+          std::ofstream f;
+          if(clear_files)
+          {
+            f.open(filename.c_str(), std::ios::trunc);
+          }
+          else
+          {
+            f.open(filename.c_str(), std::ios::app);
+          }
+
+          print_headline(f, number_of_samples);
+
+          for(unsigned int d = 0; d < dim; ++d)
+            f << std::setw(precision + 8) << std::left
+              << "x_" + dealii::Utilities::int_to_string(d + 1);
+
+          f << std::setw(precision + 8) << std::left << "epsilon";
+          f << std::setw(precision + 8) << std::left << "h_e" << std::endl;
+
+          // loop over all points
+          for(unsigned int p = 0; p < line->n_points; ++p)
+          {
+            f << std::scientific << std::setprecision(precision);
+
+            // write data
+            for(unsigned int d = 0; d < dim; ++d)
+              f << std::setw(precision + 8) << std::left << global_points[line_iterator][p][d];
+
+            // write dissipation and average over time
+            f << std::setw(precision + 8) << std::left
+              << dissipation_global[line_iterator][p] / number_of_samples;
+            
+            // write grid size and average over time
+            f << std::setw(precision + 8) << std::left
+              << grid_size_global[line_iterator][p] / number_of_samples;
+
             f << std::endl;
           }
           f.close();

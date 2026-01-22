@@ -517,6 +517,18 @@ private:
     quantity_reynolds.reset(new Quantity());
     quantity_reynolds->type = QuantityType::ReynoldsStresses;
 
+    // dissipation rate epsilon
+    auto quantity_dissipation = std::make_shared<QuantityDissipation<dim>>();
+    quantity_dissipation->type = QuantityType::Dissipation;
+    quantity_dissipation->viscosity = viscosity;
+
+    auto quantity_skin_friction_bulk = std::make_shared<QuantitySkinFriction<dim>>();
+    quantity_skin_friction_bulk->type = QuantityType::SkinFriction;
+    quantity_skin_friction_bulk->viscosity = viscosity;
+    // dummy directions (never used away from walls)
+    quantity_skin_friction_bulk->tangent_vector[0] = 1.0;
+    quantity_skin_friction_bulk->normal_vector[1]  = 0.0;
+
     // lines
     std::shared_ptr<LineHomogeneousAveraging<dim>> vel_0, vel_005, vel_05, vel_1, vel_2, vel_3,
       vel_4, vel_5, vel_6, vel_7, vel_8, vel_9, vel_10;
@@ -611,26 +623,48 @@ private:
     // set the quantities that we want to compute along the lines
     vel_0->quantities.push_back(quantity_velocity);
     vel_0->quantities.push_back(quantity_reynolds);
+    vel_0->quantities.push_back(quantity_dissipation);
+    vel_0->quantities.push_back(quantity_skin_friction_bulk);
     vel_005->quantities.push_back(quantity_velocity);
     vel_005->quantities.push_back(quantity_reynolds);
+    vel_005->quantities.push_back(quantity_dissipation);
+    vel_005->quantities.push_back(quantity_skin_friction_bulk);
     vel_05->quantities.push_back(quantity_velocity);
     vel_05->quantities.push_back(quantity_reynolds);
+    vel_05->quantities.push_back(quantity_dissipation);
+    vel_05->quantities.push_back(quantity_skin_friction_bulk);
     vel_1->quantities.push_back(quantity_velocity);
     vel_1->quantities.push_back(quantity_reynolds);
+    vel_1->quantities.push_back(quantity_dissipation);
+    vel_1->quantities.push_back(quantity_skin_friction_bulk);
     vel_2->quantities.push_back(quantity_velocity);
     vel_2->quantities.push_back(quantity_reynolds);
+    vel_2->quantities.push_back(quantity_dissipation);
+    vel_2->quantities.push_back(quantity_skin_friction_bulk);
     vel_3->quantities.push_back(quantity_velocity);
     vel_3->quantities.push_back(quantity_reynolds);
+    vel_3->quantities.push_back(quantity_dissipation);
+    vel_3->quantities.push_back(quantity_skin_friction_bulk);
     vel_4->quantities.push_back(quantity_velocity);
     vel_4->quantities.push_back(quantity_reynolds);
+    vel_4->quantities.push_back(quantity_dissipation);
+    vel_4->quantities.push_back(quantity_skin_friction_bulk);
     vel_5->quantities.push_back(quantity_velocity);
     vel_5->quantities.push_back(quantity_reynolds);
+    vel_5->quantities.push_back(quantity_dissipation);
+    vel_5->quantities.push_back(quantity_skin_friction_bulk);
     vel_6->quantities.push_back(quantity_velocity);
     vel_6->quantities.push_back(quantity_reynolds);
+    vel_6->quantities.push_back(quantity_dissipation);
+    vel_6->quantities.push_back(quantity_skin_friction_bulk);
     vel_7->quantities.push_back(quantity_velocity);
     vel_7->quantities.push_back(quantity_reynolds);
+    vel_7->quantities.push_back(quantity_dissipation);
+    vel_7->quantities.push_back(quantity_skin_friction_bulk);
     vel_8->quantities.push_back(quantity_velocity);
     vel_8->quantities.push_back(quantity_reynolds);
+    vel_8->quantities.push_back(quantity_dissipation);
+    vel_8->quantities.push_back(quantity_skin_friction_bulk);
 
     vel_9->quantities.push_back(quantity_velocity);
     vel_9->quantities.push_back(quantity_reynolds);

@@ -143,6 +143,14 @@ private:
   // For all lines: for all points along the line
   std::vector<std::vector<dealii::SymmetricTensor<2, dim, double>>> reynolds_global;
 
+  // Dissipation quantities
+  // For all lines: for all points along the line
+  std::vector<std::vector<double>> dissipation_global; // = epsilon
+
+  // Grid size quantities (he)
+  // For all lines: for all points along the line
+  std::vector<std::vector<double>> grid_size_global; //= he
+
   // Pressure quantities
   // For all lines: for all points along the line
   std::vector<std::vector<double>> pressure_global;
