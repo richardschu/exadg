@@ -56,7 +56,10 @@ public:
   setup(Operator<dim, Number> const & pde_operator_in) override;
 
   bool
-  requires_scalar_field() const;
+  requires_scalar_postprocessing_field() const;
+
+  bool
+  requires_vector_postprocessing_field() const;
 
   void
   do_postprocessing(VectorType const &     solution,
@@ -80,6 +83,11 @@ private:
   SolutionField<dim, Number> displacement_magnitude;
   SolutionField<dim, Number> displacement_jacobian;
   SolutionField<dim, Number> max_principal_stress;
+  SolutionField<dim, Number> E1_orientation;
+  SolutionField<dim, Number> E2_orientation;
+  SolutionField<dim, Number> traction_local_full;
+  SolutionField<dim, Number> traction_local_normal;
+  SolutionField<dim, Number> traction_local_inplane;
 
   // write output for visualization of results (e.g., using paraview)
   OutputGenerator<dim, Number> output_generator;

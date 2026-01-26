@@ -145,6 +145,99 @@ private:
     elasticity_operator_base;
 };
 
+/*
+ * These are the traction components selected for output, the cut plain is always normal to the
+ * spatial counterpart of `E3`, namely `e3`.
+ */
+enum class LocalStressDirection
+{
+  Undefined,
+  Full,
+  Normal,
+  InPlane,
+  E1_orientation_only,
+  E2_orientation_only
+};
+
+/*
+ * Calculator for the local stress component of the Cauchy stress tensor sigma,
+ *
+ * sigma = (1/det(F)) * F * S * F^T
+ *
+ * where F is the deformation gradient tensor and S is the second Piola-Kirchhoff stress tensor.
+ * Define the spatial directions
+ *
+ * ei = F * Ei/||F * Ei||, i = 1, 2
+ *
+ * and e3 = e1 x e2 / ||e1 x e2||
+ *
+ * The Cauchy traction vector taking the cutting plane normal to e3 is then
+ *
+ * t = sigma * e3
+ *
+ * which corresponds to `LocalStressDirection::Full` with components `Ei_spatial` in direction ei
+ *
+ * t_ei = (t . ei) ei, i = 1, 2, 3
+ *
+ * with t_e3 corresponding to `LocalStressDirection::Normal`
+ * and the summed in-plain (e1--e2) component `LocalStressDirection::InPlane`
+ *
+ * t_e12 = t_e1 + t_e2 = t - t_e3
+ *
+ */
+template<int dim, typename Number>
+class LocalStressCalculator
+{
+public:
+  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+
+  typedef LocalStressCalculator<dim, Number> This;
+
+  typedef CellIntegrator<dim, dim, Number> CellIntegratorVector;
+
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
+
+  LocalStressCalculator();
+
+  void
+  initialize(dealii::MatrixFree<dim, Number> const & matrix_free_in,
+             unsigned int const                      dof_index_vector_in,
+             unsigned int const                      dof_index_vector_postprocessing_in,
+             unsigned int const                      quad_index_in,
+             LocalStressDirection const &            local_stress_direction_in,
+             Structure::ElasticityOperatorBase<dim, Number> const & elasticity_operator_base_in);
+
+  /*
+   * Compute the right-hand side of an L2 projection of the local stress component.
+   */
+  void
+  compute_projection_rhs(VectorType &       dst_vector_postprocessing_valued,
+                         VectorType const & src_vector_valued) const;
+
+private:
+  void
+  cell_loop(dealii::MatrixFree<dim, Number> const &       matrix_free,
+            VectorType &                                  dst_vector_postprocessing_valued,
+            VectorType const &                            src_vector_valued,
+            std::pair<unsigned int, unsigned int> const & cell_range) const;
+
+  dealii::MatrixFree<dim, Number> const * matrix_free;
+
+  unsigned int dof_index_vector;
+  unsigned int dof_index_vector_postprocessing;
+  unsigned int quad_index;
+
+  LocalStressDirection local_stress_direction;
+
+  // Pointer to the underlying elasticity operator to compute stresses and recover traction
+  // components dependent on the material model.
+  dealii::ObserverPointer<Structure::ElasticityOperatorBase<dim, Number> const>
+    elasticity_operator_base;
+};
+
 } // namespace ExaDG
 
 #endif /* EXADG_OPERATORS_STRUCTURE_CALCULATORS_H_ */

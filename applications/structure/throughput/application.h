@@ -290,8 +290,9 @@ private:
                                                       fiber_k_1,
                                                       fiber_k_2,
                                                       fiber_switch_limit,
-                                                      {},
-                                                      {},
+                                                      nullptr /* e1_orientations */,
+                                                      nullptr /* e2_orientations */,
+                                                      nullptr /* stiffness_scaling */,
                                                       {},
                                                       0.0,
                                                       two_dim_type)));

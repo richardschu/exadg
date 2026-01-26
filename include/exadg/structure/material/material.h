@@ -40,6 +40,7 @@ class Material
 {
 public:
   typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
   typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
   typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
 
@@ -260,6 +261,23 @@ public:
                   "Overwrite this method in derived class to access stored deformation gradient."));
 
     tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Return the stored material orientations `E_1` and `E_2`.
+   */
+  virtual std::vector<vector>
+  get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(
+      false,
+      dealii::ExcMessage(
+        "Overwrite this method in derived class to access stored material orientation data."));
+
+    std::vector<vector> dummy;
     return dummy;
   }
 };

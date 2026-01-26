@@ -211,8 +211,9 @@ public:
            std::shared_ptr<MaterialDescriptor const>             material_descriptor_in,
            Parameters const &                                    param_in,
            std::string const &                                   field_in,
-           bool const                                            setup_scalar_field_in,
-           MPI_Comm const &                                      mpi_comm_in);
+           bool const       setup_scalar_postprocessing_field_in,
+           bool const       setup_vector_postprocessing_field_in,
+           MPI_Comm const & mpi_comm_in);
 
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
@@ -239,10 +240,16 @@ public:
   initialize_dof_vector(VectorType & src) const final;
 
   /*
-   * Initialization of DoF vector for scalar field.
+   * Initialization of DoF vector for scalar postpocessing field.
    */
   void
-  initialize_dof_vector_scalar(VectorType & src) const;
+  initialize_dof_vector_scalar_postprocessing(VectorType & src) const;
+
+  /*
+   * Initialization of DoF vector for vector postprocessing field.
+   */
+  void
+  initialize_dof_vector_vector_postprocessing(VectorType & src) const;
 
   /*
    * Prescribe initial conditions using a specified initial solution function.
@@ -359,7 +366,10 @@ public:
   get_dof_handler() const;
 
   dealii::DoFHandler<dim> const &
-  get_dof_handler_scalar() const;
+  get_dof_handler_scalar_postprocessing() const;
+
+  dealii::DoFHandler<dim> const &
+  get_dof_handler_vector_postprocessing() const;
 
   dealii::types::global_dof_index
   get_number_of_dofs() const;
@@ -394,6 +404,31 @@ public:
   compute_max_principal_stress(VectorType &       dst_scalar_valued,
                                VectorType const & src_vector_valued) const;
 
+  // compute the local material orientation E1
+  void
+  compute_E1_orientation(VectorType &       dst_vector_postprocessing_valued,
+                         VectorType const & src_vector_valued) const;
+
+  // compute the local material orientation E2
+  void
+  compute_E2_orientation(VectorType &       dst_vector_postprocessing_valued,
+                         VectorType const & src_vector_valued) const;
+
+  // compute local traction component: full
+  void
+  compute_traction_local_full(VectorType &       dst_vector_postprocessing_valued,
+                              VectorType const & src_vector_valued) const;
+
+  // compute local traction component: normal
+  void
+  compute_traction_local_normal(VectorType &       dst_vector_postprocessing_valued,
+                                VectorType const & src_vector_valued) const;
+
+  // compute local traction component: in-plane
+  void
+  compute_traction_local_inplane(VectorType &       dst_vector_postprocessing_valued,
+                                 VectorType const & src_vector_valued) const;
+
 private:
   /*
    * Initializes dealii::DoFHandler.
@@ -408,7 +443,10 @@ private:
   get_dof_name_periodicity_and_hanging_node_constraints() const;
 
   std::string
-  get_dof_name_scalar() const;
+  get_dof_name_scalar_postprocessing() const;
+
+  std::string
+  get_dof_name_vector_postprocessing() const;
 
   std::string
   get_quad_name() const;
@@ -420,7 +458,10 @@ private:
   get_dof_index_periodicity_and_hanging_node_constraints() const;
 
   unsigned int
-  get_dof_index_scalar() const;
+  get_dof_index_scalar_postprocessing() const;
+
+  unsigned int
+  get_dof_index_vector_postprocessing() const;
 
   unsigned int
   get_quad_index() const;
@@ -498,9 +539,14 @@ private:
   std::shared_ptr<dealii::FiniteElement<dim>> fe;
   dealii::DoFHandler<dim>                     dof_handler;
 
-  bool                                        setup_scalar_field;
-  std::shared_ptr<dealii::FiniteElement<dim>> fe_scalar;
-  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_scalar;
+  bool                                        setup_scalar_field_postprocessing;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_scalar_postprocessing;
+  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_scalar_postprocessing;
+
+  bool                                        setup_vector_field_postprocessing;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_vector_postprocessing;
+  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_vector_postprocessing;
+
 
   // AffineConstraints object as needed by iterative solvers and preconditioners for linear systems
   // of equations. This constraint object contains additional constraints from Dirichlet boundary
@@ -523,14 +569,20 @@ private:
   // set beforehand in separate routines.
   dealii::AffineConstraints<Number> affine_constraints_periodicity_and_hanging_nodes;
 
-  // Constraints object for the scalar field containing only periodicity and hanging node
-  // constraints as we do not enforce further Dirichlet boundary conditions on the scalar field.
-  dealii::AffineConstraints<Number> affine_constraints_periodicity_and_hanging_nodes_scalar;
+  // Constraints object for the postprocessing fields containing only periodicity and hanging node
+  // constraints as we do not enforce further Dirichlet boundary conditions on the these fields.
+  // Note that these constraints will remain empty for the default discontinuous space.
+  dealii::AffineConstraints<Number>
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing;
+  dealii::AffineConstraints<Number>
+    affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing;
 
   std::string const dof_index = "dof";
   std::string const dof_index_periodicity_and_hanging_node_constraints =
     "dof_periodicity_hanging_nodes";
-  std::string const dof_index_scalar = "dof_scalar";
+
+  std::string const dof_index_scalar_postprocessing = "dof_scalar_postprocessing";
+  std::string const dof_index_vector_postprocessing = "dof_vector_postprocessing";
 
   std::string const quad_index               = "quad";
   std::string const quad_index_gauss_lobatto = "quad_gauss_lobatto";
@@ -596,9 +648,10 @@ private:
   /*
    * Mass (inverse) operator(s) and solvers
    */
-  std::shared_ptr<PreconditionerBase<Number>>            mass_preconditioner;
-  std::shared_ptr<Krylov::SolverBase<VectorType>>        mass_solver;
-  InverseMassOperator<dim, 1 /* n_components */, Number> inverse_mass_scalar;
+  std::shared_ptr<PreconditionerBase<Number>>              mass_preconditioner;
+  std::shared_ptr<Krylov::SolverBase<VectorType>>          mass_solver;
+  InverseMassOperator<dim, 1 /* n_components */, Number>   inverse_mass_scalar_postprocessing;
+  InverseMassOperator<dim, dim /* n_components */, Number> inverse_mass_vector_postprocessing;
 
   /*
    * Calculators to obtain derived quantities.
@@ -608,6 +661,13 @@ private:
   DisplacementJacobianCalculator<dim, Number> displacement_jacobian_calculator;
 
   MaxPrincipalStressCalculator<dim, Number> max_principal_stress_calculator;
+
+  LocalStressCalculator<dim, Number> E1_orientation_calculator;
+  LocalStressCalculator<dim, Number> E2_orientation_calculator;
+
+  LocalStressCalculator<dim, Number> traction_local_full_calculator;
+  LocalStressCalculator<dim, Number> traction_local_normal_calculator;
+  LocalStressCalculator<dim, Number> traction_local_inplane_calculator;
 
   /*
    * MPI communicator

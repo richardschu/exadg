@@ -171,6 +171,31 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     }
   }
 
+  // Store only the minimal amount for the general case of having a field of
+  // material coordinate systems. The mean fiber direction is always needed, since
+  // I_i_star(M_1) is used as a fiber switch. However, we need M_2 for postprocessing.
+  fiber_direction_M_1.resize(N_FIBER_FAMILIES);
+  fiber_direction_M_2.resize(N_FIBER_FAMILIES);
+  for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
+  {
+    fiber_direction_M_1[i].initialize(matrix_free, quad_index, false, false);
+    fiber_direction_M_2[i].initialize(matrix_free, quad_index, false, false);
+  }
+
+  if constexpr(cache_level < 2)
+  {
+    // The structure tensor is reconstructed from M1 and M2 on the fly.
+  }
+  else
+  {
+    // The structure tensors are stored for each fiber family.
+    fiber_structure_tensor.resize(N_FIBER_FAMILIES);
+    for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
+    {
+      fiber_structure_tensor[i].initialize(matrix_free, quad_index, false, false);
+    }
+  }
+
   // The vectors created or imported from the binary files in the application
   // increase in h-level and then in p-level (ph-Multigrid expected here).
   if(orientation_vectors_provided)
@@ -372,15 +397,10 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   // The material coordinate system is initialized constant in the entire domain.
   // Phi is the angle from the circumferential vector E_1 towards the longitudinal
   // vector E_2.
-  vector                 M_3;
   std::vector<vector>    M_1(N_FIBER_FAMILIES), M_2(N_FIBER_FAMILIES);
   dealii::Tensor<1, dim> E_1_default, E_2_default;
-  for(unsigned int d = 0; d < dim; d++)
-  {
-    Number const reciprocal_norm = 1.0 / std::sqrt(static_cast<Number>(dim));
-    E_1_default[d]               = reciprocal_norm;
-    E_2_default[d]               = reciprocal_norm;
-  }
+  E_1_default[0] = 1.0;
+  E_2_default[1] = 1.0;
 
   AssertThrow(N_FIBER_FAMILIES <= 2,
               dealii::ExcMessage(
@@ -397,38 +417,6 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
 
       M_1[i] = fiber_cos_phi[i] * E_1_default - fiber_sin_phi[i] * E_2_default;
       M_2[i] = fiber_sin_phi[i] * E_1_default + fiber_cos_phi[i] * E_2_default;
-    }
-
-    dealii::Tensor<1, dim> E_3 = cross_product_3d(E_1_default, E_2_default);
-    M_3                        = E_3;
-  }
-
-  // Store only the minimal amount for the general case of having a field of
-  // material coordinate systems. The mean fiber direction is always needed, since
-  // I_i_star(M_1) is used as a fiber switch.
-  fiber_direction_M_1.resize(N_FIBER_FAMILIES);
-
-  for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
-  {
-    fiber_direction_M_1[i].initialize(matrix_free, quad_index, false, false);
-  }
-
-  if constexpr(cache_level < 2)
-  {
-    // The structure tensor is reconstructed from M1 and M2 on the fly.
-    fiber_direction_M_2.resize(N_FIBER_FAMILIES);
-    for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
-    {
-      fiber_direction_M_2[i].initialize(matrix_free, quad_index, false, false);
-    }
-  }
-  else
-  {
-    // The structure tensors are stored for each fiber family.
-    fiber_structure_tensor.resize(N_FIBER_FAMILIES);
-    for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
-    {
-      fiber_structure_tensor[i].initialize(matrix_free, quad_index, false, false);
     }
   }
 
@@ -536,26 +524,22 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       else
       {
         // The mean fiber directions are never updated after initialization
-        // with the default E1 and E2 vectors.
+        // with the default `E_1` and `E_2` vectors.
       }
 
       // Fill the fiber orientation vectors or the structure tensor directly
       // based on the Euclidean material coordinate system and correct all
       // corresponding stored data initialized wrongly before.
-      if constexpr(cache_level < 2)
+      for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
       {
-        for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
-        {
-          fiber_direction_M_1[i].set_coefficient_cell(cell, q, M_1[i]);
-          fiber_direction_M_2[i].set_coefficient_cell(cell, q, M_2[i]);
-        }
+        fiber_direction_M_1[i].set_coefficient_cell(cell, q, M_1[i]);
+        fiber_direction_M_2[i].set_coefficient_cell(cell, q, M_2[i]);
       }
-      else
+
+      if constexpr(cache_level >= 2)
       {
         for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
         {
-          fiber_direction_M_1[i].set_coefficient_cell(cell, q, M_1[i]);
-
           symmetric_tensor const H_i = compute_structure_tensor(M_1[i], M_2[i]);
           fiber_structure_tensor[i].set_coefficient_cell(cell, q, H_i);
 
@@ -754,10 +738,11 @@ inline dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
 IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
   compute_structure_tensor(vector const & M_1, vector const & M_2) const
 {
-  vector const M_3 = cross_product_3d(M_1, M_2);
+  vector M_3 = cross_product_3d(M_1, M_2);
+  M_3 /= M_3.norm();
 
   // The structure tensor is given as:
-  // H = H_11 * M1 (x) M1 + H_22 * M2 (x) M2 + H_22 * M2 (x) M2
+  // H = H_11 * M1 (x) M1 + H_22 * M2 (x) M2 + H_33 * M3 (x) M3
   // Note that j >= i, since we operate on a `symmetric_tensor`.
   symmetric_tensor result;
   for(unsigned int i = 0; i < dim; ++i)
@@ -1854,6 +1839,39 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   }
 
   return (gradient_displacement_coefficients.get_coefficient_cell(cell, q));
+}
+
+template<int dim,
+         typename Number,
+         unsigned int check_type,
+         bool         stable_formulation,
+         unsigned int cache_level>
+std::vector<dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>>
+IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+  get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const
+{
+  // The fiber families just differ in the fiber angle relative to the `E_1` direction towards
+  // `E_2`.
+  unsigned int constexpr fiber_idx = 0;
+  vector const M_1                 = fiber_direction_M_1[fiber_idx].get_coefficient_cell(cell, q);
+  vector const M_2                 = fiber_direction_M_2[fiber_idx].get_coefficient_cell(cell, q);
+
+  Number const fiber_sin_phi =
+    std::sin(pow(-1.0, fiber_idx + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
+  Number const fiber_cos_phi =
+    std::cos(pow(-1.0, fiber_idx + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
+
+  // We computed the mean fiber directions as
+  // M_1 = fiber_cos_phi * E_1 - fiber_sin_phi * E_2
+  // M_2 = fiber_sin_phi * E_1 + fiber_cos_phi * E_2
+  // such that we get
+  // E_1 = fiber_cos_phi * M_1 + fiber_sin_phi * M_2
+  // E_2 = fiber_cos_phi * M_2 - fiber_sin_phi * M_1
+
+  std::vector<vector> E1_E2 = {fiber_cos_phi * M_1 + fiber_sin_phi * M_2,
+                               fiber_cos_phi * M_2 - fiber_sin_phi * M_1};
+
+  return E1_E2;
 }
 
 // clang-format off

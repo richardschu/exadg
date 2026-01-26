@@ -125,7 +125,8 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
       application->get_material_descriptor_ale_elasticity(),
       application->get_parameters_ale_elasticity(),
       "ale_elasticity",
-      false /* setup_scalar_field */,
+      false /* setup_scalar_postprocessing_field */,
+      false /* setup_vector_postprocessing_field */,
       mpi_comm);
   }
   else

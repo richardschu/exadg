@@ -47,7 +47,8 @@ Operator<dim, Number>::Operator(
   std::shared_ptr<MaterialDescriptor const>             material_descriptor_in,
   Parameters const &                                    param_in,
   std::string const &                                   field_in,
-  bool const                                            setup_scalar_field_in,
+  bool const                                            setup_scalar_field_postprocessing_in,
+  bool const                                            setup_vector_field_postprocessing_in,
   MPI_Comm const &                                      mpi_comm_in)
   : dealii::EnableObserverPointer(),
     grid(grid_in),
@@ -59,7 +60,8 @@ Operator<dim, Number>::Operator(
     param(param_in),
     field(field_in),
     dof_handler(*grid_in->triangulation),
-    setup_scalar_field(setup_scalar_field_in),
+    setup_scalar_field_postprocessing(setup_scalar_field_postprocessing_in),
+    setup_vector_field_postprocessing(setup_vector_field_postprocessing_in),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_in) == 0)
 {
@@ -125,34 +127,70 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
   print_parameter(pcout, "number of dofs per cell", fe->n_dofs_per_cell());
   print_parameter(pcout, "number of dofs (total)", dof_handler.n_dofs());
 
-  // Set up finite element, DoF handler and constraints of scalar field.
-  if(setup_scalar_field)
+  // Set up finite element, DoF handler and constraints of scalar postprocessing field.
+  if(setup_scalar_field_postprocessing)
   {
     bool constexpr scalar_field_is_dg = true;
-    fe_scalar                         = create_finite_element<dim>(param.grid.element_type,
-                                           scalar_field_is_dg /* is_dg */,
-                                           1 /* n_components */,
-                                           param.degree);
+    fe_scalar_postprocessing          = create_finite_element<dim>(param.grid.element_type,
+                                                          scalar_field_is_dg /* is_dg */,
+                                                          1 /* n_components */,
+                                                          param.degree);
 
-    dof_handler_scalar = std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
-    dof_handler_scalar->distribute_dofs(*fe_scalar);
+    dof_handler_scalar_postprocessing =
+      std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
+    dof_handler_scalar_postprocessing->distribute_dofs(*fe_scalar_postprocessing);
 
     // Set up hanging node and periodicity constraints for scalar field.
-    affine_constraints_periodicity_and_hanging_nodes_scalar.clear();
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing.clear();
     if(not scalar_field_is_dg)
     {
       add_hanging_node_and_periodicity_constraints(
-        affine_constraints_periodicity_and_hanging_nodes_scalar, *this->grid, *dof_handler_scalar);
+        affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing,
+        *this->grid,
+        *dof_handler_scalar_postprocessing);
     }
-    affine_constraints_periodicity_and_hanging_nodes_scalar.close();
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing.close();
 
     pcout << std::endl
           << "Discontinuous Galerkin finite element discretization of scalar field:" << std::endl
           << std::endl;
 
     print_parameter(pcout, "degree of 1D polynomials", param.degree);
-    print_parameter(pcout, "number of dofs per cell", fe_scalar->n_dofs_per_cell());
-    print_parameter(pcout, "number of dofs (total)", dof_handler_scalar->n_dofs());
+    print_parameter(pcout, "number of dofs per cell", fe_scalar_postprocessing->n_dofs_per_cell());
+    print_parameter(pcout, "number of dofs (total)", dof_handler_scalar_postprocessing->n_dofs());
+  }
+
+  // Set up finite element, DoF handler and constraints of vector postprocessing field.
+  if(setup_vector_field_postprocessing)
+  {
+    bool constexpr vector_field_is_dg = true;
+    fe_vector_postprocessing          = create_finite_element<dim>(param.grid.element_type,
+                                                          vector_field_is_dg /* is_dg */,
+                                                          dim /* n_components */,
+                                                          param.degree);
+
+    dof_handler_vector_postprocessing =
+      std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
+    dof_handler_vector_postprocessing->distribute_dofs(*fe_vector_postprocessing);
+
+    // Set up hanging node and periodicity constraints for vector field.
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing.clear();
+    if(not vector_field_is_dg)
+    {
+      add_hanging_node_and_periodicity_constraints(
+        affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing,
+        *this->grid,
+        *dof_handler_vector_postprocessing);
+    }
+    affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing.close();
+
+    pcout << std::endl
+          << "Discontinuous Galerkin finite element discretization of vector field:" << std::endl
+          << std::endl;
+
+    print_parameter(pcout, "degree of 1D polynomials", param.degree);
+    print_parameter(pcout, "number of dofs per cell", fe_vector_postprocessing->n_dofs_per_cell());
+    print_parameter(pcout, "number of dofs (total)", dof_handler_vector_postprocessing->n_dofs());
   }
 }
 
@@ -190,12 +228,23 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   matrix_free_data.insert_constraint(&affine_constraints_periodicity_and_hanging_nodes,
                                      get_dof_name_periodicity_and_hanging_node_constraints());
 
-  // Insert `dealii::DoFHandler` and `dealii::AffineConstraints` for scalar field.
-  if(setup_scalar_field)
+  // Insert `dealii::DoFHandler` and `dealii::AffineConstraints` for postprocessing fields.
+  if(setup_scalar_field_postprocessing)
   {
-    matrix_free_data.insert_dof_handler(dof_handler_scalar.get(), get_dof_name_scalar());
-    matrix_free_data.insert_constraint(&affine_constraints_periodicity_and_hanging_nodes_scalar,
-                                       get_dof_name_scalar());
+    matrix_free_data.insert_dof_handler(dof_handler_scalar_postprocessing.get(),
+                                        get_dof_name_scalar_postprocessing());
+    matrix_free_data.insert_constraint(
+      &affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing,
+      get_dof_name_scalar_postprocessing());
+  }
+
+  if(setup_vector_field_postprocessing)
+  {
+    matrix_free_data.insert_dof_handler(dof_handler_vector_postprocessing.get(),
+                                        get_dof_name_vector_postprocessing());
+    matrix_free_data.insert_constraint(
+      &affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing,
+      get_dof_name_vector_postprocessing());
   }
 
   // Set up and insert `dealii::Quadrature` objects.
@@ -262,7 +311,7 @@ Operator<dim, Number>::setup_operators()
   operator_data.quad_index              = get_quad_index();
   operator_data.dof_index_inhomogeneous = get_dof_index_periodicity_and_hanging_node_constraints();
   operator_data.use_matrix_based_vmult  = param.use_matrix_based_implementation;
-  operator_data.sparse_matrix_type              = param.sparse_matrix_type;
+  operator_data.sparse_matrix_type      = param.sparse_matrix_type;
 
   if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
@@ -280,7 +329,7 @@ Operator<dim, Number>::setup_operators()
   operator_data.stable_formulation  = param.stable_formulation;
   if(param.large_deformation)
   {
-    operator_data.pull_back_traction = param.pull_back_traction;
+    operator_data.pull_back_traction      = param.pull_back_traction;
     operator_data.spatial_integration     = param.spatial_integration;
     operator_data.force_material_residual = param.force_material_residual;
     operator_data.cache_level             = param.cache_level;
@@ -288,7 +337,7 @@ Operator<dim, Number>::setup_operators()
   }
   else
   {
-    operator_data.pull_back_traction = false;
+    operator_data.pull_back_traction  = false;
     operator_data.spatial_integration = false;
   }
 
@@ -328,19 +377,39 @@ Operator<dim, Number>::setup_operators()
     boundary_mass_operator.initialize(*matrix_free, affine_constraints, boundary_mass_data);
   }
 
+  // vector inverse mass operator
+  if(setup_vector_field_postprocessing)
+  {
+    InverseMassOperatorData<Number> inverse_mass_operator_data_vector_postprocessing;
+    inverse_mass_operator_data_vector_postprocessing.parameters.solver_data = param.solver_data;
+    inverse_mass_operator_data_vector_postprocessing.dof_index =
+      get_dof_index_vector_postprocessing();
+    inverse_mass_operator_data_vector_postprocessing.quad_index = get_quad_index();
+    inverse_mass_operator_data_vector_postprocessing.parameters.implementation_type =
+      inverse_mass_operator_data_vector_postprocessing.get_optimal_inverse_mass_type(
+        *fe_vector_postprocessing, param.grid.element_type);
+
+    inverse_mass_vector_postprocessing.initialize(
+      *matrix_free,
+      inverse_mass_operator_data_vector_postprocessing,
+      &affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing);
+  }
+
   // scalar inverse mass operator
-  if(setup_scalar_field)
+  if(setup_scalar_field_postprocessing)
   {
     InverseMassOperatorData<Number> inverse_mass_operator_data_scalar;
     inverse_mass_operator_data_scalar.parameters.solver_data = param.solver_data;
-    inverse_mass_operator_data_scalar.dof_index              = get_dof_index_scalar();
-    inverse_mass_operator_data_scalar.quad_index             = get_quad_index();
+    inverse_mass_operator_data_scalar.dof_index  = get_dof_index_scalar_postprocessing();
+    inverse_mass_operator_data_scalar.quad_index = get_quad_index();
     inverse_mass_operator_data_scalar.parameters.implementation_type =
-      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar, param.grid.element_type);
+      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar_postprocessing,
+                                                                      param.grid.element_type);
 
-    inverse_mass_scalar.initialize(*matrix_free,
-                                   inverse_mass_operator_data_scalar,
-                                   &affine_constraints_periodicity_and_hanging_nodes_scalar);
+    inverse_mass_scalar_postprocessing.initialize(
+      *matrix_free,
+      inverse_mass_operator_data_scalar,
+      &affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing);
   }
 
   // setup rhs operator
@@ -359,28 +428,66 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::setup_calculators_for_derived_quantities()
 {
-  if(setup_scalar_field)
+  ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
+    param.large_deformation ?
+      static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
+      static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
+
+  if(setup_scalar_field_postprocessing)
   {
     vector_magnitude_calculator.initialize(*matrix_free,
                                            get_dof_index(),
-                                           get_dof_index_scalar(),
+                                           get_dof_index_scalar_postprocessing(),
                                            get_quad_index());
 
     displacement_jacobian_calculator.initialize(*matrix_free,
                                                 get_dof_index(),
-                                                get_dof_index_scalar(),
+                                                get_dof_index_scalar_postprocessing(),
                                                 get_quad_index());
-
-    ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
-      param.large_deformation ?
-        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
-        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
 
     max_principal_stress_calculator.initialize(*matrix_free,
                                                get_dof_index(),
-                                               get_dof_index_scalar(),
+                                               get_dof_index_scalar_postprocessing(),
                                                get_quad_index(),
                                                elasticity_operator_base);
+  }
+
+  if(setup_vector_field_postprocessing)
+  {
+    E1_orientation_calculator.initialize(*matrix_free,
+                                         get_dof_index(),
+                                         get_dof_index_vector_postprocessing(),
+                                         get_quad_index(),
+                                         LocalStressDirection::E1_orientation_only,
+                                         elasticity_operator_base);
+
+    E2_orientation_calculator.initialize(*matrix_free,
+                                         get_dof_index(),
+                                         get_dof_index_vector_postprocessing(),
+                                         get_quad_index(),
+                                         LocalStressDirection::E2_orientation_only,
+                                         elasticity_operator_base);
+
+    traction_local_full_calculator.initialize(*matrix_free,
+                                              get_dof_index(),
+                                              get_dof_index_vector_postprocessing(),
+                                              get_quad_index(),
+                                              LocalStressDirection::Full,
+                                              elasticity_operator_base);
+
+    traction_local_normal_calculator.initialize(*matrix_free,
+                                                get_dof_index(),
+                                                get_dof_index_vector_postprocessing(),
+                                                get_quad_index(),
+                                                LocalStressDirection::Normal,
+                                                elasticity_operator_base);
+
+    traction_local_inplane_calculator.initialize(*matrix_free,
+                                                 get_dof_index(),
+                                                 get_dof_index_vector_postprocessing(),
+                                                 get_quad_index(),
+                                                 LocalStressDirection::InPlane,
+                                                 elasticity_operator_base);
   }
 }
 
@@ -708,11 +815,22 @@ Operator<dim, Number>::get_dof_name_periodicity_and_hanging_node_constraints() c
 
 template<int dim, typename Number>
 std::string
-Operator<dim, Number>::get_dof_name_scalar() const
+Operator<dim, Number>::get_dof_name_scalar_postprocessing() const
 {
-  AssertThrow(setup_scalar_field, dealii::ExcMessage("Scalar field should not be set up."));
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing field was not set up."));
 
-  return field + "_" + dof_index_scalar;
+  return field + "_" + dof_index_scalar_postprocessing;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_dof_name_vector_postprocessing() const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing field was not set up."));
+
+  return field + "_" + dof_index_vector_postprocessing;
 }
 
 template<int dim, typename Number>
@@ -741,13 +859,13 @@ void
 Operator<dim, Number>::compute_displacement_magnitude(VectorType &       dst_scalar_valued,
                                                       VectorType const & src_vector_valued) const
 {
-  AssertThrow(setup_scalar_field,
+  AssertThrow(setup_scalar_field_postprocessing,
               dealii::ExcMessage("Scalar field not set up. "
                                  "Cannot compute displacement magnitude."));
 
   vector_magnitude_calculator.compute(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
 }
 
 template<int dim, typename Number>
@@ -755,13 +873,13 @@ void
 Operator<dim, Number>::compute_displacement_jacobian(VectorType &       dst_scalar_valued,
                                                      VectorType const & src_vector_valued) const
 {
-  AssertThrow(setup_scalar_field,
+  AssertThrow(setup_scalar_field_postprocessing,
               dealii::ExcMessage("Scalar field not set up. "
                                  "Cannot compute Jacobian of the displacement field."));
 
   displacement_jacobian_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
 }
 
 template<int dim, typename Number>
@@ -769,13 +887,93 @@ void
 Operator<dim, Number>::compute_max_principal_stress(VectorType &       dst_scalar_valued,
                                                     VectorType const & src_vector_valued) const
 {
-  AssertThrow(setup_scalar_field,
+  AssertThrow(setup_scalar_field_postprocessing,
               dealii::ExcMessage("Scalar field not set up. "
                                  "Cannot compute maximum principal stress."));
 
   max_principal_stress_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_E1_orientation(VectorType &       dst_vector_postprocessing_valued,
+                                              VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute E1 orientation."));
+
+  E1_orientation_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                   src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_E2_orientation(VectorType &       dst_vector_postprocessing_valued,
+                                              VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute E2 orientation."));
+
+  E2_orientation_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                   src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_full(VectorType & dst_vector_postprocessing_valued,
+                                                   VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute traction vector: full."));
+
+  traction_local_full_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                        src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_normal(VectorType & dst_vector_postprocessing_valued,
+                                                     VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute traction vector: normal."));
+
+  traction_local_normal_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                          src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_inplane(VectorType & dst_vector_postprocessing_valued,
+                                                      VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute traction vector: in-plane."));
+
+  traction_local_inplane_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                           src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
 }
 
 template<int dim, typename Number>
@@ -787,11 +985,22 @@ Operator<dim, Number>::get_dof_index_periodicity_and_hanging_node_constraints() 
 
 template<int dim, typename Number>
 unsigned int
-Operator<dim, Number>::get_dof_index_scalar() const
+Operator<dim, Number>::get_dof_index_scalar_postprocessing() const
 {
-  AssertThrow(setup_scalar_field, dealii::ExcMessage("Scalar field should not be set up."));
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing field was not set up."));
 
-  return matrix_free_data->get_dof_index(get_dof_name_scalar());
+  return matrix_free_data->get_dof_index(get_dof_name_scalar_postprocessing());
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_dof_index_vector_postprocessing() const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing field was not set up."));
+
+  return matrix_free_data->get_dof_index(get_dof_name_vector_postprocessing());
 }
 
 template<int dim, typename Number>
@@ -844,13 +1053,24 @@ Operator<dim, Number>::initialize_dof_vector(VectorType & src) const
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::initialize_dof_vector_scalar(VectorType & src) const
+Operator<dim, Number>::initialize_dof_vector_scalar_postprocessing(VectorType & src) const
 {
-  AssertThrow(setup_scalar_field,
-              dealii::ExcMessage("Scalar field not set up. "
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing field not set up. "
                                  "Cannot initialize scalar dof vector."));
 
-  matrix_free->initialize_dof_vector(src, get_dof_index_scalar());
+  matrix_free->initialize_dof_vector(src, get_dof_index_scalar_postprocessing());
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::initialize_dof_vector_vector_postprocessing(VectorType & src) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing field not set up. "
+                                 "Cannot initialize vector dof vector."));
+
+  matrix_free->initialize_dof_vector(src, get_dof_index_vector_postprocessing());
 }
 
 template<int dim, typename Number>
@@ -1290,11 +1510,22 @@ Operator<dim, Number>::get_dof_handler() const
 
 template<int dim, typename Number>
 dealii::DoFHandler<dim> const &
-Operator<dim, Number>::get_dof_handler_scalar() const
+Operator<dim, Number>::get_dof_handler_scalar_postprocessing() const
 {
-  AssertThrow(setup_scalar_field, dealii::ExcMessage("Scalar dof handler has not been set up."));
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing dof handler has not been set up."));
 
-  return *dof_handler_scalar;
+  return *dof_handler_scalar_postprocessing;
+}
+
+template<int dim, typename Number>
+dealii::DoFHandler<dim> const &
+Operator<dim, Number>::get_dof_handler_vector_postprocessing() const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing dof handler has not been set up."));
+
+  return *dof_handler_vector_postprocessing;
 }
 
 template<int dim, typename Number>

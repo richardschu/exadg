@@ -709,8 +709,16 @@ private:
     pp_data.output_data.write_displacement_magnitude = true;
     pp_data.output_data.write_displacement_jacobian  = true;
     pp_data.output_data.write_max_principal_stress   = true;
-    pp_data.output_data.write_higher_order           = true;
-    pp_data.output_data.degree                       = this->param.degree;
+
+    bool const orientation_available = material_type == MaterialType::IncompressibleFibrousTissue;
+    pp_data.output_data.write_E1_orientation         = orientation_available;
+    pp_data.output_data.write_E2_orientation         = orientation_available;
+    pp_data.output_data.write_traction_local_full    = orientation_available;
+    pp_data.output_data.write_traction_local_normal  = orientation_available;
+    pp_data.output_data.write_traction_local_inplane = orientation_available;
+
+    pp_data.output_data.write_higher_order = true;
+    pp_data.output_data.degree             = this->param.degree;
 
     pp_data.error_data.time_control_data.is_active        = true;
     pp_data.error_data.time_control_data.start_time       = start_time;

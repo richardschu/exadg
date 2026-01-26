@@ -95,6 +95,12 @@ Discontinuous Galerkin finite element discretization of scalar field:
   number of dofs per cell:                   125
   number of dofs (total):                    1000
 
+Discontinuous Galerkin finite element discretization of vector field:
+
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   375
+  number of dofs (total):                    3000
+
 ... done!
 
 Setup elasticity operator ...
@@ -164,4 +170,4 @@ ________________________________________________________________________________
 ... done!
 
 Calculate error for all fields for solution data:
-  Relative error (L2-norm): 6.03822e-02
+  Relative error (L2-norm): 6.06311e-02

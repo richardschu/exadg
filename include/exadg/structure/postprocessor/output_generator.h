@@ -36,8 +36,15 @@ namespace Structure
 {
 struct OutputData : public OutputDataBase
 {
-  OutputData() : write_displacement_magnitude(false), write_displacement_jacobian(false),
-      write_max_principal_stress(false)
+  OutputData()
+    : write_displacement_magnitude(false),
+      write_displacement_jacobian(false),
+      write_max_principal_stress(false),
+      write_E1_orientation(false),
+      write_E2_orientation(false),
+      write_traction_local_full(false),
+      write_traction_local_normal(false),
+      write_traction_local_inplane(false)
   {
   }
 
@@ -49,6 +56,11 @@ struct OutputData : public OutputDataBase
     print_parameter(pcout, "Write displacement magnitude", write_displacement_magnitude);
     print_parameter(pcout, "Write displacement Jacobian", write_displacement_jacobian);
     print_parameter(pcout, "Write maximum principal stress", write_max_principal_stress);
+    print_parameter(pcout, "Write E1 orientation", write_E1_orientation);
+    print_parameter(pcout, "Write E2 orientation", write_E2_orientation);
+    print_parameter(pcout, "Write traction: full", write_traction_local_full);
+    print_parameter(pcout, "Write traction: normal", write_traction_local_normal);
+    print_parameter(pcout, "Write traction: in-plane", write_traction_local_inplane);
   }
 
   // write displacement magnitude
@@ -59,6 +71,16 @@ struct OutputData : public OutputDataBase
 
   // write maximum principal stress
   bool write_max_principal_stress;
+
+  // write the material orientation vector
+  bool write_E1_orientation;
+  bool write_E2_orientation;
+
+  // write traction vector components relative to the material coordinates:
+  // full vector, normal or in-plane components.
+  bool write_traction_local_full;
+  bool write_traction_local_normal;
+  bool write_traction_local_inplane;
 };
 
 template<int dim, typename Number>

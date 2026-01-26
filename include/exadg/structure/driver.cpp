@@ -59,12 +59,14 @@ Driver<dim, Number>::setup()
 
   application->setup(grid, mapping, multigrid_mappings);
 
-  bool setup_scalar_field = false;
+  bool setup_scalar_postprocessing_field = false;
+  bool setup_vector_postprocessing_field = false;
   if(not is_throughput_study)
   {
     // initialize postprocessor, i.e., get user parameters
-    postprocessor      = application->create_postprocessor();
-    setup_scalar_field = postprocessor->requires_scalar_field();
+    postprocessor                     = application->create_postprocessor();
+    setup_scalar_postprocessing_field = postprocessor->requires_scalar_postprocessing_field();
+    setup_vector_postprocessing_field = postprocessor->requires_vector_postprocessing_field();
   }
 
   // setup spatial operator
@@ -76,7 +78,8 @@ Driver<dim, Number>::setup()
                                                          application->get_material_descriptor(),
                                                          application->get_parameters(),
                                                          "elasticity",
-                                                         setup_scalar_field,
+                                                         setup_scalar_postprocessing_field,
+                                                         setup_vector_postprocessing_field,
                                                          mpi_comm);
 
   pde_operator->setup();
