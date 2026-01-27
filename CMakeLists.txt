@@ -284,6 +284,16 @@ DEAL_II_INITIALIZE_CACHED_VARIABLES()
 
 DEAL_II_SETUP_TARGET(exadg)
 
+include(CheckIPOSupported)
+check_ipo_supported(RESULT _res OUTPUT _out LANGUAGES CXX)
+if (_res)
+  message(STATUS "Compiler supports interprocedural/link-time optimizations")
+  set_property(TARGET exadg
+               PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+  message(STATUS "Compiler does not support interprocedural/link-time optimizations: ${_out}")
+endif()
+
 ENABLE_TESTING()
 
 ADD_SUBDIRECTORY(applications)
