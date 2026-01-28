@@ -51,8 +51,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
     velocity(this->order),
     velocity_red(4),
     velocity_matvec(4 * 2),
-    pressure(4),
-    pressure_matvec(4),
+    pressure(5),
+    pressure_matvec(5),
     convective_divergence_rhs(this->param.order_extrapolation_pressure_nbc),
     divergences(this->order),
     pressure_nbc_rhs(this->param.order_extrapolation_pressure_nbc),
@@ -388,9 +388,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::pressure_step()
 
   // solve linear system of equations
   unsigned int                 n_iter = 0;
-  dealii::ReductionControl     control(this->param.solver_data_pressure_poisson.max_iter,
-                                   this->param.solver_data_pressure_poisson.abs_tol,
-                                   this->param.solver_data_pressure_poisson.rel_tol);
+  dealii::SolverControl        control(this->param.solver_data_pressure_poisson.max_iter,
+                                extrapolate_accuracy.first *
+                                  this->param.solver_data_pressure_poisson.rel_tol);
   dealii::SolverCG<VectorType> solver(control);
   solver.solve(*laplace_op, pressure_np, pressure_rhs, *poisson_preconditioner);
   n_iter = control.last_step();
@@ -414,7 +414,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::pressure_step()
                 << "Pressure step prepare: " << t_rhs << "/" << t_extrapol << " s, solve " << t_sol
                 << std::endl
                 << "Solve pressure step (projection reduced residual from "
-                << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second << "):";
+                << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second
+                << " solve to " << control.last_value() << "):";
     print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
   }
 
@@ -540,9 +541,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     const double t_residual = timer2.wall_time();
     timer2.restart();
 
-    dealii::ReductionControl          control(this->param.solver_data_momentum.max_iter,
-                                     this->param.solver_data_momentum.abs_tol,
-                                     this->param.solver_data_momentum.rel_tol);
+    dealii::SolverControl             control(this->param.solver_data_momentum.max_iter,
+                                  extrapolate_accuracy.first *
+                                    this->param.solver_data_momentum.rel_tol);
     dealii::SolverCG<VectorTypeFloat> solver_cg(control);
     velocity_red.back() = 0;
     op_rt_float->set_parameters(factor_mass, factor_lapl);
@@ -571,7 +572,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     {
       this->pcout << std::endl
                   << "Solve viscous step (projection reduced residual from "
-                  << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second << "):";
+                  << extrapolate_accuracy.first << " to " << extrapolate_accuracy.second
+                  << " solve to " << control.last_value() << "):";
       print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
     }
 

@@ -100,6 +100,25 @@ extrapolate_vectors(std::vector<Number3> const &                                
     for(unsigned int i = 0; i < locally_owned_size; ++i)
       res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
   }
+  else if(factors.size() == 5)
+  {
+    Number const * vec_0  = vectors[0].begin();
+    Number const * vec_1  = vectors[1].begin();
+    Number const * vec_2  = vectors[2].begin();
+    Number const * vec_3  = vectors[3].begin();
+    Number const * vec_4  = vectors[4].begin();
+    Number2 *      res    = result.begin();
+    Number2 const  beta_0 = factors[0];
+    Number2 const  beta_1 = factors[1];
+    Number2 const  beta_2 = factors[2];
+    Number2 const  beta_3 = factors[3];
+    Number2 const  beta_4 = factors[4];
+
+    DEAL_II_OPENMP_SIMD_PRAGMA
+    for(unsigned int i = 0; i < locally_owned_size; ++i)
+      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] +
+               beta_4 * vec_4[i];
+  }
   else
     for(unsigned int i = 0; i < locally_owned_size; ++i)
     {
@@ -171,6 +190,25 @@ extrapolate_vectors_and_add(
     DEAL_II_OPENMP_SIMD_PRAGMA
     for(unsigned int i = 0; i < locally_owned_size; ++i)
       res[i] += beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
+  }
+  else if(factors.size() == 5)
+  {
+    Number const * vec_0  = vectors[0].begin();
+    Number const * vec_1  = vectors[1].begin();
+    Number const * vec_2  = vectors[2].begin();
+    Number const * vec_3  = vectors[3].begin();
+    Number const * vec_4  = vectors[4].begin();
+    Number2 *      res    = result.begin();
+    Number2 const  beta_0 = factors[0];
+    Number2 const  beta_1 = factors[1];
+    Number2 const  beta_2 = factors[2];
+    Number2 const  beta_3 = factors[3];
+    Number2 const  beta_4 = factors[4];
+
+    DEAL_II_OPENMP_SIMD_PRAGMA
+    for(unsigned int i = 0; i < locally_owned_size; ++i)
+      res[i] += beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] +
+                beta_4 * vec_4[i];
   }
   else
     for(unsigned int i = 0; i < locally_owned_size; ++i)

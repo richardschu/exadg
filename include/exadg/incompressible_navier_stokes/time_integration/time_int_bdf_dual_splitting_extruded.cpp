@@ -465,9 +465,10 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
 
   // solve linear system of equations
   unsigned int                 n_iter = 0;
-  dealii::ReductionControl     control(this->param.solver_data_pressure_poisson.max_iter,
-                                   this->param.solver_data_pressure_poisson.abs_tol,
-                                   this->param.solver_data_pressure_poisson.rel_tol);
+  dealii::SolverControl        control(this->param.solver_data_pressure_poisson.max_iter,
+                                (this->use_extrapolation ? extrapolate_accuracy.first :
+                                                                  pressure_rhs.l2_norm()) *
+                                  this->param.solver_data_pressure_poisson.rel_tol);
   dealii::SolverCG<VectorType> solver(control);
   solver.solve(*laplace_op, pressure_np, pressure_rhs, *poisson_preconditioner);
   n_iter = control.last_step();
@@ -591,9 +592,10 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::viscous_step()
     const double t_residual = timer2.wall_time();
     timer2.restart();
 
-    dealii::ReductionControl          control(this->param.solver_data_momentum.max_iter,
-                                     this->param.solver_data_momentum.abs_tol,
-                                     this->param.solver_data_momentum.rel_tol);
+    dealii::SolverControl             control(this->param.solver_data_momentum.max_iter,
+                                  (this->use_extrapolation ? extrapolate_accuracy.first :
+                                                                         rhs_float.l2_norm()) *
+                                    this->param.solver_data_momentum.rel_tol);
     dealii::SolverCG<VectorTypeFloat> solver_cg(control);
     velocity_red.back() = 0;
     op_rt_float->set_parameters(factor_mass, factor_lapl);
