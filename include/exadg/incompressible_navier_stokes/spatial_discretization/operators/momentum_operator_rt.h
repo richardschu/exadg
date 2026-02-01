@@ -1167,10 +1167,11 @@ public:
   }
 
   void
-  evaluate_momentum_rhs(const VectorType & pressure,
-                        const VectorType & velocity_old,
-                        const Number       velocity_scale,
-                        VectorType &       rhs) const
+  evaluate_momentum_rhs(const VectorType &                           pressure,
+                        const VectorType &                           velocity_old,
+                        const Number                                 velocity_scale,
+                        VectorType &                                 rhs,
+                        const std::shared_ptr<dealii::Function<dim>> source_function = {}) const
   {
     AssertDimension(pressure_shape_info.data[0].n_q_points_1d, shape_info.data[0].n_q_points_1d);
     AssertDimension(pressure_shape_info.data[0].fe_degree, shape_info.data[1].fe_degree);
@@ -1195,22 +1196,30 @@ public:
 
       const unsigned int degree = shape_info.data[0].fe_degree;
       if(degree == 2)
-        do_momentum_rhs_on_cell<2>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<2>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
       else if(degree == 3)
-        do_momentum_rhs_on_cell<3>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<3>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
       else if(degree == 4)
-        do_momentum_rhs_on_cell<4>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<4>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
 #ifndef DEBUG
       else if(degree == 5)
-        do_momentum_rhs_on_cell<5>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<5>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
       else if(degree == 6)
-        do_momentum_rhs_on_cell<6>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<6>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
       else if(degree == 7)
-        do_momentum_rhs_on_cell<7>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<7>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
       else if(degree == 8)
-        do_momentum_rhs_on_cell<8>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<8>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
       else if(degree == 9)
-        do_momentum_rhs_on_cell<9>(cell, pressure, velocity_old, velocity_scale, rhs);
+        do_momentum_rhs_on_cell<9>(
+          cell, pressure, velocity_old, velocity_scale, source_function, rhs);
 #endif
       else
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
@@ -5232,11 +5241,12 @@ private:
 
   template<int degree>
   void
-  do_momentum_rhs_on_cell(const unsigned int cell,
-                          const VectorType & pressure,
-                          const VectorType & velocity_old,
-                          const Number       velocity_scale,
-                          VectorType &       rhs) const
+  do_momentum_rhs_on_cell(const unsigned int                             cell,
+                          const VectorType &                             pressure,
+                          const VectorType &                             velocity_old,
+                          const Number                                   velocity_scale,
+                          const std::shared_ptr<dealii::Function<dim>> & rhs_function,
+                          VectorType &                                   rhs) const
   {
     constexpr unsigned int n_q_points_1d   = degree + 1;
     constexpr unsigned int n_points        = Utilities::pow(n_q_points_1d, dim);
@@ -5303,15 +5313,24 @@ private:
       if constexpr(dim == 2)
       {
         const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
-        const VectorizedArray<Number> t0     = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
-        const VectorizedArray<Number> t1     = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
-        const VectorizedArray<Number> s0     = jac_xy[0][0] * t0 + jac_xy[1][0] * t1;
-        const VectorizedArray<Number> s1     = jac_xy[0][1] * t0 + jac_xy[1][1] * t1;
+        VectorizedArray<Number>       val_real[2] = {jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1],
+                                               jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1]};
+        for(unsigned int d = 0; d < dim; ++d)
+          val_real[d] *= inv_jac_det * velocity_scale;
+        if(rhs_function.get() != nullptr)
+          for(unsigned int v = 0; v < n_lanes; ++v)
+          {
+            Point<dim> point =
+              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1];
+            for(unsigned int d = 0; d < dim; ++d)
+              val_real[d][v] += rhs_function->value(point, d);
+          }
 
-        quad_values[q1 * dim] =
-          s0 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
-        quad_values[q1 * dim + 1] =
-          s1 * (inv_jac_det * velocity_scale * mapping_info.quad_weights_xy[q1]);
+        const VectorizedArray<Number> s0 = jac_xy[0][0] * val_real[0] + jac_xy[1][0] * val_real[1];
+        const VectorizedArray<Number> s1 = jac_xy[0][1] * val_real[0] + jac_xy[1][1] * val_real[1];
+
+        quad_values[q1 * dim]     = s0 * (mapping_info.quad_weights_xy[q1]);
+        quad_values[q1 * dim + 1] = s1 * (mapping_info.quad_weights_xy[q1]);
 
         pressure_values[q1] *= mapping_info.quad_weights_xy[q1];
       }
@@ -5327,24 +5346,28 @@ private:
           val_real[0] = jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1];
           val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
           val_real[2] = h_z * val[2];
+          for(unsigned int d = 0; d < dim; ++d)
+            val_real[d] *= h_z_inverse * inv_jac_det * velocity_scale;
 
-          const Number weight_z = mapping_info.quad_weights_z[qz];
-          // need factors without h_z_inverse in code below because
-          // it cancels with h_z
-          const VectorizedArray<Number> factor_ma =
-            (mapping_info.quad_weights_xy[q1] * h_z_inverse * inv_jac_det * velocity_scale) *
-            weight_z;
+          if(rhs_function.get() != nullptr)
+            for(unsigned int v = 0; v < n_lanes; ++v)
+            {
+              Point<dim> point;
+              for(unsigned int d = 0; d < 2; ++d)
+                point[d] =
+                  mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
+              for(unsigned int d = 0; d < dim; ++d)
+                val_real[d][v] += rhs_function->value(point, d);
+            }
 
           // For the test function part, the Jacobian determinant
           // that is part of the integration factor cancels with the
           // inverse Jacobian determinant present in the factor of
           // the derivative
-
-          // jac_grad * (J^{-1} * (grad_in * factor)), re-use part in
-          // braces as 'tmp' from above
-          VectorizedArray<Number> value_tmp[dim];
           for(unsigned int d = 0; d < dim; ++d)
-            val_real[d] *= factor_ma;
+            val_real[d] *= mapping_info.quad_weights_xy[q1] * mapping_info.quad_weights_z[qz];
+
+          VectorizedArray<Number> value_tmp[dim];
           for(unsigned int d = 0; d < 2; ++d)
             value_tmp[d] = jac_xy[0][d] * val_real[0] + jac_xy[1][d] * val_real[1];
           value_tmp[2] = h_z * val_real[2];
@@ -5353,7 +5376,8 @@ private:
           quad_values[q * dim + 1] = value_tmp[1];
           quad_values[q * dim + 2] = value_tmp[2];
 
-          pressure_values[q] *= (mapping_info.quad_weights_xy[q1] * weight_z);
+          pressure_values[q] *=
+            (mapping_info.quad_weights_xy[q1] * mapping_info.quad_weights_z[qz]);
         }
       }
     }

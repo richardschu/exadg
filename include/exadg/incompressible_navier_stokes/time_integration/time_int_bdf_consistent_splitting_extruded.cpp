@@ -375,6 +375,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::pressure_step()
   std::pair<double, double> extrapolate_accuracy(0., 0.);
   if(this->use_extrapolation)
   {
+    pressure[0].copy_locally_owned_data_from(pressure_np);
     poisson_preconditioner->get_dg_matrix().vmult(pressure_matvec[0], pressure[0]);
     extrapolate_accuracy =
       compute_least_squares_fit(pressure_matvec, pressure_rhs, pressure, pressure_np);
@@ -490,18 +491,23 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
       factors[i] = this->bdf.get_alpha(i) / this->get_time_step_size();
     extrapolate_vectors(factors, velocity, solution_rt);
 
-    op_rt->evaluate_momentum_rhs(pressure_np, solution_rt, 1.0, rhs_rt);
+    if(this->param.right_hand_side == true)
+    {
+      pde_operator->get_field_functions()->right_hand_side->set_time(this->get_next_time());
+      op_rt->evaluate_momentum_rhs(pressure_np,
+                                   solution_rt,
+                                   1.0,
+                                   rhs_rt,
+                                   pde_operator->get_field_functions()->right_hand_side);
+    }
+    else
+    {
+      op_rt->evaluate_momentum_rhs(pressure_np, solution_rt, 1.0, rhs_rt);
+    }
 
     for(unsigned int i = 0; i < factors.size(); ++i)
       factors[i] = -this->extra.get_beta(i);
     extrapolate_vectors_and_add(factors, this->vec_convective_term, rhs_rt);
-
-    if(this->param.right_hand_side == true)
-    {
-      op_rt->evaluate_add_body_force(this->get_next_time(),
-                                     *pde_operator->get_field_functions()->right_hand_side,
-                                     rhs_rt);
-    }
 
     const double t_rhs = timer.wall_time();
 
@@ -529,8 +535,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     DEAL_II_OPENMP_SIMD_PRAGMA
     for(unsigned int i = 0; i < owned_size; ++i)
       preconditioner_viscous.get_vector().local_element(i) =
-        1.0 / (factor_mass * diagonal_mass.local_element(i) +
-               factor_lapl * diagonal_laplace.local_element(i));
+        1.0f / (float(factor_mass) * diagonal_mass.local_element(i) +
+                float(factor_lapl) * diagonal_laplace.local_element(i));
     const double t_prec = timer2.wall_time();
     timer2.restart();
 
@@ -600,7 +606,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::prepare_vectors_for_next_tim
   velocity[0].swap(solution_rt);
 
   swap_back_one_step(pressure);
-  pressure[0].copy_locally_owned_data_from(pressure_np);
   swap_back_one_step(pressure_matvec);
 
   swap_back_one_step(velocity_red);
