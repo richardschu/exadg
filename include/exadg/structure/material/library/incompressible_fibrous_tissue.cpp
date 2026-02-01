@@ -306,6 +306,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       }
     }
 
+    stiffness_scaling_dof_vector->update_ghost_values();
+
     if(not found_match)
     {
       (*stiffness_scaling_dof_vector) = 0.0;
