@@ -137,7 +137,7 @@ private:
   pressure_step();
 
   void
-  rhs_pressure(VectorType & rhs) const;
+  rhs_pressure(VectorType & rhs);
 
   void
   momentum_step();

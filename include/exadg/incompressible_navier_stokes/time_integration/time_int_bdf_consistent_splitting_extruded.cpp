@@ -129,8 +129,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
   // pressure
   pde_operator->initialize_vector_pressure(pressure_np);
   pde_operator->initialize_vector_pressure(pressure_rhs);
-  for(VectorType & vector : pressure_nbc_rhs)
-    pde_operator->initialize_vector_pressure(vector);
   for(VectorType & vector : divergences)
     pde_operator->initialize_vector_pressure(vector);
   for(VectorType & vector : convective_divergence_rhs)
@@ -179,6 +177,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
     op_rt->initialize_dof_vector(vec);
   // vector not used
   this->convective_term_np.reinit(0);
+  for(VectorType & vector : pressure_nbc_rhs)
+    op_rt->initialize_vector_pressure_neumann_boundary(vector);
 
   for(auto & vector : velocity_red)
     op_rt_float->initialize_dof_vector(vector);
@@ -425,27 +425,32 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::pressure_step()
 
 template<int dim, typename Number>
 void
-TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) const
+TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs)
 {
   /*
    *  I. convective extrapolation
    */
-  rhs.equ(extra_pressure_rhs.get_beta(0), convective_divergence_rhs[0]);
-  for(unsigned int i = 1; i < extra_pressure_rhs.get_order(); ++i)
-    rhs.add(extra_pressure_rhs.get_beta(i), convective_divergence_rhs[i]);
+  std::vector<Number> factors(extra_pressure_rhs.get_order());
+  for(unsigned int i = 0; i < extra_pressure_rhs.get_order(); ++i)
+    factors[i] = extra_pressure_rhs.get_beta(i);
+  extrapolate_vectors(factors, convective_divergence_rhs, rhs);
 
   /*
-   *  II. forcing term
+   *  II. calculate Leray projection
+   */
+  if(this->param.apply_leray_projection)
+  {
+    factors.resize(divergences.size());
+    for(unsigned int i = 0; i < divergences.size(); ++i)
+      factors[i] = -this->bdf.get_alpha(i) / this->get_time_step_size();
+    extrapolate_vectors_and_add(factors, divergences, rhs);
+  }
+
+  /*
+   *  III. forcing term
    */
   laplace_op->evaluate_add_divergence_body_force(
     this->get_next_time(), *pde_operator->get_field_functions()->right_hand_side, rhs);
-
-  /*
-   *  III. calculate Leray projection
-   */
-  if(this->param.apply_leray_projection)
-    for(unsigned int i = 0; i < divergences.size(); ++i)
-      rhs.add(-this->bdf.get_alpha(i) / this->get_time_step_size(), divergences[i]);
 
   /*
    *  IV. handle consistent boundary condition
@@ -454,8 +459,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rh
    *  IV.1 compute curl-curl term by extrapolating the prepared values from
    *  previous times
    */
+  factors.resize(extra_pressure_nbc.get_order());
   for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
-    rhs.add(this->extra_pressure_nbc.get_beta(i), pressure_nbc_rhs[i]);
+    factors[i] = extra_pressure_nbc.get_beta(i);
+  extrapolate_vectors(factors, pressure_nbc_rhs, pressure_nbc_rhs.back());
+  op_rt->add_pressure_neumann_boundary_to_vector(pressure_nbc_rhs.back(), rhs);
 
   /*
    * IV.2 time derivative and contributions of Leray is disabled are ignored

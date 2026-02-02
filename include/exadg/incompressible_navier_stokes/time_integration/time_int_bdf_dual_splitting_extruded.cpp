@@ -125,8 +125,6 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
   // pressure
   pde_operator->initialize_vector_pressure(pressure_np);
   pde_operator->initialize_vector_pressure(pressure_rhs);
-  for(VectorType & vector : pressure_nbc_rhs)
-    pde_operator->initialize_vector_pressure(vector);
 
   // do test for matrix-free operator of optimized kind
   const std::vector<unsigned int> cell_vectorization_category =
@@ -151,39 +149,38 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
 
   op_rt_float->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
 
-  if constexpr(dim == 3)
+  op_rt_float->set_parameters(1.0, 0.0);
+  op_rt_float->compute_diagonal(diagonal_mass);
+
+  preconditioner_mass.get_vector().reinit(diagonal_mass, true);
+  const unsigned int local_size = diagonal_mass.locally_owned_size();
+  DEAL_II_OPENMP_SIMD_PRAGMA
+  for(unsigned int i = 0; i < local_size; ++i)
   {
-    op_rt_float->set_parameters(1.0, 0.0);
-    op_rt_float->compute_diagonal(diagonal_mass);
-
-    preconditioner_mass.get_vector().reinit(diagonal_mass, true);
-    const unsigned int local_size = diagonal_mass.locally_owned_size();
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < local_size; ++i)
-    {
-      AssertThrow(diagonal_mass.local_element(i) > 1e-30, dealii::ExcInternalError());
-      preconditioner_mass.get_vector().local_element(i) = 1. / diagonal_mass.local_element(i);
-    }
-    op_rt_float->set_parameters(0.0, 1.0);
-    op_rt_float->compute_diagonal(diagonal_laplace);
-
-    for(VectorType & vector : velocity)
-      op_rt->initialize_dof_vector(vector);
-
-    solutions_convective.resize(velocity.size());
-    for(VectorType & vector : solutions_convective)
-      op_rt->initialize_dof_vector(vector);
-
-    for(VectorType & vec : this->vec_convective_term)
-      op_rt->initialize_dof_vector(vec);
-    op_rt->initialize_dof_vector(this->convective_term_np);
-
-    for(auto & vector : velocity_red)
-      op_rt_float->initialize_dof_vector(vector);
-    for(auto & vector : velocity_matvec)
-      op_rt_float->initialize_dof_vector(vector);
-    op_rt_float->initialize_dof_vector(rhs_float);
+    AssertThrow(diagonal_mass.local_element(i) > 1e-30, dealii::ExcInternalError());
+    preconditioner_mass.get_vector().local_element(i) = 1. / diagonal_mass.local_element(i);
   }
+  op_rt_float->set_parameters(0.0, 1.0);
+  op_rt_float->compute_diagonal(diagonal_laplace);
+
+  for(VectorType & vector : velocity)
+    op_rt->initialize_dof_vector(vector);
+
+  solutions_convective.resize(velocity.size());
+  for(VectorType & vector : solutions_convective)
+    op_rt->initialize_dof_vector(vector);
+
+  for(VectorType & vec : this->vec_convective_term)
+    op_rt->initialize_dof_vector(vec);
+  op_rt->initialize_dof_vector(this->convective_term_np);
+  for(VectorType & vector : pressure_nbc_rhs)
+    op_rt->initialize_vector_pressure_neumann_boundary(vector);
+
+  for(auto & vector : velocity_red)
+    op_rt_float->initialize_dof_vector(vector);
+  for(auto & vector : velocity_matvec)
+    op_rt_float->initialize_dof_vector(vector);
+  op_rt_float->initialize_dof_vector(rhs_float);
 
   laplace_op = std::make_shared<LaplaceOperator::LaplaceOperatorDG<dim, Number>>();
   laplace_op->reinit(*pde_operator->get_mapping(),
@@ -507,21 +504,27 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::pressure_step()
 
 template<int dim, typename Number>
 void
-TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs) const
+TimeIntBDFDualSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs)
 {
   /*
    * I. Pressure Neumann boundary terms
    */
-  rhs.equ(this->extra_pressure_nbc.get_beta(0), pressure_nbc_rhs[0]);
-  for(unsigned int i = 1; i < extra_pressure_nbc.get_order(); ++i)
-    rhs.add(this->extra_pressure_nbc.get_beta(i), pressure_nbc_rhs[i]);
+  rhs = 0;
+  std::vector<Number> factors(extra_pressure_nbc.get_order());
+  for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
+    factors[i] = extra_pressure_nbc.get_beta(i);
+  extrapolate_vectors(factors, pressure_nbc_rhs, pressure_nbc_rhs.back());
+  op_rt->add_pressure_neumann_boundary_to_vector(pressure_nbc_rhs.back(), rhs);
 
+  /*
+   * II. Body force contribution to rhs
+   */
   if(this->param.right_hand_side)
     op_rt->evaluate_add_pressure_neumann_from_body_force(
       *pde_operator->get_field_functions()->right_hand_side, rhs);
 
   /*
-   * II. calculate divergence term
+   * III. calculate velocity divergence term
    */
   op_rt->evaluate_add_velocity_divergence(solution_rt,
                                           -this->bdf.get_gamma0() / this->get_time_step_size(),

@@ -1262,7 +1262,7 @@ public:
   evaluate_pressure_neumann_from_velocity(const VectorType & velocity,
                                           const bool         convective,
                                           const Number       viscosity,
-                                          VectorType &       pressure_vector) const
+                                          VectorType &       pressure_boundary_vector) const
   {
     velocity.update_ghost_values();
 
@@ -1270,27 +1270,82 @@ public:
     {
       const unsigned int degree = shape_info.data[0].fe_degree;
       if(degree == 2)
-        do_pressure_neumann_on_cell<2>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<2>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
       else if(degree == 3)
-        do_pressure_neumann_on_cell<3>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<3>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
       else if(degree == 4)
-        do_pressure_neumann_on_cell<4>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<4>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
 #ifndef DEBUG
       else if(degree == 5)
-        do_pressure_neumann_on_cell<5>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<5>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
       else if(degree == 6)
-        do_pressure_neumann_on_cell<6>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<6>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
       else if(degree == 7)
-        do_pressure_neumann_on_cell<7>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<7>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
       else if(degree == 8)
-        do_pressure_neumann_on_cell<8>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<8>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
       else if(degree == 9)
-        do_pressure_neumann_on_cell<9>(cell, velocity, convective, viscosity, pressure_vector);
+        do_pressure_neumann_on_cell<9>(
+          cell, velocity, convective, viscosity, pressure_boundary_vector);
 #endif
       else
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
     }
     velocity.zero_out_ghost_values();
+  }
+
+  void
+  add_pressure_neumann_boundary_to_vector(const VectorType & pressure_boundary_vector,
+                                          VectorType &       pressure_vector) const
+  {
+    const unsigned int mm = shape_info.data[0].fe_degree;
+    AssertDimension(mm, pressure_shape_info.data[0].fe_degree + 1);
+    const unsigned int data_per_face = Utilities::pow(mm, dim - 1);
+    AssertDimension(pressure_boundary_vector.size(),
+                    cells_at_dirichlet_boundary.size() * n_lanes * data_per_face);
+    for(unsigned int cell = 0; cell < cells_at_dirichlet_boundary.size(); ++cell)
+      for(unsigned int v = 0; v < n_lanes && cells_at_dirichlet_boundary[cell].second[v] !=
+                                               numbers::invalid_unsigned_int;
+          ++v)
+      {
+        const unsigned int face           = cells_at_dirichlet_boundary[cell].first;
+        const unsigned int face_direction = face / 2;
+        const unsigned int cell_index     = cells_at_dirichlet_boundary[cell].second[v];
+        const unsigned int base           = (cell * n_lanes + v) * data_per_face;
+        const unsigned int offset = (face % 2) * Utilities::pow(mm, face_direction) * (mm - 1);
+        const unsigned int idx =
+          (*pressure_dof_indices)[cell_index / n_lanes][cell_index % n_lanes] + offset;
+        if(face_direction == 0)
+          for(unsigned int i = 0; i < data_per_face; ++i)
+            pressure_vector.local_element(idx + i * mm) +=
+              pressure_boundary_vector.local_element(base + i);
+        else if(face_direction == 1)
+          for(unsigned int i1 = 0; i1 < (dim == 3 ? mm : 1); ++i1)
+            for(unsigned int i0 = 0; i0 < mm; ++i0)
+              pressure_vector.local_element(idx + i1 * mm * mm + i0) +=
+                pressure_boundary_vector.local_element(base + i1 * mm + i0);
+        else
+          for(unsigned int i = 0; i < data_per_face; ++i)
+            pressure_vector.local_element(idx + i) =
+              pressure_boundary_vector.local_element(base + i);
+      }
+  }
+
+  void
+  initialize_vector_pressure_neumann_boundary(VectorType & pressure_boundary_vector) const
+  {
+    const unsigned int mm            = shape_info.data[0].fe_degree;
+    const unsigned int data_per_face = Utilities::pow(mm, dim - 1);
+
+    // create vector without parallel partitioning
+    pressure_boundary_vector.reinit(cells_at_dirichlet_boundary.size() * n_lanes * data_per_face);
   }
 
   void
@@ -5661,7 +5716,7 @@ private:
                               const VectorType & velocity,
                               const bool         do_convective,
                               const Number       viscosity,
-                              std::vector<Number> &       pressure_rhs) const
+                              VectorType &       pressure_rhs) const
   {
     const unsigned int face           = cells_at_dirichlet_boundary[cell].first;
     const unsigned int face_direction = face / 2;
@@ -5962,7 +6017,7 @@ private:
         {
           const unsigned int cell_index =
             cells_at_dirichlet_boundary[cell].second[v] == numbers::invalid_unsigned_int ?
-              cells_at_dirichlet_boundary[cell].second[0] :
+              cells_at_dirichlet_boundary[cell].second[n_lanes_filled - 1] :
               cells_at_dirichlet_boundary[cell].second[v];
 
           const unsigned int idx =
@@ -6124,7 +6179,7 @@ private:
         {
           const unsigned int cell_index =
             cells_at_dirichlet_boundary[cell].second[v] == numbers::invalid_unsigned_int ?
-              cells_at_dirichlet_boundary[cell].second[0] :
+              cells_at_dirichlet_boundary[cell].second[n_lanes_filled - 1] :
               cells_at_dirichlet_boundary[cell].second[v];
 
           const unsigned int idx =
@@ -6213,25 +6268,12 @@ private:
                                                            pressure_values,
                                                            pressure_values);
 
-    for(unsigned int v = 0; v < n_lanes_filled; ++v)
-    {
-      const unsigned int cell_index = cells_at_dirichlet_boundary[cell].second[v];
-      const unsigned int mm         = degree;
-      AssertDimension(degree, pressure_shape_info.data[0].fe_degree + 1);
-      const unsigned int offset = (face % 2) * Utilities::pow(mm, face_direction) * (mm - 1);
-      const unsigned int idx =
-        (*pressure_dof_indices)[cell_index / n_lanes][cell_index % n_lanes] + offset;
-      if(face_direction == 0)
-        for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
-          pressure_rhs.local_element(idx + i * mm) = pressure_values[i][v];
-      else if(face_direction == 1)
-        for(unsigned int i1 = 0; i1 < (dim == 3 ? mm : 1); ++i1)
-          for(unsigned int i0 = 0; i0 < mm; ++i0)
-            pressure_rhs.local_element(idx + i1 * mm * mm + i0) = pressure_values[i1 * mm + i0][v];
-      else
-        for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
-          pressure_rhs.local_element(idx + i) = pressure_values[i][v];
-    }
+    constexpr unsigned int            data_per_face = Utilities::pow(degree, dim - 1);
+    std::array<unsigned int, n_lanes> indices_of_face_data;
+    for(unsigned int i = 0; i < n_lanes; ++i)
+      indices_of_face_data[i] = (cell * n_lanes + i) * data_per_face;
+    vectorized_transpose_and_store(
+      false, data_per_face, pressure_values, indices_of_face_data.data(), pressure_rhs.begin());
   }
 
   template<int degree>
