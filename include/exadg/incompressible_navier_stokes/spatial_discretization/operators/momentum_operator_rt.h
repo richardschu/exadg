@@ -5404,7 +5404,7 @@ private:
             point[d] =
               mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
           for(unsigned int d = 0; d < dim; ++d)
-            body_force[d][v] += rhs_function->value(point, d);
+            body_force[d][v] = rhs_function->value(point, d);
         }
 
       if constexpr(dim == 2)

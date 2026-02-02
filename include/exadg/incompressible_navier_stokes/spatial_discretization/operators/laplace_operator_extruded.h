@@ -2856,7 +2856,7 @@ private:
     constexpr unsigned int nn            = n_q_points_1d;
     constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
 
-    VectorizedArray<Number> quad_values[dim * n_points];
+    VectorizedArray<Number> quad_values[dim * n_points], body_force_z[Utilities::pow(n_q_points_1d, dim - 1)];
 
     std::array<unsigned int, n_lanes> shifted_data_indices;
     for(unsigned int v = 0; v < n_lanes; ++v)
@@ -2877,20 +2877,27 @@ private:
         VectorizedArray<Number> JxW_xy;
         JxW_xy.gather(&mapping_info.cell_JxW_xy[q1], mapping_info.mapping_data_index[cell].data());
 
+        // Assume body force does not depend on z direction
+        Tensor<1, dim, VectorizedArray<Number>> body_force;
+        for(unsigned int v = 0; v < n_lanes; ++v)
+          {
+            Point<dim> point;
+            for(unsigned int d = 0; d < 2; ++d)
+              point[d] =
+                mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
+            for(unsigned int d = 0; d < dim; ++d)
+              body_force[d][v] = rhs_function.value(point, d);
+          }
+
+        // keep z component for face integral later
+        body_force_z[q1] = body_force[dim - 1];
+
         if constexpr(dim == 2)
         {
-          VectorizedArray<Number> f_val[dim];
-          for(unsigned int v = 0; v < n_lanes; ++v)
-          {
-            Point<dim> point =
-              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1];
-            f_val[0][v] = rhs_function.value(point, 0);
-            f_val[1][v] = rhs_function.value(point, 1);
-          }
           const VectorizedArray<Number> s0 =
-            inv_jac_xy[0][0] * f_val[0] + inv_jac_xy[1][0] * f_val[1];
+            inv_jac_xy[0][0] * body_force[0] + inv_jac_xy[1][0] * body_force[1];
           const VectorizedArray<Number> s1 =
-            inv_jac_xy[0][1] * f_val[0] + inv_jac_xy[1][1] * f_val[1];
+            inv_jac_xy[0][1] * body_force[0] + inv_jac_xy[1][1] * body_force[1];
 
           quad_values[q1 * dim]     = s0 * JxW_xy;
           quad_values[q1 * dim + 1] = s1 * JxW_xy;
@@ -2899,23 +2906,12 @@ private:
         {
           for(unsigned int qz = 0, q = q1; qz < nn; ++qz, q += nn * nn)
           {
-            Tensor<1, dim, VectorizedArray<Number>> val_real;
-            for(unsigned int v = 0; v < n_lanes; ++v)
-            {
-              Point<dim> point;
-              for(unsigned int d = 0; d < 2; ++d)
-                point[d] =
-                  mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
-              for(unsigned int d = 0; d < dim; ++d)
-                val_real[d][v] = rhs_function.value(point, d);
-            }
-
             const Number                  weight_z = mapping_info.quad_weights_z[qz];
             const VectorizedArray<Number> factor   = JxW_xy * h_z * weight_z;
 
-            VectorizedArray<Number> value_tmp[dim];
+            VectorizedArray<Number> val_real[dim], value_tmp[dim];
             for(unsigned int d = 0; d < dim; ++d)
-              val_real[d] *= factor;
+              val_real[d] = body_force[d] * factor;
             for(unsigned int d = 0; d < 2; ++d)
               value_tmp[d] = inv_jac_xy[0][d] * val_real[0] + inv_jac_xy[1][d] * val_real[1];
             value_tmp[2] = h_z_inverse * val_real[2];
@@ -3021,15 +3017,7 @@ private:
       {
         VectorizedArray<Number> JxW_xy;
         JxW_xy.gather(&mapping_info.cell_JxW_xy[q], mapping_info.mapping_data_index[cell].data());
-        VectorizedArray<Number> flux_term;
-        for(unsigned int v = 0; v < n_lanes; ++v)
-        {
-          Point<dim> point;
-          for(unsigned int d = 0; d < 2; ++d)
-            point[d] =
-              mapping_info.face_quadrature_points[mapping_info.mapping_data_index[cell][v] + q][d];
-          flux_term[v] = rhs_function.value(point, 2);
-        }
+        VectorizedArray<Number> flux_term = body_force_z[q];
         flux_term *= JxW_xy * mapping_info.quad_weights_xy[q] * boundary_mask;
         const unsigned int stride = nn * nn;
         for(unsigned int i = 0; i < n_q_points_1d; ++i)
