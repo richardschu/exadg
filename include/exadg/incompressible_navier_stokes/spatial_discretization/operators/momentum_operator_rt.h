@@ -1173,6 +1173,28 @@ public:
                         VectorType &                                 rhs,
                         const std::shared_ptr<dealii::Function<dim>> source_function = {}) const
   {
+    evaluate_momentum_rhs(
+      pressure,
+      velocity_old,
+      velocity_scale,
+      rhs,
+      [&rhs](const unsigned int begin, const unsigned int end) {
+        std::fill(rhs.begin() + begin, rhs.begin() + end, Number(0.));
+      },
+      {},
+      source_function);
+  }
+
+  void
+  evaluate_momentum_rhs(
+    const VectorType &                                                  pressure,
+    const VectorType &                                                  velocity_old,
+    const Number                                                        velocity_scale,
+    VectorType &                                                        rhs,
+    const std::function<void(const unsigned int, const unsigned int)> & before_loop,
+    const std::function<void(const unsigned int, const unsigned int)> & after_loop,
+    const std::shared_ptr<dealii::Function<dim>>                        source_function = {}) const
+  {
     AssertDimension(pressure_shape_info.data[0].n_q_points_1d, shape_info.data[0].n_q_points_1d);
     AssertDimension(pressure_shape_info.data[0].fe_degree, shape_info.data[1].fe_degree);
 
@@ -1180,9 +1202,7 @@ public:
     for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
         range < cell_loop_pre_list_index[n_cell_batches + 1];
         ++range)
-      std::fill(rhs.begin() + cell_loop_pre_list[range].first,
-                rhs.begin() + cell_loop_pre_list[range].second,
-                Number(0.));
+      before_loop(cell_loop_pre_list[range].first, cell_loop_pre_list[range].second);
 
     velocity_old.update_ghost_values();
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
@@ -1190,9 +1210,7 @@ public:
       for(unsigned int range = cell_loop_mass_pre_list_index[cell];
           range < cell_loop_mass_pre_list_index[cell + 1];
           ++range)
-        std::fill(rhs.begin() + cell_loop_mass_pre_list[range].first,
-                  rhs.begin() + cell_loop_mass_pre_list[range].second,
-                  Number(0.));
+        before_loop(cell_loop_mass_pre_list[range].first, cell_loop_mass_pre_list[range].second);
 
       const unsigned int degree = shape_info.data[0].fe_degree;
       if(degree == 2)
@@ -1223,9 +1241,21 @@ public:
 #endif
       else
         AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+
+      for(unsigned int range = cell_loop_post_list_index[cell];
+          range < cell_loop_post_list_index[cell + 1];
+          ++range)
+        after_loop(cell_loop_post_list[range].first, cell_loop_post_list[range].second);
     }
-    rhs.compress(VectorOperation::add);
+
+    rhs.compress_start(0, VectorOperation::add);
     velocity_old.zero_out_ghost_values();
+    rhs.compress_finish(VectorOperation::add);
+
+    for(unsigned int range = cell_loop_post_list_index[n_cell_batches];
+        range < cell_loop_post_list_index[n_cell_batches + 1];
+        ++range)
+      after_loop(cell_loop_post_list[range].first, cell_loop_post_list[range].second);
   }
 
   void
@@ -1234,7 +1264,6 @@ public:
                                           const Number       viscosity,
                                           VectorType &       pressure_vector) const
   {
-    pressure_vector = 0.0;
     velocity.update_ghost_values();
 
     for(unsigned int cell = 0; cell < cells_at_dirichlet_boundary.size(); ++cell)
@@ -1518,7 +1547,7 @@ private:
   compute_vector_access_pattern()
   {
     const unsigned int        n_dofs     = partitioner->locally_owned_size();
-    constexpr unsigned int    chunk_size = 128;
+    constexpr unsigned int    chunk_size = 256;
     std::vector<unsigned int> touched_first_by((n_dofs + chunk_size - 1) / chunk_size,
                                                numbers::invalid_unsigned_int);
     std::vector<unsigned int> touched_mass_first_by((n_dofs + chunk_size - 1) / chunk_size,
@@ -5310,21 +5339,26 @@ private:
                                     &jac_xy[0][0]);
       const VectorizedArray<Number> inv_jac_det = Number(1.0) / determinant(jac_xy);
 
+      // Assume body force does not depend on z direction
+      Tensor<1, dim, VectorizedArray<Number>> body_force;
+      if(rhs_function.get() != nullptr)
+        for(unsigned int v = 0; v < n_lanes; ++v)
+        {
+          Point<dim> point;
+          for(unsigned int d = 0; d < 2; ++d)
+            point[d] =
+              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
+          for(unsigned int d = 0; d < dim; ++d)
+            body_force[d][v] += rhs_function->value(point, d);
+        }
+
       if constexpr(dim == 2)
       {
         const VectorizedArray<Number> val[2] = {quad_values[q1 * dim], quad_values[q1 * dim + 1]};
         VectorizedArray<Number>       val_real[2] = {jac_xy[0][0] * val[0] + jac_xy[0][1] * val[1],
                                                jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1]};
         for(unsigned int d = 0; d < dim; ++d)
-          val_real[d] *= inv_jac_det * velocity_scale;
-        if(rhs_function.get() != nullptr)
-          for(unsigned int v = 0; v < n_lanes; ++v)
-          {
-            Point<dim> point =
-              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1];
-            for(unsigned int d = 0; d < dim; ++d)
-              val_real[d][v] += rhs_function->value(point, d);
-          }
+          val_real[d] = val_real[d] * (inv_jac_det * velocity_scale) + body_force[d];
 
         const VectorizedArray<Number> s0 = jac_xy[0][0] * val_real[0] + jac_xy[1][0] * val_real[1];
         const VectorizedArray<Number> s1 = jac_xy[0][1] * val_real[0] + jac_xy[1][1] * val_real[1];
@@ -5347,18 +5381,8 @@ private:
           val_real[1] = jac_xy[1][0] * val[0] + jac_xy[1][1] * val[1];
           val_real[2] = h_z * val[2];
           for(unsigned int d = 0; d < dim; ++d)
-            val_real[d] *= h_z_inverse * inv_jac_det * velocity_scale;
-
-          if(rhs_function.get() != nullptr)
-            for(unsigned int v = 0; v < n_lanes; ++v)
-            {
-              Point<dim> point;
-              for(unsigned int d = 0; d < 2; ++d)
-                point[d] =
-                  mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
-              for(unsigned int d = 0; d < dim; ++d)
-                val_real[d][v] += rhs_function->value(point, d);
-            }
+            val_real[d] =
+              val_real[d] * (h_z_inverse * velocity_scale * inv_jac_det) + body_force[d];
 
           // For the test function part, the Jacobian determinant
           // that is part of the integration factor cancels with the
@@ -5637,7 +5661,7 @@ private:
                               const VectorType & velocity,
                               const bool         do_convective,
                               const Number       viscosity,
-                              VectorType &       pressure_rhs) const
+                              std::vector<Number> &       pressure_rhs) const
   {
     const unsigned int face           = cells_at_dirichlet_boundary[cell].first;
     const unsigned int face_direction = face / 2;
@@ -5680,7 +5704,7 @@ private:
     {
       const unsigned int cell_index =
         cells_at_dirichlet_boundary[cell].second[v] == numbers::invalid_unsigned_int ?
-          cells_at_dirichlet_boundary[cell].second[0] :
+          cells_at_dirichlet_boundary[cell].second[n_lanes_filled - 1] :
           cells_at_dirichlet_boundary[cell].second[v];
       shifted_data_indices[v] =
         mapping_info.mapping_data_index[cell_index / n_lanes][cell_index % n_lanes] * 4;
@@ -6199,14 +6223,14 @@ private:
         (*pressure_dof_indices)[cell_index / n_lanes][cell_index % n_lanes] + offset;
       if(face_direction == 0)
         for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
-          pressure_rhs.local_element(idx + i * mm) += pressure_values[i][v];
+          pressure_rhs.local_element(idx + i * mm) = pressure_values[i][v];
       else if(face_direction == 1)
         for(unsigned int i1 = 0; i1 < (dim == 3 ? mm : 1); ++i1)
           for(unsigned int i0 = 0; i0 < mm; ++i0)
-            pressure_rhs.local_element(idx + i1 * mm * mm + i0) += pressure_values[i1 * mm + i0][v];
+            pressure_rhs.local_element(idx + i1 * mm * mm + i0) = pressure_values[i1 * mm + i0][v];
       else
         for(unsigned int i = 0; i < Utilities::pow(mm, dim - 1); ++i)
-          pressure_rhs.local_element(idx + i) += pressure_values[i][v];
+          pressure_rhs.local_element(idx + i) = pressure_values[i][v];
     }
   }
 

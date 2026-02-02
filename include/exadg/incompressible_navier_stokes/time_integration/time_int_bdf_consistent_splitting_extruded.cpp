@@ -484,30 +484,39 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
   if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
     /*
-     *  Calculate the right-hand side of the linear system of equations.
+     *  Calculate the right-hand side of the linear system of equations. This
+     *  uses the interface to overlap vector operations before and after the
+     *  loop for the two extrapolations that are necessary for this step, in
+     *  order to increase the data locality
      */
-    std::vector<Number> factors(velocity.size());
-    for(unsigned int i = 0; i < factors.size(); ++i)
-      factors[i] = this->bdf.get_alpha(i) / this->get_time_step_size();
-    extrapolate_vectors(factors, velocity, solution_rt);
+    std::vector<Number> factors_velocity_rhs(velocity.size());
+    std::vector<Number> factors_convective_term(velocity.size());
+    for(unsigned int i = 0; i < velocity.size(); ++i)
+    {
+      factors_velocity_rhs[i]    = this->bdf.get_alpha(i) / this->get_time_step_size();
+      factors_convective_term[i] = -this->extra.get_beta(i);
+    }
 
+    std::shared_ptr<dealii::Function<dim>> right_hand_side;
     if(this->param.right_hand_side == true)
     {
-      pde_operator->get_field_functions()->right_hand_side->set_time(this->get_next_time());
-      op_rt->evaluate_momentum_rhs(pressure_np,
-                                   solution_rt,
-                                   1.0,
-                                   rhs_rt,
-                                   pde_operator->get_field_functions()->right_hand_side);
+      right_hand_side = pde_operator->get_field_functions()->right_hand_side;
+      right_hand_side->set_time(this->get_next_time());
     }
-    else
-    {
-      op_rt->evaluate_momentum_rhs(pressure_np, solution_rt, 1.0, rhs_rt);
-    }
-
-    for(unsigned int i = 0; i < factors.size(); ++i)
-      factors[i] = -this->extra.get_beta(i);
-    extrapolate_vectors_and_add(factors, this->vec_convective_term, rhs_rt);
+    op_rt->evaluate_momentum_rhs(
+      pressure_np,
+      solution_rt,
+      1.0,
+      rhs_rt,
+      [&](const unsigned int begin, const unsigned int end) {
+        extrapolate_vectors_range<false>(begin, end, factors_velocity_rhs, velocity, solution_rt);
+        std::fill(rhs_rt.begin() + begin, rhs_rt.begin() + end, 0.);
+      },
+      [&](const unsigned int begin, const unsigned int end) {
+        extrapolate_vectors_range<true>(
+          begin, end, factors_convective_term, this->vec_convective_term, rhs_rt);
+      },
+      right_hand_side);
 
     const double t_rhs = timer.wall_time();
 
@@ -540,18 +549,29 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     const double t_prec = timer2.wall_time();
     timer2.restart();
 
+    // This loop computes the residual vector in double precision as a
+    // right-hand side for the actual CG solution, copies the vector to single
+    // precision for the subsequent solution with CG, and initializes the
+    // solution vector to 0 to benefit from the low residual with the double
+    // residual
     op_rt->set_parameters(-factor_mass, -factor_lapl);
-    op_rt->vmult_add(rhs_rt, solution_rt);
-    rhs_float.copy_locally_owned_data_from(rhs_rt);
+    op_rt->vmult(
+      rhs_rt,
+      solution_rt,
+      [](const unsigned int, const unsigned int) {},
+      [&](const unsigned int begin, const unsigned int end) {
+        std::copy(rhs_rt.begin() + begin, rhs_rt.begin() + end, rhs_float.begin() + begin);
+        std::fill(velocity_red.back().begin() + begin, velocity_red.back().begin() + end, 0.f);
+      });
 
     const double t_residual = timer2.wall_time();
     timer2.restart();
 
-    dealii::SolverControl             control(this->param.solver_data_momentum.max_iter,
+    dealii::SolverControl control(this->param.solver_data_momentum.max_iter,
                                   extrapolate_accuracy.first *
                                     this->param.solver_data_momentum.rel_tol);
+
     dealii::SolverCG<VectorTypeFloat> solver_cg(control);
-    velocity_red.back() = 0;
     op_rt_float->set_parameters(factor_mass, factor_lapl);
     solver_cg.solve(*op_rt_float, velocity_red.back(), rhs_float, preconditioner_viscous);
     n_iter = control.last_step();

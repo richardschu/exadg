@@ -41,13 +41,17 @@
  *  more details.
  *  ______________________________________________________________________
  */
-template<typename Number, typename Number2, typename Number3>
+template<bool add_into_result, typename Number, typename Number2, typename Number3>
 void
-extrapolate_vectors(std::vector<Number3> const &                                            factors,
-                    std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
-                    dealii::LinearAlgebra::distributed::Vector<Number2> &                   result)
+extrapolate_vectors_range(
+  const std::size_t                                                       start_index,
+  const std::size_t                                                       end_index,
+  const std::vector<Number3> &                                            factors,
+  std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
+  dealii::LinearAlgebra::distributed::Vector<Number2> &                   result)
 {
-  unsigned int const locally_owned_size = result.locally_owned_size();
+  AssertIndexRange(start_index, result.locally_owned_size());
+  AssertIndexRange(end_index, result.locally_owned_size() + 1);
   if(factors.size() == 1)
   {
     Number const * vec_0  = vectors[0].begin();
@@ -55,8 +59,8 @@ extrapolate_vectors(std::vector<Number3> const &                                
     Number2 const  beta_0 = factors[0];
 
     DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i];
+    for(unsigned int i = start_index; i < end_index; ++i)
+      res[i] = add_into_result ? (res[i] + beta_0 * vec_0[i]) : (beta_0 * vec_0[i]);
   }
   else if(factors.size() == 2)
   {
@@ -67,8 +71,9 @@ extrapolate_vectors(std::vector<Number3> const &                                
     Number2 const  beta_1 = factors[1];
 
     DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i];
+    for(unsigned int i = start_index; i < end_index; ++i)
+      res[i] =
+        (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) + beta_1 * vec_1[i];
   }
   else if(factors.size() == 3)
   {
@@ -81,8 +86,9 @@ extrapolate_vectors(std::vector<Number3> const &                                
     Number2 const  beta_2 = factors[2];
 
     DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i];
+    for(unsigned int i = start_index; i < end_index; ++i)
+      res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
+               beta_1 * vec_1[i] + beta_2 * vec_2[i];
   }
   else if(factors.size() == 4)
   {
@@ -97,8 +103,9 @@ extrapolate_vectors(std::vector<Number3> const &                                
     Number2 const  beta_3 = factors[3];
 
     DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
+    for(unsigned int i = start_index; i < end_index; ++i)
+      res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
+               beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
   }
   else if(factors.size() == 5)
   {
@@ -115,18 +122,30 @@ extrapolate_vectors(std::vector<Number3> const &                                
     Number2 const  beta_4 = factors[4];
 
     DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] = beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] +
-               beta_4 * vec_4[i];
+    for(unsigned int i = start_index; i < end_index; ++i)
+      res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
+               beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] + beta_4 * vec_4[i];
   }
   else
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
+    for(unsigned int i = start_index; i < end_index; ++i)
     {
       Number2 entry = factors[0] * vectors[0].local_element(i);
       for(unsigned int j = 1; j < factors.size(); ++j)
         entry += factors[j] * vectors[j].local_element(i);
-      result.local_element(i) = entry;
+      if(add_into_result)
+        result.local_element(i) += entry;
+      else
+        result.local_element(i) = entry;
     }
+}
+
+template<typename Number, typename Number2, typename Number3>
+void
+extrapolate_vectors(std::vector<Number3> const &                                            factors,
+                    std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
+                    dealii::LinearAlgebra::distributed::Vector<Number2> &                   result)
+{
+  extrapolate_vectors_range<false>(0, result.locally_owned_size(), factors, vectors, result);
 }
 
 
@@ -138,86 +157,7 @@ extrapolate_vectors_and_add(
   std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
   dealii::LinearAlgebra::distributed::Vector<Number2> &                   result)
 {
-  unsigned int const locally_owned_size = result.locally_owned_size();
-  if(factors.size() == 1)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number2 *      res    = result.begin();
-    Number2 const  beta_0 = factors[0];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] += beta_0 * vec_0[i];
-  }
-  else if(factors.size() == 2)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number2 *      res    = result.begin();
-    Number2 const  beta_0 = factors[0];
-    Number2 const  beta_1 = factors[1];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] += beta_0 * vec_0[i] + beta_1 * vec_1[i];
-  }
-  else if(factors.size() == 3)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number const * vec_2  = vectors[2].begin();
-    Number2 *      res    = result.begin();
-    Number2 const  beta_0 = factors[0];
-    Number2 const  beta_1 = factors[1];
-    Number2 const  beta_2 = factors[2];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] += beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i];
-  }
-  else if(factors.size() == 4)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number const * vec_2  = vectors[2].begin();
-    Number const * vec_3  = vectors[3].begin();
-    Number2 *      res    = result.begin();
-    Number2 const  beta_0 = factors[0];
-    Number2 const  beta_1 = factors[1];
-    Number2 const  beta_2 = factors[2];
-    Number2 const  beta_3 = factors[3];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] += beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
-  }
-  else if(factors.size() == 5)
-  {
-    Number const * vec_0  = vectors[0].begin();
-    Number const * vec_1  = vectors[1].begin();
-    Number const * vec_2  = vectors[2].begin();
-    Number const * vec_3  = vectors[3].begin();
-    Number const * vec_4  = vectors[4].begin();
-    Number2 *      res    = result.begin();
-    Number2 const  beta_0 = factors[0];
-    Number2 const  beta_1 = factors[1];
-    Number2 const  beta_2 = factors[2];
-    Number2 const  beta_3 = factors[3];
-    Number2 const  beta_4 = factors[4];
-
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-      res[i] += beta_0 * vec_0[i] + beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] +
-                beta_4 * vec_4[i];
-  }
-  else
-    for(unsigned int i = 0; i < locally_owned_size; ++i)
-    {
-      Number2 entry = factors[0] * vectors[0].local_element(i);
-      for(unsigned int j = 1; j < factors.size(); ++j)
-        entry += factors[j] * vectors[j].local_element(i);
-      result.local_element(i) += entry;
-    }
+  extrapolate_vectors_range<true>(0, result.locally_owned_size(), factors, vectors, result);
 }
 
 
