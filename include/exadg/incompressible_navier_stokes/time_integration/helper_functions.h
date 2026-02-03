@@ -303,41 +303,23 @@ compute_least_squares_fit(OperatorType const &            op,
   extrapolate_vectors(small_vector, vectors, result);
 }
 
-// Compute a least squares fit and return the norm of the right-hand side as
-// well as the achieved residual
-template<typename VectorType1, typename VectorType2, bool combine_two = false>
-std::pair<double, double>
-compute_least_squares_fit(std::vector<VectorType1> const & vectors_matvec,
-                          VectorType2 const &              rhs,
-                          std::vector<VectorType1> const & vectors,
-                          VectorType2 &                    result,
-                          double const                     factor_second = 1.0)
+
+template<bool combine_two, typename Number, typename Number2>
+void
+do_compute_inner_products_range(const unsigned int begin,
+                                const unsigned int end,
+                                const unsigned int n_vectors,
+                                const double       factor_second,
+                                const std::array<const Number *, (combine_two ? 10 : 5)> & vec_ptrs,
+                                const Number2 *                                            rhs_ptr,
+                                dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> & local_sums)
 {
-  AssertDimension((combine_two ? 2 : 1) * vectors.size(), vectors_matvec.size());
-  const unsigned int n_vectors = vectors.size();
-  using Number                 = typename VectorType1::value_type;
-  using Number2                = typename VectorType2::value_type;
-  dealii::FullMatrix<double> matrix(n_vectors, n_vectors);
-  std::vector<double>        small_vector(n_vectors);
-
-  // Solve the normal equations for the minimization problem
-  // min_{alpha_i} | sum(alpha_i A x_i) - b |
-  // for which we compute the matrix (A x_i)^T (A x_j) and rhs (A x_i)^T b
-  AssertThrow(vectors.size() <= 5, dealii::ExcNotImplemented());
-  std::array<const Number *, (combine_two ? 10 : 5)> vec_ptrs = {};
-  for(unsigned int j = 0; j < (combine_two ? 2 * n_vectors : n_vectors); ++j)
-    vec_ptrs[j] = vectors_matvec[j].begin();
-  Number2 const * rhs_ptr = rhs.begin();
-
   unsigned int constexpr n_lanes    = dealii::VectorizedArray<double>::size();
   unsigned int constexpr n_lanes_4  = 4 * n_lanes;
-  unsigned int const regular_size_4 = (vectors[0].locally_owned_size()) / n_lanes_4 * n_lanes_4;
-  unsigned int const regular_size   = (vectors[0].locally_owned_size()) / n_lanes * n_lanes;
+  unsigned int const regular_size_4 = end / n_lanes_4 * n_lanes_4;
+  unsigned int const regular_size   = end / n_lanes * n_lanes;
 
-  // compute inner products in normal equations (all at once)
-  dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
-
-  unsigned int k = 0;
+  unsigned int k = begin;
   for(; k < regular_size_4; k += n_lanes_4)
   {
     for(unsigned int i = 0; i < n_vectors; ++i)
@@ -473,7 +455,7 @@ compute_least_squares_fit(std::vector<VectorType1> const & vectors_matvec,
     }
     local_sums[0][5] += rhs_k * rhs_k;
   }
-  for(; k < vectors[0].locally_owned_size(); ++k)
+  for(; k < end; ++k)
   {
     for(unsigned int i = 0; i < n_vectors; ++i)
     {
@@ -497,15 +479,34 @@ compute_least_squares_fit(std::vector<VectorType1> const & vectors_matvec,
     }
     local_sums[0][5][k - regular_size] += rhs_ptr[k] * rhs_ptr[k];
   }
+}
+
+
+
+// Compute a least squares fit and return the norm of the right-hand side as
+// well as the achieved residual
+inline std::pair<double, double>
+do_compute_least_squares_fit(
+  const MPI_Comm                                                 communicator,
+  const dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> & local_sums,
+  std::vector<double> &                                          small_vector)
+{
+  const unsigned int         n_vectors = small_vector.size();
+  dealii::FullMatrix<double> matrix(n_vectors, n_vectors);
+  AssertThrow(n_vectors <= 5,
+              dealii::ExcNotImplemented("Cannot handle " + std::to_string(n_vectors) +
+                                        " vectors in least squares fit yet!"));
+
   std::array<double, 21> scalar_sums;
   unsigned int           count = 0;
   for(unsigned int i = 0; i < n_vectors; ++i)
     for(unsigned int j = 0; j < i + 2; ++j, ++count)
       scalar_sums[count] = local_sums[i][j].sum();
   scalar_sums[count] = local_sums[0][5].sum();
+  AssertThrow(count < 21, dealii::ExcInternalError());
 
   dealii::Utilities::MPI::sum(dealii::ArrayView<double const>(scalar_sums.data(), count + 1),
-                              vectors[0].get_mpi_communicator(),
+                              communicator,
                               dealii::ArrayView<double>(scalar_sums.data(), count + 1));
 
   // This algorithm performs a Cholesky (LDLT) factorization of
@@ -554,18 +555,43 @@ compute_least_squares_fit(std::vector<VectorType1> const & vectors_matvec,
     residual_norm_sqr += scalar_sums[c] * small_vector[i] * small_vector[i];
     residual_norm_sqr -= 2 * scalar_sums[c + 1] * small_vector[i];
   }
+  return std::make_pair(std::sqrt(scalar_sums[count]), std::sqrt(std::abs(residual_norm_sqr)));
+}
 
-  // if(dealii::Utilities::MPI::this_mpi_process(vectors[0].get_mpi_communicator()) == 0)
-  //{
-  //  std::cout << "extrapolate " << std::defaultfloat << std::setprecision(3) << result.size()
-  //            << ": ";
-  //  for(const double a : small_vector)
-  //    std::cout << a << " ";
-  //  if(i > 0)
-  //    std::cout << "i=" << i << " " << matrix(i - 1, i - 1) / matrix(0, 0) << " "
-  //              << std::sqrt(residual_norm_sqr) << "   ";
-  //}
+
+
+// Compute a least squares fit and return the norm of the right-hand side as
+// well as the achieved residual
+template<typename VectorType1, typename VectorType2, bool combine_two = false>
+std::pair<double, double>
+compute_least_squares_fit(std::vector<VectorType1> const & vectors_matvec,
+                          VectorType2 const &              rhs,
+                          std::vector<VectorType1> const & vectors,
+                          VectorType2 &                    result,
+                          double const                     factor_second = 1.0)
+{
+  AssertDimension((combine_two ? 2 : 1) * vectors.size(), vectors_matvec.size());
+  const unsigned int  n_vectors = vectors.size();
+  std::vector<double> small_vector(n_vectors);
+
+  // Solve the normal equations for the minimization problem
+  // min_{alpha_i} | sum(alpha_i A x_i) - b |
+  // for which we compute the matrix (A x_i)^T (A x_j) and rhs (A x_i)^T b
+  AssertThrow(vectors.size() <= 5, dealii::ExcNotImplemented());
+  std::array<const typename VectorType1::value_type *, (combine_two ? 10 : 5)> vec_ptrs = {};
+  for(unsigned int j = 0; j < (combine_two ? 2 * n_vectors : n_vectors); ++j)
+    vec_ptrs[j] = vectors_matvec[j].begin();
+
+  // compute inner products in normal equations (all at once)
+  dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
+
+  do_compute_inner_products_range<combine_two>(
+    0, result.locally_owned_size(), n_vectors, factor_second, vec_ptrs, rhs.begin(), local_sums);
+
+  const auto residuals =
+    do_compute_least_squares_fit(result.get_mpi_communicator(), local_sums, small_vector);
+
   extrapolate_vectors(small_vector, vectors, result);
 
-  return std::make_pair(std::sqrt(scalar_sums[count]), std::sqrt(std::abs(residual_norm_sqr)));
+  return residuals;
 }

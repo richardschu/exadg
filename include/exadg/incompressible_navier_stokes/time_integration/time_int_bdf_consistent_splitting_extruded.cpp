@@ -537,40 +537,69 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     const Number factor_mass = this->get_scaling_factor_time_derivative_term();
     const Number factor_lapl = this->pde_operator->get_viscous_kernel_data().viscosity;
 
+    // Compute least squares fit - use the version that runs the inner product
+    // computations embedded into the matrix-vector product of the current
+    // vector to overlap memory access with computations
+    const unsigned int  n_vectors = velocity_red.size();
+    std::vector<double> projection_vector(n_vectors);
+    AssertDimension(velocity_matvec.size(), 2 * n_vectors);
+    AssertThrow(projection_vector.size() <= 5, dealii::ExcNotImplemented());
+    std::array<const float *, 10> vec_ptrs = {};
+    for(unsigned int j = 0; j < 2 * n_vectors; ++j)
+      vec_ptrs[j] = velocity_matvec[j].begin();
+    dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
+
     op_rt_float->set_parameters(0.0, factor_lapl);
-    op_rt_float->vmult(velocity_matvec[0], velocity_red[0]);
-    op_rt_float->set_parameters(1.0, 0.0);
-    op_rt_float->vmult(velocity_matvec[1], velocity_red[0]);
-    extrapolate_accuracy = compute_least_squares_fit<VectorTypeFloat, VectorType, true>(
-      velocity_matvec, rhs_rt, velocity_red, solution_rt, factor_mass);
+    op_rt_float->vmult_mass_and_laplace(velocity_matvec[1],
+                                        velocity_matvec[0],
+                                        velocity_red[0],
+                                        [&](const unsigned int begin, const unsigned int end) {
+                                          do_compute_inner_products_range<true>(begin,
+                                                                                end,
+                                                                                n_vectors,
+                                                                                factor_mass,
+                                                                                vec_ptrs,
+                                                                                rhs_rt.begin(),
+                                                                                local_sums);
+                                        });
+    extrapolate_accuracy = do_compute_least_squares_fit(solution_rt.get_mpi_communicator(),
+                                                        local_sums,
+                                                        projection_vector);
+
     const double t_proj = timer2.wall_time();
     timer2.restart();
 
-    preconditioner_viscous.get_vector().reinit(diagonal_mass, true);
+    if(preconditioner_viscous.get_vector().get_partitioner().get() !=
+       diagonal_mass.get_partitioner().get())
+      preconditioner_viscous.get_vector().reinit(diagonal_mass, true);
 
-    const unsigned int owned_size = diagonal_mass.locally_owned_size();
+    // This loop computes the residual vector in double precision as a
+    // right-hand side for the actual CG solution and copies the vector to
+    // single precision for the subsequent solution with CG. Note we compute
+    // the extrapolation from the least-squares projection first at this
+    // stage, to benefit from data locality in accessing the solution_rt
+    // vector
+    op_rt->set_parameters(-factor_mass, -factor_lapl);
+    op_rt->vmult(
+      rhs_rt,
+      solution_rt,
+      [&](const unsigned int begin, const unsigned int end) {
+        extrapolate_vectors_range<false>(begin, end, projection_vector, velocity_red, solution_rt);
+      },
+      [&](const unsigned int begin, const unsigned int end) {
+        std::copy(rhs_rt.begin() + begin, rhs_rt.begin() + end, rhs_float.begin() + begin);
+      });
+
+    // Do the last tasks before solving: (i) initialize the solution vector to
+    // 0 before starting the solver to benefit from the low residual with the
+    // double residual and (ii) set the right entries of the preconditioner.
+    const unsigned int owned_size = solution_rt.locally_owned_size();
     DEAL_II_OPENMP_SIMD_PRAGMA
     for(unsigned int i = 0; i < owned_size; ++i)
       preconditioner_viscous.get_vector().local_element(i) =
         1.0f / (float(factor_mass) * diagonal_mass.local_element(i) +
                 float(factor_lapl) * diagonal_laplace.local_element(i));
-    const double t_prec = timer2.wall_time();
-    timer2.restart();
-
-    // This loop computes the residual vector in double precision as a
-    // right-hand side for the actual CG solution, copies the vector to single
-    // precision for the subsequent solution with CG, and initializes the
-    // solution vector to 0 to benefit from the low residual with the double
-    // residual
-    op_rt->set_parameters(-factor_mass, -factor_lapl);
-    op_rt->vmult(
-      rhs_rt,
-      solution_rt,
-      [](const unsigned int, const unsigned int) {},
-      [&](const unsigned int begin, const unsigned int end) {
-        std::copy(rhs_rt.begin() + begin, rhs_rt.begin() + end, rhs_float.begin() + begin);
-        std::fill(velocity_red.back().begin() + begin, velocity_red.back().begin() + end, 0.f);
-      });
+    velocity_red.back() = 0.f;
 
     const double t_residual = timer2.wall_time();
     timer2.restart();
@@ -583,6 +612,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     op_rt_float->set_parameters(factor_mass, factor_lapl);
     solver_cg.solve(*op_rt_float, velocity_red.back(), rhs_float, preconditioner_viscous);
     n_iter = control.last_step();
+
     DEAL_II_OPENMP_SIMD_PRAGMA
     for(unsigned int i = 0; i < owned_size; ++i)
     {
@@ -595,8 +625,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     if(this->print_solver_info() and not(this->is_test))
     {
       this->pcout << std::endl
-                  << "Viscous step prepare: " << t_rhs << "/" << t_proj << "/" << t_prec << "/"
-                  << t_residual << " s, solve " << timer2.wall_time() << " s";
+                  << std::setprecision(5) << "Viscous step prepare: " << t_rhs << "/" << t_proj
+                  << "/" << t_residual << " s, solve " << timer2.wall_time() << " s";
     }
 
     iterations_viscous.first += 1;

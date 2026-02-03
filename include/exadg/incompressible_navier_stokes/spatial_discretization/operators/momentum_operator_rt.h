@@ -1022,6 +1022,10 @@ public:
       time.restart();
       src.update_ghost_values_finish();
       timings[1] += time.wall_time();
+
+      time.restart();
+      exchange_data_for_face_integrals<true>(src);
+      timings[3] += time.wall_time();
     }
     else
     {
@@ -1031,12 +1035,6 @@ public:
 
     time.restart();
 
-    // only do the data exchange for face integral if we have Laplacian contribution
-    if(factor_laplace != 0.)
-      exchange_data_for_face_integrals<true>(src);
-    timings[3] += time.wall_time();
-
-    time.restart();
     for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
     {
       if(factor_laplace != 0.)
@@ -1102,6 +1100,104 @@ public:
       timings[13] += time.wall_time();
       timings[14] += total_timer.wall_time();
     }
+  }
+
+
+  void
+  vmult_mass_and_laplace(
+    VectorType &                                                        dst_mass,
+    VectorType &                                                        dst_laplace,
+    const VectorType &                                                  src,
+    const std::function<void(const unsigned int, const unsigned int)> & after_loop) const
+  {
+    AssertThrow(this->factor_mass == Number(0.),
+                ExcMessage("For combined operation, set the mass factor "
+                           "to zero as it gets computed separately"));
+    Timer total_timer;
+    timings[0] += 1;
+    Timer time;
+
+    const unsigned int n_cell_batches = dof_indices.size();
+
+    for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
+        range < cell_loop_pre_list_index[n_cell_batches + 1];
+        ++range)
+    {
+      std::fill(dst_laplace.begin() + cell_loop_pre_list[range].first,
+                dst_laplace.begin() + cell_loop_pre_list[range].second,
+                Number(0));
+      std::fill(dst_mass.begin() + cell_loop_pre_list[range].first,
+                dst_mass.begin() + cell_loop_pre_list[range].second,
+                Number(0));
+    }
+
+    AssertThrow(factor_laplace != 0., ExcNotImplemented());
+
+    src.update_ghost_values();
+    timings[1] += time.wall_time();
+
+    time.restart();
+    exchange_data_for_face_integrals<true>(src);
+    timings[3] += time.wall_time();
+
+    time.restart();
+    for(unsigned int cell = 0; cell < n_cell_batches; ++cell)
+    {
+      for(unsigned int range = cell_loop_mass_pre_list_index[cell];
+          range < cell_loop_mass_pre_list_index[cell + 1];
+          ++range)
+      {
+        std::fill(dst_laplace.begin() + cell_loop_mass_pre_list[range].first,
+                  dst_laplace.begin() + cell_loop_mass_pre_list[range].second,
+                  Number(0));
+        std::fill(dst_mass.begin() + cell_loop_mass_pre_list[range].first,
+                  dst_mass.begin() + cell_loop_mass_pre_list[range].second,
+                  Number(0));
+      }
+
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 2)
+        do_mass_laplace_on_cell<2>(cell, src, dst_mass, dst_laplace);
+      else if(degree == 3)
+        do_mass_laplace_on_cell<3>(cell, src, dst_mass, dst_laplace);
+      else if(degree == 4)
+        do_mass_laplace_on_cell<4>(cell, src, dst_mass, dst_laplace);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_mass_laplace_on_cell<5>(cell, src, dst_mass, dst_laplace);
+      else if(degree == 6)
+        do_mass_laplace_on_cell<6>(cell, src, dst_mass, dst_laplace);
+      else if(degree == 7)
+        do_mass_laplace_on_cell<7>(cell, src, dst_mass, dst_laplace);
+      else if(degree == 8)
+        do_mass_laplace_on_cell<8>(cell, src, dst_mass, dst_laplace);
+      else if(degree == 9)
+        do_mass_laplace_on_cell<9>(cell, src, dst_mass, dst_laplace);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+      for(unsigned int range = cell_loop_post_list_index[cell];
+          range < cell_loop_post_list_index[cell + 1];
+          ++range)
+        after_loop(cell_loop_post_list[range].first, cell_loop_post_list[range].second);
+    }
+
+    timings[7] += time.wall_time();
+    time.restart();
+
+    dst_laplace.compress_start(0, VectorOperation::add);
+    dst_mass.compress_start(1, VectorOperation::add);
+    src.zero_out_ghost_values();
+    dst_laplace.compress_finish(VectorOperation::add);
+    dst_mass.compress_finish(VectorOperation::add);
+
+    for(unsigned int range = cell_loop_post_list_index[n_cell_batches];
+        range < cell_loop_post_list_index[n_cell_batches + 1];
+        ++range)
+      after_loop(cell_loop_post_list[range].first, cell_loop_post_list[range].second);
+
+    timings[8] += time.wall_time();
+    timings[9] += total_timer.wall_time();
   }
 
   void
@@ -3273,7 +3369,7 @@ private:
                                                               quad_values,
                                                               out_values);
       else
-        compute_cell_mass<n_q_points_1d>(cell, quad_values, out_values);
+        compute_cell_mass<n_q_points_1d>(cell, this->factor_mass, quad_values, out_values);
 
       // Face integrals if Laplace factor is positive
       if(factor_laplace != 0.)
@@ -3336,7 +3432,7 @@ private:
                                                                   quad_values,
                                                                   out_values);
           else
-            compute_cell_mass<n_q_points_1d>(cell, quad_values, out_values);
+            compute_cell_mass<n_q_points_1d>(cell, this->factor_mass, quad_values, out_values);
 
           if(factor_laplace != 0.)
             for(unsigned int f = 0; f < 2 * dim; ++f)
@@ -3381,6 +3477,42 @@ private:
                                                             dof_indices[cell],
                                                             dst.begin());
     }
+  }
+
+  template<int degree>
+  void
+  do_mass_laplace_on_cell(const unsigned int cell,
+                          const VectorType & src,
+                          VectorType &       dst_mass,
+                          VectorType &       dst_laplace) const
+  {
+    constexpr unsigned int n_q_points_1d = degree + 1;
+    constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
+    const auto &           shape_data    = shape_info.data;
+
+    VectorizedArray<Number> quad_values[dim * n_points], out_values[dim * n_points];
+    read_cell_values<degree, n_q_points_1d>(src.begin(), dof_indices[cell], quad_values);
+
+    compute_cell<CellOperation::helmholtz, n_q_points_1d>(shape_data,
+                                                          cell,
+                                                          quad_values,
+                                                          out_values);
+
+    // Face integrals if Laplace factor is positive
+    if(factor_laplace != 0.)
+      for(unsigned int f = 0; f < 2 * dim; ++f)
+        compute_face<degree, true>(shape_data, src, cell, f, quad_values, out_values);
+
+    integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
+                                                  n_active_entries_per_cell_batch(cell),
+                                                  out_values,
+                                                  dst_laplace.begin());
+
+    compute_cell_mass<n_q_points_1d>(cell, Number(1.0), quad_values, quad_values);
+    integrate_cell_scatter<degree, n_q_points_1d>(dof_indices[cell],
+                                                  n_active_entries_per_cell_batch(cell),
+                                                  quad_values,
+                                                  dst_mass.begin());
   }
 
   template<int degree>
@@ -3998,6 +4130,7 @@ private:
   template<int n_q_points_1d>
   void
   compute_cell_mass(const unsigned int        cell,
+                    const Number              factor_mass,
                     VectorizedArray<Number> * quad_values,
                     VectorizedArray<Number> * out_values) const
   {
@@ -4007,7 +4140,6 @@ private:
     for(unsigned int v = 0; v < n_lanes; ++v)
       shifted_data_indices[v] = mapping_info.mapping_data_index[cell][v] * 4;
 
-    const Number factor_mass = this->factor_mass;
     const Number h_z_inverse = mapping_info.h_z_inverse;
     const Number h_z         = mapping_info.h_z;
 
