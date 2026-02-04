@@ -58,8 +58,11 @@ void
 LinearOperator<dim, Number>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator_m,
   OperatorType const &               operator_type,
+  unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
+  (void)face;
+
   // Note that for the spatial integration approach, this is a quasi-Newton method
   // as the finite deformation of the body is ignored in the directional derivative.
 
@@ -69,6 +72,7 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
 
   for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
+    // reset traction for each q-point evaluation
     traction = 0.0;
 
     // integrate standard (stored) traction or exterior pressure on Robin boundaries
@@ -94,7 +98,7 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
         if(it != this->operator_data.bc->robin_k_c_p_param.end())
         {
           bool const   normal_projection_displacement = it->second.first[0];
-          double const coefficient_displacement       = it->second.second[0];
+          Number const coefficient_displacement       = it->second.second[0];
 
           if(normal_projection_displacement)
           {
@@ -109,7 +113,7 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
           if(this->operator_data.unsteady)
           {
             bool const   normal_projection_velocity = it->second.first[1];
-            double const coefficient_velocity       = it->second.second[1];
+            Number const coefficient_velocity       = it->second.second[1];
 
             if(normal_projection_velocity)
             {

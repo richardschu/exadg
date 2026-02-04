@@ -341,6 +341,7 @@ private:
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
                                   OperatorType const &               operator_type,
+                                  unsigned int const                 face,
                                   dealii::types::boundary_id const & boundary_id) const final;
 
   LaplaceOperatorData<rank, dim> operator_data;

@@ -1278,10 +1278,12 @@ void
 OperatorBase<dim, Number, n_components>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator,
   OperatorType const &               operator_type,
+  unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
   (void)integrator;
   (void)operator_type;
+  (void)face;
   (void)boundary_id;
 
   AssertThrow(
@@ -1526,6 +1528,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_loop_hom_operator(
     {
       do_boundary_integral_continuous(integrator_m,
                                       OperatorType::homogeneous,
+                                      face,
                                       matrix_free.get_boundary_id(face));
     }
 
@@ -1580,6 +1583,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_loop_inhom_operator(
 
       do_boundary_integral_continuous(integrator_m_inhom,
                                       OperatorType::inhomogeneous,
+                                      face,
                                       matrix_free.get_boundary_id(face));
 
       // make sure that we do not write into Dirichlet degrees of freedom
@@ -1798,7 +1802,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_loop_diagonal(
       }
       else
       {
-        this->do_boundary_integral_continuous(integrator_m, OperatorType::homogeneous, bid);
+        this->do_boundary_integral_continuous(integrator_m, OperatorType::homogeneous, face, bid);
       }
 
       integrator_m.integrate(integrator_flags.face_integrate);
@@ -2447,7 +2451,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_loop_calculate_system_mat
       }
       else
       {
-        this->do_boundary_integral_continuous(integrator_m, OperatorType::homogeneous, bid);
+        this->do_boundary_integral_continuous(integrator_m, OperatorType::homogeneous, face, bid);
       }
 
       integrator_m.integrate(integrator_flags.face_integrate);

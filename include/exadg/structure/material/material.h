@@ -280,6 +280,22 @@ public:
     std::vector<vector> dummy;
     return dummy;
   }
+
+  /*
+   * Get the scaling parameter for the Robin boundary condition's displacement component. Overwrite
+   * this function in the derived class to, e.g., provide stored values of a parameter field or
+   * evaluate a more elaborate analytical function.
+   */
+  virtual scalar
+  get_robin_k_scaling(unsigned int const face, unsigned int const q) const
+  {
+    (void)face;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("This should not be used, remove this assert once tested. ##+"));
+
+    return dealii::make_vectorized_array<Number>(1.0);
+  }
 };
 
 } // namespace Structure

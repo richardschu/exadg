@@ -1876,6 +1876,21 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   return E1_E2;
 }
 
+template<int dim,
+         typename Number,
+         unsigned int check_type,
+         bool         stable_formulation,
+         unsigned int cache_level>
+dealii::VectorizedArray<Number>
+IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+  get_robin_k_scaling(unsigned int const face, unsigned int const q) const
+{
+  (void)face;
+  (void)q;
+
+  return dealii::make_vectorized_array<Number>(1.0);
+}
+
 // clang-format off
 // Note that the higher check types (third template argument) are missing.
 template class IncompressibleFibrousTissue<2, float,  0, true,  0>;

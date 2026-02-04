@@ -540,6 +540,7 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
 
     do_boundary_integral_continuous(integrator_m_inhom,
                                     OperatorType::full,
+                                    face,
                                     matrix_free.get_boundary_id(face));
 
     // make sure that we do not write into Dirichlet degrees of freedom
@@ -554,9 +555,12 @@ void
 NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator,
   OperatorType const &               operator_type,
+  unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
   BoundaryType const boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
+
+  std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
 
 #ifdef DEBUG
   if(this->operator_data.spatial_integration)
@@ -585,6 +589,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
 
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
   {
+    // Reset traction for each q-point evaluation.
     traction = 0.0;
 
     // Integrate standard (stored) traction or exterior pressure on Robin boundaries.
@@ -644,7 +649,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
       }
     }
 
-    // check boundary ID in robin_k_c_p_param to add boundary mass integrals from Robin boundaries
+    // check boundary ID in `robin_k_c_p_param` to add boundary mass integrals from Robin boundaries
     // on `BoundaryType::NeumannCached` or `BoundaryType::RobinSpringDashpotPressure`
     if(boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
@@ -656,7 +661,8 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
         if(it != this->operator_data.bc->robin_k_c_p_param.end())
         {
           bool const   normal_projection_displacement = it->second.first[0];
-          double const coefficient_displacement       = it->second.second[0];
+          scalar const coefficient_displacement =
+            it->second.second[0] * material->get_robin_k_scaling(face, q);
 
           if(normal_projection_displacement)
           {
@@ -671,7 +677,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
           if(this->operator_data.unsteady)
           {
             bool const   normal_projection_velocity = it->second.first[1];
-            double const coefficient_velocity       = it->second.second[1];
+            Number const coefficient_velocity       = it->second.second[1];
 
             if(normal_projection_velocity)
             {
