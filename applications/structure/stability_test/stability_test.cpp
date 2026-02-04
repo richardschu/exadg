@@ -328,6 +328,7 @@ setup_material(MaterialType                            material_type,
                                                       nullptr /* e1_ori */,
                                                       nullptr /* e2_ori */,
                                                       nullptr /* stiffness_scaling */,
+                                                      nullptr /* robin_k_scaling */,
                                                       {} /* degree_per_level */,
                                                       0.0 /* point_match_tol */,
                                                       two_dim_type);

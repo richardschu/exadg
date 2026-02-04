@@ -669,6 +669,7 @@ private:
                                                       nullptr /* e1_orientations */,
                                                       nullptr /* e2_orientations */,
                                                       nullptr /* stiffness_scaling */,
+                                                      nullptr /* robin_k_scaling */,
                                                       {},
                                                       0.0 /* point_tolerance */,
                                                       two_dim_type)));

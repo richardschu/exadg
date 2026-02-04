@@ -55,6 +55,7 @@ struct IncompressibleFibrousTissueData : public MaterialData
     std::shared_ptr<std::vector<VectorType> const> e1_orientations,
     std::shared_ptr<std::vector<VectorType> const> e2_orientations,
     std::shared_ptr<std::vector<VectorType> const> stiffness_scaling,
+    std::shared_ptr<std::vector<VectorType> const> robin_k_scaling,
     std::vector<unsigned int> const                degree_per_level,
     double const &                                 point_tolerance,
     Type2D const &                                 type_two_dim,
@@ -73,6 +74,7 @@ struct IncompressibleFibrousTissueData : public MaterialData
       e1_orientations(e1_orientations),
       e2_orientations(e2_orientations),
       stiffness_scaling(stiffness_scaling),
+      robin_k_scaling(robin_k_scaling),
       degree_per_level(degree_per_level),
       point_tolerance(point_tolerance),
       type_two_dim(type_two_dim)
@@ -95,6 +97,7 @@ struct IncompressibleFibrousTissueData : public MaterialData
   std::shared_ptr<std::vector<VectorType> const> e1_orientations;
   std::shared_ptr<std::vector<VectorType> const> e2_orientations;
   std::shared_ptr<std::vector<VectorType> const> stiffness_scaling;
+  std::shared_ptr<std::vector<VectorType> const> robin_k_scaling;
   std::vector<unsigned int> const                degree_per_level;
   double                                         point_tolerance;
 
@@ -109,9 +112,10 @@ template<int dim,
 class IncompressibleFibrousTissue : public Material<dim, Number>
 {
 public:
-  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
-  typedef std::pair<unsigned int, unsigned int>              Range;
-  typedef CellIntegrator<dim, dim, Number>                   IntegratorCell;
+  typedef dealii::LinearAlgebra::distributed::Vector<Number>  VectorType;
+  typedef std::pair<unsigned int, unsigned int>               Range;
+  typedef CellIntegrator<dim, dim /* n_components */, Number> IntegratorCell;
+  typedef FaceIntegrator<dim, dim /* n_components */, Number> IntegratorFace;
 
   typedef dealii::VectorizedArray<Number>                                  scalar;
   typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
@@ -252,13 +256,26 @@ public:
 
 private:
   /*
-   * Store factors involving (potentially variable) shear modulus.
+   * Store factors involving (potentially variable) shear modulus in integration points in cells,
+   * inner faces and boundary faces.
    */
   void
   cell_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
-                             VectorType &,
-                             VectorType const & src,
-                             Range const &      cell_range) const;
+                             VectorType &                            dst,
+                             VectorType const &                      src,
+                             Range const &                           range) const;
+
+  void
+  face_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
+                             VectorType &                            dst,
+                             VectorType const &                      src,
+                             Range const &                           range) const;
+
+  void
+  boundary_face_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                      VectorType &                            dst,
+                                      VectorType const &                      src,
+                                      Range const &                           range) const;
 
   /*
    * Helper functions to replace frequently appearing terms.
@@ -370,9 +387,12 @@ private:
 
   bool const orientation_vectors_provided;
 
-  // cache coefficients for spatially varying material parameters
+  // cache coefficients for spatially varying material parameters and exterior support
   bool                                 shear_modulus_is_variable;
   mutable VariableCoefficients<scalar> stiffness_scaling_coefficients;
+
+  bool                                 robin_k_scaling_is_variable;
+  mutable VariableCoefficients<scalar> robin_k_scaling_coefficients;
 
   // cache linearization data depending on cache_level and spatial_integration
   bool spatial_integration;
@@ -388,6 +408,7 @@ private:
   std::shared_ptr<VectorType> e1_orientation_dof_vector;
   std::shared_ptr<VectorType> e2_orientation_dof_vector;
   std::shared_ptr<VectorType> stiffness_scaling_dof_vector;
+  std::shared_ptr<VectorType> robin_k_scaling_dof_vector;
 
   // scalar cache level
   mutable VariableCoefficients<scalar> Jm1_coefficients;

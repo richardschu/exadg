@@ -291,8 +291,6 @@ public:
   {
     (void)face;
     (void)q;
-    AssertThrow(false,
-                dealii::ExcMessage("This should not be used, remove this assert once tested. ##+"));
 
     return dealii::make_vectorized_array<Number>(1.0);
   }

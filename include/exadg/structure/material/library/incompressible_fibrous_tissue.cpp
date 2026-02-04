@@ -68,9 +68,19 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
                                  data.e2_orientations != nullptr),
     shear_modulus_is_variable(data.shear_modulus_function != nullptr or
                               data.stiffness_scaling != nullptr),
+    robin_k_scaling_is_variable(data.robin_k_scaling != nullptr),
     spatial_integration(spatial_integration),
     force_material_residual(force_material_residual)
 {
+  if(robin_k_scaling_is_variable)
+  {
+    robin_k_scaling_coefficients.initialize(matrix_free,
+                                            quad_index,
+                                            true /* store_face_data */,
+                                            false /* store_cell_based_face_data */);
+    robin_k_scaling_coefficients.set_coefficients(dealii::make_vectorized_array<Number>(1.0));
+  }
+
   // initialize (potentially variable) shear modulus
   shear_modulus_stored = dealii::make_vectorized_array<Number>(shear_modulus);
 
@@ -201,19 +211,20 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   if(orientation_vectors_provided)
   {
     AssertThrow(data.e1_orientations != nullptr and data.e2_orientations != nullptr,
-                dealii::ExcMessage("Provide orientation vectors for both e1 and e2."));
+                dealii::ExcMessage("Provide orientation DoF vectors for both e1 and e2."));
 
     AssertThrow(data.e1_orientations->size() > 0,
-                dealii::ExcMessage("Provide orientation vectors or `nullptr`."));
+                dealii::ExcMessage("Provide orientation DoF vectors or `nullptr`."));
 
     AssertThrow(data.e1_orientations->size() == data.e2_orientations->size(),
-                dealii::ExcMessage("Provide orientation vectors for all levels for e1 and e2."));
+                dealii::ExcMessage(
+                  "Provide orientation DoF vectors for all levels for e1 and e2."));
 
     for(unsigned int i = 0; i < data.e1_orientations->size(); ++i)
     {
       AssertThrow((*data.e1_orientations)[i].size() == (*data.e2_orientations)[i].size(),
                   dealii::ExcMessage(
-                    "Provide e1 and e2 orientation vectors of equal size for each level."));
+                    "Provide e1 and e2 orientation DoF vectors of equal size for each level."));
     }
 
     AssertThrow(data.e1_orientations->size() == data.degree_per_level.size(),
@@ -239,7 +250,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       if(e1_orientation_dof_vector->size() == (*data.e1_orientations)[i].size() and
          degree == data.degree_per_level[i])
       {
-        pcout << "Filling orientation vectors of size " << e1_orientation_dof_vector->size()
+        pcout << "Filling orientation DoF vectors of size " << e1_orientation_dof_vector->size()
               << " (degree = " << degree << ").\n";
         found_match = true;
         e1_orientation_dof_vector->copy_locally_owned_data_from((*data.e1_orientations)[i]);
@@ -258,7 +269,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       (*e2_orientation_dof_vector) = 0.0;
       e2_orientation_dof_vector->add(1.0);
 
-      pcout << "Overwritten orientation vectors of size " << e1_orientation_dof_vector->size()
+      pcout << "Overwritten orientation DoF vectors of size " << e1_orientation_dof_vector->size()
             << " with dummy data.\n\n\n";
     }
     else
@@ -267,16 +278,16 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
             << "|E2|_2 = " << e2_orientation_dof_vector->l2_norm() << "\n\n";
     }
 #else
-    AssertThrow(not orientation_vectors_provided,
-                dealii::ExcMessage(
-                  "You must link against ExaDG-Bio to enable user-defined material orientations."));
+    AssertThrow(false,
+                dealii::ExcMessage("You must link against ExaDG-Bio to enable "
+                                   "user-defined material orientations."));
 #endif
   }
 
   if(data.stiffness_scaling != nullptr)
   {
     AssertThrow(data.stiffness_scaling->size() > 0,
-                dealii::ExcMessage("Provide stiffness scaling vectors or `nullptr`."));
+                dealii::ExcMessage("Provide stiffness scaling DoF vectors or `nullptr`."));
 
     AssertThrow(data.stiffness_scaling->size() == data.degree_per_level.size(),
                 dealii::ExcMessage("Provide degree for all levels for stiffness scaling."));
@@ -299,8 +310,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       if(stiffness_scaling_dof_vector->size() == (*data.stiffness_scaling)[i].size() and
          degree == data.degree_per_level[i])
       {
-        pcout << "Filling stiffness scaling vector of size " << stiffness_scaling_dof_vector->size()
-              << " (degree = " << degree << ").\n";
+        pcout << "Filling stiffness scaling DoF vector of size "
+              << stiffness_scaling_dof_vector->size() << " (degree = " << degree << ").\n";
         found_match = true;
         stiffness_scaling_dof_vector->copy_locally_owned_data_from((*data.stiffness_scaling)[i]);
       }
@@ -345,26 +356,115 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       mean = dealii::Utilities::MPI::sum(mean, mpi_comm) /
              dealii::Utilities::MPI::sum(n_nonzero_entries, mpi_comm);
 
-      pcout << "  Stiffness scaling vector read with (ignoring zero entries):\n"
+      pcout << "  Stiffness scaling DoF vector read with (ignoring zero entries):\n"
             << "  min {eta[|eta| > 0.0]} = " << min << "\n"
             << "  max {eta[|eta| > 0.0]} = " << max << "\n"
             << "  mean{eta[|eta| > 0.0]} = " << mean << "\n\n";
     }
 #else
-    AssertThrow(not orientation_vectors_provided,
-                dealii::ExcMessage(
-                  "You must link against ExaDG-Bio to enable user-defined material orientations."));
+    AssertThrow(false,
+                dealii::ExcMessage("You must link against ExaDG-Bio to enable "
+                                   "user-defined stiffness scaling."));
+#endif
+  }
+
+  if(robin_k_scaling_is_variable)
+  {
+    AssertThrow(data.robin_k_scaling->size() > 0,
+                dealii::ExcMessage("Provide Robin parameter scaling DoF vectors or `nullptr`."));
+
+    AssertThrow(data.robin_k_scaling->size() == data.degree_per_level.size(),
+                dealii::ExcMessage("Provide degree for all levels for `robin_k_scaling`."));
+
+    robin_k_scaling_dof_vector = std::make_shared<VectorType>();
+    matrix_free.initialize_dof_vector(*robin_k_scaling_dof_vector, dof_index);
+
+#ifdef LINK_TO_EXADGBIO
+    // Read the suitable vector from binary format.
+    dealii::DoFHandler<dim> const & dof_handler = matrix_free.get_dof_handler(dof_index);
+    unsigned int const              degree      = dof_handler.get_fe().base_element(0).degree;
+    MPI_Comm const &                mpi_comm    = dof_handler.get_mpi_communicator();
+    dealii::ConditionalOStream      pcout(std::cout,
+                                     dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
+
+    // Match the initialized vector with the given vectors.
+    bool found_match = false;
+    for(unsigned int i = 0; i < data.robin_k_scaling->size(); ++i)
+    {
+      if(robin_k_scaling_dof_vector->size() == (*data.robin_k_scaling)[i].size() and
+         degree == data.degree_per_level[i])
+      {
+        pcout << "Filling Robin parameter scaling DoF vector of size "
+              << robin_k_scaling_dof_vector->size() << " (degree = " << degree << ").\n";
+        found_match = true;
+        robin_k_scaling_dof_vector->copy_locally_owned_data_from((*data.robin_k_scaling)[i]);
+      }
+    }
+
+    robin_k_scaling_dof_vector->update_ghost_values();
+
+    if(not found_match)
+    {
+      (*robin_k_scaling_dof_vector) = 0.0;
+      robin_k_scaling_dof_vector->add(1.0);
+
+      pcout << "Overwritten Robin parameter scaling DoF vector of size "
+            << robin_k_scaling_dof_vector->size() << " with dummy data.\n\n\n";
+    }
+    else
+    {
+      // Compute min, max and mean values of shear modulus.
+      Number       min               = 1.0e20;
+      Number       max               = -1.0e20;
+      Number       mean              = 0.0;
+      unsigned int n_nonzero_entries = 0;
+      for(unsigned int i = 0; i < robin_k_scaling_dof_vector->locally_owned_size(); ++i)
+      {
+        Number const & val = robin_k_scaling_dof_vector->local_element(i);
+        if(std::abs(val) > 0.0)
+        {
+          if(val < min)
+          {
+            min = val;
+          }
+          if(val > max)
+          {
+            max = val;
+          }
+          mean += val;
+          n_nonzero_entries += 1;
+        }
+      }
+      min  = dealii::Utilities::MPI::min(min, mpi_comm);
+      max  = dealii::Utilities::MPI::max(max, mpi_comm);
+      mean = dealii::Utilities::MPI::sum(mean, mpi_comm) /
+             dealii::Utilities::MPI::sum(n_nonzero_entries, mpi_comm);
+
+      pcout << "  `robin_k_scaling` vector read with (ignoring zero entries):\n"
+            << "  min {eta[|eta| > 0.0]} = " << min << "\n"
+            << "  max {eta[|eta| > 0.0]} = " << max << "\n"
+            << "  mean{eta[|eta| > 0.0]} = " << mean << "\n\n";
+    }
+#else
+    AssertThrow(false,
+                dealii::ExcMessage("You must link against ExaDG-Bio to enable "
+                                   "user-defined Robin parameter scaling."));
 #endif
   }
 
   // Set the coefficients on the integration point level.
   VectorType dummy;
-  matrix_free.cell_loop(
+  matrix_free.loop(
     &IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
       cell_loop_set_coefficients,
+    &IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+      face_loop_set_coefficients,
+    &IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+      boundary_face_loop_set_coefficients,
     this,
     dummy,
-    dummy);
+    dummy,
+    false /* zero_dst_vector */);
 
   // Release vectors after initialization, since cell data is stored.
   if(orientation_vectors_provided)
@@ -377,6 +477,11 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   {
     stiffness_scaling_dof_vector.reset();
   }
+
+  if(data.robin_k_scaling != nullptr)
+  {
+    robin_k_scaling_dof_vector.reset();
+  }
 }
 
 template<int dim,
@@ -387,10 +492,13 @@ template<int dim,
 void
 IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
   cell_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
-                             VectorType &,
-                             VectorType const &,
-                             Range const & cell_range) const
+                             VectorType &                            dst,
+                             VectorType const &                      src,
+                             Range const &                           range) const
 {
+  (void)dst;
+  (void)src;
+
   IntegratorCell integrator(matrix_free, dof_index, quad_index);
   IntegratorCell integrator_e1(matrix_free, dof_index, quad_index);
   IntegratorCell integrator_e2(matrix_free, dof_index, quad_index);
@@ -423,7 +531,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   }
 
   // loop over all cells
-  for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+  for(unsigned int cell = range.first; cell < range.second; ++cell)
   {
     integrator.reinit(cell);
 
@@ -553,6 +661,72 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
                                                                       /* I * */ H_i /* * I^T */);
           }
         }
+      }
+    }
+  }
+}
+
+template<int dim,
+         typename Number,
+         unsigned int check_type,
+         bool         stable_formulation,
+         unsigned int cache_level>
+void
+IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+  face_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
+                             VectorType &                            dst,
+                             VectorType const &                      src,
+                             Range const &                           range) const
+{
+  (void)matrix_free;
+  (void)dst;
+  (void)src;
+  (void)range;
+
+  // We do not store any coefficients on the inner faces.
+}
+
+template<int dim,
+         typename Number,
+         unsigned int check_type,
+         bool         stable_formulation,
+         unsigned int cache_level>
+void
+IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+  boundary_face_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                      VectorType &                            dst,
+                                      VectorType const &                      src,
+                                      Range const &                           range) const
+{
+  (void)dst;
+  (void)src;
+
+  // The boundary face loop is only necessary if the Robin coefficient scaling stored in
+  // `robin_k_scaling_coefficients` varies in space. We loop over all boundary faces and interpolate
+  // the field given as a vector, whose first component is the Robin parameter scaling. This field
+  // is expected to be a volumetric field.
+  bool const do_boundary_face_loop = robin_k_scaling_is_variable;
+  if(do_boundary_face_loop)
+  {
+    IntegratorFace integrator_robin_k_scaling(matrix_free,
+                                              true /* is_interior_face */,
+                                              dof_index,
+                                              quad_index);
+
+    // loop over boundary faces and set coeffcients
+    for(unsigned int face = range.first; face < range.second; ++face)
+    {
+      integrator_robin_k_scaling.reinit(face);
+      integrator_robin_k_scaling.read_dof_values(*robin_k_scaling_dof_vector);
+      integrator_robin_k_scaling.evaluate(dealii::EvaluationFlags::values);
+
+      // loop over all quadrature points
+      for(unsigned int q = 0; q < integrator_robin_k_scaling.n_q_points; ++q)
+      {
+        vector const robin_k_scaling_vec = integrator_robin_k_scaling.get_value(q);
+        scalar const robin_k_scaling     = robin_k_scaling_vec[0];
+
+        robin_k_scaling_coefficients.set_coefficient_face(face, q, robin_k_scaling);
       }
     }
   }
@@ -1885,10 +2059,16 @@ dealii::VectorizedArray<Number>
 IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
   get_robin_k_scaling(unsigned int const face, unsigned int const q) const
 {
-  (void)face;
-  (void)q;
-
-  return dealii::make_vectorized_array<Number>(1.0);
+  if(robin_k_scaling_is_variable)
+  {
+    return robin_k_scaling_coefficients.get_coefficient_face(face, q);
+  }
+  else
+  {
+    // Avoid loading coefficients even if coefficients are initialized with 1.0. Branching here
+    // is easily predictable as it is constant for an entire simulation.
+    return dealii::make_vectorized_array<Number>(1.0);
+  }
 }
 
 // clang-format off
