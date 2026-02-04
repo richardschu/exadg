@@ -282,9 +282,13 @@ public:
   void
   update_boundary_mass_operator(Number const factor) const;
 
+  /*
+   * Set the Robin parameter for fluid--structure interaction, which only affects the velocity
+   * parameter (without normal projection), while all other parameters are zero.
+   */
   void
-  set_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
-                       double const &                               robin_parameter) const final;
+  set_fsi_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
+                           double const & robin_parameter) const final;
 
   /*
    * This function evaluates the nonlinear residual which is required by the Newton solver. In order

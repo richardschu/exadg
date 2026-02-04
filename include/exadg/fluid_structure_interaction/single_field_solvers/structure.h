@@ -42,8 +42,8 @@ public:
         double const &                                              robin_parameter_in);
 
   void
-  set_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
-                       double const &                               robin_parameter) const;
+  set_fsi_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
+                           double const &                               robin_parameter) const;
 
   // grid and mapping
   std::shared_ptr<Grid<dim>>            grid;
@@ -120,17 +120,17 @@ SolverStructure<dim, Number>::setup(
   time_integrator->setup(application->get_parameters().restarted_simulation);
 
   // Robin parameters need to be set *before* solver setup
-  set_robin_parameters(application->get_boundary_descriptor()->neumann_cached_bc,
-                       robin_parameter_in);
+  set_fsi_robin_parameters(application->get_boundary_descriptor()->neumann_cached_bc,
+                           robin_parameter_in);
 }
 
 template<int dim, typename Number>
 void
-SolverStructure<dim, Number>::set_robin_parameters(
+SolverStructure<dim, Number>::set_fsi_robin_parameters(
   std::set<dealii::types::boundary_id> const & boundary_IDs,
   double const &                               robin_parameter) const
 {
-  pde_operator->set_robin_parameters(boundary_IDs, robin_parameter);
+  pde_operator->set_fsi_robin_parameters(boundary_IDs, robin_parameter);
 }
 
 } // namespace FSI

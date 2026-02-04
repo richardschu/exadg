@@ -83,7 +83,7 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
     }
 
     // check boundary ID in robin_k_c_p_param to add boundary mass integrals from Robin boundaries
-    // on BoundaryType::NeumannCached or BoundaryType::RobinSpringDashpotPressure
+    // on `BoundaryType::NeumannCached` or `BoundaryType::RobinSpringDashpotPressure`
     if(boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {

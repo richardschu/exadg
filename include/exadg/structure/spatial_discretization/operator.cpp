@@ -1257,10 +1257,13 @@ Operator<dim, Number>::update_boundary_mass_operator(Number const factor) const
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::set_robin_parameters(
+Operator<dim, Number>::set_fsi_robin_parameters(
   std::set<dealii::types::boundary_id> const & boundary_IDs,
   double const &                               robin_parameter) const
 {
+  // We assume that this function is called with only the fluid--structure interface boudnary ID
+  // given in `boundary_IDs`. All but the velocity scaling parameter zero. Normal projection of the
+  // velocity is not considered, corresponding to standard Robin fluid--structure coupling.
   auto robin_k_c_p_param = this->boundary_descriptor->get_robin_k_c_p_param();
 
   for(auto it = boundary_IDs.begin(); it != boundary_IDs.end(); ++it)
