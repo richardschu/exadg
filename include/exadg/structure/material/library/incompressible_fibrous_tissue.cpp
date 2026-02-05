@@ -206,6 +206,17 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     }
   }
 
+#ifdef LINK_TO_EXADGBIO
+  dealii::DoFHandler<dim> const & dof_handler = matrix_free.get_dof_handler(dof_index);
+  unsigned int const              degree      = dof_handler.get_fe().base_element(0).degree;
+  MPI_Comm const &                mpi_comm    = dof_handler.get_mpi_communicator();
+  dealii::ConditionalOStream      pcout(std::cout,
+                                   dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
+
+  // Set default scientific number format.
+  pcout << std::scientific << std::setprecision(4);
+#endif
+
   // The vectors created or imported from the binary files in the application
   // increase in h-level and then in p-level (ph-Multigrid expected here).
   if(orientation_vectors_provided)
@@ -236,14 +247,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     matrix_free.initialize_dof_vector(*e2_orientation_dof_vector, dof_index);
 
 #ifdef LINK_TO_EXADGBIO
-    // Read the suitable vector from binary format.
-    dealii::DoFHandler<dim> const & dof_handler = matrix_free.get_dof_handler(dof_index);
-    unsigned int const              degree      = dof_handler.get_fe().base_element(0).degree;
-    MPI_Comm const &                mpi_comm    = dof_handler.get_mpi_communicator();
-    dealii::ConditionalOStream      pcout(std::cout,
-                                     dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
-
-    // Match the initialized vector with the given vectors.
+    // Read the suitable vector from binary format by matching the initialized vector with the
+    // vectors given for all multigrd levels.
     bool found_match = false;
     for(unsigned int i = 0; i < data.e1_orientations->size(); ++i)
     {
@@ -296,14 +301,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     matrix_free.initialize_dof_vector(*stiffness_scaling_dof_vector, dof_index);
 
 #ifdef LINK_TO_EXADGBIO
-    // Read the suitable vector from binary format.
-    dealii::DoFHandler<dim> const & dof_handler = matrix_free.get_dof_handler(dof_index);
-    unsigned int const              degree      = dof_handler.get_fe().base_element(0).degree;
-    MPI_Comm const &                mpi_comm    = dof_handler.get_mpi_communicator();
-    dealii::ConditionalOStream      pcout(std::cout,
-                                     dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
-
-    // Match the initialized vector with the given vectors.
+    // Read the suitable vector from binary format by matching the initialized vector with the
+    // vectors given for all multigrd levels.
     bool found_match = false;
     for(unsigned int i = 0; i < data.stiffness_scaling->size(); ++i)
     {
@@ -380,14 +379,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     matrix_free.initialize_dof_vector(*robin_k_scaling_dof_vector, dof_index);
 
 #ifdef LINK_TO_EXADGBIO
-    // Read the suitable vector from binary format.
-    dealii::DoFHandler<dim> const & dof_handler = matrix_free.get_dof_handler(dof_index);
-    unsigned int const              degree      = dof_handler.get_fe().base_element(0).degree;
-    MPI_Comm const &                mpi_comm    = dof_handler.get_mpi_communicator();
-    dealii::ConditionalOStream      pcout(std::cout,
-                                     dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
-
-    // Match the initialized vector with the given vectors.
+    // Read the suitable vector from binary format by matching the initialized vector with the
+    // vectors given for all multigrd levels.
     bool found_match = false;
     for(unsigned int i = 0; i < data.robin_k_scaling->size(); ++i)
     {
