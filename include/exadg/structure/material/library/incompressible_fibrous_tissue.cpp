@@ -248,7 +248,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
 
 #ifdef LINK_TO_EXADGBIO
     // Read the suitable vector from binary format by matching the initialized vector with the
-    // vectors given for all multigrd levels.
+    // vectors given for all multigrid levels.
     bool found_match = false;
     for(unsigned int i = 0; i < data.e1_orientations->size(); ++i)
     {
@@ -302,7 +302,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
 
 #ifdef LINK_TO_EXADGBIO
     // Read the suitable vector from binary format by matching the initialized vector with the
-    // vectors given for all multigrd levels.
+    // vectors given for all multigrid levels.
     bool found_match = false;
     for(unsigned int i = 0; i < data.stiffness_scaling->size(); ++i)
     {
@@ -336,6 +336,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       for(unsigned int i = 0; i < stiffness_scaling_dof_vector->locally_owned_size(); ++i)
       {
         Number const & val = stiffness_scaling_dof_vector->local_element(i);
+        // Ignore zero entries since only one vector component is filled with data.
         if(std::abs(val) > 0.0)
         {
           if(val < min)
@@ -380,7 +381,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
 
 #ifdef LINK_TO_EXADGBIO
     // Read the suitable vector from binary format by matching the initialized vector with the
-    // vectors given for all multigrd levels.
+    // vectors given for all multigrid levels.
     bool found_match = false;
     for(unsigned int i = 0; i < data.robin_k_scaling->size(); ++i)
     {
@@ -414,6 +415,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
       for(unsigned int i = 0; i < robin_k_scaling_dof_vector->locally_owned_size(); ++i)
       {
         Number const & val = robin_k_scaling_dof_vector->local_element(i);
+        // Ignore zero entries since only one vector component is filled with data.
         if(std::abs(val) > 0.0)
         {
           if(val < min)
@@ -531,17 +533,17 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     if(orientation_vectors_provided)
     {
       integrator_e1.reinit(cell);
-      integrator_e1.read_dof_values(*e1_orientation_dof_vector);
+      integrator_e1.read_dof_values_plain(*e1_orientation_dof_vector);
       integrator_e1.evaluate(dealii::EvaluationFlags::values);
       integrator_e2.reinit(cell);
-      integrator_e2.read_dof_values(*e2_orientation_dof_vector);
+      integrator_e2.read_dof_values_plain(*e2_orientation_dof_vector);
       integrator_e2.evaluate(dealii::EvaluationFlags::values);
     }
 
     if(data.stiffness_scaling != nullptr)
     {
       integrator_stiffness_scaling.reinit(cell);
-      integrator_stiffness_scaling.read_dof_values(*stiffness_scaling_dof_vector);
+      integrator_stiffness_scaling.read_dof_values_plain(*stiffness_scaling_dof_vector);
       integrator_stiffness_scaling.evaluate(dealii::EvaluationFlags::values);
     }
 
@@ -566,7 +568,43 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
           // Scalar stiffness scaling coefficient is stored in component 0 of the vector-valued DoF
           // vector.
           vector const stiffness_scaling_vec = integrator_stiffness_scaling.get_value(q);
-          stiffness_scaling                  = stiffness_scaling_vec[0];
+
+          // Reading in the debug field of f(x) = cos(z) * cos(5*x*y), we can verify correctness.
+          bool constexpr check_values_with_debug_field = false;
+          if(check_values_with_debug_field)
+          {
+            dealii::Point<dim, dealii::VectorizedArray<Number>> const q_points =
+              integrator_stiffness_scaling.quadrature_point(q);
+            if constexpr(dim == 3)
+            {
+              scalar const val_exact =
+                std::cos(q_points[dim - 1]) * std::cos(5.0 * q_points[0] * q_points[1]);
+              scalar const & val_approx = stiffness_scaling_vec[0];
+              scalar const   rel_error  = std::abs(val_exact - val_approx) / std::abs(val_exact);
+              for(unsigned int v = 0; v < matrix_free.n_active_entries_per_cell_batch(cell); v++)
+              {
+                if(rel_error[v] > 1e-3)
+                {
+                  std::cout << "rel_error = " << rel_error[v] << " in (x, y, z) = ("
+                            << q_points[0][v] << ", " << q_points[1][v] << ", "
+                            << q_points[dim - 1][v] << ") : "
+                            << "val_exact = " << val_exact[v] << ", val_approx = " << val_approx[v]
+                            << "\n";
+
+                  AssertThrow(false,
+                              dealii::ExcMessage("Stored integration point data does not match the "
+                                                 "expected analytical function to be provided in "
+                                                 "the binary file."));
+                }
+              }
+            }
+            else
+            {
+              AssertThrow(dim == 3, dealii::ExcMessage("Debug field only implemented in 3D."));
+            }
+          }
+
+          stiffness_scaling = stiffness_scaling_vec[0];
         }
         else
         {
@@ -697,7 +735,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   // The boundary face loop is only necessary if the Robin coefficient scaling stored in
   // `robin_k_scaling_coefficients` varies in space. We loop over all boundary faces and interpolate
   // the field given as a vector, whose first component is the Robin parameter scaling. This field
-  // is expected to be a volumetric field.
+  // is expected to be a volumetric field, and we set the field on *all* boundaries.
   bool const do_boundary_face_loop = robin_k_scaling_is_variable;
   if(do_boundary_face_loop)
   {
@@ -710,16 +748,30 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     for(unsigned int face = range.first; face < range.second; ++face)
     {
       integrator_robin_k_scaling.reinit(face);
-      integrator_robin_k_scaling.read_dof_values(*robin_k_scaling_dof_vector);
+      integrator_robin_k_scaling.read_dof_values_plain(*robin_k_scaling_dof_vector);
       integrator_robin_k_scaling.evaluate(dealii::EvaluationFlags::values);
 
       // loop over all quadrature points
       for(unsigned int q = 0; q < integrator_robin_k_scaling.n_q_points; ++q)
       {
         vector const robin_k_scaling_vec = integrator_robin_k_scaling.get_value(q);
-        scalar const robin_k_scaling     = robin_k_scaling_vec[0];
 
-        robin_k_scaling_coefficients.set_coefficient_face(face, q, robin_k_scaling);
+        // Reading in the debug field of f(x) = cos(z) * cos(5*x*y), we can verify correctness.
+        bool constexpr overwrite_value = false;
+        if constexpr(overwrite_value)
+        {
+          dealii::Point<dim, dealii::VectorizedArray<Number>> const q_points =
+            integrator_robin_k_scaling.quadrature_point(q);
+
+          scalar const robin_k_scaling =
+            std::cos(q_points[dim - 1]) * std::cos(5.0 * q_points[0] * q_points[1]);
+          robin_k_scaling_coefficients.set_coefficient_face(face, q, robin_k_scaling);
+        }
+        else
+        {
+          scalar const robin_k_scaling = robin_k_scaling_vec[0];
+          robin_k_scaling_coefficients.set_coefficient_face(face, q, robin_k_scaling);
+        }
       }
     }
   }

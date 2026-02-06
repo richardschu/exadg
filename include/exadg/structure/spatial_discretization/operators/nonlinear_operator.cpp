@@ -664,6 +664,43 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
           scalar const coefficient_displacement =
             it->second.second[0] * material->get_robin_k_scaling(face, q);
 
+          // Reading in the debug field of f(x) = cos(z) * cos(5*x*y), we can verify correctness.
+          bool constexpr check_values_with_debug_field = false;
+          if(check_values_with_debug_field)
+          {
+            dealii::Point<dim, dealii::VectorizedArray<Number>> const q_points =
+              integrator.quadrature_point(q);
+            if constexpr(dim == 3)
+            {
+              scalar const val_exact =
+                std::cos(q_points[dim - 1]) * std::cos(5.0 * q_points[0] * q_points[1]);
+              scalar const & val_approx = material->get_robin_k_scaling(face, q);
+              scalar const   rel_error  = std::abs(val_exact - val_approx) / std::abs(val_exact);
+              for(unsigned int v = 0;
+                  v < integrator.get_matrix_free().n_active_entries_per_face_batch(face);
+                  v++)
+              {
+                if(rel_error[v] > 1e-3)
+                {
+                  std::cout << "rel_error = " << rel_error[v] << " in (x, y, z) = ("
+                            << q_points[0][v] << ", " << q_points[1][v] << ", "
+                            << q_points[dim - 1][v] << ") : "
+                            << "val_exact = " << val_exact[v] << ", val_approx = " << val_approx[v]
+                            << ", boundary_id = " << boundary_id << "\n";
+
+                  AssertThrow(false,
+                              dealii::ExcMessage("Stored integration point data does not match the "
+                                                 "expected analytical function to be provided in "
+                                                 "the binary file."));
+                }
+              }
+            }
+            else
+            {
+              AssertThrow(dim == 3, dealii::ExcMessage("Debug field only implemented in 3D."));
+            }
+          }
+
           if(normal_projection_displacement)
           {
             vector const N = integrator.normal_vector(q);
