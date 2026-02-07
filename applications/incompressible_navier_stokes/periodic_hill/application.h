@@ -206,7 +206,7 @@ private:
     this->param.start_with_low_order            = read_restart ? false : true;
 
     // output of solver information
-    this->param.solver_info_data.interval_time = flow_through_time / 10.0;
+    this->param.solver_info_data.interval_time = flow_through_time / 100.0;
 
     // SPATIAL DISCRETIZATION
     this->param.spatial_discretization      = spatial_discretization;
@@ -248,14 +248,15 @@ private:
     this->param.restarted_simulation       = read_restart;
     this->param.restart_data.write_restart = write_restart;
     // write restart every 40% of the simulation time
-    this->param.restart_data.interval_time = (this->param.end_time - this->param.start_time) * 0.4;
+    this->param.restart_data.interval_time = (this->param.end_time - this->param.start_time) * 0.8;
     this->param.restart_data.directory_coarse_triangulation = this->output_parameters.directory;
     this->param.restart_data.directory                      = this->output_parameters.directory;
     this->param.restart_data.filename            = this->output_parameters.filename + "_restart";
     this->param.restart_data.interval_wall_time  = 1.e6;
     this->param.restart_data.interval_time_steps = 1e8;
 
-    this->param.restart_data.discretization_identical                        = false;
+    // Same `mapping_degree` and spatial resolution are the most stable options for restart,
+    // polynomial degree can be varied.
     this->param.restart_data.consider_mapping_write                          = true;
     this->param.restart_data.consider_mapping_read_source                    = true;
     this->param.restart_data.consider_restart_time_in_mesh_movement_function = true;

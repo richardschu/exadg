@@ -62,6 +62,12 @@ public:
   {
   }
 
+  virtual unsigned int
+  get_size_velocity() const;
+
+  virtual unsigned int
+  get_size_pressure() const;
+
   virtual VectorType const &
   get_velocity() const = 0;
 
@@ -111,6 +117,12 @@ protected:
   void
   setup_derived() override;
 
+  virtual void
+  copy_to_vec_convective_term_for_restart(unsigned int const i) const;
+
+  virtual void
+  copy_from_vec_convective_term_for_restart(unsigned int const i);
+
   void
   read_restart_vectors() final;
 
@@ -144,9 +156,10 @@ protected:
   std::shared_ptr<SpatialOperatorBase<dim, Number>> operator_base;
 
   // convective term formulated explicitly
-  bool                    needs_vector_convective_term;
-  std::vector<VectorType> vec_convective_term;
-  VectorType              convective_term_np;
+  bool                            needs_vector_convective_term;
+  std::vector<VectorType>         vec_convective_term;
+  mutable std::vector<VectorType> vec_convective_term_for_restart;
+  VectorType                      convective_term_np;
 
   // required for strongly-coupled partitioned iteration
   bool use_extrapolation;

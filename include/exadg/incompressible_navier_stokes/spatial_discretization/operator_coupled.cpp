@@ -135,12 +135,18 @@ template<int dim, typename Number>
 void
 OperatorCoupled<dim, Number>::update_divergence_penalty_operator(VectorType const & velocity)
 {
+  AssertThrow(false,
+              dealii::ExcMessage("This function is empty. Should it be filled or should we "
+                                 "put a comment here saying that no update is necessary?"));
 }
 
 template<int dim, typename Number>
 void
 OperatorCoupled<dim, Number>::update_continuity_penalty_operator(VectorType const & velocity)
 {
+  AssertThrow(false,
+              dealii::ExcMessage("This function is empty. Should it be filled or should we "
+                                 "put a comment here saying that no update is necessary?"));
 }
 
 template<int dim, typename Number>
