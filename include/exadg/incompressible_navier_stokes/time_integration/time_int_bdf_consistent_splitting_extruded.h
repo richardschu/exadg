@@ -97,6 +97,12 @@ public:
   double
   recalculate_time_step_size() const override;
 
+  void
+  write_restart_vectors() const override;
+
+  void
+  read_restart_vectors() override;
+
 private:
   void
   allocate_vectors() final;
@@ -112,20 +118,6 @@ private:
 
   unsigned int
   get_size_pressure() const final;
-
-  void
-  copy_to_vec_convective_term_for_restart(unsigned int const i) const final;
-
-  void
-  copy_from_vec_convective_term_for_restart(unsigned int const i) final;
-
-  void
-  get_vectors_serialization(std::vector<VectorType const *> & vectors_velocity,
-                            std::vector<VectorType const *> & vectors_pressure) const final;
-
-  void
-  set_vectors_deserialization(std::vector<VectorType> const & vectors_velocity,
-                              std::vector<VectorType> const & vectors_pressure) final;
 
   void
   do_timestep_solve() final;
@@ -191,21 +183,7 @@ private:
   std::vector<VectorTypeFloat> pressure_matvec;           // `dg_matrix` vector
   std::vector<VectorType>      convective_divergence_rhs; // mf vector
   std::vector<VectorType>      divergences;               // mf vector
-  std::vector<VectorType>      pressure_nbc_rhs;          // mf vector
-
-  // vectors required for restart, all standard matrix-free vectors, but might feature DoF
-  // reordering compared to the default one.
-  mutable std::vector<VectorType> velocity_for_restart;        // mf vector
-  mutable std::vector<VectorType> velocity_red_for_restart;    // mf vector
-  mutable std::vector<VectorType> velocity_matvec_for_restart; // mf vector
-
-  mutable std::vector<VectorType> pressure_for_restart;        // mf vector
-  mutable std::vector<VectorType> pressure_matvec_for_restart; // mf vector
-
-  // required for strongly-coupled partitioned FSI
-  VectorType pressure_last_iter;
-  VectorType velocity_projection_last_iter;
-  VectorType velocity_viscous_last_iter;
+  std::vector<VectorType>      pressure_nbc_rhs;          // vector only living on boundary
 
   std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, Number>>   op_rt;
   std::shared_ptr<RTOperator::RaviartThomasOperatorBase<dim, float>>    op_rt_float;

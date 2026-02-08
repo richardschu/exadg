@@ -124,10 +124,10 @@ protected:
   copy_from_vec_convective_term_for_restart(unsigned int const i);
 
   void
-  read_restart_vectors() final;
+  read_restart_vectors() override;
 
   void
-  write_restart_vectors() const final;
+  write_restart_vectors() const override;
 
   virtual void
   get_vectors_serialization(std::vector<VectorType const *> & vectors_velocity,

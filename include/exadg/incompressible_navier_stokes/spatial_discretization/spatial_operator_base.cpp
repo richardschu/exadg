@@ -1125,7 +1125,7 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                                    *grid->triangulation);
   }
 
-  // Setup vectors for de-/serialization.
+  // Set up vectors for de-/serialization.
   std::vector<VectorType> vectors_u_restart(vectors_velocity.size());
   std::vector<VectorType> vectors_p_restart(vectors_pressure.size());
   for(VectorType & vector : vectors_u_restart)
