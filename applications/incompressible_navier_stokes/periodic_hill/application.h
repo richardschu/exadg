@@ -107,6 +107,7 @@ public:
     {
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
+      prm.add_parameter("RestartIntervalTime", restart_interval_time, "Time between writes of restart data in multiples of flow-through time.");
       prm.add_parameter("TriangulationType", triangulation_type, "Type of triangulation");
       prm.add_parameter("TemporalDiscretization",
                         temporal_discretization,
@@ -116,7 +117,7 @@ public:
       prm.add_parameter("ReynoldsNumber", Re, "Reynolds number (ignored if Inviscid = true)");
       prm.add_parameter("EndTime",
                         end_time_multiples,
-                        "End time in multiples of flow through time.",
+                        "End time in multiples of flow-through time.",
                         dealii::Patterns::Double(0.0, 1000.0));
       prm.add_parameter("GridStretchFactor",
                         grid_stretch_factor,
@@ -126,7 +127,7 @@ public:
                         "Decides whether statistics are calculated.");
       prm.add_parameter("SampleStartTime",
                         sample_start_time_multiples,
-                        "Start time of sampling in multiples of flow through time.",
+                        "Start time of sampling in multiples of flow-through time.",
                         dealii::Patterns::Integer(0.0, 1000.0));
       prm.add_parameter("SampleEveryTimeSteps",
                         sample_every_timesteps,
@@ -156,6 +157,7 @@ private:
     // depend on values defined in input file
     end_time          = end_time_multiples * flow_through_time;
     sample_start_time = double(sample_start_time_multiples) * flow_through_time;
+    restart_interval_time = restart_interval_time * flow_through_time;
 
     // sample end time is equal to end time, which is read from the input file
     sample_end_time = end_time;
@@ -206,7 +208,7 @@ private:
     this->param.start_with_low_order            = read_restart ? false : true;
 
     // output of solver information
-    this->param.solver_info_data.interval_time = flow_through_time / 100.0;
+    this->param.solver_info_data.interval_time = flow_through_time / 10.0;
 
     // SPATIAL DISCRETIZATION
     this->param.spatial_discretization      = spatial_discretization;
@@ -248,7 +250,7 @@ private:
     this->param.restarted_simulation       = read_restart;
     this->param.restart_data.write_restart = write_restart;
     // write restart every 40% of the simulation time
-    this->param.restart_data.interval_time = (this->param.end_time - this->param.start_time) * 0.8;
+    this->param.restart_data.interval_time = restart_interval_time;
     this->param.restart_data.directory_coarse_triangulation = this->output_parameters.directory;
     this->param.restart_data.directory                      = this->output_parameters.directory;
     this->param.restart_data.filename            = this->output_parameters.filename + "_restart";
@@ -765,7 +767,7 @@ private:
   // start and end time
   double const start_time         = 0.0;
   double       end_time_multiples = 10;
-  double       end_time           = double(end_time_multiples) * flow_through_time;
+  double       end_time           = end_time_multiples * flow_through_time;
 
   // grid
   double grid_stretch_factor = 1.6;
@@ -780,6 +782,7 @@ private:
   // restart
   bool write_restart = false;
   bool read_restart  = false;
+  double restart_interval_time = (end_time - start_time) * 0.8;
 
   // sampling
   bool         calculate_statistics        = true;
