@@ -103,11 +103,11 @@ Calculation of time step size:
 Starting time loop ...
 
 Calculate error for all fields at time t = 0.0000e+00:
-  Relative error (L2-norm): 1.41945e-11
+  Relative error (L2-norm): 1.41944e-11
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.00331e-04
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -115,7 +115,7 @@ Calculate error for all fields at time t = 1.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 9969    t = 1.00010e+00 -> t + dt = 1.00020e+00
+ Time step number = 9969     advance to t + dt = 1.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 2.0000e+00:
@@ -123,7 +123,7 @@ Calculate error for all fields at time t = 2.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 19936   t = 2.00010e+00 -> t + dt = 2.00020e+00
+ Time step number = 19936    advance to t + dt = 2.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 3.0000e+00:
@@ -131,7 +131,7 @@ Calculate error for all fields at time t = 3.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 29903   t = 3.00010e+00 -> t + dt = 3.00020e+00
+ Time step number = 29903    advance to t + dt = 3.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 4.0000e+00:
@@ -139,7 +139,7 @@ Calculate error for all fields at time t = 4.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 39870   t = 4.00010e+00 -> t + dt = 4.00020e+00
+ Time step number = 39870    advance to t + dt = 4.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 5.0000e+00:
@@ -147,7 +147,7 @@ Calculate error for all fields at time t = 5.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 49837   t = 5.00010e+00 -> t + dt = 5.00020e+00
+ Time step number = 49837    advance to t + dt = 5.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 6.0000e+00:
@@ -155,23 +155,23 @@ Calculate error for all fields at time t = 6.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 59804   t = 6.00010e+00 -> t + dt = 6.00020e+00
+ Time step number = 59804    advance to t + dt = 6.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 7.0000e+00:
-  Relative error (L2-norm): 1.30565e-10
+  Relative error (L2-norm): 1.30566e-10
 
 ________________________________________________________________________________
 
- Time step number = 69771   t = 7.00010e+00 -> t + dt = 7.00020e+00
+ Time step number = 69771    advance to t + dt = 7.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 8.0000e+00:
-  Relative error (L2-norm): 1.30555e-10
+  Relative error (L2-norm): 1.30556e-10
 
 ________________________________________________________________________________
 
- Time step number = 79738   t = 8.00010e+00 -> t + dt = 8.00020e+00
+ Time step number = 79738    advance to t + dt = 8.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 9.0000e+00:
@@ -179,7 +179,7 @@ Calculate error for all fields at time t = 9.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 89705   t = 9.00010e+00 -> t + dt = 9.00020e+00
+ Time step number = 89705    advance to t + dt = 9.00010e+00 + 1.00331e-04
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+01:

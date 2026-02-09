@@ -135,7 +135,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 6.83060e-04
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1450
   number of dofs (total) after adaptive mesh refinement:1375
@@ -146,7 +146,7 @@ Calculate error for all fields at time t = 5.0546e-02:
 
 ________________________________________________________________________________
 
- Time step number = 75      t = 5.05464e-02 -> t + dt = 5.12295e-02
+ Time step number = 75       advance to t + dt = 5.05464e-02 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1375
   number of dofs (total) after adaptive mesh refinement:1450
@@ -156,7 +156,7 @@ Calculate error for all fields at time t = 1.0041e-01:
 
 ________________________________________________________________________________
 
- Time step number = 148     t = 1.00410e-01 -> t + dt = 1.01093e-01
+ Time step number = 148      advance to t + dt = 1.00410e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1525
@@ -167,7 +167,7 @@ Calculate error for all fields at time t = 1.5027e-01:
 
 ________________________________________________________________________________
 
- Time step number = 221     t = 1.50273e-01 -> t + dt = 1.50956e-01
+ Time step number = 221      advance to t + dt = 1.50273e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1600
   number of dofs (total) after adaptive mesh refinement:1675
@@ -177,7 +177,7 @@ Calculate error for all fields at time t = 2.0014e-01:
 
 ________________________________________________________________________________
 
- Time step number = 294     t = 2.00137e-01 -> t + dt = 2.00820e-01
+ Time step number = 294      advance to t + dt = 2.00137e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1525
@@ -188,7 +188,7 @@ Calculate error for all fields at time t = 2.5000e-01:
 
 ________________________________________________________________________________
 
- Time step number = 367     t = 2.50000e-01 -> t + dt = 2.50683e-01
+ Time step number = 367      advance to t + dt = 2.50000e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1825
   number of dofs (total) after adaptive mesh refinement:1900
@@ -198,7 +198,7 @@ Calculate error for all fields at time t = 3.0055e-01:
 
 ________________________________________________________________________________
 
- Time step number = 441     t = 3.00546e-01 -> t + dt = 3.01230e-01
+ Time step number = 441      advance to t + dt = 3.00546e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1600
   number of dofs (total) after adaptive mesh refinement:1450
@@ -209,7 +209,7 @@ Calculate error for all fields at time t = 3.5041e-01:
 
 ________________________________________________________________________________
 
- Time step number = 514     t = 3.50410e-01 -> t + dt = 3.51093e-01
+ Time step number = 514      advance to t + dt = 3.50410e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1375
@@ -219,7 +219,7 @@ Calculate error for all fields at time t = 4.0027e-01:
 
 ________________________________________________________________________________
 
- Time step number = 587     t = 4.00273e-01 -> t + dt = 4.00956e-01
+ Time step number = 587      advance to t + dt = 4.00273e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1450
@@ -229,7 +229,7 @@ Calculate error for all fields at time t = 4.5014e-01:
 
 ________________________________________________________________________________
 
- Time step number = 660     t = 4.50137e-01 -> t + dt = 4.50820e-01
+ Time step number = 660      advance to t + dt = 4.50137e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1525
@@ -240,7 +240,7 @@ Calculate error for all fields at time t = 5.0000e-01:
 
 ________________________________________________________________________________
 
- Time step number = 734     t = 5.00683e-01 -> t + dt = 5.01366e-01
+ Time step number = 734      advance to t + dt = 5.00683e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1450
@@ -250,7 +250,7 @@ Calculate error for all fields at time t = 5.5055e-01:
 
 ________________________________________________________________________________
 
- Time step number = 807     t = 5.50546e-01 -> t + dt = 5.51230e-01
+ Time step number = 807      advance to t + dt = 5.50546e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1525
   number of dofs (total) after adaptive mesh refinement:1750
@@ -261,7 +261,7 @@ Calculate error for all fields at time t = 6.0041e-01:
 
 ________________________________________________________________________________
 
- Time step number = 880     t = 6.00410e-01 -> t + dt = 6.01093e-01
+ Time step number = 880      advance to t + dt = 6.00410e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1825
   number of dofs (total) after adaptive mesh refinement:1750
@@ -271,7 +271,7 @@ Calculate error for all fields at time t = 6.5027e-01:
 
 ________________________________________________________________________________
 
- Time step number = 953     t = 6.50273e-01 -> t + dt = 6.50956e-01
+ Time step number = 953      advance to t + dt = 6.50273e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1750
   number of dofs (total) after adaptive mesh refinement:1975
@@ -282,7 +282,7 @@ Calculate error for all fields at time t = 7.0014e-01:
 
 ________________________________________________________________________________
 
- Time step number = 1026    t = 7.00137e-01 -> t + dt = 7.00820e-01
+ Time step number = 1026     advance to t + dt = 7.00137e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:1900
   number of dofs (total) after adaptive mesh refinement:1975
@@ -292,7 +292,7 @@ Calculate error for all fields at time t = 7.5000e-01:
 
 ________________________________________________________________________________
 
- Time step number = 1099    t = 7.50000e-01 -> t + dt = 7.50683e-01
+ Time step number = 1099     advance to t + dt = 7.50000e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:2050
   number of dofs (total) after adaptive mesh refinement:1975
@@ -303,7 +303,7 @@ Calculate error for all fields at time t = 8.0055e-01:
 
 ________________________________________________________________________________
 
- Time step number = 1173    t = 8.00546e-01 -> t + dt = 8.01230e-01
+ Time step number = 1173     advance to t + dt = 8.00546e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:2050
   number of dofs (total) after adaptive mesh refinement:2350
@@ -313,7 +313,7 @@ Calculate error for all fields at time t = 8.5041e-01:
 
 ________________________________________________________________________________
 
- Time step number = 1246    t = 8.50410e-01 -> t + dt = 8.51093e-01
+ Time step number = 1246     advance to t + dt = 8.50410e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:2425
   number of dofs (total) after adaptive mesh refinement:2350
@@ -323,7 +323,7 @@ Calculate error for all fields at time t = 9.0027e-01:
 
 ________________________________________________________________________________
 
- Time step number = 1319    t = 9.00273e-01 -> t + dt = 9.00956e-01
+ Time step number = 1319     advance to t + dt = 9.00273e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:2425
   number of dofs (total) after adaptive mesh refinement:2350
@@ -334,7 +334,7 @@ Calculate error for all fields at time t = 9.5014e-01:
 
 ________________________________________________________________________________
 
- Time step number = 1392    t = 9.50137e-01 -> t + dt = 9.50820e-01
+ Time step number = 1392     advance to t + dt = 9.50137e-01 + 6.83060e-04
 ________________________________________________________________________________
   number of dofs (total) after adaptive mesh refinement:2275
   number of dofs (total) after adaptive mesh refinement:2500

@@ -187,7 +187,7 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 9.76562e-04
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 9.76562e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 1.0000e+00:

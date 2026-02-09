@@ -189,110 +189,110 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.41421e-01
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 1.41421e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 1.0056e+01:
   Absolute error (L2-norm): 1.68135e-01
 
 Calculate error for pressure at time t = 1.0056e+01:
-  Absolute error (L2-norm): 4.11875e-10
+  Absolute error (L2-norm): 4.34642e-10
 
 ________________________________________________________________________________
 
- Time step number = 50      t = 1.00557e+01 -> t + dt = 1.02097e+01
+ Time step number = 50       advance to t + dt = 1.00557e+01 + 1.53980e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.0119e+01:
   Absolute error (L2-norm): 1.36693e-02
 
 Calculate error for pressure at time t = 2.0119e+01:
-  Absolute error (L2-norm): 1.68078e-11
+  Absolute error (L2-norm): 3.83489e-11
 
 ________________________________________________________________________________
 
- Time step number = 119     t = 2.01194e+01 -> t + dt = 2.02617e+01
+ Time step number = 119      advance to t + dt = 2.01194e+01 + 1.42360e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 3.0043e+01:
   Absolute error (L2-norm): 1.15089e-03
 
 Calculate error for pressure at time t = 3.0043e+01:
-  Absolute error (L2-norm): 8.23861e-13
+  Absolute error (L2-norm): 4.78246e-12
 
 ________________________________________________________________________________
 
- Time step number = 189     t = 3.00429e+01 -> t + dt = 3.01844e+01
+ Time step number = 189      advance to t + dt = 3.00429e+01 + 1.41500e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 4.0085e+01:
   Absolute error (L2-norm): 9.40746e-05
 
 Calculate error for pressure at time t = 4.0085e+01:
-  Absolute error (L2-norm): 9.40131e-13
+  Absolute error (L2-norm): 1.58066e-13
 
 ________________________________________________________________________________
 
- Time step number = 260     t = 4.00852e+01 -> t + dt = 4.02266e+01
+ Time step number = 260      advance to t + dt = 4.00852e+01 + 1.41420e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 5.0126e+01:
   Absolute error (L2-norm): 7.69248e-06
 
 Calculate error for pressure at time t = 5.0126e+01:
-  Absolute error (L2-norm): 4.66125e-15
+  Absolute error (L2-norm): 2.09860e-14
 
 ________________________________________________________________________________
 
- Time step number = 331     t = 5.01260e+01 -> t + dt = 5.02674e+01
+ Time step number = 331      advance to t + dt = 5.01260e+01 + 1.41420e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 6.0025e+01:
   Absolute error (L2-norm): 6.51593e-07
 
 Calculate error for pressure at time t = 6.0025e+01:
-  Absolute error (L2-norm): 1.73958e-15
+  Absolute error (L2-norm): 6.38771e-16
 
 ________________________________________________________________________________
 
- Time step number = 401     t = 6.00254e+01 -> t + dt = 6.01668e+01
+ Time step number = 401      advance to t + dt = 6.00254e+01 + 1.41420e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 7.0066e+01:
   Absolute error (L2-norm): 5.32807e-08
 
 Calculate error for pressure at time t = 7.0066e+01:
-  Absolute error (L2-norm): 3.15033e-15
+  Absolute error (L2-norm): 1.00180e-15
 
 ________________________________________________________________________________
 
- Time step number = 472     t = 7.00662e+01 -> t + dt = 7.02077e+01
+ Time step number = 472      advance to t + dt = 7.00662e+01 + 1.41420e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 8.0107e+01:
-  Absolute error (L2-norm): 4.35676e-09
+  Absolute error (L2-norm): 4.35675e-09
 
 Calculate error for pressure at time t = 8.0107e+01:
-  Absolute error (L2-norm): 1.63373e-15
+  Absolute error (L2-norm): 1.61469e-15
 
 ________________________________________________________________________________
 
- Time step number = 543     t = 8.01071e+01 -> t + dt = 8.02485e+01
+ Time step number = 543      advance to t + dt = 8.01071e+01 + 1.41420e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 9.0006e+01:
-  Absolute error (L2-norm): 3.69033e-10
+  Absolute error (L2-norm): 3.69028e-10
 
 Calculate error for pressure at time t = 9.0006e+01:
-  Absolute error (L2-norm): 1.71827e-15
+  Absolute error (L2-norm): 2.21273e-15
 
 ________________________________________________________________________________
 
- Time step number = 613     t = 9.00065e+01 -> t + dt = 9.01479e+01
+ Time step number = 613      advance to t + dt = 9.00065e+01 + 1.41420e-01
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 1.0005e+02:
-  Absolute error (L2-norm): 3.01722e-11
+  Absolute error (L2-norm): 3.01674e-11
 
 Calculate error for pressure at time t = 1.0005e+02:
-  Absolute error (L2-norm): 3.56495e-16
+  Absolute error (L2-norm): 2.08392e-15

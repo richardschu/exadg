@@ -113,7 +113,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.00000e+00
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 1.00000e+00
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -233,7 +233,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 5.00000e-01
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 5.00000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -353,7 +353,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 2.50000e-01
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 2.50000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -473,7 +473,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.25000e-01
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 1.25000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -593,7 +593,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 6.25000e-02
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 6.25000e-02
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -713,7 +713,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-02
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 3.12500e-02
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -833,7 +833,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.56250e-02
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 1.56250e-02
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -953,7 +953,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 7.81250e-03
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 7.81250e-03
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -1073,7 +1073,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.90625e-03
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 3.90625e-03
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:

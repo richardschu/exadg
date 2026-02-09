@@ -102,114 +102,114 @@ Calculation of time step size:
 Starting time loop ...
 
 Calculate error for all fields at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.84564e-16
+  Relative error (L2-norm): 2.49361e-16
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.47206e-05
+ Time step number = 1        advance to t + dt = 0.00000e+00 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 3.7533e-02:
-  Relative error (L2-norm): 5.91066e-14
+  Relative error (L2-norm): 5.85658e-14
 
 Calculate error for all fields at time t = 7.5031e-02:
-  Relative error (L2-norm): 1.18254e-13
+  Relative error (L2-norm): 1.17984e-13
 
 ________________________________________________________________________________
 
- Time step number = 2162    t = 7.50312e-02 -> t + dt = 7.50660e-02
+ Time step number = 2162     advance to t + dt = 7.50312e-02 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.1253e-01:
-  Relative error (L2-norm): 1.93904e-13
+  Relative error (L2-norm): 1.93744e-13
 
 Calculate error for all fields at time t = 1.5003e-01:
-  Relative error (L2-norm): 3.00553e-13
+  Relative error (L2-norm): 3.00375e-13
 
 ________________________________________________________________________________
 
- Time step number = 4322    t = 1.50028e-01 -> t + dt = 1.50062e-01
+ Time step number = 4322     advance to t + dt = 1.50028e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.8753e-01:
-  Relative error (L2-norm): 4.49021e-13
+  Relative error (L2-norm): 4.48741e-13
 
 Calculate error for all fields at time t = 2.2502e-01:
-  Relative error (L2-norm): 6.40916e-13
+  Relative error (L2-norm): 6.40572e-13
 
 ________________________________________________________________________________
 
- Time step number = 6482    t = 2.25024e-01 -> t + dt = 2.25059e-01
+ Time step number = 6482     advance to t + dt = 2.25024e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 2.6252e-01:
-  Relative error (L2-norm): 8.68688e-13
+  Relative error (L2-norm): 8.68289e-13
 
 Calculate error for all fields at time t = 3.0002e-01:
-  Relative error (L2-norm): 1.11796e-12
+  Relative error (L2-norm): 1.11760e-12
 
 ________________________________________________________________________________
 
- Time step number = 8642    t = 3.00021e-01 -> t + dt = 3.00056e-01
+ Time step number = 8642     advance to t + dt = 3.00021e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 3.3752e-01:
-  Relative error (L2-norm): 1.36990e-12
+  Relative error (L2-norm): 1.36949e-12
 
 Calculate error for all fields at time t = 3.7502e-01:
-  Relative error (L2-norm): 1.60258e-12
+  Relative error (L2-norm): 1.60213e-12
 
 ________________________________________________________________________________
 
- Time step number = 10802   t = 3.75017e-01 -> t + dt = 3.75052e-01
+ Time step number = 10802    advance to t + dt = 3.75017e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 4.1252e-01:
-  Relative error (L2-norm): 1.79566e-12
+  Relative error (L2-norm): 1.79523e-12
 
 Calculate error for all fields at time t = 4.5001e-01:
-  Relative error (L2-norm): 1.93081e-12
+  Relative error (L2-norm): 1.93044e-12
 
 ________________________________________________________________________________
 
- Time step number = 12962   t = 4.50014e-01 -> t + dt = 4.50049e-01
+ Time step number = 12962    advance to t + dt = 4.50014e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 4.8751e-01:
-  Relative error (L2-norm): 1.99537e-12
+  Relative error (L2-norm): 1.99490e-12
 
 Calculate error for all fields at time t = 5.2501e-01:
-  Relative error (L2-norm): 1.98301e-12
+  Relative error (L2-norm): 1.98257e-12
 
 ________________________________________________________________________________
 
- Time step number = 15122   t = 5.25010e-01 -> t + dt = 5.25045e-01
+ Time step number = 15122    advance to t + dt = 5.25010e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 5.6251e-01:
-  Relative error (L2-norm): 1.89504e-12
+  Relative error (L2-norm): 1.89468e-12
 
 Calculate error for all fields at time t = 6.0001e-01:
-  Relative error (L2-norm): 1.74016e-12
+  Relative error (L2-norm): 1.73980e-12
 
 ________________________________________________________________________________
 
- Time step number = 17282   t = 6.00007e-01 -> t + dt = 6.00042e-01
+ Time step number = 17282    advance to t + dt = 6.00007e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 6.3751e-01:
-  Relative error (L2-norm): 1.53260e-12
+  Relative error (L2-norm): 1.53230e-12
 
 Calculate error for all fields at time t = 6.7500e-01:
-  Relative error (L2-norm): 1.29180e-12
+  Relative error (L2-norm): 1.29156e-12
 
 ________________________________________________________________________________
 
- Time step number = 19442   t = 6.75003e-01 -> t + dt = 6.75038e-01
+ Time step number = 19442    advance to t + dt = 6.75003e-01 + 3.47206e-05
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 7.1250e-01:
-  Relative error (L2-norm): 1.03892e-12
+  Relative error (L2-norm): 1.03875e-12
 
 Calculate error for all fields at time t = 7.5000e-01:
-  Relative error (L2-norm): 7.94741e-13
+  Relative error (L2-norm): 7.94726e-13
