@@ -686,9 +686,9 @@ private:
                                  dealii::Triangulation<dim> const & triangulation) const;
 
   void
-  project_standard_to_restart(VectorType const &              src_standard,
-                              dealii::DoFHandler<dim> const & src_dof_handler_standard,
-                              VectorType &                    dst_restart,
+  project_standard_to_restart(std::vector<VectorType const *> const & src_standard,
+                              dealii::DoFHandler<dim> const &         src_dof_handler_standard,
+                              std::vector<VectorType> &               dst_restart,
                               dealii::DoFHandler<dim> const & dst_dof_handler_restart) const;
 
   void

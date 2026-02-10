@@ -110,22 +110,18 @@ SpatialOperatorBase<dim, Number>::initialize_dof_handler_restart(
 template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::project_standard_to_restart(
-  VectorType const &              src_standard,
-  dealii::DoFHandler<dim> const & src_dof_handler_standard,
-  VectorType &                    dst_restart,
-  dealii::DoFHandler<dim> const & dst_dof_handler_restart) const
+  std::vector<VectorType const *> const & src_standard,
+  dealii::DoFHandler<dim> const &         src_dof_handler_standard,
+  std::vector<VectorType> &               dst_restart,
+  dealii::DoFHandler<dim> const &         dst_dof_handler_restart) const
 {
+  AssertDimension(src_standard.size(), dst_restart.size());
   // The mass matrix for projecting from the standard function space to the
   // restart function space is diagonal, see `initialize_dof_handler_restart()`.
 
   // vector with relevant DoFs needed for interpolation
-  dealii::IndexSet const rel_dofs_src =
-    dealii::DoFTools::extract_locally_relevant_dofs(src_dof_handler_standard);
-  VectorType rel_src_standard(src_dof_handler_standard.locally_owned_dofs(),
-                              rel_dofs_src,
-                              mpi_comm);
-  rel_src_standard = src_standard;
-  rel_src_standard.update_ghost_values();
+  for(VectorType const * vec : src_standard)
+    vec->update_ghost_values();
 
   // setup ``dealii::FEValues``
   dealii::FiniteElement<dim> const & fe_src = src_dof_handler_standard.get_fe();
@@ -156,33 +152,42 @@ SpatialOperatorBase<dim, Number>::project_standard_to_restart(
       fe_values_src.reinit(cell_src);
       cell_dst->get_dof_indices(dof_indices_dst);
 
-      if(n_components == dim)
-        fe_values_src[vector].get_function_values(rel_src_standard, vector_values);
-      else
-        fe_values_src[scalar].get_function_values(rel_src_standard, scalar_values);
-
-      for(unsigned int i = 0; i < dofs_per_cell; ++i)
+      for(unsigned int index = 0; index < src_standard.size(); ++index)
       {
-        // We assume that the sequence of support points provided for
-        // `dealii::FE_DGQArbitraryNodes` is unchanged from the ones passed
-        // in `initialize_dof_handler_restart()`.
-        if(dst_restart.get_partitioner()->in_local_range(dof_indices_dst[i]))
+        if(n_components == dim)
+          fe_values_src[vector].get_function_values(*src_standard[index], vector_values);
+        else
+          fe_values_src[scalar].get_function_values(*src_standard[index], scalar_values);
+
+        dealii::Utilities::MPI::Partitioner const & partitioner =
+          *dst_restart[index].get_partitioner();
+        for(unsigned int i = 0; i < dofs_per_cell; ++i)
         {
-          if(n_components == dim)
+          // We assume that the sequence of support points provided for
+          // `dealii::FE_DGQArbitraryNodes` is unchanged from the ones passed
+          // in `initialize_dof_handler_restart()`.
+          if(partitioner.in_local_range(dof_indices_dst[i]))
           {
-            unsigned int const comp_i = fe_dst.system_to_component_index(i).first;
-            // We assume that the DoFs are sorted component-wise per cell.
-            unsigned int const q            = i % fe_values_src.n_quadrature_points;
-            dst_restart[dof_indices_dst[i]] = vector_values[q][comp_i];
+            if(n_components == dim)
+            {
+              unsigned int const comp_i = fe_dst.system_to_component_index(i).first;
+              // We assume that the DoFs are sorted component-wise per cell.
+              unsigned int const q                   = i % fe_values_src.n_quadrature_points;
+              dst_restart[index][dof_indices_dst[i]] = vector_values[q][comp_i];
+            }
+            else
+              dst_restart[index][dof_indices_dst[i]] = scalar_values[i /* q */];
           }
-          else
-            dst_restart[dof_indices_dst[i]] = scalar_values[i /* q */];
         }
       }
     }
   }
 
-  dst_restart.compress(dealii::VectorOperation::insert);
+  for(VectorType const * vec : src_standard)
+    vec->zero_out_ghost_values();
+
+  for(VectorType & vec : dst_restart)
+    vec.compress(dealii::VectorOperation::insert);
 }
 
 template<int dim, typename Number>
@@ -1142,17 +1147,15 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                   dof_handler_p_restart->get_mpi_communicator());
 
   // Project standard to restart function space.
-  for(unsigned int i = 0; i < vectors_velocity.size(); ++i)
-    project_standard_to_restart(*vectors_velocity[i],
-                                dof_handler_u,
-                                vectors_u_restart[i],
-                                *dof_handler_u_restart);
+  project_standard_to_restart(vectors_velocity,
+                              dof_handler_u,
+                              vectors_u_restart,
+                              *dof_handler_u_restart);
 
-  for(unsigned int i = 0; i < vectors_pressure.size(); ++i)
-    project_standard_to_restart(*vectors_pressure[i],
-                                dof_handler_p,
-                                vectors_p_restart[i],
-                                *dof_handler_p_restart);
+  project_standard_to_restart(vectors_pressure,
+                              dof_handler_p,
+                              vectors_p_restart,
+                              *dof_handler_p_restart);
 
   // OUTPUT THE VECTORS
   if constexpr(false)
