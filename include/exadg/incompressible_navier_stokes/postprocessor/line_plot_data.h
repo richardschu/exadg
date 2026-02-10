@@ -95,9 +95,7 @@ struct QuantitySkinFriction : Quantity
 template<int dim>
 struct QuantityDissipation : Quantity
 {
-  QuantityDissipation()
-    : Quantity(),
-      viscosity(1.0)
+  QuantityDissipation() : Quantity(), viscosity(1.0)
   {
     this->type = QuantityType::Dissipation;
   }

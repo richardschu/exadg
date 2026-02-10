@@ -63,11 +63,11 @@ private:
 };
 
 template<int dim>
-class RightHandSide : public dealii::Function<dim>
+class RightHandSide : public SerializableFunction<dim>
 {
 public:
   RightHandSide(FlowRateController const & flow_rate_controller)
-    : dealii::Function<dim>(dim, 0.0), flow_rate_controller(flow_rate_controller)
+    : SerializableFunction<dim>(dim), flow_rate_controller(flow_rate_controller)
   {
   }
 
@@ -83,6 +83,37 @@ public:
     }
 
     return result;
+  }
+
+  void
+  write_restart_data(boost::archive::binary_oarchive & archive) const override
+  {
+    const auto parameters = flow_rate_controller.get_parameters_for_serialization();
+    archive &  parameters;
+  }
+
+  // The information is always read on rank zero and then broadcast to all
+  // ranks by the additional function synchronize_function_parameters()
+  void
+  read_restart_data(boost::archive::binary_iarchive & archive) override
+  {
+    // get right data type for parameters by getting (at this point invalid)
+    // data from the controller...
+    auto parameters = flow_rate_controller.get_parameters_for_serialization();
+
+    // ... and now set the actual parameter as read from the file
+    archive & parameters;
+    const_cast<FlowRateController &>(flow_rate_controller)
+      .set_parameters_from_serialization(parameters);
+  }
+
+  void
+  broadcast_function_parameters(const MPI_Comm comm, const unsigned int rank = 0) override
+  {
+    auto parameters = flow_rate_controller.get_parameters_for_serialization();
+    parameters      = dealii::Utilities::MPI::broadcast(comm, parameters, rank);
+    const_cast<FlowRateController &>(flow_rate_controller)
+      .set_parameters_from_serialization(parameters);
   }
 
 private:
@@ -107,7 +138,9 @@ public:
     {
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
-      prm.add_parameter("RestartIntervalTime", restart_interval_time, "Time between writes of restart data in multiples of flow-through time.");
+      prm.add_parameter("RestartIntervalTime",
+                        restart_interval_time,
+                        "Time between writes of restart data in multiples of flow-through time.");
       prm.add_parameter("TriangulationType", triangulation_type, "Type of triangulation");
       prm.add_parameter("TemporalDiscretization",
                         temporal_discretization,
@@ -155,8 +188,8 @@ private:
     viscosity = inviscid ? 0.0 : bulk_velocity * H / Re;
 
     // depend on values defined in input file
-    end_time          = end_time_multiples * flow_through_time;
-    sample_start_time = double(sample_start_time_multiples) * flow_through_time;
+    end_time              = end_time_multiples * flow_through_time;
+    sample_start_time     = double(sample_start_time_multiples) * flow_through_time;
     restart_interval_time = restart_interval_time * flow_through_time;
 
     // sample end time is equal to end time, which is read from the input file
@@ -250,7 +283,7 @@ private:
     this->param.restarted_simulation       = read_restart;
     this->param.restart_data.write_restart = write_restart;
     // write restart every 40% of the simulation time
-    this->param.restart_data.interval_time = restart_interval_time;
+    this->param.restart_data.interval_time                  = restart_interval_time;
     this->param.restart_data.directory_coarse_triangulation = this->output_parameters.directory;
     this->param.restart_data.directory                      = this->output_parameters.directory;
     this->param.restart_data.filename            = this->output_parameters.filename + "_restart";
@@ -780,8 +813,8 @@ private:
   // postprocessing
 
   // restart
-  bool write_restart = false;
-  bool read_restart  = false;
+  bool   write_restart         = false;
+  bool   read_restart          = false;
   double restart_interval_time = (end_time - start_time) * 0.8;
 
   // sampling

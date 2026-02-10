@@ -33,9 +33,11 @@
 #include <exadg/incompressible_navier_stokes/user_interface/enum_types.h>
 #include <exadg/utilities/numbers.h>
 #include <exadg/utilities/print_functions.h>
+#include <exadg/utilities/serializable_function.h>
 
 namespace ExaDG
 {
+template<int dim>
 struct DeserializationParameters
 {
   DeserializationParameters()
@@ -62,6 +64,37 @@ struct DeserializationParameters
     print_parameter(pcout, "Spatial discretization", spatial_discretization);
   }
 
+  void
+  broadcast(const MPI_Comm comm, const unsigned int root_rank = 0)
+  {
+    std::array<unsigned int, 7> parameters{{degree,
+                                            degree_u,
+                                            degree_p,
+                                            mapping_degree,
+                                            consider_mapping_write,
+                                            static_cast<unsigned int>(triangulation_type),
+                                            static_cast<unsigned int>(spatial_discretization)}};
+    parameters     = dealii::Utilities::MPI::broadcast(comm, parameters, root_rank);
+    degree         = parameters[0];
+    degree_u       = parameters[1];
+    degree_p       = parameters[2];
+    mapping_degree = parameters[3];
+    AssertThrow(parameters[4] == 0 || parameters[4] == 1,
+                dealii::ExcInternalError("Invalid value " + std::to_string(parameters[4]) +
+                                         "of bool"));
+    consider_mapping_write = parameters[4];
+    triangulation_type     = TriangulationType(parameters[5]);
+    spatial_discretization = IncNS::SpatialDiscretization(parameters[6]);
+
+    AssertThrow(serializable_functions.size() ==
+                  dealii::Utilities::MPI::max(serializable_functions.size(), comm),
+                dealii::ExcDimensionMismatch(
+                  serializable_functions.size(),
+                  dealii::Utilities::MPI::max(serializable_functions.size(), comm)));
+    for(std::shared_ptr<SerializableFunction<dim>> & function : serializable_functions)
+      function->broadcast_function_parameters(comm, root_rank);
+  }
+
   // Polynomial degrees of the finite elements used at serialization.
   unsigned int degree;
   unsigned int degree_u;
@@ -78,6 +111,9 @@ struct DeserializationParameters
 
   // Spatial discretization used at serialization. Relevant for incompressible Navier-Stokes only.
   IncNS::SpatialDiscretization spatial_discretization;
+
+  // Functions including possible state
+  std::vector<std::shared_ptr<SerializableFunction<dim>>> serializable_functions;
 };
 
 struct RestartData

@@ -484,8 +484,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rh
     extrapolate_vectors_and_add(factors, divergences, rhs);
   }
 
-  this->pcout << rhs.l2_norm() << " ";
-
   /*
    *  III. forcing term
    */
@@ -900,15 +898,15 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::read_restart_vectors()
       this->vec_convective_term[i],
       convective_divergence_rhs[std::min<int>(i, convective_divergence_rhs.size() - 1)],
       divergences[i]);
-    if (static_cast<std::size_t>(i) < velocity_red.size())
-      {
-        // Initialize the old solutions for better extrapolation
-        velocity_red[i].copy_locally_owned_data_from(velocity[i]);
-        op_rt_float->vmult_mass_and_laplace(velocity_matvec[2 * i + 1],
-                                            velocity_matvec[2 * i],
-                                            velocity_red[i],
-                                            [](const unsigned int, const unsigned int) {});
-      }
+    if(static_cast<std::size_t>(i) < velocity_red.size())
+    {
+      // Initialize the old solutions for better extrapolation
+      velocity_red[i].copy_locally_owned_data_from(velocity[i]);
+      op_rt_float->vmult_mass_and_laplace(velocity_matvec[2 * i + 1],
+                                          velocity_matvec[2 * i],
+                                          velocity_red[i],
+                                          [](const unsigned int, const unsigned int) {});
+    }
 
     if(static_cast<std::size_t>(i) < pressure_nbc_rhs.size())
       op_rt->evaluate_pressure_neumann_from_velocity(

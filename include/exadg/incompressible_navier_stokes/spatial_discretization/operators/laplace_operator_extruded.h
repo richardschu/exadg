@@ -2856,7 +2856,8 @@ private:
     constexpr unsigned int nn            = n_q_points_1d;
     constexpr unsigned int n_points      = Utilities::pow(n_q_points_1d, dim);
 
-    VectorizedArray<Number> quad_values[dim * n_points], body_force_z[Utilities::pow(n_q_points_1d, dim - 1)];
+    VectorizedArray<Number> quad_values[dim * n_points],
+      body_force_z[Utilities::pow(n_q_points_1d, dim - 1)];
 
     std::array<unsigned int, n_lanes> shifted_data_indices;
     for(unsigned int v = 0; v < n_lanes; ++v)
@@ -2880,14 +2881,14 @@ private:
         // Assume body force does not depend on z direction
         Tensor<1, dim, VectorizedArray<Number>> body_force;
         for(unsigned int v = 0; v < n_lanes; ++v)
-          {
-            Point<dim> point;
-            for(unsigned int d = 0; d < 2; ++d)
-              point[d] =
-                mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
-            for(unsigned int d = 0; d < dim; ++d)
-              body_force[d][v] = rhs_function.value(point, d);
-          }
+        {
+          Point<dim> point;
+          for(unsigned int d = 0; d < 2; ++d)
+            point[d] =
+              mapping_info.quadrature_points[mapping_info.mapping_data_index[cell][v] + q1][d];
+          for(unsigned int d = 0; d < dim; ++d)
+            body_force[d][v] = rhs_function.value(point, d);
+        }
 
         // keep z component for face integral later
         body_force_z[q1] = body_force[dim - 1];
