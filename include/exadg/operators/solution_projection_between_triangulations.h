@@ -249,6 +249,8 @@ project_vectors(
     write_points_in_dummy_triangulation(
       points_not_found, "./", "points_not_found", 0, source_dof_handler.get_mpi_communicator());
 
+    MPI_Barrier(source_dof_handler.get_mpi_communicator());
+
     AssertThrow(
       rpe_source.all_points_found(),
       dealii::ExcMessage(
