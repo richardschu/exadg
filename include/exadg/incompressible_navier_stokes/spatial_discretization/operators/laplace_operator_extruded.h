@@ -31,7 +31,8 @@
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tensor_product_kernels.h>
 
-#include "extruded_mapping_info.h"
+#include <exadg/incompressible_navier_stokes/spatial_discretization/operators/extruded_mapping_info.h>
+
 
 namespace LaplaceOperator
 {
@@ -466,6 +467,36 @@ public:
       distribute_local_to_global_compressed<degree, degree + 1, 1>(
         dst, compressed_dof_indices, all_indices_unconstrained, cell, {}, true, dof_values);
   }
+
+  template<int degree>
+  void
+  read_dof_values(const unsigned int        cell,
+                  const VectorType &        src,
+                  VectorizedArray<Number> * dof_values) const
+  {
+    if(degree <= 2)
+    {
+      constexpr unsigned int dofs_per_cell = Utilities::pow(degree + 1, dim);
+      const unsigned int *   dof_indices =
+        compressed_dof_indices.data() + cell * dofs_per_cell * n_lanes;
+      const unsigned char * unconstrained = all_indices_unconstrained.data() + cell * dofs_per_cell;
+      for(unsigned int i = 0; i < dofs_per_cell; ++i)
+        if(unconstrained[i])
+          for(unsigned int v = 0; v < n_lanes; ++v)
+            dof_values[i][v] = src.local_element(dof_indices[i * n_lanes + v]);
+        else
+        {
+          dof_values[i] = 0.;
+          for(unsigned int v = 0; v < n_lanes; ++v)
+            if(dof_indices[i * n_lanes + v] != numbers::invalid_unsigned_int)
+              dof_values[i][v] = src.local_element(dof_indices[i * n_lanes + v]);
+        }
+    }
+    else
+      read_dof_values_compressed<degree, degree + 1, 1>(
+        src, compressed_dof_indices, all_indices_unconstrained, cell, {}, true, dof_values);
+  }
+
 
 private:
   void
@@ -1739,6 +1770,45 @@ public:
   }
 
   void
+  prolongate_and_add(VectorType &                           dg_solution,
+                     const VectorType &                     fe_correction,
+                     const LaplaceOperatorFE<dim, Number> & fe_operator) const
+  {
+    fe_correction.update_ghost_values();
+    const unsigned int n_cell_batches = dof_indices.size();
+
+    // Run loop in reverse direction to increase the cache hits with data
+    // remaining from the previous cell loop on the fe level and the next cell
+    // loop on the dg level (that both run in forward order through the cells)
+    for(int cell = n_cell_batches - 1; cell >= 0; --cell)
+    {
+      const unsigned int degree = shape_info.data[0].fe_degree;
+      if(degree == 1)
+        do_prolongate<1>(cell, fe_correction, fe_operator, dg_solution);
+      else if(degree == 2)
+        do_prolongate<2>(cell, fe_correction, fe_operator, dg_solution);
+      else if(degree == 3)
+        do_prolongate<3>(cell, fe_correction, fe_operator, dg_solution);
+      else if(degree == 4)
+        do_prolongate<4>(cell, fe_correction, fe_operator, dg_solution);
+#ifndef DEBUG
+      else if(degree == 5)
+        do_prolongate<5>(cell, fe_correction, fe_operator, dg_solution);
+      else if(degree == 6)
+        do_prolongate<6>(cell, fe_correction, fe_operator, dg_solution);
+      else if(degree == 7)
+        do_prolongate<7>(cell, fe_correction, fe_operator, dg_solution);
+      else if(degree == 8)
+        do_prolongate<8>(cell, fe_correction, fe_operator, dg_solution);
+#endif
+      else
+        AssertThrow(false, ExcMessage("Degree " + std::to_string(degree) + " not instantiated"));
+    }
+
+    fe_correction.zero_out_ghost_values();
+  }
+
+  void
   evaluate_add_divergence_body_force(const double                  time,
                                      const dealii::Function<dim> & rhs_function,
                                      VectorType &                  dst) const
@@ -2844,6 +2914,20 @@ private:
           for(unsigned int i = 0; i < n_q_points_1d; ++i)
             vals[i * stride] += shape_vec[i][0] * v0 + shape_vec[i][1] * d0;
         }
+  }
+
+  template<int degree>
+  void
+  do_prolongate(const unsigned int                     cell,
+                const VectorType &                     fe_correction,
+                const LaplaceOperatorFE<dim, Number> & fe_operator,
+                VectorType &                           dg_solution) const
+  {
+    constexpr unsigned int  dofs_per_cell = Utilities::pow(degree + 1, dim);
+    VectorizedArray<Number> values_dofs[dofs_per_cell];
+    fe_operator.template read_dof_values<degree>(cell, fe_correction, values_dofs);
+    vectorized_transpose_and_store(
+      true, dofs_per_cell, values_dofs, dof_indices[cell].data(), dg_solution.begin());
   }
 
   template<int degree>

@@ -397,7 +397,9 @@ public:
       timings[level + 1][1] += time.wall_time();
       time.restart();
     }
-    mg_transfers[max_level]->prolongate_and_add(solution_update_dg, solution_update[max_level]);
+    dg_matrix.prolongate_and_add(solution_update_dg,
+                                 solution_update[max_level],
+                                 mg_matrices[max_level]);
     timings.back()[3] += time.wall_time();
     time.restart();
 
