@@ -18,6 +18,7 @@
         "TriangulationType": "Serial",
         "ReadRestart": "false",
         "WriteRestart": "true",
+        "RestartIntervalTime": "0.8",
         "TemporalDiscretization": "BDFConsistentSplittingExtruded",
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",

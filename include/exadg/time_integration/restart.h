@@ -219,17 +219,18 @@ write_deserialization_parameters(MPI_Comm const &                       mpi_comm
     boost::archive::binary_oarchive output_archive(stream);
 
     // Sequence has to match `read_deserialization_parameters()`.
-    output_archive &   parameters.degree;
-    output_archive &   parameters.degree_u;
-    output_archive &   parameters.degree_p;
-    output_archive &   parameters.mapping_degree;
-    output_archive &   parameters.consider_mapping_write;
-    output_archive &   parameters.triangulation_type;
-    output_archive &   parameters.spatial_discretization;
+    output_archive & parameters.degree;
+    output_archive & parameters.degree_u;
+    output_archive & parameters.degree_p;
+    output_archive & parameters.mapping_degree;
+    output_archive & parameters.consider_mapping_write;
+    output_archive & parameters.triangulation_type;
+    output_archive & parameters.spatial_discretization;
+
+    // Check if serializable functions were provided and add them.
     const unsigned int n_functions = parameters.serializable_functions.size();
     output_archive &   n_functions;
-
-    for(const std::shared_ptr<SerializableFunction<dim>> function :
+    for(std::shared_ptr<SerializableFunction<dim>> const & function :
         parameters.serializable_functions)
       function->write_restart_data(output_archive);
   }
@@ -269,6 +270,7 @@ read_deserialization_parameters(MPI_Comm const &                 mpi_comm,
     input_archive & parameters.triangulation_type;
     input_archive & parameters.spatial_discretization;
 
+    // Read serializable in case they were added.
     unsigned int    n_functions = 0;
     input_archive & n_functions;
     AssertThrow(parameters.serializable_functions.size() == n_functions,

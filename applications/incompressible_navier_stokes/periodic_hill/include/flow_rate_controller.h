@@ -32,7 +32,8 @@ public:
   FlowRateController(double const bulk_velocity,
                      double const target_flow_rate,
                      double const H,
-                     double const start_time)
+                     double const start_time,
+                     bool const   assert_non_matching_parameters_at_restart = false)
     : bulk_velocity(bulk_velocity),
       target_flow_rate(target_flow_rate),
       length_scale(H),
@@ -40,7 +41,8 @@ public:
       f_damping(0.0),
       time_old(start_time),
       flow_rate(0.0),
-      flow_rate_old(0.0)
+      flow_rate_old(0.0),
+      assert_non_matching_parameters_at_restart(assert_non_matching_parameters_at_restart)
   {
   }
 
@@ -76,24 +78,86 @@ public:
     time_old      = time;
   }
 
-  std::array<double, 5>
-  get_parameters_for_serialization() const
+  std::array<double, 8>
+  get_parameters_for_serialization(bool const print_parameters = false) const
   {
-    std::array<double, 5> parameters{{f, f_damping, time_old, flow_rate, flow_rate_old}};
+    // Store complete state of the `FlowRateController`.
+    std::array<double, 8> parameters{{f,
+                                      f_damping,
+                                      time_old,
+                                      flow_rate,
+                                      flow_rate_old,
+                                      bulk_velocity,
+                                      target_flow_rate,
+                                      length_scale}};
+
+    if(print_parameters)
+    {
+      print_parameters_for_all_ranks();
+    }
+
     return parameters;
   }
 
   void
-  set_parameters_from_serialization(const std::array<double, 5> & parameters)
+  set_parameters_from_serialization(const std::array<double, 8> & parameters,
+                                    bool const                    print_parameters = false)
   {
     f             = parameters[0];
     f_damping     = parameters[1];
     time_old      = parameters[2];
     flow_rate     = parameters[3];
     flow_rate_old = parameters[4];
+
+    // Check if the serialized data matches with the given parameters.
+    if(assert_non_matching_parameters_at_restart)
+    {
+      const double bulk_velocity_old    = parameters[5];
+      const double target_flow_rate_old = parameters[6];
+      const double length_scale_old     = parameters[7];
+
+      AssertThrow(std::abs(bulk_velocity_old - bulk_velocity) < 1e-20,
+                  dealii::ExcMessage("The `bulk_velocity` parameter provided at restart "
+                                     "does not match the value serialized"));
+      AssertThrow(std::abs(target_flow_rate_old - target_flow_rate) < 1e-20,
+                  dealii::ExcMessage("The `bulk_velocity` parameter provided at restart "
+                                     "does not match the value serialized"));
+      AssertThrow(std::abs(length_scale_old - length_scale) < 1e-20,
+                  dealii::ExcMessage("The `bulk_velocity` parameter provided at restart "
+                                     "does not match the value serialized"));
+    }
+
+    if(print_parameters)
+    {
+      print_parameters_for_all_ranks();
+    }
   }
 
 private:
+  void
+  print_parameters_for_all_ranks() const
+  {
+    unsigned int const mpi_process = dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
+    for(unsigned int i = 0; i < dealii::Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD); ++i)
+    {
+      if(i == mpi_process)
+      {
+        // clang-format off
+        std::cout << "    FlowRateController parameters: (MPI process "
+                  << std::to_string(mpi_process) << ")\n" << std::scientific << std::setprecision(4)
+                  << "      f                = " << f << "\n"
+                  << "      f_damping        = " << f_damping << "\n"
+                  << "      time_old         = " << time_old << "\n"
+                  << "      flow_rate        = " << flow_rate << "\n"
+                  << "      flow_rate_old    = " << flow_rate_old << "\n"
+                  << "      bulk_velocity    = " << bulk_velocity << "\n"
+                  << "      target_flow_rate = " << target_flow_rate << "\n"
+                  << "      length_scale     = " << length_scale << "\n";
+        // clang-format on
+      }
+    }
+  }
+
   double const bulk_velocity, target_flow_rate, length_scale;
 
   double f;
@@ -103,6 +167,8 @@ private:
 
   double flow_rate;
   double flow_rate_old;
+
+  bool const assert_non_matching_parameters_at_restart;
 };
 
 } // namespace IncNS

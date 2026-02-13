@@ -40,22 +40,22 @@ public:
   {
   }
 
-  virtual void
-  write_restart_data(boost::archive::binary_oarchive &) const
-  {
-  }
+  /*
+   * These functions define the interface for the added functionality to serialize and deserialize
+   * the parameters of derived classes.
+   */
 
-  // The information is always read on rank zero and then broadcast to all
-  // ranks by the additional function synchronize_function_parameters()
+  // Add data to be serialized to the archive.
   virtual void
-  read_restart_data(boost::archive::binary_iarchive &)
-  {
-  }
+  write_restart_data(boost::archive::binary_oarchive & archive) const = 0;
 
-
+  // Read serialized data from th archive. Note that the information is always read on rank 0 and
+  // then broadcast to all ranks by the additional function `broadcast_function_parameters()`
   virtual void
-  broadcast_function_parameters(const MPI_Comm, const unsigned int = 0)
-  {
-  }
+  read_restart_data(boost::archive::binary_iarchive & archive) = 0;
+
+  // Broadcast the de-/serialized parameters from `root_rank` to all other ranks.
+  virtual void
+  broadcast_function_parameters(const MPI_Comm mpi_comm, const unsigned int root_rank = 0) = 0;
 };
 } // namespace ExaDG

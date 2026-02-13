@@ -18,6 +18,7 @@
         "TriangulationType": "Distributed",
         "ReadRestart": "false",
         "WriteRestart": "false",
+        "RestartIntervalTime": "0.8",
         "TemporalDiscretization": "BDFDualSplittingExtruded",
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
