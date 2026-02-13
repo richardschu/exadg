@@ -18,6 +18,7 @@
         "TriangulationType": "Distributed",
         "ReadRestart": "true",
         "WriteRestart": "false",
+        "RestartDirectory": "./output/",
         "RestartIntervalTime": "0.8",
         "TemporalDiscretization": "BDFConsistentSplittingExtruded",
         "SpatialDiscretization": "HDIV",

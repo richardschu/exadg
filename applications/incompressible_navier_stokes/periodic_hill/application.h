@@ -140,6 +140,9 @@ public:
     {
       prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
       prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
+      prm.add_parameter("RestartDirectory",
+                        restart_directory,
+                        "Directory with restart data to start the simulation from.");
       prm.add_parameter("RestartIntervalTime",
                         restart_interval_time,
                         "Time between writes of restart data in multiples of flow-through time.");
@@ -290,8 +293,9 @@ private:
     this->param.restart_data.write_restart = write_restart;
     // write restart every 40% of the simulation time
     this->param.restart_data.interval_time                  = restart_interval_time;
-    this->param.restart_data.directory_coarse_triangulation = this->output_parameters.directory;
-    this->param.restart_data.directory                      = this->output_parameters.directory;
+    this->param.restart_data.directory_coarse_triangulation = restart_directory;
+    this->param.restart_data.directory_read                 = restart_directory;
+    this->param.restart_data.directory_write                = this->output_parameters.directory;
     this->param.restart_data.filename            = this->output_parameters.filename + "_restart";
     this->param.restart_data.interval_wall_time  = 1.e6;
     this->param.restart_data.interval_time_steps = 1e8;
@@ -819,9 +823,10 @@ private:
   // postprocessing
 
   // restart
-  bool   write_restart         = false;
-  bool   read_restart          = false;
-  double restart_interval_time = 8.0 * flow_through_time;
+  bool        write_restart         = false;
+  bool        read_restart          = false;
+  double      restart_interval_time = 8.0 * flow_through_time;
+  std::string restart_directory     = "./output/";
 
   // sampling
   bool         calculate_statistics        = true;

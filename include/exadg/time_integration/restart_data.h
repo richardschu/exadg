@@ -127,7 +127,8 @@ struct RestartData
       interval_wall_time(std::numeric_limits<double>::max()),
       interval_time_steps(std::numeric_limits<unsigned int>::max()),
       directory_coarse_triangulation("./output/"),
-      directory("./output/"),
+      directory_read("./output/"),
+      directory_write("./output/"),
       filename("restart"),
       counter(1),
       discretization_identical(false),
@@ -154,7 +155,8 @@ struct RestartData
       print_parameter(pcout, "Interval wall time", interval_wall_time);
       print_parameter(pcout, "Interval time steps", interval_time_steps);
       print_parameter(pcout, "Directory coarse triangulation", directory_coarse_triangulation);
-      print_parameter(pcout, "Directory", directory);
+      print_parameter(pcout, "Directory for reading data", directory_read);
+      print_parameter(pcout, "Directory for writing data", directory_write);
       print_parameter(pcout, "Filename", filename);
     }
   }
@@ -204,9 +206,11 @@ struct RestartData
   // number of time steps after which to write restart
   unsigned int interval_time_steps;
 
-  // directory for restart files: coarse triangulation and snapshot data can be stored separately.
+  // Directories for restart files can be chosen independently for the coarse triangulation, the
+  // snapshot to be read at start, and the snapshot data to be stored during the simulation.
   std::string directory_coarse_triangulation;
-  std::string directory;
+  std::string directory_read;
+  std::string directory_write;
 
   // filename for restart files
   std::string filename;
