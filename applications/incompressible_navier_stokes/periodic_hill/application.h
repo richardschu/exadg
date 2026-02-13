@@ -88,23 +88,25 @@ public:
   void
   write_restart_data(boost::archive::binary_oarchive & archive) const override
   {
-    const auto parameters = flow_rate_controller.get_parameters_for_serialization();
-    archive &  parameters;
+    const auto parameters =
+      flow_rate_controller.get_parameters_for_serialization(true /* print_parameters */);
+    archive & parameters;
   }
 
   // The information is always read on rank zero and then broadcast to all
-  // ranks by the additional function synchronize_function_parameters()
+  // ranks by the additional function `broadcast_function_parameters()`
   void
   read_restart_data(boost::archive::binary_iarchive & archive) override
   {
     // get right data type for parameters by getting (at this point invalid)
     // data from the controller...
-    auto parameters = flow_rate_controller.get_parameters_for_serialization();
+    auto parameters =
+      flow_rate_controller.get_parameters_for_serialization(false /* print_parameters */);
 
     // ... and now set the actual parameter as read from the file
     archive & parameters;
     const_cast<FlowRateController &>(flow_rate_controller)
-      .set_parameters_from_serialization(parameters);
+      .set_parameters_from_serialization(parameters, true /* print_parameters */);
   }
 
   void
@@ -113,7 +115,7 @@ public:
     auto parameters = flow_rate_controller.get_parameters_for_serialization();
     parameters      = dealii::Utilities::MPI::broadcast(comm, parameters, rank);
     const_cast<FlowRateController &>(flow_rate_controller)
-      .set_parameters_from_serialization(parameters);
+      .set_parameters_from_serialization(parameters, false /* print_parameters */);
   }
 
 private:
@@ -204,7 +206,11 @@ private:
 
     // finally refresh the flow rate controller
     flow_rate_controller.reset(
-      new FlowRateController(bulk_velocity, target_flow_rate, H, start_time));
+      new FlowRateController(bulk_velocity,
+                             target_flow_rate,
+                             H,
+                             start_time,
+                             true /* assert_non_matching_parameters_at_restart */));
   }
 
   void
@@ -815,7 +821,7 @@ private:
   // restart
   bool   write_restart         = false;
   bool   read_restart          = false;
-  double restart_interval_time = (end_time - start_time) * 0.8;
+  double restart_interval_time = 8.0 * flow_through_time;
 
   // sampling
   bool         calculate_statistics        = true;
