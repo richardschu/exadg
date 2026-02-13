@@ -38,7 +38,6 @@ public:
       length_scale(H),
       f(0.0), // f(t=t_0) = f_0
       f_damping(0.0),
-      time_step(1.0),
       time_old(start_time),
       flow_rate(0.0),
       flow_rate_old(0.0)
@@ -52,10 +51,10 @@ public:
   }
 
   void
-  update_body_force(double const flow_rate_in, double const time, int const time_step_number)
+  update_body_force(double const flow_rate_in, double const time)
   {
-    flow_rate = flow_rate_in;
-    time_step = time - time_old;
+    flow_rate              = flow_rate_in;
+    double const time_step = time - time_old;
 
     // use an I-controller with damping (D) to asymptotically reach the desired target flow rate
 
@@ -65,7 +64,7 @@ public:
     f += k_I * (target_flow_rate - flow_rate) * time_step;
 
     // the time step size is 0 when this function is called the first time
-    if(time_step_number > 1)
+    if(time_step > 0)
     {
       // dimensional analysis: [k_D] = 1/(m^2) -> k_D = const / H^2
       double const C_D = 0.1;
@@ -77,13 +76,29 @@ public:
     time_old      = time;
   }
 
+  std::array<double, 5>
+  get_parameters_for_serialization() const
+  {
+    std::array<double, 5> parameters{{f, f_damping, time_old, flow_rate, flow_rate_old}};
+    return parameters;
+  }
+
+  void
+  set_parameters_from_serialization(const std::array<double, 5> & parameters)
+  {
+    f             = parameters[0];
+    f_damping     = parameters[1];
+    time_old      = parameters[2];
+    flow_rate     = parameters[3];
+    flow_rate_old = parameters[4];
+  }
+
 private:
   double const bulk_velocity, target_flow_rate, length_scale;
 
   double f;
   double f_damping;
 
-  double time_step;
   double time_old;
 
   double flow_rate;

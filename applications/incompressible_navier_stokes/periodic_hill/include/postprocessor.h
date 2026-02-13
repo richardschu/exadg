@@ -135,7 +135,7 @@ public:
         write_flow_rate_output(flow_rate, time, false);
 
       // update body force
-      flow_rate_controller.update_body_force(flow_rate, time, time_step_number);
+      flow_rate_controller.update_body_force(flow_rate, time);
     }
 
     // line plot statistics

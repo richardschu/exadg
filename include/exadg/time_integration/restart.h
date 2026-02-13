@@ -191,10 +191,11 @@ set_ghost_state(std::vector<VectorType *> const & vectors,
  * Utility function to write the parameters a discretization is serialized with. This is to recover
  * the parameters when deserializing.
  */
+template<int dim>
 inline void
-write_deserialization_parameters(MPI_Comm const &                  mpi_comm,
-                                 RestartData const &               restart_data,
-                                 DeserializationParameters const & parameters)
+write_deserialization_parameters(MPI_Comm const &                       mpi_comm,
+                                 RestartData const &                    restart_data,
+                                 DeserializationParameters<dim> const & parameters)
 {
   // Create folder if not existent.
   create_directories(restart_data.directory, mpi_comm);
@@ -218,13 +219,19 @@ write_deserialization_parameters(MPI_Comm const &                  mpi_comm,
     boost::archive::binary_oarchive output_archive(stream);
 
     // Sequence has to match `read_deserialization_parameters()`.
-    output_archive & parameters.degree;
-    output_archive & parameters.degree_u;
-    output_archive & parameters.degree_p;
-    output_archive & parameters.mapping_degree;
-    output_archive & parameters.consider_mapping_write;
-    output_archive & parameters.triangulation_type;
-    output_archive & parameters.spatial_discretization;
+    output_archive &   parameters.degree;
+    output_archive &   parameters.degree_u;
+    output_archive &   parameters.degree_p;
+    output_archive &   parameters.mapping_degree;
+    output_archive &   parameters.consider_mapping_write;
+    output_archive &   parameters.triangulation_type;
+    output_archive &   parameters.spatial_discretization;
+    const unsigned int n_functions = parameters.serializable_functions.size();
+    output_archive &   n_functions;
+
+    for(const std::shared_ptr<SerializableFunction<dim>> function :
+        parameters.serializable_functions)
+      function->write_restart_data(output_archive);
   }
 }
 
@@ -232,11 +239,12 @@ write_deserialization_parameters(MPI_Comm const &                  mpi_comm,
  * Utility function to read the parameters a discretization is serialized with. This is to recover
  * the parameters when deserializing.
  */
-inline DeserializationParameters
-read_deserialization_parameters(MPI_Comm const & mpi_comm, RestartData const & restart_data)
+template<int dim>
+inline void
+read_deserialization_parameters(MPI_Comm const &                 mpi_comm,
+                                RestartData const &              restart_data,
+                                DeserializationParameters<dim> & parameters)
 {
-  DeserializationParameters parameters;
-
   // Filename for deserialization parameters has to match `write_deserialization_parameters()`.
   std::string const filename =
     restart_data.directory + restart_data.filename + ".deserialization_parameters";
@@ -260,12 +268,18 @@ read_deserialization_parameters(MPI_Comm const & mpi_comm, RestartData const & r
     input_archive & parameters.consider_mapping_write;
     input_archive & parameters.triangulation_type;
     input_archive & parameters.spatial_discretization;
+
+    unsigned int    n_functions = 0;
+    input_archive & n_functions;
+    AssertThrow(parameters.serializable_functions.size() == n_functions,
+                dealii::ExcDimensionMismatch(parameters.serializable_functions.size(),
+                                             n_functions));
+    for(std::shared_ptr<SerializableFunction<dim>> function : parameters.serializable_functions)
+      function->read_restart_data(input_archive);
   }
 
   // Broadcast parameters to all processes.
-  parameters = dealii::Utilities::MPI::broadcast(mpi_comm, parameters, 0);
-
-  return parameters;
+  parameters.broadcast(mpi_comm, 0);
 }
 
 /*

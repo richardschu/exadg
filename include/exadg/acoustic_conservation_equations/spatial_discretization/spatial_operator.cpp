@@ -249,7 +249,7 @@ SpatialOperator<dim, Number>::serialize_vectors(
 {
   // Write deserialization parameters. These do not change during the simulation, but the data are
   // small and we want to make sure to overwrite them.
-  DeserializationParameters deserialization_parameters;
+  DeserializationParameters<dim> deserialization_parameters;
   deserialization_parameters.degree_u               = param.degree_u;
   deserialization_parameters.degree_p               = param.degree_p;
   deserialization_parameters.mapping_degree         = param.mapping_degree;
@@ -291,8 +291,8 @@ SpatialOperator<dim, Number>::deserialize_vectors(
   std::vector<bool> const has_ghost_elements = get_ghost_state(block_vectors);
 
   // Load the deserialization parameters.
-  DeserializationParameters const deserialization_parameters =
-    read_deserialization_parameters(mpi_comm, param.restart_data);
+  DeserializationParameters<dim> deserialization_parameters;
+  read_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
   // Load potentially unfitting checkpoint triangulation of TriangulationType.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =

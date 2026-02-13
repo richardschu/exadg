@@ -1102,13 +1102,16 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
 {
   // Write deserialization parameters. These do not change during the simulation, but the data are
   // small and we want to make sure to overwrite them.
-  DeserializationParameters deserialization_parameters;
+  DeserializationParameters<dim> deserialization_parameters;
   deserialization_parameters.degree_u               = param.degree_u;
   deserialization_parameters.degree_p               = param.get_degree_p(param.degree_u);
   deserialization_parameters.mapping_degree         = param.mapping_degree;
   deserialization_parameters.consider_mapping_write = param.restart_data.consider_mapping_write;
   deserialization_parameters.triangulation_type     = param.grid.triangulation_type;
   deserialization_parameters.spatial_discretization = param.spatial_discretization;
+  if(const auto serializable_function =
+       std::dynamic_pointer_cast<SerializableFunction<dim>>(field_functions->right_hand_side))
+    deserialization_parameters.serializable_functions = {serializable_function};
   write_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
   // We use `dealii::DoFRenumbering::matrix_free_data_locality()` such that the DoF ordering depends
@@ -1220,8 +1223,11 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
   std::vector<bool> const has_ghost_elements_pressure = get_ghost_state(vectors_pressure);
 
   // Load the deserialization parameters.
-  DeserializationParameters const deserialization_parameters =
-    read_deserialization_parameters(mpi_comm, param.restart_data);
+  DeserializationParameters<dim> deserialization_parameters;
+  if(const auto serializable_function =
+       std::dynamic_pointer_cast<SerializableFunction<dim>>(field_functions->right_hand_side))
+    deserialization_parameters.serializable_functions = {serializable_function};
+  read_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
   // Load potentially unfitting checkpoint triangulation of TriangulationType.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =
