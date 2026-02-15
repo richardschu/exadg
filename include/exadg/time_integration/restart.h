@@ -198,11 +198,11 @@ write_deserialization_parameters(MPI_Comm const &                       mpi_comm
                                  DeserializationParameters<dim> const & parameters)
 {
   // Create folder if not existent.
-  create_directories(restart_data.directory, mpi_comm);
+  create_directories(restart_data.directory_write, mpi_comm);
 
   // Filename for deserialization parameters has to match `read_deserialization_parameters()`.
   std::string const filename =
-    restart_data.directory + restart_data.filename + ".deserialization_parameters";
+    restart_data.directory_write + restart_data.filename + ".deserialization_parameters";
 
   // Write the parameters with a single processor.
   if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
@@ -248,7 +248,7 @@ read_deserialization_parameters(MPI_Comm const &                 mpi_comm,
 {
   // Filename for deserialization parameters has to match `write_deserialization_parameters()`.
   std::string const filename =
-    restart_data.directory + restart_data.filename + ".deserialization_parameters";
+    restart_data.directory_read + restart_data.filename + ".deserialization_parameters";
 
   // Read the parameters with a single processor.
   if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
@@ -402,8 +402,9 @@ store_vectors_in_triangulation_and_serialize(
   }
 
   // Serialize the triangulation keeping a maximum of two snapshots.
-  std::string const filename = restart_data.directory + restart_data.filename + ".triangulation";
-  MPI_Comm const &  mpi_comm = dof_handlers[0]->get_mpi_communicator();
+  std::string const filename =
+    restart_data.directory_write + restart_data.filename + ".triangulation";
+  MPI_Comm const & mpi_comm = dof_handlers[0]->get_mpi_communicator();
   if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
     // Serialization only creates a single file, move with one process only.
@@ -514,7 +515,7 @@ deserialize_triangulation(RestartData const &     restart_data,
 {
   std::shared_ptr<dealii::Triangulation<dim>> triangulation_old;
 
-  std::string const filename = restart_data.directory + restart_data.filename;
+  std::string const filename = restart_data.directory_write + restart_data.filename;
 
   // Deserialize the checkpointed triangulation,
   if(triangulation_type == TriangulationType::Serial)

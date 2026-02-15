@@ -210,7 +210,7 @@ TimeIntBase::write_restart() const
           << " Writing restart file at time t = " << this->get_time() << ":" << std::endl;
 
     std::string const filename =
-      restart_data.directory + generate_restart_filename(restart_data.filename);
+      restart_data.directory_write + generate_restart_filename(restart_data.filename);
 
     if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
       rename_old_restart_files(filename, restart_data.n_snapshots_keep);
@@ -229,7 +229,8 @@ TimeIntBase::read_restart()
         << std::endl
         << " Reading restart file:" << std::endl;
 
-  std::string filename = restart_data.directory + generate_restart_filename(restart_data.filename);
+  std::string filename =
+    restart_data.directory_read + generate_restart_filename(restart_data.filename);
 
   std::ifstream in(filename);
   AssertThrow(in, dealii::ExcMessage("File " + filename + " does not exist."));

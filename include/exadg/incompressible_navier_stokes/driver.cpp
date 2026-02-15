@@ -82,7 +82,7 @@ Driver<dim, Number>::setup()
           if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
           {
             std::string const filename =
-              restart_data.directory + generate_restart_filename(restart_data.filename);
+              restart_data.directory_read + generate_restart_filename(restart_data.filename);
 
             std::ifstream in(filename);
             AssertThrow(in, dealii::ExcMessage("File " + filename + " does not exist."));

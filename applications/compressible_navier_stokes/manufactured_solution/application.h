@@ -411,7 +411,8 @@ private:
     this->param.restart_data.interval_wall_time             = 1.e6;
     this->param.restart_data.interval_time_steps            = 1e8;
     this->param.restart_data.directory_coarse_triangulation = this->output_parameters.directory;
-    this->param.restart_data.directory                      = this->output_parameters.directory;
+    this->param.restart_data.directory_read                 = this->output_parameters.directory;
+    this->param.restart_data.directory_write                = this->output_parameters.directory;
     this->param.restart_data.filename = this->output_parameters.filename + "_restart";
 
     this->param.restart_data.discretization_identical     = false;
