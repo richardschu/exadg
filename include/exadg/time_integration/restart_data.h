@@ -134,6 +134,7 @@ struct RestartData
       discretization_identical(false),
       consider_mapping_write(false),
       consider_mapping_read_source(false),
+      consider_mapping_read_target(false),
       consider_restart_time_in_mesh_movement_function(true),
       rpe_rtree_level(0),
       rpe_tolerance_unit_cell(1e-12),
@@ -188,6 +189,29 @@ struct RestartData
     return trigger_restart;
   }
 
+  bool
+  requires_dof_handler_mapping(bool const restarted_simulation) const
+  {
+    bool const reading_requires_dof_handler_mapping =
+      restarted_simulation and consider_mapping_read_source;
+    bool const writing_requires_dof_handler_mapping = write_restart and consider_mapping_write;
+
+    return reading_requires_dof_handler_mapping or writing_requires_dof_handler_mapping;
+  }
+
+  bool
+  requires_mapping_reset(bool const restarted_simulation = true) const
+  {
+    if(discretization_identical or not restarted_simulation)
+    {
+      // If we do not restart, we do not need to reset the mapppings. Also, mappings can be safely
+      // ignored if we simply assign the vectors read from snapshot data.
+      return false;
+    }
+
+    return not consider_mapping_read_target;
+  }
+
   bool write_restart;
 
   // Number of snapshots to keep
@@ -236,8 +260,11 @@ struct RestartData
    */
 
   // Reconstruct the mapping for the serialized grid (`source`) in the grid-to-grid projection at
-  // restart. Note that the grid use at restart is always considered as defined in the applciation.
+  // restart. The checkpointed data might carry a mapping, which is used if
+  // `consider_mapping_read_source == true`. The grid used at restart can be considered as defined
+  // in the application or reset to perform the grid-to-grid projection on an unmapped grid.
   bool consider_mapping_read_source;
+  bool consider_mapping_read_target;
 
   // When creating a mapping function via `create_mesh_movement_function()`, use the `start_time` or
   // the `time` serialized to evaluate the mapping at restart.

@@ -74,7 +74,7 @@ Operator<dim, Number>::Operator(
     dof_handler_velocity = std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
   }
 
-  if(needs_dof_handler_mapping())
+  if(param.restart_data.requires_dof_handler_mapping(param.restarted_simulation))
   {
     fe_mapping =
       create_finite_element<dim>(ElementType::Hypercube, true, dim, param.mapping_degree);
@@ -105,7 +105,7 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
     dof_handler_velocity->distribute_dofs(*fe_velocity);
   }
 
-  if(needs_dof_handler_mapping())
+  if(param.restart_data.requires_dof_handler_mapping(param.restarted_simulation))
   {
     dof_handler_mapping->distribute_dofs(*fe_mapping);
   }
@@ -356,8 +356,12 @@ Operator<dim, Number>::do_setup()
              mf_data->get_quadrature_vector(),
              mf_data->data);
 
-  if(param.ale_formulation)
-    matrix_free_own_storage = mf;
+  if(param.ale_formulation or param.restart_data.requires_mapping_reset(param.restarted_simulation))
+  {
+    // We need to adapt the mapping of the `MatrixFree` object for ALE formulations and when
+    // performing restart projections on undeformed grids.
+    matrix_free_mutable = mf;
+  }
 
   // Subsequently, call the other setup function with MatrixFree/MatrixFreeData objects as
   // arguments.
@@ -689,6 +693,28 @@ Operator<dim, Number>::deserialize_vectors(std::vector<VectorType *> const & vec
       checkpoint_mapping = std::const_pointer_cast<dealii::Mapping<dim> const>(tmp);
     }
 
+    // Reset the mapping in `MatrixFree` to project on the undeformed configuration.
+    if(param.restart_data.requires_mapping_reset())
+    {
+      // Attaching manifolds, we assume that we at least refine once. We do not support coarsening
+      // (undoing the refinement without the manifold) and subsequent refinement.
+      dealii::Triangulation<dim> const & triangulation =
+        matrix_free->get_dof_handler().get_triangulation();
+      std::vector<dealii::types::manifold_id> manifold_ids = triangulation.get_manifold_ids();
+      AssertThrow(manifold_ids.size() == 1 and manifold_ids[0] == dealii::numbers::flat_manifold_id,
+                  dealii::ExcMessage("Combination of manifolds and grid-to-grid projection "
+                                     "in unmapped grid at restart not supported."));
+
+      // Create dummy linear mapping since we have no mapping serialized to restore.
+      std::shared_ptr<dealii::Mapping<dim>> default_mapping;
+      GridUtilities::create_mapping(default_mapping,
+                                    get_element_type(triangulation),
+                                    1 /* mapping_degree */);
+
+      // Update `MatrixFree` mapping, needs to be restored after grid-to-grid projection.
+      matrix_free_mutable->update_mapping(*default_mapping);
+    }
+
     ExaDG::GridToGridProjection::GridToGridProjectionData<dim> data;
     data.rpe_data.rtree_level            = param.restart_data.rpe_rtree_level;
     data.rpe_data.tolerance              = param.restart_data.rpe_tolerance_unit_cell;
@@ -702,6 +728,12 @@ Operator<dim, Number>::deserialize_vectors(std::vector<VectorType *> const & vec
       *matrix_free,
       vectors_per_dof_handler,
       data);
+
+    if(param.restart_data.requires_mapping_reset())
+    {
+      // Restore the mapping in `MatrixFree` to continue with the requested mapping after restart.
+      matrix_free_mutable->update_mapping(*this->get_mapping());
+    }
   }
 
   // Recover ghost vector state.
@@ -908,11 +940,10 @@ Operator<dim, Number>::update_after_grid_motion(bool const update_matrix_free)
 {
   if(update_matrix_free)
   {
-    // Since matrix_free points to matrix_free_own_storage, we also update the actual/main
-    // MatrixFree object called matrix_free.
-    matrix_free_own_storage->update_mapping(*get_mapping());
+    // Since matrix_free points to `matrix_free_mutable`, we also update the actual/main
+    // MatrixFree object called `matrix_free`.
+    matrix_free_mutable->update_mapping(*get_mapping());
   }
-
 
   // update SIPG penalty parameter of diffusive operator which depends on the deformation
   // of elements
@@ -1113,14 +1144,6 @@ bool
 Operator<dim, Number>::needs_own_dof_handler_velocity() const
 {
   return param.analytical_velocity_field and param.store_analytical_velocity_in_dof_vector;
-}
-
-template<int dim, typename Number>
-bool
-Operator<dim, Number>::needs_dof_handler_mapping() const
-{
-  return ((param.restart_data.consider_mapping_write and param.restart_data.write_restart) or
-          (param.restart_data.consider_mapping_read_source and param.restarted_simulation));
 }
 
 template<int dim, typename Number>

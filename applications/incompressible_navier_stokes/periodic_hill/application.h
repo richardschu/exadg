@@ -302,8 +302,9 @@ private:
 
     // Same `mapping_degree` and spatial resolution are the most stable options for restart,
     // polynomial degree can be varied.
-    this->param.restart_data.consider_mapping_write                          = true;
-    this->param.restart_data.consider_mapping_read_source                    = true;
+    this->param.restart_data.consider_mapping_write                          = false;
+    this->param.restart_data.consider_mapping_read_source                    = false;
+    this->param.restart_data.consider_mapping_read_target                    = false;
     this->param.restart_data.consider_restart_time_in_mesh_movement_function = true;
 
     this->param.restart_data.rpe_rtree_level            = 3;
