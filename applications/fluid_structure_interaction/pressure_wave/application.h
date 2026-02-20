@@ -841,12 +841,14 @@ private:
     // zero traction at wall boundaries or exterior support
     if(use_exterior_support)
     {
-      boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
-        BOUNDARY_ID_WALLS,
-        std::make_pair(std::array<bool, 2>{{true /* normal_projection_displacement */,
-                                            true /* normal_projection_velocity */}},
-                       std::array<double, 3>{
-                         {spring_coefficient, dashpot_coefficient, exterior_pressure}})));
+      Structure::RobinParameters robin_parameters(true /* velocity_normal_projection */,
+                                                  true /* displacement_normal_projection */,
+                                                  dashpot_coefficient,
+                                                  spring_coefficient,
+                                                  exterior_pressure,
+                                                  0.0 /* pressure_ramp_time */);
+
+      boundary_descriptor->robin_bc.insert(std::make_pair(BOUNDARY_ID_WALLS, robin_parameters));
     }
     else
     {

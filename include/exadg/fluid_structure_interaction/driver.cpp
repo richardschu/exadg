@@ -325,7 +325,8 @@ Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) 
   // update Robin parameter in fluid operator traction output
   fluid->pde_operator->set_robin_parameter_traction_output(robin_parameter_in);
 
-  // update Robin parameter parameters in boundary descriptor
+  // update Robin parameters in boundary descriptor, we assume that the fluid--structure interface
+  // is the only boundary in `neumann_cached_bc`.
   structure->set_fsi_robin_parameters(
     application->structure->get_boundary_descriptor()->neumann_cached_bc, robin_parameter_in);
 }

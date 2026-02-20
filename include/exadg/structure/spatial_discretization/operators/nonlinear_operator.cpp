@@ -61,12 +61,12 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType const & src) const
 {
-  AssertThrow(this->operator_data.pull_back_traction == false,
-              dealii::ExcMessage("Neumann data expected in respective "
-                                 "configuration for comparison."));
-
   if(this->operator_data.spatial_integration and (not this->operator_data.force_material_residual))
   {
+    AssertThrow(this->operator_data.pull_back_traction == false,
+                dealii::ExcMessage("Neumann data expected in respective "
+                                   "configuration for comparison."));
+
     this->matrix_free_spatial.loop(&This::cell_loop_nonlinear,
                                    &This::face_loop_empty,
                                    &This::boundary_face_loop_nonlinear,
@@ -566,13 +566,13 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   if(this->operator_data.spatial_integration)
   {
     // Assert nonzero Robin boundary terms for spatial integration.
-    auto const it = this->operator_data.bc->robin_k_c_p_param.find(boundary_id);
-    if(it != this->operator_data.bc->robin_k_c_p_param.end())
+    auto const it = this->operator_data.bc->robin_bc.find(boundary_id);
+    if(it != this->operator_data.bc->robin_bc.end())
     {
-      double const coefficient_displacement = it->second.second[0];
-      double const coefficient_velocity     = it->second.second[1];
+      RobinParameters const & robin_parameters = it->second;
 
-      if(std::abs(coefficient_displacement) > 1e-20 or std::abs(coefficient_velocity) > 1e-20)
+      if(std::abs(robin_parameters.displacement_coefficient_k) > 1e-20 or
+         std::abs(robin_parameters.velocity_coefficient_c) > 1e-20)
       {
         AssertThrow(boundary_type != BoundaryType::RobinSpringDashpotPressure,
                     dealii::ExcMessage(
@@ -649,20 +649,20 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
       }
     }
 
-    // check boundary ID in `robin_k_c_p_param` to add boundary mass integrals from Robin boundaries
+    // check boundary ID in `robin_bc` to add boundary mass integrals from Robin boundaries
     // on `BoundaryType::NeumannCached` or `BoundaryType::RobinSpringDashpotPressure`
     if(boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
       if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
       {
-        auto const it = this->operator_data.bc->robin_k_c_p_param.find(boundary_id);
+        auto const it = this->operator_data.bc->robin_bc.find(boundary_id);
 
-        if(it != this->operator_data.bc->robin_k_c_p_param.end())
+        if(it != this->operator_data.bc->robin_bc.end())
         {
-          bool const   normal_projection_displacement = it->second.first[0];
-          scalar const coefficient_displacement =
-            it->second.second[0] * material->get_robin_k_scaling(face, q);
+          RobinParameters const & robin_parameters = it->second;
+          scalar const            displacement_coefficient_k =
+            robin_parameters.displacement_coefficient_k * material->get_robin_k_scaling(face, q);
 
           // Reading in the debug field of f(x) = cos(z) * cos(5*x*y), we can verify correctness.
           bool constexpr check_values_with_debug_field = false;
@@ -701,31 +701,30 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
             }
           }
 
-          if(normal_projection_displacement)
+          if(robin_parameters.displacement_normal_projection)
           {
             vector const N = integrator.normal_vector(q);
-            traction += N * (coefficient_displacement * (N * integrator.get_value(q)));
+            traction += N * (displacement_coefficient_k * (N * integrator.get_value(q)));
           }
           else
           {
-            traction += coefficient_displacement * integrator.get_value(q);
+            traction += displacement_coefficient_k * integrator.get_value(q);
           }
 
           if(this->operator_data.unsteady)
           {
-            bool const   normal_projection_velocity = it->second.first[1];
-            Number const coefficient_velocity       = it->second.second[1];
+            Number const velocity_coefficient_c = robin_parameters.velocity_coefficient_c;
 
-            if(normal_projection_velocity)
+            if(robin_parameters.velocity_normal_projection)
             {
               vector const N = integrator.normal_vector(q);
-              traction += N * (coefficient_velocity * this->scaling_factor_mass_boundary *
+              traction += N * (velocity_coefficient_c * this->scaling_factor_mass_boundary *
                                (N * integrator.get_value(q)));
             }
             else
             {
-              traction +=
-                coefficient_velocity * this->scaling_factor_mass_boundary * integrator.get_value(q);
+              traction += velocity_coefficient_c * this->scaling_factor_mass_boundary *
+                          integrator.get_value(q);
             }
           }
         }

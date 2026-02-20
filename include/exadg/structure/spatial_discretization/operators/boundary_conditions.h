@@ -63,8 +63,16 @@ inline DEAL_II_ALWAYS_INLINE //
   }
   else if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
   {
-    double const exterior_pressure =
-      boundary_descriptor->robin_k_c_p_param.find(boundary_id)->second.second[2];
+    // Exterior pressure is scaled smoothly to improve convergence.
+    RobinParameters const & robin_parameters =
+      boundary_descriptor->robin_bc.find(boundary_id)->second;
+
+    double       exterior_pressure = robin_parameters.pressure_value;
+    double const t_ramp            = robin_parameters.pressure_ramp_time;
+    if(time < t_ramp)
+    {
+      exterior_pressure *= 0.5 * (1.0 - std::cos(time * dealii::numbers::PI / t_ramp));
+    }
 
     traction = -exterior_pressure * integrator.normal_vector(q);
   }

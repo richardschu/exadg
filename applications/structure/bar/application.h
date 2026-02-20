@@ -496,14 +496,14 @@ private:
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
     // exterior support
-    bool const spring_active_in_normal_direction_only  = true;
-    bool const dashpot_active_in_normal_direction_only = true;
-    this->boundary_descriptor->robin_k_c_p_param.insert(std::make_pair(
-      0,
-      std::make_pair(std::array<bool, 2>{{spring_active_in_normal_direction_only,
-                                          dashpot_active_in_normal_direction_only}},
-                     std::array<double, 3>{
-                       {spring_coefficient, dashpot_coefficient, exterior_pressure}})));
+    Structure::RobinParameters const robin_parameters(true /* velocity_normal_projection */,
+                                                      true /* displacement_normal_projection */,
+                                                      dashpot_coefficient,
+                                                      spring_coefficient,
+                                                      exterior_pressure,
+                                                      0.0 /* pressure_ramp_time */);
+
+    this->boundary_descriptor->robin_bc.insert(std::make_pair(0, robin_parameters));
 
     // left face
     std::vector<bool> mask_left = {true, clamp_at_left_boundary};

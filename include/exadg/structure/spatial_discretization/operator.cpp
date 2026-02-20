@@ -1238,16 +1238,17 @@ Operator<dim, Number>::update_boundary_mass_operator(Number const factor) const
   // update operator data from boundary_descriptor's velocity part from Robin boundaries
   if(param.problem_type == ProblemType::Unsteady)
   {
-    for(auto const & entry : this->boundary_descriptor->robin_k_c_p_param)
+    for(auto const & entry : this->boundary_descriptor->robin_bc)
     {
-      dealii::types::boundary_id boundary_id          = entry.first;
-      bool                       normal_projection    = entry.second.first[1];
-      Number                     velocity_coefficient = entry.second.second[1];
+      dealii::types::boundary_id boundary_id      = entry.first;
+      RobinParameters const &    robin_parameters = entry.second;
 
-      if(std::abs(velocity_coefficient) > 1e-20)
+      if(std::abs(robin_parameters.velocity_coefficient_c) > 1e-20)
       {
         robin_c_param.insert(
-          std::make_pair(boundary_id, std::make_pair(normal_projection, velocity_coefficient)));
+          std::make_pair(boundary_id,
+                         std::make_pair(robin_parameters.velocity_normal_projection,
+                                        robin_parameters.velocity_coefficient_c)));
       }
     }
   }
@@ -1261,22 +1262,32 @@ Operator<dim, Number>::set_fsi_robin_parameters(
   std::set<dealii::types::boundary_id> const & boundary_IDs,
   double const &                               robin_parameter) const
 {
-  // We assume that this function is called with only the fluid--structure interface boudnary ID
-  // given in `boundary_IDs`. All but the velocity scaling parameter zero. Normal projection of the
-  // velocity is not considered, corresponding to standard Robin fluid--structure coupling.
-  auto robin_k_c_p_param = this->boundary_descriptor->get_robin_k_c_p_param();
+  // We assume that this function is called with only the fluid--structure interface boundary ID
+  // given in `boundary_IDs`. All but the velocity scaling parameter are zero. Normal projection of
+  // the velocity is not considered, corresponding to standard Robin fluid--structure coupling.
+  std::map<dealii::types::boundary_id, RobinParameters> robin_bc =
+    this->boundary_descriptor->get_robin_bc();
 
   for(auto it = boundary_IDs.begin(); it != boundary_IDs.end(); ++it)
   {
-    robin_k_c_p_param[*it] =
-      std::make_pair(std::array<bool, 2>{{false /* normal_projection_displacement */,
-                                          false /* normal_projection_velocity */}},
-                     std::array<double, 3>{{0.0 /* coefficient_displacement */,
-                                            robin_parameter /* coefficient_velocity */,
-                                            0.0 /* exterior_pressure */}});
+    RobinParameters & robin_parameters = robin_bc[*it];
+
+    // Assert Robin parameters are not expected/updated.
+    AssertThrow(robin_parameters.velocity_normal_projection == false,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.displacement_normal_projection == false,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.displacement_coefficient_k == 0.0,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.pressure_value == 0.0,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.pressure_ramp_time == 0.0,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+
+    robin_parameters.velocity_coefficient_c = robin_parameter;
   }
 
-  this->boundary_descriptor->set_robin_k_c_p_param(robin_k_c_p_param);
+  this->boundary_descriptor->set_robin_bc(robin_bc);
 }
 
 template<int dim, typename Number>

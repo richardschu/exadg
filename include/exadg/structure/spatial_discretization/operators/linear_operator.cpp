@@ -86,44 +86,43 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
       }
     }
 
-    // check boundary ID in robin_k_c_p_param to add boundary mass integrals from Robin boundaries
-    // on `BoundaryType::NeumannCached` or `BoundaryType::RobinSpringDashpotPressure`
+    // check boundary ID in `robin_bc` to add boundary mass integrals from Robin boundaries on
+    // `BoundaryType::NeumannCached` or `BoundaryType::RobinSpringDashpotPressure`
     if(boundary_type == BoundaryType::NeumannCached or
        boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
       if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
       {
-        auto const it = this->operator_data.bc->robin_k_c_p_param.find(boundary_id);
+        auto const it = this->operator_data.bc->robin_bc.find(boundary_id);
 
-        if(it != this->operator_data.bc->robin_k_c_p_param.end())
+        if(it != this->operator_data.bc->robin_bc.end())
         {
-          bool const   normal_projection_displacement = it->second.first[0];
-          Number const coefficient_displacement       = it->second.second[0];
+          RobinParameters const & robin_parameters = it->second;
+          Number const displacement_coefficient_k  = robin_parameters.displacement_coefficient_k;
 
-          if(normal_projection_displacement)
+          if(robin_parameters.displacement_normal_projection)
           {
             vector const N = integrator_m.normal_vector(q);
-            traction += N * (coefficient_displacement * (N * integrator_m.get_value(q)));
+            traction += N * (displacement_coefficient_k * (N * integrator_m.get_value(q)));
           }
           else
           {
-            traction += coefficient_displacement * integrator_m.get_value(q);
+            traction += displacement_coefficient_k * integrator_m.get_value(q);
           }
 
           if(this->operator_data.unsteady)
           {
-            bool const   normal_projection_velocity = it->second.first[1];
-            Number const coefficient_velocity       = it->second.second[1];
+            Number const velocity_coefficient_c = robin_parameters.velocity_coefficient_c;
 
-            if(normal_projection_velocity)
+            if(robin_parameters.velocity_normal_projection)
             {
               vector const N = integrator_m.normal_vector(q);
-              traction += N * (coefficient_velocity * this->scaling_factor_mass_boundary *
+              traction += N * (velocity_coefficient_c * this->scaling_factor_mass_boundary *
                                (N * integrator_m.get_value(q)));
             }
             else
             {
-              traction += coefficient_velocity * this->scaling_factor_mass_boundary *
+              traction += velocity_coefficient_c * this->scaling_factor_mass_boundary *
                           integrator_m.get_value(q);
             }
           }

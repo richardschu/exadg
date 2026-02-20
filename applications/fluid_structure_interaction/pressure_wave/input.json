@@ -5,12 +5,12 @@
         "IsTest": "false"
     },
     "SpatialResolutionFluid": {
-        "Degree": "2",
-        "RefineSpace": "0"
+        "Degree": "3",
+        "RefineSpace": "1"
     },
     "SpatialResolutionStructure": {
-        "Degree": "1",
-        "RefineSpace": "0"
+        "Degree": "3",
+        "RefineSpace": "1"
     },
     "Fluid" : {
         "TemporalDiscretization": "BDFDualSplittingScheme"
@@ -24,13 +24,13 @@
     },
     "FSI" : {
         "AccelerationMethod": "IQN_ILS",
-        "UpdateMethod": "Implicit",
-        "CouplingMethod": "DirichletNeumann",
-        "RobinParameterScale": "0.000",
+        "UpdateMethod": "ImplicitPressureStructure",
+        "CouplingMethod": "DirichletRobinAdaptiveParameter",
+        "RobinParameterScale": "1e-6",
         "AbsTol": "1.e-9",
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
-        "InitialGuessCouplingScheme": "ConvergedSolutionPreviousTimeStep",
+        "InitialGuessCouplingScheme": "ConvergedSolutionOfPreviousTimeStep",
         "PartitionedIterMax": "100",
         "ReusedTimeSteps": "10",
         "GeometricTolerance": "1.e-8"
