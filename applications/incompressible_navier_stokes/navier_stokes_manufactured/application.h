@@ -487,6 +487,7 @@ private:
     this->param.restart_data.discretization_identical                        = false;
     this->param.restart_data.consider_mapping_write                          = move_grid;
     this->param.restart_data.consider_mapping_read_source                    = move_grid;
+    this->param.restart_data.consider_mapping_read_target                    = move_grid;
     this->param.restart_data.consider_restart_time_in_mesh_movement_function = true;
 
     this->param.restart_data.rpe_rtree_level            = 0;

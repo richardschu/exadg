@@ -269,6 +269,12 @@ private:
   std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;
   std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;
 
+  // If we want to be able to update the mapping, we need a pointer to a non-const `MatrixFree`
+  // object. `matrix_free_mutable` points to the same object the pointer to a const `MatrixFree`
+  // object `matrix_free` is pointing to. This variable is needed for ALE formulations or for
+  // grid-to-grid projections on an undeformed grid.
+  std::shared_ptr<dealii::MatrixFree<dim, Number>> matrix_free_mutable;
+
   /*
    * Basic operators.
    */

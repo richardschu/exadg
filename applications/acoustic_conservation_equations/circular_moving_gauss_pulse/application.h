@@ -203,6 +203,7 @@ private:
     this->param.restart_data.discretization_identical     = false;
     this->param.restart_data.consider_mapping_write       = true;
     this->param.restart_data.consider_mapping_read_source = true;
+    this->param.restart_data.consider_mapping_read_target = true;
 
     this->param.restart_data.rpe_rtree_level            = 0;
     this->param.restart_data.rpe_tolerance_unit_cell    = 1e-6;
