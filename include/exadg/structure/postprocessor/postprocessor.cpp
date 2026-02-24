@@ -134,10 +134,7 @@ PostProcessor<dim, Number>::do_postprocessing(VectorType const &     solution,
       additional_fields_vtu.push_back(&traction_local_inplane);
     }
 
-    output_generator.evaluate(solution,
-                              additional_fields_vtu,
-                              time,
-                              Utilities::is_unsteady_timestep(time_step_number));
+    output_generator.evaluate(solution, additional_fields_vtu, time, time_step_number);
   }
 
   /*

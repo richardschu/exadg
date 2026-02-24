@@ -29,6 +29,7 @@
 #include <exadg/postprocessor/output_data_base.h>
 #include <exadg/postprocessor/solution_field.h>
 #include <exadg/postprocessor/time_control.h>
+#include <exadg/time_integration/restart_data.h>
 
 namespace ExaDG
 {
@@ -44,7 +45,8 @@ struct OutputData : public OutputDataBase
       write_E2_orientation(false),
       write_traction_local_full(false),
       write_traction_local_normal(false),
-      write_traction_local_inplane(false)
+      write_traction_local_inplane(false),
+      restart_data()
   {
   }
 
@@ -81,6 +83,10 @@ struct OutputData : public OutputDataBase
   bool write_traction_local_full;
   bool write_traction_local_normal;
   bool write_traction_local_inplane;
+
+  // `RestartData` and `DeserializationParameters` controlling the writing of snapshot data to file.
+  DeserializationParameters deserialization_parameters;
+  RestartData               restart_data;
 };
 
 template<int dim, typename Number>
@@ -88,6 +94,7 @@ class OutputGenerator
 {
 public:
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+  typedef boost::archive::binary_oarchive                    BoostOutputArchiveType;
 
   OutputGenerator(MPI_Comm const & comm);
 
@@ -101,7 +108,7 @@ public:
     VectorType const &                                                       solution,
     std::vector<dealii::ObserverPointer<SolutionField<dim, Number>>> const & additional_fields,
     double const                                                             time,
-    bool const                                                               unsteady);
+    unsigned int const                                                       time_step_number);
 
   TimeControl time_control;
 
