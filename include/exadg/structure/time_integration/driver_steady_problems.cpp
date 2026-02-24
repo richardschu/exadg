@@ -64,8 +64,6 @@ DriverSteady<dim, Number>::solve()
   dealii::Timer timer;
   timer.restart();
 
-  postprocessing();
-
   do_solve();
 
   postprocessing();
