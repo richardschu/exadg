@@ -134,20 +134,24 @@ struct RestartData
     // if the restart is controlled by the wall time or the time_step_number because these
     // variables are reinitialized after a restart anyway.
     if(reset_counter)
+    {
       counter += int((time + 1.e-10) / interval_time);
+    }
 
-    bool const trigger_restart_base = wall_time > interval_wall_time * counter or
-                                      time > interval_time * counter or
-                                      time_step_number > interval_time_steps * counter;
+    bool const trigger_write_base = wall_time > interval_wall_time * counter or
+                                    time > interval_time * counter or
+                                    time_step_number > interval_time_steps * counter;
 
     // Additionally use the physical time window.
-    bool const trigger_restart =
-      trigger_restart_base and time >= interval_time_start and time <= interval_time_end;
+    bool const trigger_write =
+      trigger_write_base and time >= interval_time_start and time <= interval_time_end;
 
-    if(trigger_restart)
+    if(trigger_write)
+    {
       ++counter;
+    }
 
-    return trigger_restart;
+    return trigger_write;
   }
 
   bool write_restart;
@@ -196,7 +200,7 @@ struct RestartData
    */
 
   // Reconstruct the mapping for the serialized grid (`source`) in the grid-to-grid projection at
-  // restart. Note that the grid use at restart is always considered as defined in the applciation.
+  // restart. Note that the grid use at restart is always considered as defined in the appliciation.
   bool consider_mapping_read_source;
 
   // When creating a mapping function via `create_mesh_movement_function()`, use the `start_time` or
