@@ -41,10 +41,17 @@ types::time_step const steady_timestep  = std::numeric_limits<unsigned int>::max
 namespace Utilities
 {
 inline bool
+is_steady_timestep(types::time_step const timestep)
+{
+  return (timestep == numbers::steady_timestep);
+}
+
+inline bool
 is_unsteady_timestep(types::time_step const timestep)
 {
   return (timestep != numbers::steady_timestep);
 }
+
 inline bool
 is_valid_timestep(types::time_step const timestep)
 {
