@@ -306,7 +306,10 @@ TimeIntGenAlpha<dim, Number>::postprocessing() const
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(displacement_n, this->get_time(), this->get_time_step_number());
+  postprocessor->do_postprocessing(displacement_n,
+                                   false /* errors_only */,
+                                   this->get_time(),
+                                   this->get_time_step_number());
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
 }

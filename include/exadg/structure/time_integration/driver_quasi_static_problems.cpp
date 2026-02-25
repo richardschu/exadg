@@ -72,9 +72,11 @@ DriverQuasiStatic<dim, Number>::solve()
   dealii::Timer timer;
   timer.restart();
 
+  postprocessing(true /* errors_only */);
+
   do_solve();
 
-  postprocessing();
+  postprocessing(false /* errors_only */);
 
   timer_tree->insert({"DriverQuasiStatic"}, timer.wall_time());
 }
@@ -286,12 +288,12 @@ DriverQuasiStatic<dim, Number>::solve_step(double const load_factor,
 
 template<int dim, typename Number>
 void
-DriverQuasiStatic<dim, Number>::postprocessing() const
+DriverQuasiStatic<dim, Number>::postprocessing(bool const errors_only) const
 {
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(solution);
+  postprocessor->do_postprocessing(solution, errors_only);
 
   timer_tree->insert({"DriverQuasiStatic", "Postprocessing"}, timer.wall_time());
 }

@@ -64,9 +64,11 @@ DriverSteady<dim, Number>::solve()
   dealii::Timer timer;
   timer.restart();
 
+  postprocessing(true /* errors_only */);
+
   do_solve();
 
-  postprocessing();
+  postprocessing(false /* errors_only */);
 
   timer_tree->insert({"DriverSteady"}, timer.wall_time());
 }
@@ -143,12 +145,12 @@ DriverSteady<dim, Number>::do_solve()
 
 template<int dim, typename Number>
 void
-DriverSteady<dim, Number>::postprocessing() const
+DriverSteady<dim, Number>::postprocessing(bool const errors_only) const
 {
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(solution);
+  postprocessor->do_postprocessing(solution, errors_only);
 
   timer_tree->insert({"DriverSteady", "Postprocessing"}, timer.wall_time());
 }

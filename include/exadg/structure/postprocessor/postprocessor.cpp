@@ -74,6 +74,7 @@ PostProcessor<dim, Number>::requires_vector_postprocessing_field() const
 template<int dim, typename Number>
 void
 PostProcessor<dim, Number>::do_postprocessing(VectorType const &     solution,
+                                              bool const             errors_only,
                                               double const           time,
                                               types::time_step const time_step_number)
 {
@@ -82,7 +83,7 @@ PostProcessor<dim, Number>::do_postprocessing(VectorType const &     solution,
   /*
    *  write output
    */
-  if(output_generator.time_control.needs_evaluation(time, time_step_number))
+  if(not errors_only and output_generator.time_control.needs_evaluation(time, time_step_number))
   {
     std::vector<dealii::ObserverPointer<SolutionField<dim, Number>>> additional_fields_vtu;
 

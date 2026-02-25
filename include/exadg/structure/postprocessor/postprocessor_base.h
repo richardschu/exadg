@@ -60,6 +60,7 @@ public:
    */
   virtual void
   do_postprocessing(VectorType const &     solution,
+                    bool const             errors_only      = false,
                     double const           time             = 0.0,
                     types::time_step const time_step_number = numbers::steady_timestep) = 0;
 };

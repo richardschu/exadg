@@ -63,19 +63,27 @@ PostProcessor<dim, n_components, Number>::setup(
 template<int dim, int n_components, typename Number>
 void
 PostProcessor<dim, n_components, Number>::do_postprocessing(VectorType const &     solution,
+                                                            bool const             errors_only,
                                                             double const           time,
                                                             types::time_step const time_step_number)
 {
   if(error_calculator.time_control.needs_evaluation(time, time_step_number))
     error_calculator.evaluate(solution, time, Utilities::is_unsteady_timestep(time_step_number));
 
-  if(output_generator.time_control.needs_evaluation(time, time_step_number))
-    output_generator.evaluate(solution, time, Utilities::is_unsteady_timestep(time_step_number));
+  if(not errors_only)
+  {
+    if(output_generator.time_control.needs_evaluation(time, time_step_number))
+    {
+      output_generator.evaluate(solution, time, Utilities::is_unsteady_timestep(time_step_number));
+    }
 
-  if(pp_data.normal_flux_data.evaluate)
-    normal_flux_calculator->evaluate(solution,
-                                     time,
-                                     Utilities::is_unsteady_timestep(time_step_number));
+    if(pp_data.normal_flux_data.evaluate)
+    {
+      normal_flux_calculator->evaluate(solution,
+                                       time,
+                                       Utilities::is_unsteady_timestep(time_step_number));
+    }
+  }
 }
 
 template class PostProcessor<2, 1, float>;
