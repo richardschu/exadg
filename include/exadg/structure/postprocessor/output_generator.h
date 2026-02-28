@@ -46,7 +46,9 @@ struct OutputData : public OutputDataBase
       write_traction_local_full(false),
       write_traction_local_normal(false),
       write_traction_local_inplane(false),
-      restart_data()
+      deserialization_parameters(),
+      restart_data(),
+      deserialize_stress_qois(false)
   {
   }
 
@@ -87,6 +89,9 @@ struct OutputData : public OutputDataBase
   // `RestartData` and `DeserializationParameters` controlling the writing of snapshot data to file.
   DeserializationParameters deserialization_parameters;
   RestartData               restart_data;
+
+  // Add the stress QoIs to the deserialized data as well.
+  bool deserialize_stress_qois;
 };
 
 template<int dim, typename Number>

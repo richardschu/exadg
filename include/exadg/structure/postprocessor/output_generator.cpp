@@ -131,6 +131,13 @@ OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_
       // Serialization can only be triggered by `time`.
       AssertThrow(restart_data.interval_wall_time == std::numeric_limits<double>::max(),
                   dealii::ExcMessage("Serialization cannot be triggered by wall time."));
+
+      bool const stress_qois_available = output_data.write_max_principal_stress and
+                                         output_data.write_traction_local_normal and
+                                         output_data.write_traction_local_inplane;
+
+      AssertThrow((not output_data.deserialize_stress_qois) or stress_qois_available,
+                  dealii::ExcMessage("Stress QoIs were not requested in output."));
     }
   }
 }
@@ -213,6 +220,58 @@ OutputGenerator<dim, Number>::evaluate(
       std::vector<dealii::DoFHandler<dim> const *> dof_handlers{dof_handler.get()};
       std::vector<std::vector<VectorType const *>> vectors_per_dof_handler{{&solution}};
 
+      // Attach the stress QoIs and `DoFHandler`s if needed.
+      if(output_data.deserialize_stress_qois)
+      {
+        std::vector<std::string> const names_stress_qois = {"max_principal_stress",
+                                                            "traction_local_normal",
+                                                            "traction_local_inplane"};
+        for(unsigned int i = 0; i < names_stress_qois.size(); ++i)
+        {
+          bool found = false;
+          for(unsigned int j = 0; j < additional_fields.size(); ++j)
+          {
+            if(names_stress_qois[i] == additional_fields[j]->name)
+            {
+              // Check if `dealii::DoFHandler`s is already in list. Note that the vector space might
+              // be discontinuous, leading to a new `DoFHandler`.
+              found                        = false;
+              unsigned int dof_handler_idx = 0;
+              for(unsigned int k = 0; k < dof_handlers.size(); ++k)
+              {
+                if(dof_handlers[k] == &additional_fields[j]->get_dof_handler())
+                {
+                  found           = true;
+                  dof_handler_idx = k;
+                  break;
+                }
+              }
+
+              if(found)
+              {
+                vectors_per_dof_handler[dof_handler_idx].push_back(&additional_fields[j]->get());
+              }
+              else
+              {
+                dof_handlers.push_back(&additional_fields[j]->get_dof_handler());
+                vectors_per_dof_handler.push_back({&additional_fields[j]->get()});
+              }
+
+              // Name match found.
+              found = true;
+              if(found)
+              {
+                break;
+              }
+            }
+          }
+          AssertThrow(found,
+                      dealii::ExcMessage("The field with name " + names_stress_qois[i] +
+                                         " was not found in the additional fields."));
+        }
+      }
+
+      // Optionally attach the mapping as a DoF vector.
       if(restart_data.consider_mapping_write)
       {
         store_vectors_in_triangulation_and_serialize(restart_data,
