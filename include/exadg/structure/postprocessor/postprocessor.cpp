@@ -58,7 +58,8 @@ PostProcessor<dim, Number>::requires_scalar_postprocessing_field() const
 {
   return (pp_data.output_data.write_displacement_magnitude or
           pp_data.output_data.write_displacement_jacobian or
-          pp_data.output_data.write_max_principal_stress);
+          pp_data.output_data.write_max_principal_stress or
+          pp_data.output_data.write_max_fiber_stretch);
 }
 
 template<int dim, typename Number>
@@ -103,6 +104,12 @@ PostProcessor<dim, Number>::do_postprocessing(VectorType const &     solution,
     {
       max_principal_stress.evaluate(solution);
       additional_fields_vtu.push_back(&max_principal_stress);
+    }
+
+    if(pp_data.output_data.write_max_fiber_stretch)
+    {
+      max_fiber_stretch.evaluate(solution);
+      additional_fields_vtu.push_back(&max_fiber_stretch);
     }
 
     if(pp_data.output_data.write_E1_orientation)
@@ -198,6 +205,23 @@ PostProcessor<dim, Number>::initialize_derived_fields()
     };
 
     max_principal_stress.reinit();
+  }
+
+  // Maximum principal stress
+  if(pp_data.output_data.write_max_fiber_stretch)
+  {
+    max_fiber_stretch.type              = SolutionFieldType::scalar;
+    max_fiber_stretch.name              = "max_fiber_stretch";
+    max_fiber_stretch.dof_handler       = &pde_operator->get_dof_handler_scalar_postprocessing();
+    max_fiber_stretch.initialize_vector = [&](VectorType & dst) {
+      pde_operator->initialize_dof_vector_scalar_postprocessing(dst);
+    };
+    max_fiber_stretch.recompute_solution_field = [&](VectorType &       dst_scalar_valued,
+                                                     const VectorType & src_vector_valued) {
+      pde_operator->compute_max_fiber_stretch(dst_scalar_valued, src_vector_valued);
+    };
+
+    max_fiber_stretch.reinit();
   }
 
   // Material orientation E1
@@ -296,6 +320,7 @@ PostProcessor<dim, Number>::invalidate_derived_fields()
   displacement_magnitude.invalidate();
   displacement_jacobian.invalidate();
   max_principal_stress.invalidate();
+  max_fiber_stretch.invalidate();
   E1_orientation.invalidate();
   E2_orientation.invalidate();
   traction_local_full.invalidate();

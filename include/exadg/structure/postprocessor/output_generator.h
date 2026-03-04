@@ -41,6 +41,7 @@ struct OutputData : public OutputDataBase
     : write_displacement_magnitude(false),
       write_displacement_jacobian(false),
       write_max_principal_stress(false),
+      write_max_fiber_stretch(false),
       write_E1_orientation(false),
       write_E2_orientation(false),
       write_traction_local_full(false),
@@ -60,6 +61,7 @@ struct OutputData : public OutputDataBase
     print_parameter(pcout, "Write displacement magnitude", write_displacement_magnitude);
     print_parameter(pcout, "Write displacement Jacobian", write_displacement_jacobian);
     print_parameter(pcout, "Write maximum principal stress", write_max_principal_stress);
+    print_parameter(pcout, "Write maximum fiber stretch", write_max_fiber_stretch);
     print_parameter(pcout, "Write E1 orientation", write_E1_orientation);
     print_parameter(pcout, "Write E2 orientation", write_E2_orientation);
     print_parameter(pcout, "Write traction: full", write_traction_local_full);
@@ -75,6 +77,9 @@ struct OutputData : public OutputDataBase
 
   // write maximum principal stress
   bool write_max_principal_stress;
+
+  // write maximum fiber stretch
+  bool write_max_fiber_stretch;
 
   // write the material orientation vector
   bool write_E1_orientation;

@@ -132,11 +132,11 @@ OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_
       AssertThrow(restart_data.interval_wall_time == std::numeric_limits<double>::max(),
                   dealii::ExcMessage("Serialization cannot be triggered by wall time."));
 
-      bool const stress_qois_available = output_data.write_max_principal_stress and
-                                         output_data.write_traction_local_normal and
-                                         output_data.write_traction_local_inplane;
+      bool const qois_available =
+        output_data.write_max_principal_stress and output_data.write_max_fiber_stretch and
+        output_data.write_traction_local_normal and output_data.write_traction_local_inplane;
 
-      AssertThrow((not output_data.deserialize_stress_qois) or stress_qois_available,
+      AssertThrow((not output_data.deserialize_stress_qois) or qois_available,
                   dealii::ExcMessage("Stress QoIs were not requested in output."));
     }
   }
@@ -224,6 +224,7 @@ OutputGenerator<dim, Number>::evaluate(
       if(output_data.deserialize_stress_qois)
       {
         std::vector<std::string> const names_stress_qois = {"max_principal_stress",
+                                                            "max_fiber_stretch",
                                                             "traction_local_normal",
                                                             "traction_local_inplane"};
         for(unsigned int i = 0; i < names_stress_qois.size(); ++i)

@@ -19,6 +19,8 @@
  *  ______________________________________________________________________
  */
 
+// Number of fiber families oriented pairwise symmetric at +-alpha from `E_1` in the `E_1`-`E_2`
+// plane. `M_1` is the mean fiber direction, `M_2` lies normal to it in the `E_1`-`E_2` plane.
 #define N_FIBER_FAMILIES 2
 
 // deal.II
@@ -499,9 +501,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   IntegratorCell integrator_e2(matrix_free, dof_index, quad_index);
   IntegratorCell integrator_stiffness_scaling(matrix_free, dof_index, quad_index);
 
-  // The material coordinate system is initialized constant in the entire domain.
-  // Phi is the angle from the circumferential vector E_1 towards the longitudinal
-  // vector E_2.
+  // The material coordinate system is initialized constant in the entire domain. Phi is the angle
+  // from the circumferential vector `E_1` towards the longitudinal vector `E_2`.
   std::vector<vector>    M_1(N_FIBER_FAMILIES), M_2(N_FIBER_FAMILIES);
   dealii::Tensor<1, dim> E_1_default, E_2_default;
   E_1_default[0] = 1.0;
@@ -512,17 +513,15 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
                 "Using more than two fiber families, the mean directions overlap."));
   std::vector<Number> fiber_sin_phi(N_FIBER_FAMILIES);
   std::vector<Number> fiber_cos_phi(N_FIBER_FAMILIES);
+  for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
   {
-    for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
-    {
-      fiber_sin_phi[i] =
-        std::sin(pow(-1.0, i + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
-      fiber_cos_phi[i] =
-        std::cos(pow(-1.0, i + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
+    fiber_sin_phi[i] =
+      std::sin(pow(-1.0, i + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
+    fiber_cos_phi[i] =
+      std::cos(pow(-1.0, i + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
 
-      M_1[i] = fiber_cos_phi[i] * E_1_default - fiber_sin_phi[i] * E_2_default;
-      M_2[i] = fiber_sin_phi[i] * E_1_default + fiber_cos_phi[i] * E_2_default;
-    }
+    M_1[i] = fiber_cos_phi[i] * E_1_default - fiber_sin_phi[i] * E_2_default;
+    M_2[i] = fiber_sin_phi[i] * E_1_default + fiber_cos_phi[i] * E_2_default;
   }
 
   // loop over all cells
@@ -864,7 +863,14 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
 {
   if constexpr(cache_level == 0 or force_evaluation)
   {
-    scalar const fiber_switch = compute_fiber_switch(M_1, E);
+    scalar const I_i_star = compute_squared_fiber_stretch<dim, Number, stable_formulation>(M_1, E);
+
+    // fiber_switch = I_i_star < fiber_switch_limit ? 0.0 : 1.0
+    scalar const fiber_switch = dealii::compare_and_apply_mask<dealii::SIMDComparison::less_than>(
+      I_i_star,
+      dealii::make_vectorized_array<Number>(fiber_switch_limit),
+      dealii::make_vectorized_array<Number>(static_cast<Number>(0.0)),
+      dealii::make_vectorized_array<Number>(static_cast<Number>(1.0)));
 
     // Enforce an upper bound for the computed value.
     dealii::VectorizedArray<Number> const fiber_k_1_used =
@@ -996,81 +1002,6 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   {
     (void)M_1;
     return fiber_structure_tensor[i].get_coefficient_cell(cell, q);
-  }
-}
-
-// Function to evaluate the fiber_switch, not using/loading any data.
-template<int dim,
-         typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
-inline dealii::VectorizedArray<Number>
-IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
-  compute_fiber_switch(vector const & M_1, symmetric_tensor const & E) const
-{
-  if constexpr(stable_formulation)
-  {
-    // I_i_star = 2 * (M_1 (x) M_1) : E + tr(M_1 (x) M_1)
-    // clang-format off
-    // Unrolled diagonal part:
-    scalar I_i_star = M_1[0] * M_1[0] * (2.0 * E[0][0] + 1.0);
-    I_i_star       += M_1[1] * M_1[1] * (2.0 * E[1][1] + 1.0);
-    if constexpr(dim == 3)
-    {
-      I_i_star     += M_1[2] * M_1[2] * (2.0 * E[2][2] + 1.0);
-    }
-
-    // Unrolled off-diagonal part, use symmetry:
-    I_i_star   += 4.0 * M_1[0] * M_1[1] * E[0][1];
-    if constexpr(dim == 3)
-    {
-      I_i_star += 4.0 * M_1[0] * M_1[2] * E[0][2];
-      I_i_star += 4.0 * M_1[1] * M_1[2] * E[1][2];
-    }
-    // clang-format on
-
-    // fiber_switch = I_i_star < fiber_switch_limit ? 0.0 : 1.0
-    scalar const fiber_switch = dealii::compare_and_apply_mask<dealii::SIMDComparison::less_than>(
-      I_i_star,
-      dealii::make_vectorized_array<Number>(fiber_switch_limit),
-      dealii::make_vectorized_array<Number>(static_cast<Number>(0.0)),
-      dealii::make_vectorized_array<Number>(static_cast<Number>(1.0)));
-
-    return fiber_switch;
-  }
-  else
-  {
-    // I_i_star = (M_1 (x) M_1) : C
-    symmetric_tensor C = 2.0 * E;
-    add_scaled_identity(C, static_cast<Number>(1.0));
-
-    // clang-format off
-    // Unrolled diagonal part:
-    scalar I_i_star = M_1[0] * M_1[0] * C[0][0];
-    I_i_star       += M_1[1] * M_1[1] * C[1][1];
-    if constexpr(dim == 3)
-    {
-      I_i_star     += M_1[2] * M_1[2] * C[2][2];
-    }
-
-    // Unrolled off-diagonal part, use symmetry:
-    I_i_star   += 2.0 * M_1[0] * M_1[1] * C[0][1];
-    if constexpr(dim == 3)
-    {
-      I_i_star += 2.0 * M_1[0] * M_1[2] * C[0][2];
-      I_i_star += 2.0 * M_1[1] * M_1[2] * C[1][2];
-    }
-    // clang-format on
-
-    // fiber_switch = I_i_star < fiber_switch_limit ? 0.0 : 1.0
-    scalar const fiber_switch = dealii::compare_and_apply_mask<dealii::SIMDComparison::less_than>(
-      I_i_star,
-      dealii::make_vectorized_array<Number>(fiber_switch_limit),
-      dealii::make_vectorized_array<Number>(static_cast<Number>(0.0)),
-      dealii::make_vectorized_array<Number>(static_cast<Number>(1.0)));
-
-    return fiber_switch;
   }
 }
 
@@ -2072,10 +2003,11 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const
 {
   // The fiber families just differ in the fiber angle relative to the `E_1` direction towards
-  // `E_2`.
+  // `E_2`, use any to compute the material orientation.
   unsigned int constexpr fiber_idx = 0;
-  vector const M_1                 = fiber_direction_M_1[fiber_idx].get_coefficient_cell(cell, q);
-  vector const M_2                 = fiber_direction_M_2[fiber_idx].get_coefficient_cell(cell, q);
+
+  vector const M_1 = fiber_direction_M_1[fiber_idx].get_coefficient_cell(cell, q);
+  vector const M_2 = fiber_direction_M_2[fiber_idx].get_coefficient_cell(cell, q);
 
   Number const fiber_sin_phi =
     std::sin(pow(-1.0, fiber_idx + 1) * fiber_angle_phi_in_degree * dealii::numbers::PI / 180.0);
@@ -2093,6 +2025,24 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
                                fiber_cos_phi * M_2 - fiber_sin_phi * M_1};
 
   return E1_E2;
+}
+
+template<int dim,
+         typename Number,
+         unsigned int check_type,
+         bool         stable_formulation,
+         unsigned int cache_level>
+std::vector<dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>>
+IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_level>::
+  get_mean_fiber_directions_M1(unsigned int const cell, unsigned int const q) const
+{
+  std::vector<vector> M_1(N_FIBER_FAMILIES);
+  for(unsigned int i = 0; i < N_FIBER_FAMILIES; ++i)
+  {
+    M_1[i] = fiber_direction_M_1[i].get_coefficient_cell(cell, q);
+  }
+
+  return M_1;
 }
 
 template<int dim,

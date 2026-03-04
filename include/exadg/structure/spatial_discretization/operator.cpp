@@ -450,6 +450,12 @@ Operator<dim, Number>::setup_calculators_for_derived_quantities()
                                                get_dof_index_scalar_postprocessing(),
                                                get_quad_index(),
                                                elasticity_operator_base);
+
+    max_fiber_stretch_calculator.initialize(*matrix_free,
+                                            get_dof_index(),
+                                            get_dof_index_scalar_postprocessing(),
+                                            get_quad_index(),
+                                            elasticity_operator_base);
   }
 
   if(setup_vector_field_postprocessing)
@@ -892,6 +898,20 @@ Operator<dim, Number>::compute_max_principal_stress(VectorType &       dst_scala
                                  "Cannot compute maximum principal stress."));
 
   max_principal_stress_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
+
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_max_fiber_stretch(VectorType &       dst_scalar_valued,
+                                                 VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar field not set up. "
+                                 "Cannot compute maximum fiber stretch."));
+
+  max_fiber_stretch_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
   inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
 }

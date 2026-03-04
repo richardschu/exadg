@@ -322,6 +322,96 @@ LocalStressCalculator<dim, Number>::cell_loop(
   }
 }
 
+template<int dim, typename Number>
+MaxFiberStretchCalculator<dim, Number>::MaxFiberStretchCalculator()
+  : matrix_free(nullptr),
+    dof_index_vector(0),
+    dof_index_scalar(0),
+    quad_index(0),
+    elasticity_operator_base(nullptr)
+{
+}
+
+template<int dim, typename Number>
+void
+MaxFiberStretchCalculator<dim, Number>::initialize(
+  dealii::MatrixFree<dim, Number> const &                matrix_free_in,
+  unsigned int const                                     dof_index_vector_in,
+  unsigned int const                                     dof_index_scalar_in,
+  unsigned int const                                     quad_index_in,
+  Structure::ElasticityOperatorBase<dim, Number> const & elasticity_operator_base_in)
+{
+  matrix_free              = &matrix_free_in;
+  dof_index_vector         = dof_index_vector_in;
+  dof_index_scalar         = dof_index_scalar_in;
+  quad_index               = quad_index_in;
+  elasticity_operator_base = &elasticity_operator_base_in;
+}
+
+template<int dim, typename Number>
+void
+MaxFiberStretchCalculator<dim, Number>::compute_projection_rhs(
+  VectorType &       dst_scalar_valued,
+  VectorType const & src_vector_valued) const
+{
+  dst_scalar_valued = 0;
+
+  matrix_free->cell_loop(&This::cell_loop, this, dst_scalar_valued, src_vector_valued);
+}
+
+template<int dim, typename Number>
+void
+MaxFiberStretchCalculator<dim, Number>::cell_loop(
+  dealii::MatrixFree<dim, Number> const &       matrix_free,
+  VectorType &                                  dst_scalar_valued,
+  VectorType const &                            src_vector_valued,
+  std::pair<unsigned int, unsigned int> const & cell_range) const
+{
+  CellIntegratorVector integrator_vector(matrix_free, dof_index_vector, quad_index, 0);
+  CellIntegratorScalar integrator_scalar(matrix_free, dof_index_scalar, quad_index, 0);
+
+  for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+  {
+    Structure::Material<dim, Number> const & material =
+      elasticity_operator_base->get_material_in_cell(matrix_free, cell);
+
+    integrator_vector.reinit(cell);
+    // Do not enforce constraints on the `src` vector, as constraints are already applied and the
+    // `dealii::MatrixFree` object might store different constraints.
+    integrator_vector.read_dof_values_plain(src_vector_valued);
+    integrator_vector.evaluate(dealii::EvaluationFlags::gradients);
+
+    integrator_scalar.reinit(cell);
+
+    for(unsigned int q = 0; q < integrator_vector.n_q_points; q++)
+    {
+      bool constexpr stable_formulation            = true;
+      tensor const           gradient_displacement = integrator_vector.get_gradient(q);
+      symmetric_tensor const E =
+        Structure::compute_E_scaled<dim, Number, Number, stable_formulation>(gradient_displacement,
+                                                                             1.0);
+
+      // Compute the maximum fiber stretch over all mean fiber orientations.
+      std::vector<vector> const M_1 = material.get_mean_fiber_directions_M1(cell, q);
+
+      scalar max_fiber_stretch = dealii::make_vectorized_array<Number>(0.0);
+      for(unsigned int i = 0; i < M_1.size(); ++i)
+      {
+        scalar const fiber_stretch = sqrt(
+          Structure::compute_squared_fiber_stretch<dim, Number, stable_formulation>(M_1[i], E));
+
+        // max = max < val ? val : max
+        max_fiber_stretch = dealii::compare_and_apply_mask<dealii::SIMDComparison::less_than>(
+          max_fiber_stretch, fiber_stretch, fiber_stretch, max_fiber_stretch);
+      }
+
+      integrator_scalar.submit_value(max_fiber_stretch, q);
+    }
+
+    integrator_scalar.integrate_scatter(dealii::EvaluationFlags::values, dst_scalar_valued);
+  }
+}
+
 template class DisplacementJacobianCalculator<2, float>;
 template class DisplacementJacobianCalculator<2, double>;
 
@@ -339,5 +429,11 @@ template class MaxPrincipalStressCalculator<2, double>;
 
 template class MaxPrincipalStressCalculator<3, float>;
 template class MaxPrincipalStressCalculator<3, double>;
+
+template class MaxFiberStretchCalculator<2, float>;
+template class MaxFiberStretchCalculator<2, double>;
+
+template class MaxFiberStretchCalculator<3, float>;
+template class MaxFiberStretchCalculator<3, double>;
 
 } // namespace ExaDG

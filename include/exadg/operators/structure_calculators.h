@@ -238,6 +238,67 @@ private:
     elasticity_operator_base;
 };
 
+/*
+ * Calculator for the maximum squared or true fiber stretch in fiber-reinforced materials defined
+ * per fiber direction i as
+ *
+ * Ii* := (Mi (x) Mi) : C
+ *
+ * with mean fiber direction Mi, the Cauchy-Green strain tensor C := F^T * F, which is based on the
+ * deformation gradient tensor F. Note that this is independent of the fiber contribution to the
+ * strain energy density and in general a non-smooth function as we take the maximum.
+ *
+ */
+template<int dim, typename Number>
+class MaxFiberStretchCalculator
+{
+public:
+  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+
+  typedef MaxFiberStretchCalculator<dim, Number> This;
+
+  typedef CellIntegrator<dim, dim, Number> CellIntegratorVector;
+  typedef CellIntegrator<dim, 1, Number>   CellIntegratorScalar;
+
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
+
+  MaxFiberStretchCalculator();
+
+  void
+  initialize(dealii::MatrixFree<dim, Number> const &                matrix_free_in,
+             unsigned int const                                     dof_index_vector_in,
+             unsigned int const                                     dof_index_scalar_in,
+             unsigned int const                                     quad_index_in,
+             Structure::ElasticityOperatorBase<dim, Number> const & elasticity_operator_base_in);
+
+  /*
+   * Compute the right-hand side of an L2 projection of the maximum squared fiber stretch.
+   */
+  void
+  compute_projection_rhs(VectorType & dst, VectorType const & src) const;
+
+private:
+  void
+  cell_loop(dealii::MatrixFree<dim, Number> const &       matrix_free,
+            VectorType &                                  dst_scalar_valued,
+            VectorType const &                            src_vector_valued,
+            std::pair<unsigned int, unsigned int> const & cell_range) const;
+
+  dealii::MatrixFree<dim, Number> const * matrix_free;
+
+  unsigned int dof_index_vector;
+  unsigned int dof_index_scalar;
+  unsigned int quad_index;
+
+  // Pointer to the underlying elasticity operator to compute stresses dependent on the material
+  // model.
+  dealii::ObserverPointer<Structure::ElasticityOperatorBase<dim, Number> const>
+    elasticity_operator_base;
+};
+
 } // namespace ExaDG
 
 #endif /* EXADG_OPERATORS_STRUCTURE_CALCULATORS_H_ */

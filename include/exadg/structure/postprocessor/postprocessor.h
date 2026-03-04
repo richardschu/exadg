@@ -84,6 +84,7 @@ private:
   SolutionField<dim, Number> displacement_magnitude;
   SolutionField<dim, Number> displacement_jacobian;
   SolutionField<dim, Number> max_principal_stress;
+  SolutionField<dim, Number> max_fiber_stretch;
   SolutionField<dim, Number> E1_orientation;
   SolutionField<dim, Number> E2_orientation;
   SolutionField<dim, Number> traction_local_full;

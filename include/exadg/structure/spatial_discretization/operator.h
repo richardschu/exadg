@@ -408,6 +408,11 @@ public:
   compute_max_principal_stress(VectorType &       dst_scalar_valued,
                                VectorType const & src_vector_valued) const;
 
+  // compute maximum fiber stretch
+  void
+  compute_max_fiber_stretch(VectorType &       dst_scalar_valued,
+                            VectorType const & src_vector_valued) const;
+
   // compute the local material orientation E1
   void
   compute_E1_orientation(VectorType &       dst_vector_postprocessing_valued,
@@ -664,6 +669,7 @@ private:
 
   DisplacementJacobianCalculator<dim, Number> displacement_jacobian_calculator;
 
+  MaxFiberStretchCalculator<dim, Number>    max_fiber_stretch_calculator;
   MaxPrincipalStressCalculator<dim, Number> max_principal_stress_calculator;
 
   LocalStressCalculator<dim, Number> E1_orientation_calculator;

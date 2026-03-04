@@ -250,6 +250,10 @@ public:
   std::vector<vector>
   get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const final;
 
+  // Return the stored mean fiber orientation `M_1` per fiber family..
+  std::vector<vector>
+  get_mean_fiber_directions_M1(unsigned int const cell, unsigned int const q) const final;
+
   // Return the local scaling for the Robin boundary condition's displacemet component.
   scalar
   get_robin_k_scaling(unsigned int const face, unsigned int const q) const final;
@@ -319,9 +323,6 @@ private:
                        unsigned int const i,
                        unsigned int const cell,
                        unsigned int const q) const;
-
-  DEAL_II_ALWAYS_INLINE scalar
-  compute_fiber_switch(vector const & M_1, symmetric_tensor const & E) const;
 
   template<bool force_evaluation>
   DEAL_II_ALWAYS_INLINE scalar

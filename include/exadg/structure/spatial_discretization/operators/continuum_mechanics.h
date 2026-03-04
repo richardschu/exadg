@@ -978,6 +978,72 @@ inline DEAL_II_ALWAYS_INLINE //
   }
 }
 
+// Compute the squared fiber stretch defined as
+//
+// I_i_star = (M_1 (x) M_1) : C = 2 * (M_1 (x) M_1) : E + tr(M_1 (x) M_1)
+//
+// where M_1 is the mean fiberdirection per fiber family. The squared mean fiber stretch is
+// typically used as the tension/compression switch in fiber-reinforced continua.
+template<int dim, typename Number, bool stable_formulation>
+inline dealii::VectorizedArray<Number>
+compute_squared_fiber_stretch(
+  dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> const &          M_1,
+  dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> const & E)
+{
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
+
+  if constexpr(stable_formulation)
+  {
+    // I_i_star = 2 * (M_1 (x) M_1) : E + tr(M_1 (x) M_1)
+    // clang-format off
+    // Unrolled diagonal part:
+    scalar I_i_star = M_1[0] * M_1[0] * (2.0 * E[0][0] + 1.0);
+    I_i_star       += M_1[1] * M_1[1] * (2.0 * E[1][1] + 1.0);
+    if constexpr(dim == 3)
+    {
+      I_i_star     += M_1[2] * M_1[2] * (2.0 * E[2][2] + 1.0);
+    }
+
+    // Unrolled off-diagonal part, use symmetry:
+    I_i_star   += 4.0 * M_1[0] * M_1[1] * E[0][1];
+    if constexpr(dim == 3)
+    {
+      I_i_star += 4.0 * M_1[0] * M_1[2] * E[0][2];
+      I_i_star += 4.0 * M_1[1] * M_1[2] * E[1][2];
+    }
+    // clang-format on
+
+    return I_i_star;
+  }
+  else
+  {
+    // I_i_star = (M_1 (x) M_1) : C
+    symmetric_tensor C = 2.0 * E;
+    add_scaled_identity(C, static_cast<Number>(1.0));
+
+    // clang-format off
+    // Unrolled diagonal part:
+    scalar I_i_star = M_1[0] * M_1[0] * C[0][0];
+    I_i_star       += M_1[1] * M_1[1] * C[1][1];
+    if constexpr(dim == 3)
+    {
+      I_i_star     += M_1[2] * M_1[2] * C[2][2];
+    }
+
+    // Unrolled off-diagonal part, use symmetry:
+    I_i_star   += 2.0 * M_1[0] * M_1[1] * C[0][1];
+    if constexpr(dim == 3)
+    {
+      I_i_star += 2.0 * M_1[0] * M_1[2] * C[0][2];
+      I_i_star += 2.0 * M_1[1] * M_1[2] * C[1][2];
+    }
+    // clang-format on
+
+    return I_i_star;
+  }
+}
+
 template<typename Number>
 inline DEAL_II_ALWAYS_INLINE //
   std::pair<Number, bool>

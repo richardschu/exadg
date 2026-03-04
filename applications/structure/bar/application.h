@@ -710,6 +710,7 @@ private:
     pp_data.output_data.write_displacement_magnitude = true;
     pp_data.output_data.write_displacement_jacobian  = true;
     pp_data.output_data.write_max_principal_stress   = true;
+    pp_data.output_data.write_max_fiber_stretch      = true;
 
     bool const orientation_available = material_type == MaterialType::IncompressibleFibrousTissue;
     pp_data.output_data.write_E1_orientation         = orientation_available;

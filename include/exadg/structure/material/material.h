@@ -282,6 +282,23 @@ public:
   }
 
   /*
+   * Return the stored mean fiber orientation `M_1` per fiber family.
+   */
+  virtual std::vector<vector>
+  get_mean_fiber_directions_M1(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(
+      false,
+      dealii::ExcMessage(
+        "Overwrite this method in derived class to access stored mean fiber orientation data."));
+
+    std::vector<vector> dummy;
+    return dummy;
+  }
+
+  /*
    * Get the scaling parameter for the Robin boundary condition's displacement component. Overwrite
    * this function in the derived class to, e.g., provide stored values of a parameter field or
    * evaluate a more elaborate analytical function.
