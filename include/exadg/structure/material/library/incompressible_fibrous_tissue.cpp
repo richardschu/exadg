@@ -2003,7 +2003,8 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
   get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const
 {
   // The fiber families just differ in the fiber angle relative to the `E_1` direction towards
-  // `E_2`, use any to compute the material orientation.
+  // `E_2`, use any to compute the material orientation as all pairs of `M_1` and `M_2` are based
+  // on the same material orientation defined via `E_1` and `E_2`.
   unsigned int constexpr fiber_idx = 0;
 
   vector const M_1 = fiber_direction_M_1[fiber_idx].get_coefficient_cell(cell, q);

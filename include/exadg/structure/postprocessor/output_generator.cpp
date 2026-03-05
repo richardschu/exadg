@@ -132,6 +132,7 @@ OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_
       AssertThrow(restart_data.interval_wall_time == std::numeric_limits<double>::max(),
                   dealii::ExcMessage("Serialization cannot be triggered by wall time."));
 
+      // Set up QoI output to serialize them along the triangulation.
       bool const qois_available =
         output_data.write_max_principal_stress and output_data.write_max_fiber_stretch and
         output_data.write_traction_local_normal and output_data.write_traction_local_inplane;

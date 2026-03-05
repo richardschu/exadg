@@ -389,7 +389,7 @@ MaxFiberStretchCalculator<dim, Number>::cell_loop(
       tensor const           gradient_displacement = integrator_vector.get_gradient(q);
       symmetric_tensor const E =
         Structure::compute_E_scaled<dim, Number, Number, stable_formulation>(gradient_displacement,
-                                                                             1.0);
+                                                                             1.0 /* scale */);
 
       // Compute the maximum fiber stretch over all mean fiber orientations.
       std::vector<vector> const M_1 = material.get_mean_fiber_directions_M1(cell, q);
@@ -397,12 +397,10 @@ MaxFiberStretchCalculator<dim, Number>::cell_loop(
       scalar max_fiber_stretch = dealii::make_vectorized_array<Number>(0.0);
       for(unsigned int i = 0; i < M_1.size(); ++i)
       {
-        scalar const fiber_stretch = sqrt(
+        scalar const fiber_stretch = std::sqrt(
           Structure::compute_squared_fiber_stretch<dim, Number, stable_formulation>(M_1[i], E));
 
-        // max = max < val ? val : max
-        max_fiber_stretch = dealii::compare_and_apply_mask<dealii::SIMDComparison::less_than>(
-          max_fiber_stretch, fiber_stretch, fiber_stretch, max_fiber_stretch);
+        max_fiber_stretch = std::max(max_fiber_stretch, fiber_stretch);
       }
 
       integrator_scalar.submit_value(max_fiber_stretch, q);

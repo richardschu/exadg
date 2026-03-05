@@ -239,14 +239,15 @@ private:
 };
 
 /*
- * Calculator for the maximum squared or true fiber stretch in fiber-reinforced materials defined
+ * Calculator for the maximum fiber stretch in fiber-reinforced materials defined
  * per fiber direction i as
  *
- * Ii* := (Mi (x) Mi) : C
+ * Ii* := sqrt( (Mi (x) Mi) : C )
  *
  * with mean fiber direction Mi, the Cauchy-Green strain tensor C := F^T * F, which is based on the
  * deformation gradient tensor F. Note that this is independent of the fiber contribution to the
- * strain energy density and in general a non-smooth function as we take the maximum.
+ * strain energy density and in general a non-smooth function as we take the maximum. For Ii* < 1.0,
+ * the mean fiber is under compression, otherwise under tension.
  *
  */
 template<int dim, typename Number>
@@ -275,7 +276,7 @@ public:
              Structure::ElasticityOperatorBase<dim, Number> const & elasticity_operator_base_in);
 
   /*
-   * Compute the right-hand side of an L2 projection of the maximum squared fiber stretch.
+   * Compute the right-hand side of an L2 projection of the maximum fiber stretch.
    */
   void
   compute_projection_rhs(VectorType & dst, VectorType const & src) const;
@@ -293,8 +294,7 @@ private:
   unsigned int dof_index_scalar;
   unsigned int quad_index;
 
-  // Pointer to the underlying elasticity operator to compute stresses dependent on the material
-  // model.
+  // Pointer to the underlying elasticity operator.
   dealii::ObserverPointer<Structure::ElasticityOperatorBase<dim, Number> const>
     elasticity_operator_base;
 };
