@@ -47,6 +47,10 @@ public:
     }
   }
 
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class.
+  using PreconditionerBase<typename Operator::value_type>::vmult;
+
   void
   vmult(VectorType & dst, VectorType const & src) const final
   {

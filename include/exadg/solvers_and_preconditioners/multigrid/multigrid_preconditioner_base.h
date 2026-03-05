@@ -114,6 +114,10 @@ public:
   void
   update() override;
 
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class.
+  using PreconditionerBase<Number>::vmult;
+
   /*
    * This function applies the multigrid preconditioner dst = P^{-1} src.
    */

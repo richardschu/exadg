@@ -54,9 +54,8 @@ public:
   vmult(VectorType & dst, VectorType const & src) const = 0;
 
   /*
-   * This function applies the multigrid preconditioner dst = P^{-1} src and
-   * embedds the work schedule before/after the application (if supported by
-   * the preconditioner).
+   * This function applies the multigrid preconditioner dst = P^{-1} src and embeds the work
+   * schedule before/after the application (if supported by the preconditioner).
    */
   virtual void
   vmult(VectorType &                                                        dst,
