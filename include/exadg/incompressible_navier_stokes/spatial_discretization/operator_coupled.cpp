@@ -133,20 +133,10 @@ OperatorCoupled<dim, Number>::setup_solver_coupled()
 
 template<int dim, typename Number>
 void
-OperatorCoupled<dim, Number>::update_divergence_penalty_operator(VectorType const &)
+OperatorCoupled<dim, Number>::update_penalty_operator(VectorType const & velocity,
+                                                      double const &     time_step_size)
 {
-  AssertThrow(false,
-              dealii::ExcMessage("This function is empty. Should it be filled or should we "
-                                 "put a comment here saying that no update is necessary?"));
-}
-
-template<int dim, typename Number>
-void
-OperatorCoupled<dim, Number>::update_continuity_penalty_operator(VectorType const &)
-{
-  AssertThrow(false,
-              dealii::ExcMessage("This function is empty. Should it be filled or should we "
-                                 "put a comment here saying that no update is necessary?"));
+  this->projection_operator->update(velocity, time_step_size);
 }
 
 template<int dim, typename Number>
