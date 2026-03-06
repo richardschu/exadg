@@ -737,8 +737,10 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
     data.use_boundary_data      = param.continuity_penalty_use_boundary_data;
     data.bc                     = this->boundary_descriptor->velocity;
     data.dof_index              = get_dof_index_velocity();
-    data.quad_index             = get_quad_index_velocity_linearized();
-    data.use_cell_based_loops   = param.use_cell_based_face_loops;
+    // We use an increased number of integration points for the penalty operator to properly resolve
+    // the velocity field
+    data.quad_index           = get_quad_index_velocity_linearized();
+    data.use_cell_based_loops = param.use_cell_based_face_loops;
     data.apply_penalty_terms_in_postprocessing_step =
       param.apply_penalty_terms_in_postprocessing_step;
     data.implement_block_diagonal_preconditioner_matrix_free =
@@ -1092,6 +1094,7 @@ SpatialOperatorBase<dim, Number>::prescribe_initial_conditions(VectorType & velo
                         pressure,
                         field_functions->initial_solution_pressure,
                         time);
+  // Set the constrained degrees of freedom to zero.
   for(unsigned int i : matrix_free->get_constrained_dofs(get_dof_index_velocity()))
     velocity.local_element(i) = 0.0;
 
@@ -1965,6 +1968,20 @@ double
 SpatialOperatorBase<dim, Number>::calculate_dissipation_divergence_term(
   VectorType const & /*velocity*/) const
 {
+  // // previous version was:
+  // if(param.use_divergence_penalty == true)
+  // {
+  //   VectorType dst;
+  //   dst.reinit(velocity, false);
+  //   div_penalty_operator.apply(dst, velocity);
+  //   return velocity * dst;
+  // }
+  // else
+  // {
+  //   return 0.0;
+  // }
+
+  AssertThrow(param.use_divergence_penalty == false, dealii::ExcNotImplemented());
   return 0.0;
 }
 
@@ -1973,6 +1990,20 @@ double
 SpatialOperatorBase<dim, Number>::calculate_dissipation_continuity_term(
   VectorType const & /*velocity*/) const
 {
+  // // previous version was:
+  // if(param.use_continuity_penalty == true)
+  // {
+  //   VectorType dst;
+  //   dst.reinit(velocity, false);
+  //   conti_penalty_operator.apply(dst, velocity);
+  //   return velocity * dst;
+  // }
+  // else
+  // {
+  //   return 0.0;
+  // }
+
+  AssertThrow(param.use_divergence_penalty == false, dealii::ExcNotImplemented());
   return 0.0;
 }
 

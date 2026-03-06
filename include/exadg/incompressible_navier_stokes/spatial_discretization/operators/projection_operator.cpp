@@ -50,12 +50,17 @@ ProjectionOperator<dim, Number>::initialize(
   }
 
   // mass operator
-  this->integrator_flags.cell_evaluate  = dealii::EvaluationFlags::values;
-  this->integrator_flags.cell_integrate = dealii::EvaluationFlags::values;
+  if(operator_data.apply_penalty_terms_in_postprocessing_step)
+  {
+    this->integrator_flags.cell_evaluate  = dealii::EvaluationFlags::values;
+    this->integrator_flags.cell_integrate = dealii::EvaluationFlags::values;
+  }
 
   // divergence/continuity penalty
-  if(operator_data.use_divergence_penalty or operator_data.use_continuity_penalty)
-    this->integrator_flags = this->integrator_flags | kernel->get_integrator_flags();
+  AssertThrow(operator_data.use_divergence_penalty or operator_data.use_continuity_penalty,
+              dealii::ExcMessage("ProjectionOperator weakly enforces continuity "
+                                 "and/or a divergence-free vector field."));
+  this->integrator_flags = this->integrator_flags | kernel->get_integrator_flags();
 }
 
 template<int dim, typename Number>
@@ -80,8 +85,10 @@ ProjectionOperator<dim, Number>::initialize(
   }
 
   // divergence/continuity penalty
-  if(operator_data.use_divergence_penalty or operator_data.use_continuity_penalty)
-    this->integrator_flags = this->integrator_flags | kernel->get_integrator_flags();
+  AssertThrow(operator_data.use_divergence_penalty or operator_data.use_continuity_penalty,
+              dealii::ExcMessage("ProjectionOperator weakly enforces continuity "
+                                 "and/or a divergence-free vector field."));
+  this->integrator_flags = this->integrator_flags | kernel->get_integrator_flags();
 }
 
 template<int dim, typename Number>
@@ -196,9 +203,12 @@ ProjectionOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) c
 {
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
   {
+    // Mass term is only added, if the the penalty terms are applied in a postprocessing step.
     if(operator_data.apply_penalty_terms_in_postprocessing_step)
       integrator.submit_value(integrator.get_value(q), q);
 
+    // We might only have a continuity penalty term, while the penalty terms are applied in a
+    // postprocessing step.
     if(operator_data.use_divergence_penalty)
       integrator.submit_divergence(time_step_size * kernel->get_volume_flux(integrator, q), q);
   }
