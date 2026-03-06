@@ -135,10 +135,7 @@ DriverSteadyProblems<dim, Number>::do_solve(double const time, bool unsteady_pro
                 dealii::ExcMessage(
                   "Penalty terms have to be applied in momentum equation for steady problems."));
 
-    if(this->param.use_divergence_penalty == true)
-      pde_operator->update_divergence_penalty_operator(solution.block(0));
-    if(this->param.use_continuity_penalty == true)
-      pde_operator->update_continuity_penalty_operator(solution.block(0));
+    pde_operator->update_penalty_operator(solution.block(0));
   }
 
   // explicit viscosity update
