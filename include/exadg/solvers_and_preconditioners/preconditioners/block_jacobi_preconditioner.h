@@ -56,6 +56,10 @@ public:
     this->update_needed = false;
   }
 
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class.
+  using PreconditionerBase<typename Operator::value_type>::vmult;
+
   /*
    *  This function applies the block Jacobi preconditioner.
    *  Make sure that the block Jacobi preconditioner has been

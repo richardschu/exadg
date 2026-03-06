@@ -182,6 +182,10 @@ public:
     }
   }
 
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class. Note that the number type is always `double`.
+  using PreconditionerBase<double>::vmult;
+
   void
   vmult(VectorType & dst, VectorType const & src) const override
   {
@@ -336,6 +340,10 @@ public:
     }
   }
 
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class.
+  using PreconditionerBase<Number>::vmult;
+
   void
   vmult(VectorType & dst, VectorType const & src) const override
   {
@@ -427,14 +435,14 @@ private:
 
   BoomerData boomer_data;
 
-  // PETSc vector objects to avoid re-allocation in every vmult() operation
+  // PETSc vector objects to avoid re-allocation in every `vmult()` operation.
   mutable Vec petsc_vector_src;
   mutable Vec petsc_vector_dst;
 };
 #endif
 
 /**
- * Implementation of AMG preconditioner unifying PreconditionerML and PreconditionerBoomerAMG.
+ * Implementation of AMG preconditioner unifying `PreconditionerML` and `PreconditionerBoomerAMG`.
  */
 template<typename Operator, typename Number>
 class PreconditionerAMG : public PreconditionerBase<Number>
@@ -474,6 +482,10 @@ public:
       AssertThrow(false, dealii::ExcNotImplemented());
     }
   }
+
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class.
+  using PreconditionerBase<Number>::vmult;
 
   void
   vmult(VectorType & dst, VectorType const & src) const final

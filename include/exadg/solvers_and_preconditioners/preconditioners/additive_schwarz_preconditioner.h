@@ -45,6 +45,10 @@ public:
     }
   }
 
+  // Re-expose base overloads to avoid warning related to redefining `vmult()` with different
+  // signatures in based and derived class.
+  using PreconditionerBase<typename Operator::value_type>::vmult;
+
   /*
    *  This function applies the additive Schwarz preconditioner.
    *  Make sure that the additive Schwarz preconditioner has been
