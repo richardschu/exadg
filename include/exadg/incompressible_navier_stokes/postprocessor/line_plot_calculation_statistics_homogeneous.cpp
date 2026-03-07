@@ -50,6 +50,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::LinePlotCalculatorStatisti
     mapping(mapping_in),
     mpi_comm(mpi_comm_in),
     number_of_samples(0),
+    accumulated_time(0.0),
     averaging_direction(2),
     write_final_output(false),
     rt_operator(nullptr)
@@ -725,10 +726,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
 
 template<int dim, typename Number>
 void
-LinePlotCalculatorStatisticsHomogeneous<dim, Number>::evaluate(VectorType const & velocity,
-                                                               VectorType const & pressure)
+LinePlotCalculatorStatisticsHomogeneous<dim, Number>::evaluate(
+  VectorType const & velocity,
+  VectorType const & pressure,
+  double const       time_step_size_for_sampling)
 {
-  do_evaluate(velocity, pressure);
+  do_evaluate(velocity, pressure, time_step_size_for_sampling);
 }
 
 template<int dim, typename Number>
@@ -946,12 +949,15 @@ read_rt_cell_values(const unsigned int                                     degre
 
 template<int dim, typename Number>
 void
-LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType const & velocity,
-                                                                  VectorType const & pressure)
+LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
+  VectorType const & velocity,
+  VectorType const & pressure,
+  double const       time_step_size_for_sampling)
 {
   dealii::Timer time;
   // increment number of samples
   number_of_samples++;
+  accumulated_time += time_step_size_for_sampling;
 
   dealii::FiniteElement<dim> const & fe_u = dof_handler_velocity.get_fe();
 
@@ -1418,7 +1424,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         pressure_local = dealii::Utilities::MPI::sum(pressure_local, mpi_comm);
 
         // averaging in space (over homogeneous direction)
-        reference_pressure_global[index] += pressure_local / length_local;
+        reference_pressure_global[index] +=
+          (pressure_local / length_local) * time_step_size_for_sampling;
       }
     }
     offset_arrays += line.n_points;
@@ -1445,7 +1452,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
             velocity_global[line][p] +=
-              velocity_local[offset_arrays + p] / length_local[offset_arrays + p];
+              (velocity_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+              time_step_size_for_sampling;
           }
       }
       else if(quantity->type == QuantityType::ReynoldsStresses)
@@ -1458,7 +1466,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
             reynolds_global[line][p] +=
-              reynolds_local[offset_arrays + p] / length_local[offset_arrays + p];
+              (reynolds_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+              time_step_size_for_sampling;
           }
       }
       else if(quantity->type == QuantityType::SkinFriction)
@@ -1469,7 +1478,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
             wall_shear_global[line][p] +=
-              wall_shear_local[offset_arrays + p] / length_local[offset_arrays + p];
+              (wall_shear_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+              time_step_size_for_sampling;
           }
       }
       else if(quantity->type == QuantityType::Pressure)
@@ -1480,7 +1490,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
           for(unsigned int p = 0; p < n_points_on_line; ++p)
             pressure_global[line][p] +=
-              pressure_local[offset_arrays + p] / length_local[offset_arrays + p];
+              (pressure_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+              time_step_size_for_sampling;
       }
       else if(quantity->type == QuantityType::Dissipation)
       {
@@ -1491,9 +1502,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(VectorType con
           for(unsigned int p = 0; p < n_points_on_line; ++p)
           {
             dissipation_global[line][p] +=
-              dissipation_local[offset_arrays + p] / length_local[offset_arrays + p];
+              (dissipation_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+              time_step_size_for_sampling;
             grid_size_global[line][p] +=
-              grid_size_local[offset_arrays + p] / length_local[offset_arrays + p];
+              (grid_size_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+              time_step_size_for_sampling;
           }
       }
     }
@@ -1611,7 +1624,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             // write velocity and average over time
             for(unsigned int d = 0; d < dim; ++d)
               f << std::setw(precision + 8) << std::left
-                << velocity_global[line_iterator][p][d] / number_of_samples;
+                << velocity_global[line_iterator][p][d] / accumulated_time;
 
             f << std::endl;
           }
@@ -1662,9 +1675,9 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
               {
                 // equation <u_i' u_j'> = <u_i*u_j> - <u_i> * <u_j>
                 f << std::setw(precision + 8) << std::left
-                  << reynolds_global[line_iterator][p][i][j] / number_of_samples -
-                       (velocity_global[line_iterator][p][i] / number_of_samples) *
-                         (velocity_global[line_iterator][p][j] / number_of_samples);
+                  << reynolds_global[line_iterator][p][i][j] / accumulated_time -
+                       (velocity_global[line_iterator][p][i] / accumulated_time) *
+                         (velocity_global[line_iterator][p][j] / accumulated_time);
               }
             }
 
@@ -1709,7 +1722,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             // tau_w -> C_f = tau_w / (1/2 rho u²)
             double const viscosity = averaging_quantity->viscosity;
             f << std::setw(precision + 8) << std::left
-              << viscosity * wall_shear_global[line_iterator][p] / number_of_samples;
+              << viscosity * wall_shear_global[line_iterator][p] / accumulated_time;
 
             f << std::endl;
           }
@@ -1752,14 +1765,14 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
               f << std::setw(precision + 8) << std::left << global_points[line_iterator][p][d];
 
             f << std::setw(precision + 8) << std::left
-              << pressure_global[line_iterator][p] / number_of_samples;
+              << pressure_global[line_iterator][p] / accumulated_time;
 
             if(quantity->type == QuantityType::PressureCoefficient)
             {
               // p - p_ref -> C_p = (p - p_ref) / (1/2 rho u²)
               f << std::left
                 << (pressure_global[line_iterator][p] - reference_pressure_global[line_iterator]) /
-                     number_of_samples;
+                     accumulated_time;
             }
             f << std::endl;
           }
@@ -1799,11 +1812,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
 
             // write dissipation and average over time
             f << std::setw(precision + 8) << std::left
-              << dissipation_global[line_iterator][p] / number_of_samples;
+              << dissipation_global[line_iterator][p] / accumulated_time;
 
             // write grid size and average over time
             f << std::setw(precision + 8) << std::left
-              << grid_size_global[line_iterator][p] / number_of_samples;
+              << grid_size_global[line_iterator][p] / accumulated_time;
 
             f << std::endl;
           }
@@ -1813,8 +1826,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
       ++line_iterator;
     }
     const_cast<double &>(time_all) += time.wall_time();
-    std::cout << "Accumulated times for " << number_of_samples
-              << " output line stats t = " << time_all << " s" << std::endl;
+    std::cout << "Accumulated time = " << accumulated_time << " output line stats t = " << time_all
+              << " s" << std::endl;
   }
 }
 

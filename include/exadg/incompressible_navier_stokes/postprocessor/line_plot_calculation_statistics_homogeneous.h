@@ -78,7 +78,7 @@ public:
         RTOperator::RaviartThomasOperatorBase<dim, Number> const & rt_operator);
 
   void
-  evaluate(VectorType const & velocity, VectorType const & pressure);
+  evaluate(VectorType const & velocity, VectorType const & pressure, double const dt);
 
   void
   write_output() const;
@@ -90,7 +90,7 @@ private:
   print_headline(std::ofstream & f, unsigned int const number_of_samples) const;
 
   void
-  do_evaluate(VectorType const & velocity, VectorType const & pressure);
+  do_evaluate(VectorType const & velocity, VectorType const & pressure, double const dt);
 
   void
   average_pressure_for_given_point(VectorType const & pressure,
@@ -127,6 +127,9 @@ private:
 
   // number of samples for averaging in time
   unsigned int number_of_samples;
+
+  // accumulated physical time for time-weighted averaging
+  double accumulated_time;
 
   // homogeneous direction for averaging in space
   unsigned int averaging_direction;
