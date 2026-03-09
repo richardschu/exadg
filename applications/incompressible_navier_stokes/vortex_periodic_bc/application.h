@@ -104,6 +104,13 @@ public:
     prm.enter_subsection("Application");
     {
       prm.add_parameter("MeshType", mesh_type, "Type of mesh (Cartesian versus curvilinear).");
+      prm.add_parameter("TemporalDiscretization",
+                        temporal_discretization,
+                        "Type of temporal discretization.");
+      prm.add_parameter("SpatialDiscretization",
+                        spatial_discretization,
+                        "Type of spatial discretization.");
+      prm.add_parameter("EndTime", end_time, "Simulation end time used.");
     }
     prm.leave_subsection();
   }
@@ -126,7 +133,7 @@ private:
 
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                     = SolverType::Unsteady;
-    this->param.temporal_discretization         = TemporalDiscretization::BDFCoupledSolution;
+    this->param.temporal_discretization         = temporal_discretization;
     this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
     this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
     this->param.max_velocity                    = 1.0;
@@ -145,7 +152,7 @@ private:
     // SPATIAL DISCRETIZATION
     this->param.degree_p                    = DegreePressure::MixedOrder;
     this->param.grid.triangulation_type     = TriangulationType::Distributed;
-    this->param.spatial_discretization      = SpatialDiscretization::HDIV;
+    this->param.spatial_discretization      = spatial_discretization;
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
@@ -171,14 +178,13 @@ private:
     // PROJECTION METHODS
 
     // pressure Poisson equation
-    this->param.solver_pressure_poisson         = SolverPressurePoisson::CG;
-    this->param.solver_data_pressure_poisson    = SolverData(1000, ABS_TOL, REL_TOL, 100);
+    this->param.solver_data_pressure_poisson =
+      SolverData(1000, ABS_TOL, REL_TOL, LinearSolver::CG, 100);
     this->param.preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
 
     // projection step
-    this->param.solver_projection         = SolverProjection::CG;
-    this->param.solver_data_projection    = SolverData(1000, ABS_TOL, REL_TOL);
-    this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+    this->param.solver_data_projection    = SolverData(1000, ABS_TOL, REL_TOL, LinearSolver::CG);
+    this->param.preconditioner_projection = PreconditionerProjection::PointJacobi;
 
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
@@ -188,9 +194,8 @@ private:
 
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
-      this->param.solver_momentum         = SolverMomentum::CG;
-      this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL);
-      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+      this->param.solver_data_momentum    = SolverData(1000, ABS_TOL, REL_TOL, LinearSolver::CG);
+      this->param.preconditioner_momentum = MomentumPreconditioner::PointJacobi;
     }
 
 
@@ -203,9 +208,9 @@ private:
       this->param.newton_solver_data_momentum = Newton::SolverData(100, ABS_TOL, REL_TOL);
 
       // linear solver
-      this->param.solver_momentum         = SolverMomentum::GMRES;
-      this->param.solver_data_momentum    = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
-      this->param.preconditioner_momentum = MomentumPreconditioner::InverseMassMatrix;
+      this->param.solver_data_momentum =
+        SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, LinearSolver::GMRES, 100);
+      this->param.preconditioner_momentum        = MomentumPreconditioner::PointJacobi;
       this->param.update_preconditioner_momentum = false;
     }
 
@@ -219,8 +224,8 @@ private:
     this->param.newton_solver_data_coupled = Newton::SolverData(1000, ABS_TOL, REL_TOL);
 
     // linear solver
-    this->param.solver_coupled      = SolverCoupled::GMRES;
-    this->param.solver_data_coupled = SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, 100);
+    this->param.solver_data_coupled =
+      SolverData(1e4, ABS_TOL_LINEAR, REL_TOL_LINEAR, LinearSolver::GMRES, 100);
 
     // preconditioning linear solver
     this->param.preconditioner_coupled = PreconditionerCoupled::BlockTriangular;
@@ -239,9 +244,9 @@ private:
     this->param.preconditioner_pressure_block = SchurComplementPreconditioner::CahouetChabard;
 
     // Inversion of mass operator in case of H(div)-conforming method
-    this->param.inverse_mass_operator.implementation_type = InverseMassType::GlobalKrylovSolver;
-    this->param.inverse_mass_operator.solver_data         = SolverData(1000, ABS_TOL, REL_TOL);
-    this->param.inverse_mass_operator.preconditioner      = PreconditionerMass::PointJacobi;
+    this->param.inverse_mass_operator.solver_data =
+      SolverData(1000, ABS_TOL, REL_TOL, LinearSolver::CG);
+    this->param.inverse_mass_operator.preconditioner = PreconditionerMass::PointJacobi;
   }
 
   void
@@ -363,7 +368,7 @@ private:
   double const viscosity = 1.e-2;
 
   double const start_time = 0.0;
-  double const end_time   = 5.0;
+  double       end_time   = 5.0;
 
   // solver tolerances
   double const ABS_TOL = 1.e-12;
@@ -371,6 +376,10 @@ private:
 
   double const ABS_TOL_LINEAR = 1.e-12;
   double const REL_TOL_LINEAR = 1.e-2;
+
+  SpatialDiscretization spatial_discretization = SpatialDiscretization::HDIV;
+
+  TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFCoupledSolution;
 };
 
 } // namespace IncNS

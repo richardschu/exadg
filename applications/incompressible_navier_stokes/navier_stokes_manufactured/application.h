@@ -65,7 +65,7 @@ enum class BoundaryCondition
  *
  * u1 = sin(x) * cos(y) * cos(t)
  *
- * p  = cos(x*y) * cos(t)
+ * p  = cos(x) * cos(y) * cos(t)
  *
  * and derive
  *
@@ -124,13 +124,14 @@ public:
   double
   value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
-    double const t      = this->get_time();
-    double const x      = p[0];
-    double const y      = p[1];
-    double const cos_xy = std::cos(x * y);
-    double const cos_t  = std::cos(t);
+    double const t     = this->get_time();
+    double const x     = p[0];
+    double const y     = p[1];
+    double const cos_x = std::cos(x);
+    double const cos_y = std::cos(y);
+    double const cos_t = std::cos(t);
 
-    return cos_xy * cos_t;
+    return cos_x * cos_y * cos_t;
   }
 };
 
@@ -239,16 +240,15 @@ public:
      *     - nu * div(grad(u)) - 2 * sym_grad(u) * grad(nu)
      */
 
-    double const t      = this->get_time();
-    double const x      = p[0];
-    double const y      = p[1];
-    double const sin_x  = std::sin(x);
-    double const sin_y  = std::sin(y);
-    double const cos_x  = std::cos(x);
-    double const cos_y  = std::cos(y);
-    double const sin_t  = std::sin(t);
-    double const cos_t  = std::cos(t);
-    double const sin_xy = std::sin(x * y);
+    double const t     = this->get_time();
+    double const x     = p[0];
+    double const y     = p[1];
+    double const sin_x = std::sin(x);
+    double const sin_y = std::sin(y);
+    double const cos_x = std::cos(x);
+    double const cos_y = std::cos(y);
+    double const sin_t = std::sin(t);
+    double const cos_t = std::cos(t);
 
     double const u1 = sin_x * cos_y * cos_t;
     double const u2 = -cos_t * cos_x * sin_y;
@@ -265,8 +265,8 @@ public:
     double const du2_dxx = cos_t * cos_x * sin_y;
     double const du2_dyy = cos_t * cos_x * sin_y;
 
-    double const dp_dx = -sin_xy * cos_t * y;
-    double const dp_dy = -sin_xy * cos_t * x;
+    double const dp_dx = -sin_x * cos_y * cos_t;
+    double const dp_dy = -cos_x * sin_y * cos_t;
 
     dealii::Tensor<2, dim> grad_u;
     grad_u[0][0] = du1_dx;
@@ -401,7 +401,7 @@ private:
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
-    this->param.time_step_size                = std::abs(end_time - start_time) / 100;
+    this->param.time_step_size                = std::abs(end_time - start_time) / 20;
     this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
     this->param.start_with_low_order          = false; // true;
 
@@ -497,13 +497,11 @@ private:
     // PROJECTION METHODS
 
     // pressure Poisson equation
-    this->param.solver_pressure_poisson         = SolverPressurePoisson::CG;
     this->param.preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
-    this->param.solver_data_pressure_poisson    = SolverData(1000, 1.e-12, 1.e-8);
+    this->param.solver_data_pressure_poisson    = SolverData(1000, 1.e-12, 1.e-8, LinearSolver::CG);
 
     // projection step
-    this->param.solver_projection         = SolverProjection::CG;
-    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-8);
+    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-8, LinearSolver::CG);
     this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
     this->param.update_preconditioner_projection = true;
 
@@ -515,11 +513,9 @@ private:
 
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
-      this->param.solver_momentum =
-        treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
-          SolverMomentum::CG :
-          SolverMomentum::FGMRES;
-      this->param.solver_data_momentum = SolverData(1000, 1e-12, 1e-8);
+      LinearSolver const linear_solver = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
+          LinearSolver::CG : LinearSolver::FGMRES;
+      this->param.solver_data_momentum = SolverData(1000, 1e-12, 1e-8, linear_solver);
       this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                              MomentumPreconditioner::Multigrid :
                                              MomentumPreconditioner::PointJacobi;
@@ -539,8 +535,7 @@ private:
       this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
 
       // linear solver
-      this->param.solver_momentum                = SolverMomentum::GMRES;
-      this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, 100);
+      this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, LinearSolver::GMRES, 100);
       this->param.preconditioner_momentum        = MomentumPreconditioner::Multigrid;
       this->param.update_preconditioner_momentum = true;
     }
@@ -559,7 +554,7 @@ private:
       this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 60; // Chebyshev, default: 20
 
       this->param.multigrid_data_momentum.coarse_problem.solver         = this->param.non_explicit_convective_problem() ? MultigridCoarseGridSolver::GMRES : MultigridCoarseGridSolver::CG; // MultigridCoarseGridSolver::AMG
-      this->param.multigrid_data_momentum.coarse_problem.solver_data    = SolverData(1000, 1e-12, 1e-8, 30);
+      this->param.multigrid_data_momentum.coarse_problem.solver_data    = SolverData(1000, 1e-12, 1e-8, LinearSolver::Undefined, 30);
       this->param.multigrid_data_momentum.smoother_data.preconditioner  = PreconditionerSmoother::PointJacobi;
       this->param.multigrid_data_momentum.coarse_problem.preconditioner = MultigridCoarseGridPreconditioner::PointJacobi;
 #ifdef DEAL_II_WITH_TRILINOS
@@ -577,8 +572,7 @@ private:
     this->param.newton_solver_data_coupled = Newton::SolverData(100, 1.e-10, 1.e-6);
 
     // linear solver
-    this->param.solver_coupled      = SolverCoupled::FGMRES;
-    this->param.solver_data_coupled = SolverData(1e4, 1.e-12, 1.e-8, 100);
+    this->param.solver_data_coupled = SolverData(1e4, 1.e-12, 1.e-8, LinearSolver::FGMRES, 100);
 
     // preconditioning linear solver
     this->param.preconditioner_coupled        = PreconditionerCoupled::BlockTriangular;
@@ -704,12 +698,13 @@ private:
     if(move_grid)
     {
       MeshMovementData<dim> data;
-      data.temporal                       = MeshMovementAdvanceInTime::Sin;
-      data.shape                          = MeshMovementShape::Sin;
-      data.dimensions[0]                  = std::abs(interval_end - interval_start);
-      data.dimensions[1]                  = std::abs(interval_end - interval_start);
-      data.amplitude                      = std::abs(interval_end - interval_start) / 15.0;
-      data.period                         = std::abs(end_time - start_time);
+      data.temporal      = MeshMovementAdvanceInTime::Sin;
+      data.shape         = MeshMovementShape::Sin;
+      data.dimensions[0] = std::abs(interval_end - interval_start);
+      data.dimensions[1] = std::abs(interval_end - interval_start);
+      data.amplitude     = std::abs(interval_end - interval_start) / 15.0;
+      // time period chosen independently to avoid large convective ALE velocities
+      data.period                         = 0.4;
       data.t_start                        = start_time;
       data.t_end                          = end_time;
       data.spatial_number_of_oscillations = 1.0;
