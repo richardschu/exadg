@@ -503,15 +503,7 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_viscous_add_boundary_face(
   unsigned int const dof_index_pressure = this->get_dof_index_pressure();
   unsigned int const quad_index         = this->get_quad_index_velocity_standard();
 
-  CellIntegrator<dim, dim, Number> velocity(matrix_free,
-                                            dof_index_velocity,
-                                            this->get_quad_index_velocity_standard());
-
-  CellIntegrator<dim, dim, Number> velocity_scalar(matrix_free,
-                                                   this->get_dof_index_velocity_scalar(),
-                                                   quad_index);
-
-  FaceIntegratorU omega(matrix_free, true, this->get_dof_index_velocity_scalar(), quad_index);
+  FaceIntegratorU omega(matrix_free, true, dof_index_velocity, quad_index);
 
   FaceIntegratorP pressure(matrix_free, true, dof_index_pressure, quad_index);
 
@@ -523,29 +515,11 @@ OperatorDualSplitting<dim, Number>::local_rhs_ppe_nbc_viscous_add_boundary_face(
     if(boundary_type == BoundaryTypeP::Neumann)
     {
       pressure.reinit(face);
+
       omega.reinit(face);
+      omega.gather_evaluate(src, dealii::EvaluationFlags::gradients);
 
-      std::array<unsigned int, FaceIntegratorP::value_type::size()> cell_indices;
-      for(unsigned int i = 0; i < cell_indices.size(); ++i)
-        cell_indices[i] = matrix_free.get_face_info(face).cells_interior[i];
-      velocity.reinit(cell_indices);
-      velocity.gather_evaluate(src, dealii::EvaluationFlags::gradients);
-
-      for(const unsigned int q : velocity.quadrature_point_indices())
-      {
-        const auto curl_u = velocity.get_curl(q);
-        for(unsigned int d = 0; d < (dim == 2 ? 1 : dim); ++d)
-          omega.begin_dof_values()[q + d * velocity.n_q_points] = curl_u[d];
-        if(dim == 2)
-          omega.begin_dof_values()[q + 1 * velocity.n_q_points] = 0;
-      }
-
-      dealii::MatrixFreeOperators::CellwiseInverseMassMatrix<dim, -1, dim, Number> inv(
-        velocity_scalar);
-      inv.transform_from_q_points_to_basis(dim, omega.begin_dof_values(), omega.begin_dof_values());
-      omega.evaluate(dealii::EvaluationFlags::gradients);
-
-      for(const unsigned int q : pressure.quadrature_point_indices())
+      for(unsigned int q = 0; q < pressure.n_q_points; ++q)
       {
         scalar const viscosity = this->get_viscosity_boundary_face(face, q);
 
