@@ -556,9 +556,16 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   inverse_mass_operator_data_velocity_scalar.quad_index = get_quad_index_velocity_standard();
   inverse_mass_operator_data_velocity_scalar.parameters = param.inverse_mass_operator;
   // always use optimal inverse mass type for velocity scalar
+  const bool cartesian_or_affine_mapping =
+    std::all_of(matrix_free->get_mapping_info().cell_type.begin(),
+                matrix_free->get_mapping_info().cell_type.end(),
+                [](auto g) {
+                  return g <= dealii::internal::MatrixFreeFunctions::GeometryType::affine;
+                });
   inverse_mass_operator_data_velocity_scalar.parameters.implementation_type =
     inverse_mass_operator_data_velocity_scalar.get_optimal_inverse_mass_type(
-      matrix_free->get_dof_handler(get_dof_index_velocity_scalar()).get_fe());
+      matrix_free->get_dof_handler(get_dof_index_velocity_scalar()).get_fe(),
+      cartesian_or_affine_mapping);
   inverse_mass_velocity_scalar.initialize(*matrix_free, inverse_mass_operator_data_velocity_scalar);
 
   // body force operator
@@ -1812,12 +1819,10 @@ SpatialOperatorBase<dim, Number>::compute_streamfunction(VectorType &       dst,
                                 dirichlet_bc_component_mask);
 
   // initialize solver data
-  SolverData solver_data;
-  solver_data.rel_tol                        = 1e-10;
+  SolverData solver_data(1e3, 1e-20, 1e-10, LinearSolver::CG);
   bool constexpr compute_performance_metrics = false;
   bool constexpr compute_eigenvalues         = false;
-  bool const        use_preconditioner       = true;
-  std::string const name                     = "cg";
+  bool const use_preconditioner              = true;
 
   typedef Krylov::KrylovSolver<Laplace, PreconditionerBase<Number>, VectorType> SolverType;
 
@@ -1825,7 +1830,6 @@ SpatialOperatorBase<dim, Number>::compute_streamfunction(VectorType &       dst,
   SolverType poisson_solver(laplace_operator,
                             *preconditioner,
                             solver_data,
-                            name,
                             use_preconditioner,
                             compute_performance_metrics,
                             compute_eigenvalues);
@@ -2191,20 +2195,6 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
     bool constexpr compute_eigenvalues         = false;
     bool const use_preconditioner =
       param.preconditioner_projection != PreconditionerProjection::None;
-    std::string name;
-    if(param.solver_projection == SolverProjection::CG)
-    {
-      name = "cg";
-    }
-    else if(param.solver_projection == SolverProjection::FGMRES)
-    {
-      name = "fgmres";
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcMessage("Specified projection solver not implemented."));
-    }
-
 
     typedef Krylov::KrylovSolver<ProjOperator, PreconditionerBase<Number>, VectorType> SolverType;
 
@@ -2212,7 +2202,6 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
     projection_solver = std::make_shared<SolverType>(*projection_operator,
                                                      *preconditioner_projection,
                                                      param.solver_data_projection,
-                                                     name,
                                                      use_preconditioner,
                                                      compute_performance_metrics,
                                                      compute_eigenvalues);

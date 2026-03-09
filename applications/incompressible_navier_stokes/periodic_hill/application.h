@@ -304,7 +304,7 @@ private:
     // polynomial degree can be varied.
     this->param.restart_data.consider_mapping_write                          = false;
     this->param.restart_data.consider_mapping_read_source                    = false;
-    this->param.restart_data.consider_mapping_read_target                    = false;
+    this->param.restart_data.consider_mapping_read_target                    = true;
     this->param.restart_data.consider_restart_time_in_mesh_movement_function = true;
 
     this->param.restart_data.rpe_rtree_level            = 3;
@@ -314,8 +314,8 @@ private:
     // PROJECTION METHODS
 
     // pressure Poisson equation
-    this->param.solver_pressure_poisson              = SolverPressurePoisson::CG;
-    this->param.solver_data_pressure_poisson         = SolverData(1000, 1.e-12, 1.e-6, 100);
+    this->param.solver_data_pressure_poisson =
+      SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG, 100);
     this->param.preconditioner_pressure_poisson      = PreconditionerPressurePoisson::Multigrid;
     this->param.multigrid_data_pressure_poisson.type = MultigridType::cphMG;
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver =
@@ -323,22 +323,26 @@ private:
     this->param.multigrid_data_pressure_poisson.coarse_problem.preconditioner =
       MultigridCoarseGridPreconditioner::PointJacobi;
 
+    // projection step
+    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG);
+    this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+    this->param.update_preconditioner_projection = true;
+
+
     // HIGH-ORDER DUAL SPLITTING SCHEME
 
     // formulations
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    this->param.solver_momentum = SolverMomentum::CG;
-
-    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8);
+    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG);
     this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                             MomentumPreconditioner::InverseMassMatrix :
                                             MomentumPreconditioner::PointJacobi;
 
     this->param.inverse_mass_operator.implementation_type = InverseMassType::GlobalKrylovSolver;
     this->param.inverse_mass_operator.preconditioner      = PreconditionerMass::PointJacobi;
-    this->param.inverse_mass_operator.solver_data         = SolverData(1000, 1e-12, 1e-4);
+    this->param.inverse_mass_operator.solver_data = SolverData(1000, 1e-12, 1e-4, LinearSolver::CG);
 
     // CONSISTENT SPLITTING SCHEME
     this->param.order_extrapolation_pressure_rhs = 2;

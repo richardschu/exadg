@@ -69,7 +69,7 @@ struct OperatorBaseData
       implement_block_diagonal_preconditioner_matrix_free(false),
       solver_block_diagonal(Elementwise::Solver::GMRES),
       preconditioner_block_diagonal(Elementwise::Preconditioner::InverseMassMatrix),
-      solver_data_block_diagonal(SolverData(1000, 1.e-12, 1.e-2, 1000))
+      solver_data_block_diagonal(SolverData(1000, 1.e-12, 1.e-2, LinearSolver::Undefined, 1000))
   {
   }
 
@@ -446,6 +446,7 @@ protected:
 
   virtual void
   do_boundary_integral_continuous(IntegratorFace &                   integrator,
+                                  OperatorType const &               operator_type,
                                   dealii::types::boundary_id const & boundary_id) const;
 
   // The computation of the diagonal and block-diagonal requires face integrals of type
@@ -630,25 +631,16 @@ private:
                   Range const &                           range) const;
 
   /*
-   * Calculate diagonal.
+   * Calculate matrix and diagonal using `dealii::MatrixFreeTools`.
    */
   void
-  cell_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                     VectorType &                            dst,
-                     unsigned int const &,
-                     Range const & range) const;
+  cell_compute_matrix(IntegratorCell & integrator) const;
 
   void
-  face_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                     VectorType &                            dst,
-                     unsigned int const &,
-                     Range const & range) const;
+  face_compute_matrix(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
 
   void
-  boundary_face_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                              VectorType &                            dst,
-                              unsigned int const &,
-                              Range const & range) const;
+  boundary_face_compute_matrix(IntegratorFace & integrator_m) const;
 
   void
   cell_based_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
@@ -709,30 +701,6 @@ private:
   template<typename SparseMatrix>
   void
   internal_calculate_system_matrix(SparseMatrix & system_matrix) const;
-
-  /*
-   * Calculate sparse matrix.
-   */
-  template<typename SparseMatrix>
-  void
-  cell_loop_calculate_system_matrix(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                    SparseMatrix &                          dst,
-                                    SparseMatrix const &                    src,
-                                    Range const &                           range) const;
-
-  template<typename SparseMatrix>
-  void
-  face_loop_calculate_system_matrix(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                    SparseMatrix &                          dst,
-                                    SparseMatrix const &                    src,
-                                    Range const &                           range) const;
-
-  template<typename SparseMatrix>
-  void
-  boundary_face_loop_calculate_system_matrix(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                             SparseMatrix &                          dst,
-                                             SparseMatrix const &                    src,
-                                             Range const &                           range) const;
 
   /*
    * This function sets entries of the DoF-vector corresponding to constraint DoFs to one.

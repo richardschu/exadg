@@ -347,7 +347,11 @@ public:
 
     prm.enter_subsection("Application");
     {
-      prm.add_parameter("Solver", solver, "Krylov solver used.");
+      prm.add_parameter("LinearSolver", linear_solver, "Krylov solver used.");
+      prm.add_parameter("UseMatrixBasedOperator",
+                        use_matrix_based_operator,
+                        "Use matrix-based operators in global Krylov solver and Multigrid.",
+                        dealii::Patterns::Bool());
     }
     prm.leave_subsection();
   }
@@ -379,8 +383,7 @@ private:
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
 
     this->param.newton_solver_data  = Newton::SolverData(1e4, 1.e-10, 1.e-10);
-    this->param.solver              = solver;
-    this->param.solver_data         = SolverData(1e4, 1.e-12, 1.e-6, 100);
+    this->param.solver_data         = SolverData(1e4, 1.e-12, 1.e-6, linear_solver, 100);
     this->param.preconditioner      = Preconditioner::Multigrid;
     this->param.multigrid_data.type = MultigridType::phMG;
 
@@ -390,7 +393,7 @@ private:
       this->param.newton_solver_data.max_iter;
     this->param.update_preconditioner_once_newton_converged = true;
 
-    this->param.use_matrix_based_operator = false;                   // true;
+    this->param.use_matrix_based_operator = use_matrix_based_operator;
     this->param.sparse_matrix_type        = SparseMatrixType::PETSc; // Trilinos;
   }
 
@@ -531,7 +534,9 @@ private:
   double const end_time         = 1.0;
   double const frequency        = 3.0 / 2.0 * dealii::numbers::PI / end_time;
 
-  Solver solver = Solver::CG;
+  LinearSolver linear_solver = LinearSolver::CG;
+
+  bool use_matrix_based_operator = false;
 
   bool const prescribe_initial_acceleration_as_field_function = false;
 };
