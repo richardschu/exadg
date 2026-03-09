@@ -142,11 +142,20 @@ public:
     if(line_plot_calculator_statistics->time_control_statistics.time_control.needs_evaluation(
          time, time_step_number))
     {
-      if(consistent_splitting_operator)
-        line_plot_calculator_statistics->evaluate(*consistent_splitting_operator->velocity_vector,
-                                                  pressure);
-      else
-        line_plot_calculator_statistics->evaluate(velocity, pressure);
+      double time_step_size = 0.0;
+      if(previous_time >= 0.0)
+        time_step_size = time - previous_time;
+      previous_time = time;
+
+      if(time_step_size > 0.0)
+      {
+        if(consistent_splitting_operator)
+          line_plot_calculator_statistics->evaluate(*consistent_splitting_operator->velocity_vector,
+                                                    pressure,
+                                                    time_step_size);
+        else
+          line_plot_calculator_statistics->evaluate(velocity, pressure, time_step_size);
+      }
     }
 
     if(line_plot_calculator_statistics->time_control_statistics.write_preliminary_results(
@@ -176,6 +185,8 @@ private:
 
   mutable bool                                   clear_files;
   mutable std::vector<std::pair<double, double>> accumulated_flow_rate_results;
+
+  mutable double previous_time = -1.0;
 
   Number
   compute_velocity_integral()

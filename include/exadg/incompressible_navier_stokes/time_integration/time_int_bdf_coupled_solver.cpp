@@ -209,14 +209,7 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   // that these terms are added to the monolithic system of equations.
   if(this->param.apply_penalty_terms_in_postprocessing_step == false)
   {
-    if(this->param.use_divergence_penalty == true)
-    {
-      pde_operator->update_divergence_penalty_operator(solution_np.block(0));
-    }
-    if(this->param.use_continuity_penalty == true)
-    {
-      pde_operator->update_continuity_penalty_operator(solution_np.block(0));
-    }
+    pde_operator->update_penalty_operator(solution_np.block(0), this->get_time_step_size());
   }
 
   // update scaling factor of continuity equation
