@@ -225,15 +225,6 @@ private:
 
 public:
   /*
-   * Update the divergence and continuity penalty operator by recalculating the penalty parameter
-   * depending on the underlying settings, current velocity field and time step size. For
-   * instationary problems, an additional scaling by the time step size is useful, the time step
-   * size for stationary problems should be chosen as 1.0.
-   */
-  void
-  update_penalty_operator(VectorType const & velocity, double const & time_step_size = 1.0);
-
-  /*
    * Setters and getters.
    */
 
