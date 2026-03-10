@@ -1167,17 +1167,16 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
                               vectors_p_restart,
                               *dof_handler_p_restart);
 
-  // OUTPUT THE VECTORS
-  if constexpr(false)
+  if(param.restart_data.write_vectors_to_vtu)
   {
-    this->pcout << "OUTPUT VECTORS FOR COMPARISON\n";
+    this->pcout << "Writing projected serialized vectors to .vtu files\n";
     OutputDataBase output_data;
     output_data.directory = "output/";
     output_data.filename  = "projected_vectors_write";
     output_data.degree    = param.degree_u;
     VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
 
-    std::vector<std::string> names_u_restart(dim, "velocity_restart");
+    std::vector<std::string> names_u_restart(dim, "velocity_projected");
     std::vector<bool>        component_is_part_of_vector(dim, true);
     vector_writer.add_data_vector(vectors_u_restart[0],
                                   *dof_handler_u_restart,
@@ -1192,7 +1191,7 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
 
     vector_writer.add_data_vector(vectors_p_restart[0],
                                   *dof_handler_p_restart,
-                                  {"pressure_restart"});
+                                  {"pressure_projected"});
 
     vector_writer.add_data_vector(*vectors_pressure[0], dof_handler_p, {"pressure"});
 
@@ -1245,7 +1244,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
     deserialization_parameters.serializable_functions = {serializable_function};
   read_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
-  // Load potentially unfitting checkpoint triangulation of TriangulationType.
+  // Load potentially unfitting checkpoint triangulation of `TriangulationType`.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =
     deserialize_triangulation<dim>(param.restart_data,
                                    deserialization_parameters.triangulation_type,
@@ -1384,10 +1383,9 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
   set_ghost_state(vectors_velocity, has_ghost_elements_velocity);
   set_ghost_state(vectors_pressure, has_ghost_elements_pressure);
 
-  // OUTPUT THE VECTORS
-  if constexpr(false)
+  if(param.restart_data.write_vectors_to_vtu)
   {
-    this->pcout << "OUTPUT VECTORS FOR COMPARISON\n";
+    this->pcout << "Writing restart vectors to .vtu files\n";
     OutputDataBase output_data;
     output_data.directory = "output/";
     output_data.degree    = param.degree_u;
@@ -1398,7 +1396,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
       output_data.filename = "projected_vectors_read_restart";
       VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
 
-      std::vector<std::string> names_u_restart(dim, "velocity_restart");
+      std::vector<std::string> names_u_restart(dim, "velocity_projected");
       vector_writer.add_data_vector(checkpoint_vectors_velocity[0],
                                     *dof_handler_u_restart,
                                     names_u_restart,
@@ -1406,7 +1404,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
 
       vector_writer.add_data_vector(checkpoint_vectors_pressure[0],
                                     *dof_handler_p_restart,
-                                    {"pressure_restart"});
+                                    {"pressure_projected"});
 
       vector_writer.write_pvtu(this->get_mapping().get());
     }

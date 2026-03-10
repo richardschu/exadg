@@ -289,9 +289,9 @@ private:
     this->param.turbulence_model_data.constant = 1.35;
 
     // RESTART
-    this->param.restarted_simulation       = read_restart;
-    this->param.restart_data.write_restart = write_restart;
-    // write restart every 40% of the simulation time
+    this->param.restarted_simulation                        = read_restart;
+    this->param.restart_data.write_restart                  = write_restart;
+    this->param.restart_data.write_vectors_to_vtu           = true;
     this->param.restart_data.interval_time                  = restart_interval_time;
     this->param.restart_data.directory_coarse_triangulation = restart_directory;
     this->param.restart_data.directory_read                 = restart_directory;
@@ -302,10 +302,11 @@ private:
 
     // Same `mapping_degree` and spatial resolution are the most stable options for restart,
     // polynomial degree can be varied.
-    this->param.restart_data.consider_mapping_write                          = false;
-    this->param.restart_data.consider_mapping_read_source                    = false;
-    this->param.restart_data.consider_mapping_read_target                    = true;
-    this->param.restart_data.consider_restart_time_in_mesh_movement_function = true;
+    bool constexpr de_serialize_in_deformed_geometry      = false;
+    this->param.restart_data.consider_mapping_write       = de_serialize_in_deformed_geometry;
+    this->param.restart_data.consider_mapping_read_source = de_serialize_in_deformed_geometry;
+    this->param.restart_data.consider_mapping_read_target = de_serialize_in_deformed_geometry;
+    this->param.restart_data.consider_restart_time_in_mesh_movement_function = false;
 
     this->param.restart_data.rpe_rtree_level            = 3;
     this->param.restart_data.rpe_tolerance_unit_cell    = 1e-6;
