@@ -120,6 +120,7 @@ struct RestartData
 {
   RestartData()
     : write_restart(false),
+      write_vectors_to_vtu(false),
       n_snapshots_keep(2),
       interval_time(std::numeric_limits<double>::max()),
       interval_time_start(std::numeric_limits<double>::lowest()),
@@ -150,6 +151,7 @@ struct RestartData
 
     if(write_restart == true)
     {
+      print_parameter(pcout, "Write the restart vectors to vtu", write_vectors_to_vtu);
       print_parameter(pcout, "Interval physical time", interval_time);
       print_parameter(pcout, "Interval physical time window start", interval_time_start);
       print_parameter(pcout, "Interval physical time window end", interval_time_end);
@@ -213,6 +215,9 @@ struct RestartData
   }
 
   bool write_restart;
+
+  // Write intermediate vectors in the current configuration to vtu.
+  bool write_vectors_to_vtu;
 
   // Number of snapshots to keep
   unsigned int n_snapshots_keep;
