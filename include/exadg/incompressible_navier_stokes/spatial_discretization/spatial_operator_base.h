@@ -544,9 +544,7 @@ private:
   std::shared_ptr<dealii::FiniteElement<dim>> fe_p;
   std::shared_ptr<dealii::FiniteElement<dim>> fe_u_scalar;
 
-  std::shared_ptr<dealii::FiniteElement<dim>>         fe_mapping;
-  mutable std::shared_ptr<dealii::FiniteElement<dim>> fe_u_restart;
-  mutable std::shared_ptr<dealii::FiniteElement<dim>> fe_p_restart;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_mapping;
 
   dealii::DoFHandler<dim> dof_handler_u;
   dealii::DoFHandler<dim> dof_handler_p;
@@ -681,15 +679,17 @@ private:
   initialize_dof_handler_and_constraints();
 
   void
-  initialize_dof_handler_restart(unsigned int const                 degree_u,
-                                 unsigned int const                 degree_p,
-                                 dealii::Triangulation<dim> const & triangulation) const;
+  initialize_dof_handler_restart(unsigned int const                         degree_restart,
+                                 unsigned int const                         n_components,
+                                 std::shared_ptr<dealii::DoFHandler<dim>> & dof_handler_restart,
+                                 dealii::Triangulation<dim> const & triangulation_restart) const;
 
   void
-  project_standard_to_restart(std::vector<VectorType const *> const & src_standard,
-                              dealii::DoFHandler<dim> const &         src_dof_handler_standard,
-                              std::vector<VectorType> &               dst_restart,
-                              dealii::DoFHandler<dim> const & dst_dof_handler_restart) const;
+  project_to_restart_space(std::vector<VectorType const *> const & src,
+                           dealii::DoFHandler<dim> const &         src_dof_handler,
+                           dealii::Mapping<dim> const &            src_mapping,
+                           std::vector<VectorType> &               dst_restart,
+                           dealii::DoFHandler<dim> const &         dst_dof_handler_restart) const;
 
   void
   initialize_dirichlet_cached_bc();
