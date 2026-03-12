@@ -2121,19 +2121,6 @@ double
 SpatialOperatorBase<dim, Number>::calculate_dissipation_divergence_term(
   VectorType const & /*velocity*/) const
 {
-  // // previous version was:
-  // if(param.use_divergence_penalty == true)
-  // {
-  //   VectorType dst;
-  //   dst.reinit(velocity, false);
-  //   div_penalty_operator.apply(dst, velocity);
-  //   return velocity * dst;
-  // }
-  // else
-  // {
-  //   return 0.0;
-  // }
-
   AssertThrow(param.use_divergence_penalty == false, dealii::ExcNotImplemented());
   return 0.0;
 }
@@ -2143,19 +2130,6 @@ double
 SpatialOperatorBase<dim, Number>::calculate_dissipation_continuity_term(
   VectorType const & /*velocity*/) const
 {
-  // // previous version was:
-  // if(param.use_continuity_penalty == true)
-  // {
-  //   VectorType dst;
-  //   dst.reinit(velocity, false);
-  //   conti_penalty_operator.apply(dst, velocity);
-  //   return velocity * dst;
-  // }
-  // else
-  // {
-  //   return 0.0;
-  // }
-
   AssertThrow(param.use_divergence_penalty == false, dealii::ExcNotImplemented());
   return 0.0;
 }
@@ -2404,7 +2378,7 @@ SpatialOperatorBase<dim, Number>::update_projection_operator(VectorType const & 
               dealii::ExcMessage("Projection operator is not initialized."));
 
   // Update projection operator, i.e., the penalty parameters that depend on the velocity field
-  // and the time step size
+  // and the time step size.
   projection_operator->update(velocity, time_step_size);
 }
 
@@ -2413,6 +2387,9 @@ void
 SpatialOperatorBase<dim, Number>::rhs_add_projection_operator(VectorType & dst,
                                                               double const time) const
 {
+  AssertThrow(projection_operator.get() != 0,
+              dealii::ExcMessage("Projection operator is not initialized."));
+
   projection_operator->set_time(time);
   projection_operator->rhs_add(dst);
 }

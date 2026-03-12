@@ -74,7 +74,8 @@ OperatorCoupled<dim, Number>::setup_preconditioners_and_solvers()
 {
   Base::setup_preconditioners_and_solvers();
 
-  if(this->param.apply_penalty_terms_in_postprocessing_step)
+  if(this->param.apply_penalty_terms_in_postprocessing_step and
+     ((this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true)))
     Base::setup_projection_solver();
 
   setup_block_preconditioner();
@@ -114,14 +115,6 @@ OperatorCoupled<dim, Number>::setup_solver_coupled()
                                                     Krylov::SolverBase<BlockVectorType>>>(
       this->param.newton_solver_data_coupled, nonlinear_operator, linear_operator, *linear_solver);
   }
-}
-
-template<int dim, typename Number>
-void
-OperatorCoupled<dim, Number>::update_penalty_operator(VectorType const & velocity,
-                                                      double const &     time_step_size)
-{
-  this->projection_operator->update(velocity, time_step_size);
 }
 
 template<int dim, typename Number>
@@ -182,7 +175,8 @@ OperatorCoupled<dim, Number>::rhs_linear_problem(BlockVectorType &  dst,
     this->convective_operator.rhs_add(dst.block(0));
   }
 
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false)
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
+     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
   {
     this->projection_operator->set_time(time);
     this->projection_operator->rhs_add(dst.block(0));
@@ -208,7 +202,8 @@ OperatorCoupled<dim, Number>::apply_linearized_problem(BlockVectorType &       d
   this->momentum_operator.vmult(dst.block(0), src.block(0));
 
   // Divergence and continuity penalty operators
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false)
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
+     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
   {
     this->projection_operator->vmult_add(dst.block(0), src.block(0));
   }
@@ -285,7 +280,8 @@ OperatorCoupled<dim, Number>::evaluate_nonlinear_residual(BlockVectorType &     
   }
 
   // Divergence and continuity penalty operators
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false)
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
+     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
   {
     this->projection_operator->vmult_add(dst.block(0), src.block(0));
   }
@@ -349,7 +345,8 @@ OperatorCoupled<dim, Number>::evaluate_linearized_residual(BlockVectorType &    
   }
 
   // Divergence and continuity penalty operators
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false)
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
+     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
   {
     this->projection_operator->apply_add(dst.block(0), src.block(0));
   }
@@ -424,7 +421,8 @@ OperatorCoupled<dim, Number>::evaluate_nonlinear_residual_steady(BlockVectorType
   }
 
   // Divergence and continuity penalty operators
-  if(this->param.apply_penalty_terms_in_postprocessing_step == false)
+  if(this->param.apply_penalty_terms_in_postprocessing_step == false and
+     (this->param.use_divergence_penalty == true or this->param.use_continuity_penalty == true))
   {
     this->projection_operator->vmult_add(dst.block(0), src.block(0));
   }

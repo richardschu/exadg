@@ -159,11 +159,11 @@ private:
     this->param.divu_formulation = FormulationVelocityDivergenceTerm::Weak;
 
     // div-div and continuity penalty
-    this->param.use_divergence_penalty                     = false;
-    this->param.divergence_penalty_factor                  = 1.0e0;
-    this->param.use_continuity_penalty                     = false;
-    this->param.continuity_penalty_factor                  = this->param.divergence_penalty_factor;
-    this->param.continuity_penalty_components              = ContinuityPenaltyComponents::Normal;
+    this->param.use_divergence_penalty        = spatial_discretization == SpatialDiscretization::L2;
+    this->param.divergence_penalty_factor     = 1.0e0;
+    this->param.use_continuity_penalty        = spatial_discretization == SpatialDiscretization::L2;
+    this->param.continuity_penalty_factor     = this->param.divergence_penalty_factor;
+    this->param.continuity_penalty_components = ContinuityPenaltyComponents::Normal;
     this->param.apply_penalty_terms_in_postprocessing_step = false;
     this->param.continuity_penalty_use_boundary_data       = false;
 
