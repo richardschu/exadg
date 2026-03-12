@@ -1397,7 +1397,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
                    dof_handler_u_restart_intermediate->get_mpi_communicator());
 
       // We assume that if the number of cells and number of refinement levels are identical, the
-      // grid is idetical, since we do not support adaptive refinement.
+      // grid is identical, since we do not support adaptive refinement.
       bool const spatial_resolution_identical =
         checkpoint_triangulation->n_global_levels() == triangulation.n_global_levels() and
         checkpoint_triangulation->n_global_active_cells() == triangulation.n_global_active_cells();
