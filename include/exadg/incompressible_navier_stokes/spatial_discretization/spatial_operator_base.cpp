@@ -119,8 +119,8 @@ SpatialOperatorBase<dim, Number>::project_to_restart_space(
   // Kronecker-delta property in the support points being the Gauss integration points for the
   // restart space. Hence, the number of DoFs per cell can differ, but the grid must be identical.
   // We assume that if the number of refinement levels and the number of global cells is identical,
-  // the grid is idetical, since we do not support adaptive refinement.
-  AssertThrow(src.size() > 0, dealii::ExcMessage("No vector povided for projection."));
+  // the grid is identical, since we do not support adaptive refinement.
+  AssertThrow(src.size() > 0, dealii::ExcMessage("No vector provided for projection."));
 
   AssertThrow(src.size() == dst_restart.size(),
               dealii::ExcMessage("Number of vectors per DoFHandler must be euqal."));
