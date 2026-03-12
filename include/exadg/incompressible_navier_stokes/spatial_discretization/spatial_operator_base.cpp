@@ -123,7 +123,7 @@ SpatialOperatorBase<dim, Number>::project_to_restart_space(
   AssertThrow(src.size() > 0, dealii::ExcMessage("No vector provided for projection."));
 
   AssertThrow(src.size() == dst_restart.size(),
-              dealii::ExcMessage("Number of vectors per DoFHandler must be euqal."));
+              dealii::ExcMessage("Number of vectors per DoFHandler must be equal."));
 
   AssertThrow(src_dof_handler.get_triangulation().n_global_levels() ==
                 dst_dof_handler_restart.get_triangulation().n_global_levels(),
