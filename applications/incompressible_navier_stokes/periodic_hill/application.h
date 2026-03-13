@@ -316,7 +316,7 @@ private:
 
     // pressure Poisson equation
     this->param.solver_data_pressure_poisson =
-      SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG, 100);
+      SolverData(1000, 1.e-12, 1.e-5, LinearSolver::CG, 100);
     this->param.preconditioner_pressure_poisson      = PreconditionerPressurePoisson::Multigrid;
     this->param.multigrid_data_pressure_poisson.type = MultigridType::cphMG;
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver =
@@ -336,7 +336,7 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG);
+    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8, LinearSolver::CG);
     this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                             MomentumPreconditioner::InverseMassMatrix :
                                             MomentumPreconditioner::PointJacobi;
