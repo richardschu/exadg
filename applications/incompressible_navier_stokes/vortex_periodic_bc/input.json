@@ -1,20 +1,23 @@
 {
     "General": {
         "Precision": "double",
-        "Dim": "2",
+        "Dim": "3",
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "3",
-        "DegreeMax": "3",
-        "RefineSpaceMin": "3",
-        "RefineSpaceMax": "3"
+        "DegreeMin": "4",
+        "DegreeMax": "4",
+        "RefineSpaceMin": "1",
+        "RefineSpaceMax": "1"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
         "RefineTimeMax": "0"
     },
     "Application": {
+        "EndTime": "0.5",
+        "TemporalDiscretization": "BDFConsistentSplittingExtruded",
+        "SpatialDiscretization": "HDIV",
         "MeshType": "Cartesian"
     },
     "Output": {
