@@ -134,7 +134,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
                 pde_operator->get_dof_handler_u(),
                 pde_operator->get_constraint_u(),
                 cell_vectorization_category,
-                dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
+                dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1),
+                this->is_test);
 
   op_rt->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
   op_rt->initialize_dof_vector(solution_rt);
@@ -145,7 +146,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
                       pde_operator->get_dof_handler_u(),
                       pde_operator->get_constraint_u(),
                       cell_vectorization_category,
-                      dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
+                      dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1),
+                      this->is_test);
 
   op_rt_float->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
 
@@ -187,7 +189,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
                      pde_operator->get_dof_handler_p(),
                      pde_operator->get_constraint_p(),
                      cell_vectorization_category,
-                     dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1));
+                     dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1),
+                     this->is_test);
   laplace_op->set_penalty_parameters(
     pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 
@@ -200,7 +203,8 @@ TimeIntBDFDualSplittingExtruded<dim, Number>::allocate_vectors()
     pde_operator->get_dof_handler_p(),
     cell_vectorization_category,
     pde_operator->get_grid().mapping_function,
-    pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
+    pde_operator->laplace_operator.get_data().kernel_data.IP_factor,
+    this->is_test);
 
   for(unsigned int i = 0; i < pressure.size(); ++i)
     poisson_preconditioner->get_dg_matrix().initialize_dof_vector(pressure[i]);

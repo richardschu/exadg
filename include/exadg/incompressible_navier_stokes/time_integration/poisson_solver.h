@@ -85,14 +85,16 @@ public:
     const std::vector<unsigned int> &                              cell_vectorization_category,
     const std::function<std::vector<dealii::Point<dim>>(
                                                         typename dealii::Triangulation<dim>::cell_iterator const)> & mapping_function,
-                          const Number ip_factor)
+                          const Number ip_factor,
+                          const bool is_test)
     : coarse_triangulations(
         dealii::MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
           dof_handler.get_triangulation()/*,
                                            dealii::RepartitioningPolicyTools::MinimalGranularityPolicy<dim>(64)*/)),
       fe_hierarchy(create_fe_hierarchy(dof_handler.get_fe())),
       min_level(0),
-      max_level(dof_handler.get_triangulation().n_global_levels() - 1 + fe_hierarchy.max_level())
+      max_level(dof_handler.get_triangulation().n_global_levels() - 1 + fe_hierarchy.max_level()),
+      is_test(is_test)
   {
     dof_handler_hierarchy.resize(min_level, max_level);
 
@@ -244,7 +246,8 @@ public:
                      dof_handler,
                      empty_constraints,
                      cell_vectorization_category,
-                     dealii::QGauss<1>(dof_handler.get_fe().degree + 1));
+                     dealii::QGauss<1>(dof_handler.get_fe().degree + 1),
+                     this->is_test);
     dg_matrix.set_penalty_parameters(ip_factor);
     {
       typename SmootherTypeDG::AdditionalData smoother_data_dg;
@@ -296,7 +299,7 @@ public:
 
   ~PoissonPreconditionerMG()
   {
-    if(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    if(not this->is_test and Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     {
       double all_time = 0;
       for(const auto & array : timings)
@@ -424,6 +427,8 @@ private:
 
   const unsigned int min_level;
   const unsigned int max_level;
+
+  bool const is_test;
 
   dealii::MGLevelObject<dealii::DoFHandler<dim>> dof_handler_hierarchy;
 
