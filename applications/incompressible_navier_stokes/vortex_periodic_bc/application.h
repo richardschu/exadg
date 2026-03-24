@@ -111,6 +111,9 @@ public:
                         spatial_discretization,
                         "Type of spatial discretization.");
       prm.add_parameter("EndTime", end_time, "Simulation end time used.");
+      prm.add_parameter("OrderTimeIntegrator",
+                        order_time_integrator,
+                        "Order of the time integrator.");
     }
     prm.leave_subsection();
   }
@@ -142,7 +145,7 @@ private:
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
     // this->param.time_step_size                  = 1.0e-7;
     this->param.adaptive_time_stepping_limiting_factor = 1.5;
-    this->param.order_time_integrator                  = 3;
+    this->param.order_time_integrator                  = order_time_integrator;
     this->param.start_with_low_order                   = false;
 
     // output of solver information
@@ -347,14 +350,22 @@ private:
     pp_data.error_data_u.time_control_data.start_time       = start_time;
     pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time) / 20.0;
     pp_data.error_data_u.analytical_solution.reset(new AnalyticalSolutionVelocity<dim>(viscosity));
-    pp_data.error_data_u.name = "velocity";
+    pp_data.error_data_u.name                      = "velocity";
+    pp_data.error_data_u.compute_convergence_table = true;
+    pp_data.error_data_u.write_errors_to_file      = true;
+    pp_data.error_data_u.calculate_relative_errors = true;
+    pp_data.error_data_u.directory                 = this->output_parameters.directory;
 
     // ... pressure error
     pp_data.error_data_p.time_control_data.is_active        = true;
     pp_data.error_data_p.time_control_data.start_time       = start_time;
     pp_data.error_data_p.time_control_data.trigger_interval = (end_time - start_time);
     pp_data.error_data_p.analytical_solution.reset(new AnalyticalSolutionPressure<dim>(viscosity));
-    pp_data.error_data_p.name = "pressure";
+    pp_data.error_data_p.name                      = "pressure";
+    pp_data.error_data_p.compute_convergence_table = true;
+    pp_data.error_data_p.write_errors_to_file      = true;
+    pp_data.error_data_p.calculate_relative_errors = true;
+    pp_data.error_data_p.directory                 = this->output_parameters.directory;
 
     std::shared_ptr<PostProcessorBase<dim, Number>> pp;
     pp.reset(new PostProcessor<dim, Number>(pp_data, this->mpi_comm));
@@ -376,6 +387,8 @@ private:
 
   double const ABS_TOL_LINEAR = 1.e-12;
   double const REL_TOL_LINEAR = 1.e-2;
+
+  unsigned int order_time_integrator = 3;
 
   SpatialDiscretization spatial_discretization = SpatialDiscretization::HDIV;
 
