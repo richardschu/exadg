@@ -173,7 +173,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
                 pde_operator->get_dof_handler_u(),
                 pde_operator->get_constraint_u(),
                 cell_vectorization_category,
-                dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
+                dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1),
+                this->is_test);
 
   op_rt->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
   op_rt->initialize_dof_vector(solution_rt);
@@ -184,7 +185,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
                       pde_operator->get_dof_handler_u(),
                       pde_operator->get_constraint_u(),
                       cell_vectorization_category,
-                      dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1));
+                      dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1),
+                      this->is_test);
 
   op_rt_float->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
 
@@ -223,7 +225,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
                      pde_operator->get_dof_handler_p(),
                      pde_operator->get_constraint_p(),
                      cell_vectorization_category,
-                     dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1));
+                     dealii::QGauss<1>(pde_operator->get_dof_handler_p().get_fe().degree + 1),
+                     this->is_test);
   laplace_op->set_penalty_parameters(
     pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
 
@@ -236,7 +239,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
     pde_operator->get_dof_handler_p(),
     cell_vectorization_category,
     pde_operator->get_grid().mapping_function,
-    pde_operator->laplace_operator.get_data().kernel_data.IP_factor);
+    pde_operator->laplace_operator.get_data().kernel_data.IP_factor,
+    this->is_test);
 
   for(unsigned int i = 0; i < pressure.size(); ++i)
     poisson_preconditioner->get_dg_matrix().initialize_dof_vector(pressure[i]);
@@ -284,17 +288,34 @@ template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::initialize_former_multistep_dof_vectors()
 {
-  // note that the loop begins with i=1! (we could also start with i=0 but this is not necessary)
+  // note that the loop begins with i=1, since i=0 is not necessary.
   for(unsigned int i = 1; i < velocity.size(); ++i)
   {
-    AssertThrow(false, dealii::ExcNotImplemented());
     if(this->param.ale_formulation)
       this->helpers_ale->move_grid(this->get_previous_time(i));
 
-    VectorType tmp;
-    tmp.reinit(velocity_np);
-    pde_operator->prescribe_initial_conditions(tmp, pressure_np, this->get_previous_time(i));
-    op_rt->copy_mf_to_this_vector(tmp, velocity[i]);
+    VectorType tmp_velocity, tmp_pressure;
+    tmp_velocity.reinit(velocity_np);
+    tmp_pressure.reinit(pressure_np);
+    pde_operator->prescribe_initial_conditions(tmp_velocity,
+                                               tmp_pressure,
+                                               this->get_previous_time(i));
+
+    // Copy vectors of `VectorType` to RT vector type.
+    op_rt->copy_mf_to_this_vector(tmp_velocity, velocity[i]);
+
+    // Convert `VectorType` to `VectorTypeFloat`, `pressure` has a fixed size unrelated to the
+    // extrapolation/integration order. Fill the entries that correspond to `velocity`.
+    pressure[i].copy_locally_owned_data_from(tmp_pressure);
+
+    // Construct pressure Neumann data vector, which has a number of entries depending on
+    // extrapolation order of the pressure for the Neumann BC, `order_extrapolation_pressure_nbc`.
+    if(i < pressure_nbc_rhs.size())
+      op_rt->evaluate_pressure_neumann_from_velocity(
+        velocity[i],
+        false,
+        this->pde_operator->get_viscous_kernel_data().viscosity,
+        pressure_nbc_rhs[i]);
   }
 }
 
@@ -495,20 +516,34 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rh
    */
   /*
    *  IV.1 compute curl-curl term by extrapolating the prepared values from
-   *  previous times
+   *  previous times, contributing on Dirichlet boundary
    */
-  factors.resize(extra_pressure_nbc.get_order());
-  for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
-    factors[i] = extra_pressure_nbc.get_beta(i);
-  extrapolate_vectors(factors, pressure_nbc_rhs, pressure_nbc_rhs.back());
-  op_rt->add_pressure_neumann_boundary_to_vector(pressure_nbc_rhs.back(), rhs);
+  if(not pde_operator->is_pressure_level_undefined())
+  {
+    factors.resize(extra_pressure_nbc.get_order());
+    for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)
+      factors[i] = extra_pressure_nbc.get_beta(i);
 
-  /*
-   * IV.2 time derivative and contributions of Leray is disabled are ignored
-   * at this point -> TODO
-   */
+    extrapolate_vectors(factors, pressure_nbc_rhs, pressure_nbc_rhs.back());
+    op_rt->add_pressure_neumann_boundary_to_vector(pressure_nbc_rhs.back(), rhs);
+  }
 
-  // IV.3. pressure Dirichlet boundary conditions not done -> TODO
+  // If Leray projection is not applied then the contributions from the old time derivative do not
+  // cancel, so they have to be added
+  if(not this->param.apply_leray_projection)
+  {
+    // TODO
+    AssertThrow(false,
+                dealii::ExcMessage("Leray projection cancels some terms, "
+                                   "these are missing here."));
+  }
+
+  // IV.2. pressure Dirichlet boundary conditions
+  if(not pde_operator->is_pressure_level_undefined())
+  {
+    // TODO
+    AssertThrow(false, dealii::ExcMessage("Dirichlet BCs on the pressure are not implemented."));
+  }
 
   // special case: pressure level is undefined
   // Set mean value of rhs to zero in order to obtain a consistent linear system of equations.

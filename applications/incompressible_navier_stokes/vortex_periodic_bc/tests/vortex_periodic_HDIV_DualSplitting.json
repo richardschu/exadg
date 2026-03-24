@@ -15,6 +15,7 @@
         "RefineTimeMax": "0"
     },
     "Application": {
+        "OrderTimeIntegrator": "3",
         "EndTime": "0.5",
         "TemporalDiscretization": "BDFDualSplitting",
         "SpatialDiscretization": "HDIV",

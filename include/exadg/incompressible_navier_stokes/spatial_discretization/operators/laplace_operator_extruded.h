@@ -1184,9 +1184,11 @@ public:
          const AffineConstraints<OtherNumber> & constraints,
          const std::vector<unsigned int> &      cell_vectorization_category,
          const Quadrature<1> &                  quadrature,
+         const bool                             is_test,
          const MPI_Comm                         communicator_shared = MPI_COMM_SELF)
   {
     (void)communicator_shared; // TODO: not yet implemented
+    this->is_test                                       = is_test;
     this->dof_handler                                   = &dof_handler;
     const FiniteElement<dim> &                       fe = dof_handler.get_fe();
     typename MatrixFree<dim, Number>::AdditionalData mf_data;
@@ -1372,7 +1374,7 @@ public:
 
   ~LaplaceOperatorDG()
   {
-    if(timings[0] > 0)
+    if(not this->is_test and timings[0] > 0)
     {
       const MPI_Comm comm = dof_handler->get_mpi_communicator();
       std::cout << std::defaultfloat << std::setprecision(3);
@@ -1394,7 +1396,7 @@ public:
       if(Utilities::MPI::this_mpi_process(comm) == 0)
         std::cout << std::endl;
     }
-    if(timings[10] > 0)
+    if(not this->is_test and timings[10] > 0)
     {
       const MPI_Comm comm       = MPI_COMM_WORLD;
       const double   total_time = Utilities::MPI::sum(timings[14], comm) / timings[10] /
@@ -1886,6 +1888,7 @@ public:
   }
 
 private:
+  bool                                   is_test;
   ObserverPointer<const DoFHandler<dim>> dof_handler;
   MatrixFree<dim, Number>                matrix_free;
 
