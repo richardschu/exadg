@@ -516,9 +516,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rh
    */
   /*
    *  IV.1 compute curl-curl term by extrapolating the prepared values from
-   *  previous times, contributing on Dirichlet boundary
+   *  previous times, contributing on Dirichlet boundary only
    */
-  if(not pde_operator->is_pressure_level_undefined())
+  if(op_rt->n_cells_at_dirichlet_boundary() > 0)
   {
     factors.resize(extra_pressure_nbc.get_order());
     for(unsigned int i = 0; i < extra_pressure_nbc.get_order(); ++i)

@@ -709,6 +709,12 @@ public:
     }
   }
 
+  unsigned int
+  n_cells_at_dirichlet_boundary() const
+  {
+    return cells_at_dirichlet_boundary.size();
+  }
+
   void
   initialize_dof_vector(VectorType & vec) const
   {

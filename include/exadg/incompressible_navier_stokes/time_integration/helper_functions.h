@@ -50,11 +50,10 @@ extrapolate_vectors_range(
   std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
   dealii::LinearAlgebra::distributed::Vector<Number2> &                   result)
 {
-  AssertThrow(result.locally_owned_size() > 0,
-              dealii::ExcMessage("Result vector has not been initialized."));
+  Assert(result.size() > 0, dealii::ExcMessage("Result vector has not been initialized."));
   for(auto const & vector : vectors)
-    AssertThrow(vector.locally_owned_size() > 0,
-                dealii::ExcMessage("Vector to extrapolate has not been initialized."));
+    Assert(vector.size() > 0,
+           dealii::ExcMessage("Vector to extrapolate has not been initialized."));
   AssertIndexRange(start_index, result.locally_owned_size());
   AssertIndexRange(end_index, result.locally_owned_size() + 1);
   if(factors.size() == 1)
