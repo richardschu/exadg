@@ -164,14 +164,20 @@ public:
         {
           dealii::MappingQCache<dim> mapping_coarse(1);
           mapping_coarse.initialize(dof_h.get_triangulation(), mapping_function);
-          mg_matrices[level].reinit(
-            mapping_coarse, dof_h, level_constraints[level], {}, dealii::QGauss<1>(2));
+          mg_matrices[level].reinit(mapping_coarse,
+                                    dof_h,
+                                    level_constraints[level],
+                                    {},
+                                    dealii::QGauss<1>(dof_h.get_fe().degree + 1));
         }
         else
         {
           dealii::MappingQ1<dim> mapping_coarse;
-          mg_matrices[level].reinit(
-            mapping_coarse, dof_h, level_constraints[level], {}, dealii::QGauss<1>(2));
+          mg_matrices[level].reinit(mapping_coarse,
+                                    dof_h,
+                                    level_constraints[level],
+                                    {},
+                                    dealii::QGauss<1>(dof_h.get_fe().degree + 1));
         }
       }
       else
