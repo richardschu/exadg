@@ -1397,9 +1397,8 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
         checkpoint_triangulation->n_global_levels() == triangulation.n_global_levels() and
         checkpoint_triangulation->n_global_active_cells() == triangulation.n_global_active_cells();
 
-      if(false) // spatial_resolution_identical == true)
+      if(spatial_resolution_identical == true)
       {
-        // TODO: this is failing for high numbers of MPI ranks.
         this->pcout << "\n"
                     << "USING IDENTICAL GRID\n\n";
 
@@ -1432,7 +1431,7 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
                       dealii::ExcMessage("Combination of manifolds and grid-to-grid projection "
                                          "in unmapped grid at restart not supported."));
 
-          // Create dummy linear mapping since we have no mapping serialized to restore.
+          // Create dummy linear mapping for projection on undeformed grid.
           std::shared_ptr<dealii::Mapping<dim>> default_mapping;
           GridUtilities::create_mapping(default_mapping,
                                         get_element_type(triangulation),
@@ -1464,11 +1463,17 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
             target_dof_handlers,
             *matrix_free,
             target_vectors_per_dof_handler,
-            projection_data);
+            projection_data,
+            {1} /* dof_index */,
+            {1} /* quad_index */);
 
           // Restore the mapping in `MatrixFree` to continue with the requested mapping after
           // restart.
           matrix_free_mutable->update_mapping(*this->get_mapping());
+
+          // Set pointers to pressure vectors for plotting.
+          checkpoint_vectors[1 /* pressure */]      = source_vectors_per_dof_handler[0];
+          checkpoint_dof_handlers[1 /* pressure */] = source_dof_handlers[0];
         }
       }
       else

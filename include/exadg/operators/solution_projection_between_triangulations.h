@@ -454,8 +454,8 @@ project_vectors(
 
 /**
  * Utility function to perform matrix-free grid-to-grid projection. We assume we only have a single
- * `dealii::FiniteElement` per `dealii::DoFHandler`. This function requires a suitable `MatrixFree`
- * object.
+ * `dealii::FiniteElement` per `dealii::DoFHandler`. This function requires a `MatrixFree` object,
+ * that contains the `DoFHandler` and a suitable integration rule at the specified indices.
  */
 template<int dim, typename Number, typename VectorType>
 void
@@ -466,7 +466,9 @@ do_grid_to_grid_projection(
   std::vector<dealii::DoFHandler<dim> const *> const & target_dof_handlers,
   dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & target_matrix_free,
   std::vector<std::vector<VectorType *>> & target_vectors_per_dof_handler,
-  GridToGridProjectionData<dim> const &    data)
+  GridToGridProjectionData<dim> const &    data,
+  std::vector<unsigned int> const &        dof_index_per_dof_handler  = {},
+  std::vector<unsigned int> const &        quad_index_per_dof_handler = {})
 {
   // Check input dimensions.
   AssertThrow(source_vectors_per_dof_handler.size() == source_dof_handlers.size(),
@@ -485,10 +487,21 @@ do_grid_to_grid_projection(
                   target_vectors_per_dof_handler.at(i).size(),
                 dealii::ExcMessage("Vectors of source and target vectors need to have same size."));
   }
+  AssertThrow(dof_index_per_dof_handler.size() == target_dof_handlers.size() or
+                dof_index_per_dof_handler.size() == 0,
+              dealii::ExcMessage("Provide DoF indices matching MatrixFree or none."));
+  AssertThrow(quad_index_per_dof_handler.size() == target_dof_handlers.size() or
+                quad_index_per_dof_handler.size() == 0,
+              dealii::ExcMessage("Provide quadrature indices matching MatrixFree or none."));
 
   // Project vectors per `dealii::DoFHandler`.
   for(unsigned int i = 0; i < target_dof_handlers.size(); ++i)
   {
+    unsigned int const dof_index =
+      dof_index_per_dof_handler.size() == 0 ? i : dof_index_per_dof_handler[i];
+    unsigned int const quad_index =
+      quad_index_per_dof_handler.size() == 0 ? i : quad_index_per_dof_handler[i];
+
     unsigned int const n_components = target_dof_handlers[i]->get_fe().n_components();
     if(n_components == 1)
     {
@@ -498,8 +511,8 @@ do_grid_to_grid_projection(
         source_vectors_per_dof_handler.at(i),
         target_matrix_free,
         target_vectors_per_dof_handler.at(i),
-        i /* dof_index */,
-        i /* quad_index */,
+        dof_index,
+        quad_index,
         data);
     }
     else if(n_components == dim)
@@ -510,8 +523,8 @@ do_grid_to_grid_projection(
         source_vectors_per_dof_handler.at(i),
         target_matrix_free,
         target_vectors_per_dof_handler.at(i),
-        i /* dof_index */,
-        i /* quad_index */,
+        dof_index,
+        quad_index,
         data);
     }
     else if(n_components == dim + 2)
@@ -522,8 +535,8 @@ do_grid_to_grid_projection(
         source_vectors_per_dof_handler.at(i),
         target_matrix_free,
         target_vectors_per_dof_handler.at(i),
-        i /* dof_index */,
-        i /* quad_index */,
+        dof_index,
+        quad_index,
         data);
     }
     else
