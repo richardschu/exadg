@@ -76,6 +76,9 @@ InverseMassOperator<dim, n_components, Number>::initialize(
       dealii::ExcMessage(
         "The matrix-free cell-wise inverse mass operator is only available for L2-conforming elements."));
 
+    // Store `0` to signal that no global iterations are done.
+    this->n_iter_global_last = 0;
+
     if(fe.reference_cell().is_hyper_cube())
     {
       AssertThrow(
