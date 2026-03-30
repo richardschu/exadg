@@ -31,6 +31,7 @@
 // ExaDG
 #include <exadg/grid/grid_data.h>
 #include <exadg/incompressible_navier_stokes/user_interface/enum_types.h>
+#include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 #include <exadg/utilities/numbers.h>
 #include <exadg/utilities/print_functions.h>
 #include <exadg/utilities/serializable_function.h>
@@ -139,7 +140,8 @@ struct RestartData
       consider_restart_time_in_mesh_movement_function(true),
       rpe_rtree_level(0),
       rpe_tolerance_unit_cell(1e-12),
-      rpe_enforce_unique_mapping(false)
+      rpe_enforce_unique_mapping(false),
+      solver_data(SolverData(1e3, 1e-20, 1e-6, LinearSolver::CG))
   {
   }
 
@@ -280,6 +282,9 @@ struct RestartData
   unsigned int rpe_rtree_level;
   double       rpe_tolerance_unit_cell;
   bool         rpe_enforce_unique_mapping;
+
+  // Settings for Krylov solver used in case grid-to-grid projection is necessary.
+  SolverData solver_data;
 };
 
 } // namespace ExaDG

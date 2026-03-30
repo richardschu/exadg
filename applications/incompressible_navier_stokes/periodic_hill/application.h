@@ -308,6 +308,9 @@ private:
     this->param.restart_data.consider_mapping_read_target = de_serialize_in_deformed_geometry;
     this->param.restart_data.consider_restart_time_in_mesh_movement_function = false;
 
+    this->param.restart_data.solver_data.abs_tol        = 1e-20;
+    this->param.restart_data.solver_data.rel_tol        = 1e-12;
+    this->param.restart_data.solver_data.max_iter       = 1e3;
     this->param.restart_data.rpe_rtree_level            = 3;
     this->param.restart_data.rpe_tolerance_unit_cell    = 1e-6;
     this->param.restart_data.rpe_enforce_unique_mapping = false;
@@ -473,8 +476,11 @@ private:
         {
           // need to adjust for hierarchic numbering of
           // dealii::MappingQCache
-          points_moved[i] = manifold.push_forward(
-            fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
+          if(consider_mapping)
+            points_moved[i] = manifold.push_forward(
+              fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
+          else
+            points_moved[i] = fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]);
         }
 
         return points_moved;
@@ -488,7 +494,10 @@ private:
       {
         // need to adjust for hierarchic numbering of
         // dealii::MappingQCache
-        points_moved[i] = manifold.push_forward(cell->vertex(i));
+        if(consider_mapping)
+          points_moved[i] = manifold.push_forward(cell->vertex(i));
+        else
+          points_moved[i] = cell->vertex(i);
       }
 
       return points_moved;
@@ -821,7 +830,8 @@ private:
   double       end_time           = end_time_multiples * flow_through_time;
 
   // grid
-  double grid_stretch_factor = 1.6;
+  bool const consider_mapping    = true;
+  double     grid_stretch_factor = 1.6;
 
   // dicretization
   TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
