@@ -151,7 +151,7 @@ assemble_projection_rhs(VectorType &                              system_rhs,
                         dealii::Mapping<dim> const &              source_and_target_mapping,
                         dealii::DoFHandler<dim> const &           target_dof_handler,
                         dealii::AffineConstraints<Number> const & target_constraints,
-                        dealii::Quadrature<dim> const &           quadrature)
+                        dealii::Quadrature<dim> const &           quadrature_dim)
 {
   // Check if the triangulations *might* be identical, assuming there is no adaptive refinement.
   dealii::Triangulation<dim> const & source_triangulation = source_dof_handler.get_triangulation();
@@ -165,28 +165,18 @@ assemble_projection_rhs(VectorType &                              system_rhs,
   dealii::FiniteElement<dim> const & source_fe = source_dof_handler.get_fe();
   dealii::FiniteElement<dim> const & target_fe = target_dof_handler.get_fe();
 
-  dealii::FEValues<dim> fe_values_source(source_and_target_mapping,
-                                         source_fe,
-                                         quadrature,
-                                         dealii::update_values);
-  dealii::FEValues<dim> fe_values_target(source_and_target_mapping,
-                                         target_fe,
-                                         quadrature,
-                                         dealii::update_values | dealii::update_JxW_values);
+  const dealii::Quadrature<1> & quadrature = quadrature_dim.get_tensor_basis()[0];
 
-  unsigned int const dofs_per_cell = target_fe.dofs_per_cell;
-  unsigned int const n_q_points    = quadrature.size();
+  dealii::FEEvaluation<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number, 1>>
+    fe_values_source(source_and_target_mapping, source_fe, quadrature, dealii::update_values);
+  dealii::FEEvaluation<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number, 1>>
+    fe_values_target(source_and_target_mapping,
+                     target_fe,
+                     quadrature,
+                     dealii::update_values | dealii::update_JxW_values);
 
-  std::vector<dealii::types::global_dof_index> dof_indices(dofs_per_cell);
-  std::vector<dealii::Tensor<1, dim>> vector_values_source(fe_values_source.n_quadrature_points);
-  std::vector<double>                 scalar_values_source(fe_values_source.n_quadrature_points);
-
-  dealii::FEValuesExtractors::Vector const vector(0);
-  dealii::FEValuesExtractors::Scalar const scalar(0);
-
-  dealii::Vector<double> cell_rhs(dofs_per_cell);
-
-  AssertThrow(n_components == dim or n_components == 1, dealii::ExcNotImplemented());
+  dealii::Vector<Number>                       cell_rhs(target_fe.dofs_per_cell);
+  std::vector<dealii::types::global_dof_index> dof_indices(target_fe.dofs_per_cell);
 
   for(const auto & cell_target : target_dof_handler.active_cell_iterators())
   {
@@ -196,28 +186,15 @@ assemble_projection_rhs(VectorType &                              system_rhs,
       fe_values_source.reinit(cell_source);
       fe_values_target.reinit(cell_target);
 
-      cell_rhs = 0.0;
+      fe_values_source.read_dof_values(source_vector);
+      fe_values_source.evaluate(dealii::EvaluationFlags::values);
+      for(const unsigned int q : fe_values_source.quadrature_point_indices())
+        fe_values_target.submit_value(fe_values_source.get_value(q), q);
 
-      if constexpr(n_components == dim)
-      {
-        fe_values_source[vector].get_function_values(source_vector, vector_values_source);
-
-        for(unsigned int q = 0; q < n_q_points; ++q)
-          for(unsigned int i = 0; i < dofs_per_cell; ++i)
-            cell_rhs[i] += vector_values_source[q] * fe_values_target[vector].value(i, q) *
-                           fe_values_target.JxW(q);
-      }
-      else
-      {
-        fe_values_source[scalar].get_function_values(source_vector, scalar_values_source);
-
-        for(unsigned int q = 0; q < n_q_points; ++q)
-          for(unsigned int i = 0; i < dofs_per_cell; ++i)
-            cell_rhs[i] += scalar_values_source[q] * fe_values_target[scalar].value(i, q) *
-                           fe_values_target.JxW(q);
-      }
-
-      // Assemble ignoring constraints as `dealii::MatrixFree` resolves constraints.
+      fe_values_target.integrate(dealii::EvaluationFlags::values);
+      for(unsigned int i = 0; i < cell_rhs.size(); ++i)
+        cell_rhs(fe_values_target.get_internal_dof_numbering()[i]) =
+          fe_values_target.begin_dof_values()[i][0];
       cell_target->get_dof_indices(dof_indices);
       target_constraints.distribute_local_to_global(cell_rhs, dof_indices, system_rhs);
     }
