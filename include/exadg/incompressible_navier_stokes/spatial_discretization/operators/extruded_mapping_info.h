@@ -139,7 +139,7 @@ compute_vectorization_category(const dealii::Triangulation<dim> & tria)
                                  next_cells[5].begin(),
                                  next_cells[5].end());
         unsigned int count_4 = 0, count_2 = 0, count_1 = 0;
-        while(sorted_next_cells.size() % 8 != 0 && count_4 < next_cells[4].size())
+        while(sorted_next_cells.size() % 16 != 0 && count_4 < next_cells[4].size())
         {
           sorted_next_cells.push_back(next_cells[4][count_4]);
           ++count_4;
@@ -147,41 +147,32 @@ compute_vectorization_category(const dealii::Triangulation<dim> & tria)
         sorted_next_cells.insert(sorted_next_cells.end(),
                                  next_cells[3].begin(),
                                  next_cells[3].end());
-        // avoid having 9 cells of one kind that spills two 8-sized lanes,
-        // so peel off one of each here
-        if(sorted_next_cells.size() % 8 != 0)
-          if(count_2 < next_cells[2].size())
-          {
-            sorted_next_cells.push_back(next_cells[2][count_2]);
-            ++count_2;
-          }
-        if(sorted_next_cells.size() % 8 != 0)
-          if(count_1 < next_cells[1].size())
-          {
-            sorted_next_cells.push_back(next_cells[1][count_1]);
-            ++count_1;
-          }
-        while(sorted_next_cells.size() % 8 != 0 && count_1 < next_cells[1].size())
+        while(sorted_next_cells.size() % 16 != 0 && count_4 < next_cells[4].size())
         {
-          sorted_next_cells.push_back(next_cells[1][count_1]);
-          ++count_1;
+          sorted_next_cells.push_back(next_cells[4][count_4]);
+          ++count_4;
         }
-        while(sorted_next_cells.size() % 8 != 0 && count_2 < next_cells[2].size())
+        while(sorted_next_cells.size() % 16 != 0 && count_2 < next_cells[2].size())
         {
           sorted_next_cells.push_back(next_cells[2][count_2]);
           ++count_2;
         }
+        while(sorted_next_cells.size() % 16 != 0 && count_1 < next_cells[1].size())
+        {
+          sorted_next_cells.push_back(next_cells[1][count_1]);
+          ++count_1;
+        }
         // possibly move some insertions of category 0 in between to fill
         // up and avoid further exchange steps
+        sorted_next_cells.insert(sorted_next_cells.end(),
+                                 next_cells[1].begin() + count_1,
+                                 next_cells[1].end());
         sorted_next_cells.insert(sorted_next_cells.end(),
                                  next_cells[2].begin() + count_2,
                                  next_cells[2].end());
         sorted_next_cells.insert(sorted_next_cells.end(),
                                  next_cells[4].begin() + count_4,
                                  next_cells[4].end());
-        sorted_next_cells.insert(sorted_next_cells.end(),
-                                 next_cells[1].begin() + count_1,
-                                 next_cells[1].end());
         sorted_next_cells.insert(sorted_next_cells.end(),
                                  next_cells[0].begin(),
                                  next_cells[0].end());
