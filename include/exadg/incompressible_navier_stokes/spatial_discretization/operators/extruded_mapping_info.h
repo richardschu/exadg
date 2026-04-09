@@ -108,7 +108,7 @@ group_cells_by_left_neighbors(
       }
     cells_per_neighbor_value[boundary_type].emplace_back(lexicographic_index, cell);
   }
-  else if(cell->n_children() == dealii::Utilities::pow(2, dim))
+  else if(cell->has_children() && cell->n_children() == dealii::Utilities::pow(2, dim))
     for(unsigned int child = 0, d2 = 0; d2 < (dim > 2 ? 2 : 1); ++d2)
       for(unsigned int d1 = 0; d1 < (dim > 1 ? 2 : 1); ++d1)
         for(unsigned int d0 = 0; d0 < 2; ++d0, ++child)
@@ -124,7 +124,8 @@ group_cells_by_left_neighbors(
                                         cells_per_neighbor_value);
         }
   else
-    AssertThrow(false, dealii::ExcMessage("Only hypercube elements allowed for this code path"));
+    AssertThrow(cell->has_children() == false,
+                dealii::ExcMessage("Only hypercube elements allowed for this code path"));
 }
 
 
