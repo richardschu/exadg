@@ -145,23 +145,18 @@ public:
     // L2-conforming spaces.
     if(data.implementation_type == InverseMassType::MatrixfreeOperator)
     {
-      AssertThrow(
-        fe.base_element(0).dofs_per_cell == dealii::Utilities::pow(fe.degree + 1, dim),
-        dealii::ExcMessage(
-          "The matrix-free cell-wise inverse mass operator is currently "
-          "only available for isotropic tensor-product elements."));
+      AssertThrow(fe.base_element(0).dofs_per_cell == dealii::Utilities::pow(fe.degree + 1, dim),
+                  dealii::ExcMessage("The matrix-free cell-wise inverse mass operator is currently "
+                                     "only available for isotropic tensor-product elements."));
 
-      AssertThrow(
-        this->matrix_free->get_shape_info(0, quad_index).data[0].n_q_points_1d == fe.degree + 1,
-        dealii::ExcMessage(
-          "The matrix-free cell-wise inverse mass operator is currently "
-          "only available if n_q_points_1d = n_nodes_1d."));
+      AssertThrow(this->matrix_free->get_shape_info(0, quad_index).data[0].n_q_points_1d ==
+                    fe.degree + 1,
+                  dealii::ExcMessage("The matrix-free cell-wise inverse mass operator is currently "
+                                     "only available if n_q_points_1d = n_nodes_1d."));
 
-      AssertThrow(
-        fe.conforms(dealii::FiniteElementData<dim>::L2),
-        dealii::ExcMessage(
-          "The matrix-free cell-wise inverse mass operator is "
-          "only available for L2-conforming elements."));
+      AssertThrow(fe.conforms(dealii::FiniteElementData<dim>::L2),
+                  dealii::ExcMessage("The matrix-free cell-wise inverse mass operator is "
+                                     "only available for L2-conforming elements."));
     }
     else
     {
