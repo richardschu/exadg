@@ -528,6 +528,10 @@ deserialize_triangulation(RestartData const &     restart_data,
                     "in the respective application.h using TriangulationType::Serial."));
     }
 
+    AssertThrow(coarse_triangulation.all_reference_cells_are_hyper_cube(),
+                dealii::ExcMessage("Coarse triangulation contains non-hypercube elements. "
+                                   "This is not supported for p::d::Triangulation."));
+
     std::shared_ptr<dealii::parallel::distributed::Triangulation<dim>> tmp =
       std::make_shared<dealii::parallel::distributed::Triangulation<dim>>(mpi_communicator);
 
