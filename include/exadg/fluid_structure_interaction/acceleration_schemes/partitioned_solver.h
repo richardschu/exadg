@@ -62,10 +62,6 @@ public:
   get_structure_velocity(VectorType & velocity_structure, unsigned int const iteration) const;
 
 private:
-  void
-  get_structure_displacement(VectorType &       displacement_structure,
-                             unsigned int const iteration) const;
-
   bool
   check_convergence(VectorType const & residual) const;
 
@@ -209,64 +205,72 @@ PartitionedSolver<dim, Number>::get_structure_velocity(VectorType & velocity_str
 
 template<int dim, typename Number>
 void
-PartitionedSolver<dim, Number>::get_structure_displacement(VectorType & displacement_structure,
-                                                           unsigned int const iteration) const
-{
-  if(iteration == 0)
-  {
-    if(this->parameters.initial_guess_coupling_scheme ==
-       InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep)
-    {
-      structure->time_integrator->extrapolate_displacement_to_np(displacement_structure);
-    }
-    else if(this->parameters.initial_guess_coupling_scheme ==
-            InitialGuessCouplingScheme::ConvergedSolutionOfPreviousTimeStep)
-    {
-      displacement_structure = structure->time_integrator->get_displacement_n();
-    }
-    else
-    {
-      AssertThrow(false,
-                  dealii::ExcMessage(
-                    "Behavior for this `InitialGuessCouplingScheme` is not defined."));
-    }
-  }
-  else
-  {
-    displacement_structure = structure->time_integrator->get_displacement_np();
-  }
-}
-
-template<int dim, typename Number>
-void
 PartitionedSolver<dim, Number>::solve(
   std::function<void(VectorType &, VectorType const &, unsigned int const)> const &
     apply_dirichlet_robin_scheme)
 {
-  // iteration counter
-  unsigned int k = 0;
+  // define lambda functions for fixed-point iteration
+  auto const lambda_setup_vector = [&](VectorType & vector) {
+    structure->pde_operator->initialize_dof_vector(vector);
+  };
+  auto const lambda_get_iterate = [&](VectorType & vector, unsigned int const iteration_counter) {
+    if(iteration_counter == 0)
+    {
+      if(this->parameters.initial_guess_coupling_scheme ==
+         InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep)
+      {
+        structure->time_integrator->extrapolate_displacement_to_np(vector);
+      }
+      else if(this->parameters.initial_guess_coupling_scheme ==
+              InitialGuessCouplingScheme::ConvergedSolutionOfPreviousTimeStep)
+      {
+        vector = structure->time_integrator->get_displacement_n();
+      }
+      else
+      {
+        AssertThrow(false,
+                    dealii::ExcMessage(
+                      "Behavior for this `InitialGuessCouplingScheme` is not defined."));
+      }
+    }
+    else
+    {
+      vector = structure->time_integrator->get_displacement_np();
+    }
+  };
+  auto const lambda_set_iterate = [&](VectorType const & vector) {
+    structure->time_integrator->set_displacement(vector);
+  };
+  auto const lambda_fixed_point_iteration =
+    [&](VectorType & dst, VectorType const & src, unsigned int const iteration_counter) {
+      apply_dirichlet_robin_scheme(dst, src, iteration_counter);
+    };
+
+  unsigned int const number_of_time_steps = partitioned_iterations.first;
 
   // fixed-point iteration with various acceleration methods
+  unsigned int iteration_counter = 0;
   if(parameters.acceleration_method == AccelerationMethod::FixedRelaxation)
   {
-    VectorType d;
-    structure->pde_operator->initialize_dof_vector(d);
+    VectorType x;
+    lambda_setup_vector(x);
 
+    // coupling loop
     bool         converged = false;
     double const omega     = parameters.omega_init; // fixed relaxation parameter
-    while(not(converged) and k < parameters.partitioned_iter_max)
+    while(not(converged) and iteration_counter < parameters.partitioned_iter_max)
     {
-      print_solver_info_header(k);
+      print_solver_info_header(iteration_counter);
 
-      get_structure_displacement(d, k);
+      lambda_get_iterate(x, iteration_counter);
 
-      VectorType d_tilde(d);
-      apply_dirichlet_robin_scheme(d_tilde, d, k);
+      VectorType x_tilde(x);
+      lambda_fixed_point_iteration(x_tilde, x, iteration_counter);
 
       // compute residual and check convergence
-      VectorType r = d_tilde;
-      r.add(-1.0, d);
-      converged = check_convergence(r);
+      VectorType residual = x_tilde;
+      residual.add(-1.0, x);
+      converged = check_convergence(residual);
 
       // relaxation
       if(not(converged))
@@ -274,37 +278,38 @@ PartitionedSolver<dim, Number>::solve(
         dealii::Timer timer;
         timer.restart();
 
-        d.add(omega, r);
-        structure->time_integrator->set_displacement(d);
+        x.add(omega, residual);
+        lambda_set_iterate(x);
 
         timer_tree->insert({"FixedRelaxation"}, timer.wall_time());
       }
 
       // increment counter of partitioned iteration
-      ++k;
+      ++iteration_counter;
     }
   }
   else if(parameters.acceleration_method == AccelerationMethod::Aitken)
   {
-    VectorType r_old, d;
-    structure->pde_operator->initialize_dof_vector(r_old);
-    structure->pde_operator->initialize_dof_vector(d);
+    VectorType residual_old, x;
+    lambda_setup_vector(residual_old);
+    lambda_setup_vector(x);
 
+    // coupling loop
     bool   converged = false;
     double omega     = 1.0;
-    while(not(converged) and k < parameters.partitioned_iter_max)
+    while(not(converged) and iteration_counter < parameters.partitioned_iter_max)
     {
-      print_solver_info_header(k);
+      print_solver_info_header(iteration_counter);
 
-      get_structure_displacement(d, k);
+      lambda_get_iterate(x, iteration_counter);
 
-      VectorType d_tilde(d);
-      apply_dirichlet_robin_scheme(d_tilde, d, k);
+      VectorType x_tilde(x);
+      lambda_fixed_point_iteration(x_tilde, x, iteration_counter);
 
       // compute residual and check convergence
-      VectorType r = d_tilde;
-      r.add(-1.0, d);
-      converged = check_convergence(r);
+      VectorType residual = x_tilde;
+      residual.add(-1.0, x);
+      converged = check_convergence(residual);
 
       // relaxation
       if(not(converged))
@@ -312,27 +317,27 @@ PartitionedSolver<dim, Number>::solve(
         dealii::Timer timer;
         timer.restart();
 
-        if(k == 0)
+        if(iteration_counter == 0)
         {
           omega = parameters.omega_init;
         }
         else
         {
-          VectorType delta_r = r;
-          delta_r.add(-1.0, r_old);
-          omega *= -(r_old * delta_r) / delta_r.norm_sqr();
+          VectorType delta_residual = residual;
+          delta_residual.add(-1.0, residual_old);
+          omega *= -(residual_old * delta_residual) / delta_residual.norm_sqr();
         }
 
-        r_old = r;
+        residual_old = residual;
 
-        d.add(omega, r);
-        structure->time_integrator->set_displacement(d);
+        x.add(omega, residual);
+        lambda_set_iterate(x);
 
         timer_tree->insert({"Aitken"}, timer.wall_time());
       }
 
       // increment counter of partitioned iteration
-      ++k;
+      ++iteration_counter;
     }
   }
   else if(parameters.acceleration_method == AccelerationMethod::IQN_ILS)
@@ -341,29 +346,27 @@ PartitionedSolver<dim, Number>::solve(
     D = std::make_shared<std::vector<VectorType>>();
     R = std::make_shared<std::vector<VectorType>>();
 
-    VectorType d, d_tilde, d_tilde_old, r, r_old;
-    structure->pde_operator->initialize_dof_vector(d);
-    structure->pde_operator->initialize_dof_vector(d_tilde);
-    structure->pde_operator->initialize_dof_vector(d_tilde_old);
-    structure->pde_operator->initialize_dof_vector(r);
-    structure->pde_operator->initialize_dof_vector(r_old);
+    VectorType x, x_tilde, x_tilde_old, residual, residual_old;
+    lambda_setup_vector(x);
+    lambda_setup_vector(x_tilde);
+    lambda_setup_vector(x_tilde_old);
+    lambda_setup_vector(residual);
+    lambda_setup_vector(residual_old);
 
-    unsigned int const q = parameters.reused_time_steps;
-    unsigned int const n = fluid->time_integrator->get_number_of_time_steps();
-
+    // coupling loop
     bool converged = false;
-    while(not(converged) and k < parameters.partitioned_iter_max)
+    while(not(converged) and iteration_counter < parameters.partitioned_iter_max)
     {
-      print_solver_info_header(k);
+      print_solver_info_header(iteration_counter);
 
-      get_structure_displacement(d, k);
+      lambda_get_iterate(x, iteration_counter);
 
-      apply_dirichlet_robin_scheme(d_tilde, d, k);
+      lambda_fixed_point_iteration(x_tilde, x, iteration_counter);
 
       // compute residual and check convergence
-      r = d_tilde;
-      r.add(-1.0, d);
-      converged = check_convergence(r);
+      residual = x_tilde;
+      residual.add(-1.0, x);
+      converged = check_convergence(residual);
 
       // relaxation
       if(not(converged))
@@ -371,73 +374,74 @@ PartitionedSolver<dim, Number>::solve(
         dealii::Timer timer;
         timer.restart();
 
-        if(k == 0 and (q == 0 or n == 0))
+        if(iteration_counter == 0 and
+           (parameters.reused_time_steps == 0 or number_of_time_steps == 0))
         {
-          d.add(parameters.omega_init, r);
+          x.add(parameters.omega_init, residual);
         }
         else
         {
-          if(k >= 1)
+          if(iteration_counter >= 1)
           {
             // append D, R matrices
-            VectorType delta_d_tilde = d_tilde;
-            delta_d_tilde.add(-1.0, d_tilde_old);
-            D->push_back(delta_d_tilde);
+            VectorType delta_x_tilde = x_tilde;
+            delta_x_tilde.add(-1.0, x_tilde_old);
+            D->push_back(delta_x_tilde);
 
-            VectorType delta_r = r;
-            delta_r.add(-1.0, r_old);
-            R->push_back(delta_r);
+            VectorType delta_residual = residual;
+            delta_residual.add(-1.0, residual_old);
+            R->push_back(delta_residual);
           }
 
           // fill vectors (including reuse)
           std::vector<VectorType> Q = *R;
           for(auto R_q : R_history)
-            for(auto delta_r : *R_q)
-              Q.push_back(delta_r);
+            for(auto delta_residual : *R_q)
+              Q.push_back(delta_residual);
           std::vector<VectorType> D_all = *D;
           for(auto D_q : D_history)
-            for(auto delta_d : *D_q)
-              D_all.push_back(delta_d);
+            for(auto delta_x : *D_q)
+              D_all.push_back(delta_x);
 
           AssertThrow(D_all.size() == Q.size(),
                       dealii::ExcMessage("D, Q vectors must have same size."));
 
-          unsigned int const k_all = Q.size();
-          if(k_all >= 1)
+          unsigned int const iteration_counter_all = Q.size();
+          if(iteration_counter_all >= 1)
           {
             // compute QR-decomposition
-            Matrix<Number> U(k_all);
+            Matrix<Number> U(iteration_counter_all);
             compute_QR_decomposition(Q, U);
 
-            std::vector<Number> rhs(k_all, 0.0);
-            for(unsigned int i = 0; i < k_all; ++i)
-              rhs[i] = -Number(Q[i] * r);
+            std::vector<Number> rhs(iteration_counter_all, 0.0);
+            for(unsigned int i = 0; i < iteration_counter_all; ++i)
+              rhs[i] = -Number(Q[i] * residual);
 
             // alpha = U^{-1} rhs
-            std::vector<Number> alpha(k_all, 0.0);
+            std::vector<Number> alpha(iteration_counter_all, 0.0);
             backward_substitution(U, alpha, rhs);
 
-            // d_{k+1} = d_tilde_{k} + delta d_tilde
-            d = d_tilde;
-            for(unsigned int i = 0; i < k_all; ++i)
-              d.add(alpha[i], D_all[i]);
+            // x_{k+1} = x_tilde_{k} + delta x_tilde
+            x = x_tilde;
+            for(unsigned int i = 0; i < iteration_counter_all; ++i)
+              x.add(alpha[i], D_all[i]);
           }
           else // despite reuse, the vectors might be empty
           {
-            d.add(parameters.omega_init, r);
+            x.add(parameters.omega_init, residual);
           }
         }
 
-        d_tilde_old = d_tilde;
-        r_old       = r;
+        x_tilde_old  = x_tilde;
+        residual_old = residual;
 
-        structure->time_integrator->set_displacement(d);
+        lambda_set_iterate(x);
 
         timer_tree->insert({"IQN-ILS"}, timer.wall_time());
       }
 
       // increment counter of partitioned iteration
-      ++k;
+      ++iteration_counter;
     }
 
     dealii::Timer timer;
@@ -446,9 +450,9 @@ PartitionedSolver<dim, Number>::solve(
     // Update history
     D_history.push_back(D);
     R_history.push_back(R);
-    if(D_history.size() > q)
+    if(D_history.size() > parameters.reused_time_steps)
       D_history.erase(D_history.begin());
-    if(R_history.size() > q)
+    if(R_history.size() > parameters.reused_time_steps)
       R_history.erase(R_history.begin());
 
     timer_tree->insert({"IQN-ILS"}, timer.wall_time());
@@ -461,34 +465,32 @@ PartitionedSolver<dim, Number>::solve(
 
     std::vector<VectorType> B;
 
-    VectorType d, d_tilde, d_tilde_old, r, r_old, b, b_old;
-    structure->pde_operator->initialize_dof_vector(d);
-    structure->pde_operator->initialize_dof_vector(d_tilde);
-    structure->pde_operator->initialize_dof_vector(d_tilde_old);
-    structure->pde_operator->initialize_dof_vector(r);
-    structure->pde_operator->initialize_dof_vector(r_old);
-    structure->pde_operator->initialize_dof_vector(b);
-    structure->pde_operator->initialize_dof_vector(b_old);
+    VectorType x, x_tilde, x_tilde_old, residual, residual_old, b, b_old;
+    lambda_setup_vector(x);
+    lambda_setup_vector(x_tilde);
+    lambda_setup_vector(x_tilde_old);
+    lambda_setup_vector(residual);
+    lambda_setup_vector(residual_old);
+    lambda_setup_vector(b);
+    lambda_setup_vector(b_old);
 
     std::shared_ptr<Matrix<Number>> U;
     std::vector<VectorType>         Q;
 
-    unsigned int const q = parameters.reused_time_steps;
-    unsigned int const n = fluid->time_integrator->get_number_of_time_steps();
-
+    // coupling loop
     bool converged = false;
-    while(not(converged) and k < parameters.partitioned_iter_max)
+    while(not(converged) and iteration_counter < parameters.partitioned_iter_max)
     {
-      print_solver_info_header(k);
+      print_solver_info_header(iteration_counter);
 
-      get_structure_displacement(d, k);
+      lambda_get_iterate(x, iteration_counter);
 
-      apply_dirichlet_robin_scheme(d_tilde, d, k);
+      lambda_fixed_point_iteration(x_tilde, x, iteration_counter);
 
       // compute residual and check convergence
-      r = d_tilde;
-      r.add(-1.0, d);
-      converged = check_convergence(r);
+      residual = x_tilde;
+      residual.add(-1.0, x);
+      converged = check_convergence(residual);
 
       // relaxation
       if(not(converged))
@@ -497,62 +499,63 @@ PartitionedSolver<dim, Number>::solve(
         timer.restart();
 
         // compute b vector
-        inv_jacobian_times_residual(b, D_history, R_history, Z_history, r);
+        inv_jacobian_times_residual(b, D_history, R_history, Z_history, residual);
 
-        if(k == 0 and (q == 0 or n == 0))
+        if(iteration_counter == 0 and
+           (parameters.reused_time_steps == 0 or number_of_time_steps == 0))
         {
-          d.add(parameters.omega_init, r);
+          x.add(parameters.omega_init, residual);
         }
         else
         {
-          d = d_tilde;
-          d.add(-1.0, b);
+          x = x_tilde;
+          x.add(-1.0, b);
 
-          if(k >= 1)
+          if(iteration_counter >= 1)
           {
             // append D, R, B matrices
-            VectorType delta_d_tilde = d_tilde;
-            delta_d_tilde.add(-1.0, d_tilde_old);
-            D->push_back(delta_d_tilde);
+            VectorType delta_x_tilde = x_tilde;
+            delta_x_tilde.add(-1.0, x_tilde_old);
+            D->push_back(delta_x_tilde);
 
-            VectorType delta_r = r;
-            delta_r.add(-1.0, r_old);
-            R->push_back(delta_r);
+            VectorType delta_residual = residual;
+            delta_residual.add(-1.0, residual_old);
+            R->push_back(delta_residual);
 
-            VectorType delta_b = delta_d_tilde;
+            VectorType delta_b = delta_x_tilde;
             delta_b.add(1.0, b_old);
             delta_b.add(-1.0, b);
             B.push_back(delta_b);
 
             // compute QR-decomposition
-            U = std::make_shared<Matrix<Number>>(k);
+            U = std::make_shared<Matrix<Number>>(iteration_counter);
             Q = *R;
             compute_QR_decomposition(Q, *U);
 
-            std::vector<Number> rhs(k, 0.0);
-            for(unsigned int i = 0; i < k; ++i)
-              rhs[i] = -Number(Q[i] * r);
+            std::vector<Number> rhs(iteration_counter, 0.0);
+            for(unsigned int i = 0; i < iteration_counter; ++i)
+              rhs[i] = -Number(Q[i] * residual);
 
             // alpha = U^{-1} rhs
-            std::vector<Number> alpha(k, 0.0);
+            std::vector<Number> alpha(iteration_counter, 0.0);
             backward_substitution(*U, alpha, rhs);
 
-            for(unsigned int i = 0; i < k; ++i)
-              d.add(alpha[i], B[i]);
+            for(unsigned int i = 0; i < iteration_counter; ++i)
+              x.add(alpha[i], B[i]);
           }
         }
 
-        d_tilde_old = d_tilde;
-        r_old       = r;
-        b_old       = b;
+        x_tilde_old  = x_tilde;
+        residual_old = residual;
+        b_old        = b;
 
-        structure->time_integrator->set_displacement(d);
+        lambda_set_iterate(x);
 
         timer_tree->insert({"IQN-IMVLS"}, timer.wall_time());
       }
 
       // increment counter of partitioned iteration
-      ++k;
+      ++iteration_counter;
     }
 
     dealii::Timer timer;
@@ -561,9 +564,9 @@ PartitionedSolver<dim, Number>::solve(
     // Update history
     D_history.push_back(D);
     R_history.push_back(R);
-    if(D_history.size() > q)
+    if(D_history.size() > parameters.reused_time_steps)
       D_history.erase(D_history.begin());
-    if(R_history.size() > q)
+    if(R_history.size() > parameters.reused_time_steps)
       R_history.erase(R_history.begin());
 
     // compute Z and add to Z_history
@@ -572,7 +575,7 @@ PartitionedSolver<dim, Number>::solve(
     *Z = Q; // make sure that Z has correct size
     backward_substitution_multiple_rhs(*U, *Z, Q);
     Z_history.push_back(Z);
-    if(Z_history.size() > q)
+    if(Z_history.size() > parameters.reused_time_steps)
       Z_history.erase(Z_history.begin());
 
     timer_tree->insert({"IQN-IMVLS"}, timer.wall_time());
@@ -582,10 +585,11 @@ PartitionedSolver<dim, Number>::solve(
     AssertThrow(false, dealii::ExcMessage("This AccelerationMethod is not implemented."));
   }
 
+  // Update counters to compute average FSI iterations over time steps.
   partitioned_iterations.first += 1;
-  partitioned_iterations.second += k;
+  partitioned_iterations.second += iteration_counter;
 
-  print_solver_info_converged(k);
+  print_solver_info_converged(iteration_counter);
 }
 
 } // namespace FSI
