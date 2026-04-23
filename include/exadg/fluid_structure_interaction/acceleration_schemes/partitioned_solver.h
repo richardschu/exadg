@@ -246,8 +246,45 @@ PartitionedSolver<dim, Number>::solve(
   // iteration counter
   unsigned int k = 0;
 
-  // fixed-point iteration with dynamic relaxation (Aitken relaxation)
-  if(parameters.acceleration_method == AccelerationMethod::Aitken)
+  // fixed-point iteration with various acceleration methods
+  if(parameters.acceleration_method == AccelerationMethod::FixedRelaxation)
+  {
+    VectorType d;
+    structure->pde_operator->initialize_dof_vector(d);
+
+    bool         converged = false;
+    double const omega     = parameters.omega_init; // fixed relaxation parameter
+    while(not(converged) and k < parameters.partitioned_iter_max)
+    {
+      print_solver_info_header(k);
+
+      get_structure_displacement(d, k);
+
+      VectorType d_tilde(d);
+      apply_dirichlet_robin_scheme(d_tilde, d, k);
+
+      // compute residual and check convergence
+      VectorType r = d_tilde;
+      r.add(-1.0, d);
+      converged = check_convergence(r);
+
+      // relaxation
+      if(not(converged))
+      {
+        dealii::Timer timer;
+        timer.restart();
+
+        d.add(omega, r);
+        structure->time_integrator->set_displacement(d);
+
+        timer_tree->insert({"FixedRelaxation"}, timer.wall_time());
+      }
+
+      // increment counter of partitioned iteration
+      ++k;
+    }
+  }
+  else if(parameters.acceleration_method == AccelerationMethod::Aitken)
   {
     VectorType r_old, d;
     structure->pde_operator->initialize_dof_vector(r_old);

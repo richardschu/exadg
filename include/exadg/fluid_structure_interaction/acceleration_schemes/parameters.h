@@ -36,6 +36,7 @@ namespace FSI
 enum class AccelerationMethod
 {
   Undefined,
+  FixedRelaxation,
   Aitken,
   IQN_ILS,
   IQN_IMVLS
