@@ -18,7 +18,7 @@
         "RelTol": "1.e-3", 
         "OmegaInit": "0.3",
         "ReusedTimeSteps": "8",
-        "PartitionedIterMax": "100"
+        "PartitionedMaxIter": "100"
     },
     "Application" : {
     },

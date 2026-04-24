@@ -31,7 +31,7 @@
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
         "InitialGuessCouplingScheme": "ConvergedSolutionOfPreviousTimeStep",
-        "PartitionedIterMax": "100",
+        "PartitionedMaxIter": "100",
         "ReusedTimeSteps": "10",
         "GeometricTolerance": "1.e-8"
     },
