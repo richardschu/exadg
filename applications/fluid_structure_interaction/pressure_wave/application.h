@@ -56,7 +56,7 @@ double const TIME_PRESSURE  = 3.0e-3;
 double const TIME_STEP_SIZE = 0.0001;
 double const END_TIME       = 0.02;
 
-double const       OUTPUT_INTERVAL_TIME                = END_TIME / 20;
+double const       OUTPUT_INTERVAL_TIME                = END_TIME / 20.0;
 unsigned int const OUTPUT_SOLVER_INFO_EVERY_TIME_STEPS = 1e0;
 
 double const REL_TOL = 1.e-3;
@@ -102,6 +102,8 @@ public:
   void
   add_parameters(dealii::ParameterHandler & prm) final
   {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
     // clang format off
     prm.enter_subsection("Fluid");
     prm.add_parameter("TemporalDiscretization",
@@ -655,6 +657,8 @@ public:
   void
   add_parameters(dealii::ParameterHandler & prm) final
   {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
     // clang format off
     prm.enter_subsection("Structure");
     prm.add_parameter("WeakDamping",
