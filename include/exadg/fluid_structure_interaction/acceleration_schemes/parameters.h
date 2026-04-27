@@ -31,16 +31,42 @@
 
 namespace ExaDG
 {
-namespace FSI
+namespace FixedPointSolver
 {
 enum class AccelerationMethod
 {
   Undefined,
+  FixedRelaxation,
   Aitken,
   IQN_ILS,
   IQN_IMVLS
 };
 
+struct Parameters
+{
+  Parameters()
+    : acceleration_method(AccelerationMethod::Undefined),
+      abs_tol(1.e-12),
+      rel_tol(1.e-3),
+      omega_init(0.1),
+      reused_time_steps(0),
+      max_iter(100),
+      print_solver_info(true)
+  {
+  }
+
+  AccelerationMethod acceleration_method;
+  double             abs_tol;
+  double             rel_tol;
+  double             omega_init;
+  unsigned int       reused_time_steps;
+  unsigned int       max_iter;
+  bool               print_solver_info;
+};
+} // namespace FixedPointSolver
+
+namespace FSI
+{
 enum class UpdateMethod
 {
   Undefined,
@@ -70,7 +96,7 @@ enum class InitialGuessCouplingScheme
 struct Parameters
 {
   Parameters()
-    : acceleration_method(AccelerationMethod::Undefined),
+    : acceleration_method(FixedPointSolver::AccelerationMethod::Undefined),
       update_method(UpdateMethod::Implicit),
       coupling_method(CouplingMethod::DirichletNeumann),
       robin_parameter_scale(0.0),
@@ -80,7 +106,7 @@ struct Parameters
       initial_guess_coupling_scheme(
         InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep),
       reused_time_steps(0),
-      partitioned_iter_max(100),
+      partitioned_max_iter(100),
       geometric_tolerance(1.e-10)
   {
   }
@@ -93,7 +119,7 @@ struct Parameters
       prm.add_parameter("AccelerationMethod",
                         acceleration_method,
                         "Acceleration method.",
-                        Patterns::Enum<AccelerationMethod>(),
+                        Patterns::Enum<FixedPointSolver::AccelerationMethod>(),
                         true);
       prm.add_parameter(
         "UpdateMethod", update_method, "Update method.", Patterns::Enum<UpdateMethod>(), false);
@@ -126,8 +152,8 @@ struct Parameters
                         "Number of time steps reused for acceleration.",
                         dealii::Patterns::Integer(0, 100),
                         false);
-      prm.add_parameter("PartitionedIterMax",
-                        partitioned_iter_max,
+      prm.add_parameter("PartitionedMaxIter",
+                        partitioned_max_iter,
                         "Maximum number of fixed-point iterations.",
                         dealii::Patterns::Integer(1, 1000),
                         true);
@@ -140,16 +166,16 @@ struct Parameters
     prm.leave_subsection();
   }
 
-  AccelerationMethod         acceleration_method;
-  UpdateMethod               update_method;
-  CouplingMethod             coupling_method;
-  double                     robin_parameter_scale;
-  double                     abs_tol;
-  double                     rel_tol;
-  double                     omega_init;
-  InitialGuessCouplingScheme initial_guess_coupling_scheme;
-  unsigned int               reused_time_steps;
-  unsigned int               partitioned_iter_max;
+  FixedPointSolver::AccelerationMethod acceleration_method;
+  UpdateMethod                         update_method;
+  CouplingMethod                       coupling_method;
+  double                               robin_parameter_scale;
+  double                               abs_tol;
+  double                               rel_tol;
+  double                               omega_init;
+  InitialGuessCouplingScheme           initial_guess_coupling_scheme;
+  unsigned int                         reused_time_steps;
+  unsigned int                         partitioned_max_iter;
 
   // tolerance used to locate points at the fluid-structure interface
   double geometric_tolerance;

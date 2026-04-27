@@ -30,7 +30,7 @@
 
 namespace ExaDG
 {
-namespace FSI
+namespace LinearAlgebra
 {
 /*
  * Own implementation of matrix class.
@@ -187,7 +187,7 @@ inv_jacobian_times_residual(VectorType &                                        
   }
 }
 
-} // namespace FSI
+} // namespace LinearAlgebra
 } // namespace ExaDG
 
 #endif /* EXADG_FLUID_STRUCTURE_INTERACTION_ACCELERATION_SCHEMES_LINEAR_ALGEBRA_H_ */
