@@ -22,7 +22,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/bending_wall/",
+        "OutputDirectory": "./output/bending_wall/",
         "OutputName": "fsi_test",
         "WriteOutput": "false"
     }

@@ -23,7 +23,7 @@
     "Application" : {
     },
     "Output": {
-        "OutputDirectory" : "output/cylinder_with_flag/", 
+        "OutputDirectory" : "./output/cylinder_with_flag/",
         "OutputName" : "test", 
         "WriteOutput" : "false"
   }

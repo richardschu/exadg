@@ -234,8 +234,11 @@ project_vectors(
 
   if(not rpe_source.all_points_found())
   {
+    MPI_Comm const     mpi_comm         = source_dof_handler.get_mpi_communicator();
+    unsigned int const this_mpi_process = dealii::Utilities::MPI::this_mpi_process(mpi_comm);
+
     write_points_in_dummy_triangulation(
-      integration_points_target, "./", "points_all", 0, source_dof_handler.get_mpi_communicator());
+      integration_points_target, "./", "points_all", this_mpi_process, mpi_comm);
 
     std::vector<dealii::Point<dim>> points_not_found;
     points_not_found.reserve(integration_points_target.size());
@@ -248,7 +251,7 @@ project_vectors(
     }
 
     write_points_in_dummy_triangulation(
-      points_not_found, "./", "points_not_found", 0, source_dof_handler.get_mpi_communicator());
+      points_not_found, "./", "points_not_found", this_mpi_process, mpi_comm);
 
     AssertThrow(
       rpe_source.all_points_found(),

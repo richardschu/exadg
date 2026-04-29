@@ -95,13 +95,16 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling structure -> ALE ..." << std::endl;
 
-    auto const & tria       = structure->pde_operator->get_dof_handler().get_triangulation();
-    auto const boundary_ids = application->structure->get_boundary_descriptor()->neumann_cached_bc;
-    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    dealii::Triangulation<dim> const & tria =
+      structure->pde_operator->get_dof_handler().get_triangulation();
+    std::set<dealii::types::boundary_id> const boundary_ids_interface =
+      application->structure->get_boundary_descriptor()->neumann_cached_bc;
+    std::vector<bool> const marked_vertices_structure =
+      get_marked_vertices_via_boundary_ids(tria, boundary_ids_interface);
 
     if(application->fluid->get_parameters().mesh_movement_type == IncNS::MeshMovementType::Poisson)
     {
-      structure_to_ale = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+      structure_to_ale = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
 
       std::shared_ptr<Poisson::DeformedMapping<dim, Number>> poisson_grid_motion =
         std::dynamic_pointer_cast<Poisson::DeformedMapping<dim, Number>>(fluid->ale_mapping);
@@ -115,7 +118,7 @@ Driver<dim, Number>::setup_interface_coupling()
     else if(application->fluid->get_parameters().mesh_movement_type ==
             IncNS::MeshMovementType::Elasticity)
     {
-      structure_to_ale = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+      structure_to_ale = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
 
       std::shared_ptr<Structure::DeformedMapping<dim, Number>> elasticity_grid_motion =
         std::dynamic_pointer_cast<Structure::DeformedMapping<dim, Number>>(fluid->ale_mapping);
@@ -143,11 +146,14 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling structure -> fluid ..." << std::endl;
 
-    auto const & tria       = structure->pde_operator->get_dof_handler().get_triangulation();
-    auto const boundary_ids = application->structure->get_boundary_descriptor()->neumann_cached_bc;
-    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    dealii::Triangulation<dim> const & tria =
+      structure->pde_operator->get_dof_handler().get_triangulation();
+    std::set<dealii::types::boundary_id> const boundary_ids_interface =
+      application->structure->get_boundary_descriptor()->neumann_cached_bc;
+    std::vector<bool> const marked_vertices_structure =
+      get_marked_vertices_via_boundary_ids(tria, boundary_ids_interface);
 
-    structure_to_fluid = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+    structure_to_fluid = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
     structure_to_fluid->setup(fluid->pde_operator->get_container_interface_data(),
                               structure->pde_operator->get_dof_handler(),
                               *structure->mapping,
@@ -166,12 +172,14 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling fluid -> structure ..." << std::endl;
 
-    auto const & tria = fluid->pde_operator->get_dof_handler_u().get_triangulation();
-    auto const   boundary_ids =
+    dealii::Triangulation<dim> const & tria =
+      fluid->pde_operator->get_dof_handler_u().get_triangulation();
+    std::set<dealii::types::boundary_id> const boundary_ids_interface =
       application->fluid->get_boundary_descriptor()->velocity->dirichlet_cached_bc;
-    auto const marked_vertices_fluid = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    std::vector<bool> const marked_vertices_fluid =
+      get_marked_vertices_via_boundary_ids(tria, boundary_ids_interface);
 
-    fluid_to_structure = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+    fluid_to_structure = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
     fluid_to_structure->setup(structure->pde_operator->get_container_interface_data_neumann(),
                               fluid->pde_operator->get_dof_handler_u(),
                               *fluid->mapping,
