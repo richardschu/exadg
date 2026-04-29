@@ -30,6 +30,7 @@
 #include <exadg/grid/mapping_dof_vector.h>
 #include <exadg/matrix_free/matrix_free_data.h>
 #include <exadg/structure/spatial_discretization/operator.h>
+#include <exadg/structure/time_integration/driver_inverse_analysis.h>
 #include <exadg/structure/time_integration/driver_quasi_static_problems.h>
 #include <exadg/structure/time_integration/driver_steady_problems.h>
 #include <exadg/structure/time_integration/time_int_gen_alpha.h>
@@ -108,6 +109,9 @@ private:
 
   // driver quasi-static
   std::shared_ptr<DriverQuasiStatic<dim, Number>> driver_quasi_static;
+
+  // driver inverse analysis
+  std::shared_ptr<DriverInverseAnalysis<dim, Number>> driver_inverse_analysis;
 
   // time integration scheme
   std::shared_ptr<TimeIntGenAlpha<dim, Number>> time_integrator;

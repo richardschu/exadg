@@ -108,6 +108,12 @@ Driver<dim, Number>::setup()
         pde_operator, postprocessor, application->get_parameters(), mpi_comm, is_test);
       driver_quasi_static->setup();
     }
+    else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+    {
+      driver_inverse_analysis = std::make_shared<DriverInverseAnalysis<dim, Number>>(
+        pde_operator, postprocessor, application->get_parameters(), mpi_comm, is_test);
+      driver_inverse_analysis->setup();
+    }
     else
     {
       AssertThrow(false, dealii::ExcMessage("Not implemented."));
@@ -135,6 +141,10 @@ Driver<dim, Number>::solve() const
   {
     driver_quasi_static->solve();
   }
+  else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+  {
+    driver_inverse_analysis->solve();
+  }
   else
   {
     AssertThrow(false, dealii::ExcMessage("Not implemented."));
@@ -158,6 +168,11 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
     pcout << std::endl << "Average number of iterations:" << std::endl;
     driver_quasi_static->print_iterations();
   }
+  else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+  {
+    pcout << std::endl << "Average number of iterations:" << std::endl;
+    driver_inverse_analysis->print_iterations();
+  }
   else if(application->get_parameters().problem_type == ProblemType::Unsteady)
   {
     pcout << std::endl << "Average number of iterations:" << std::endl;
@@ -177,6 +192,10 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
   else if(application->get_parameters().problem_type == ProblemType::QuasiStatic)
   {
     timer_tree.insert({"Elasticity"}, driver_quasi_static->get_timings());
+  }
+  else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+  {
+    timer_tree.insert({"Elasticity"}, driver_inverse_analysis->get_timings());
   }
   else
   {

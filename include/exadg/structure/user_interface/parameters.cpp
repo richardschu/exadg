@@ -94,11 +94,11 @@ Parameters::check() const
   AssertThrow(problem_type != ProblemType::Undefined,
               dealii::ExcMessage("Parameter must be defined."));
 
-  if(problem_type == ProblemType::QuasiStatic)
+  if(problem_type == ProblemType::QuasiStatic or problem_type == ProblemType::InverseAnalysis)
   {
     AssertThrow(large_deformation == true,
-                dealii::ExcMessage(
-                  "QuasiStatic solver only implemented for nonlinear formulation."));
+                dealii::ExcMessage("QuasiStatic and InverseAnalysis solvers only "
+                                   "implemented for nonlinear formulation."));
   }
 
   if(problem_type == ProblemType::Unsteady)
@@ -117,7 +117,7 @@ Parameters::check() const
 
   if(spatial_integration)
   {
-    AssertThrow(large_deformation,
+    AssertThrow(large_deformation == true,
                 dealii::ExcMessage("Spatial integration only different from "
                                    "material configuration for finite strain problems."));
 
@@ -126,10 +126,26 @@ Parameters::check() const
                                    "need to match for spatial integration."));
   }
 
+  if(problem_type == ProblemType::InverseAnalysis)
+  {
+    AssertThrow(large_deformation == true,
+                dealii::ExcMessage("Inverse analysis only implemented for nonlinear formulation."));
+    AssertThrow(pull_back_body_force == true,
+                dealii::ExcMessage("Pull back body force not implemented for inverse analysis."));
+    AssertThrow(pull_back_traction == true,
+                dealii::ExcMessage("Pull back traction not implemented for inverse analysis."));
+  }
+
   // SPATIAL DISCRETIZATION
   grid.check();
 
   AssertThrow(degree > 0, dealii::ExcMessage("Polynomial degree must be larger than zero."));
+  AssertThrow(mapping_degree > 0, dealii::ExcMessage("Mapping degree must be larger than zero."));
+  if(involves_h_multigrid())
+  {
+    AssertThrow(mapping_degree_coarse_grids > 0,
+                dealii::ExcMessage("Mapping degree for coarse grids must be larger than zero."));
+  }
 
   if(use_matrix_based_implementation)
   {
@@ -211,7 +227,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 {
   pcout << std::endl << "Temporal discretization:" << std::endl;
 
-  if(problem_type == ProblemType::QuasiStatic)
+  if(problem_type == ProblemType::QuasiStatic or problem_type == ProblemType::InverseAnalysis)
   {
     print_parameter(pcout, "load_increment", load_increment);
   }

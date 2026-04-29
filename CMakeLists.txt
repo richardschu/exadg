@@ -186,6 +186,7 @@ SET(TARGET_SRC
      include/exadg/structure/preconditioners/multigrid_preconditioner.cpp
      include/exadg/structure/time_integration/driver_steady_problems.cpp
      include/exadg/structure/time_integration/driver_quasi_static_problems.cpp
+     include/exadg/structure/time_integration/driver_inverse_analysis.cpp
      include/exadg/structure/time_integration/time_int_gen_alpha.cpp
      include/exadg/structure/postprocessor/output_generator.cpp
      include/exadg/structure/postprocessor/postprocessor.cpp

@@ -36,14 +36,19 @@ namespace Structure
 /**************************************************************************************/
 
 /*
- *  ProblemType describes whether a steady or an unsteady problem has to be solved
+ *  ProblemType describes which type of problem has to be solved:
+ *  .) Steady: steady-state problem, i.e., no time dependence
+ *  .) QuasiStatic: quasi-static problem, i.e., time dependence in loading, but no inertial terms
+ *  .) Unsteady: unsteady problem, i.e., time dependence through inertial terms and loading
+ *  .) InverseAnalysis: inverse analysis, i.e., given loaded state, find the material configuration
  */
 enum class ProblemType
 {
   Undefined,
   Steady,
   QuasiStatic,
-  Unsteady
+  Unsteady,
+  InverseAnalysis
 };
 
 enum class Type2D
