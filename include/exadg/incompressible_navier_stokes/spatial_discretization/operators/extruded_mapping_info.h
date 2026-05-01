@@ -89,6 +89,12 @@ convert_map_to_range_list(const unsigned int                                    
 
 
 
+// Our algorithm use the fluxes computed on the right face as input to the
+// left faces of the neighboring cell through a flux buffer. However, this can
+// only be done for faces that are locally owned and if the cell on the left
+// has already computed its right faces. We therefore try to set up an order
+// of cells that is beneficial according to this metric, which we achieve by a
+// local lexicographic ordering of the cells.
 template<std::size_t dim>
 void
 group_cells_by_left_neighbors(
@@ -100,6 +106,11 @@ group_cells_by_left_neighbors(
 {
   if(cell->is_active() && cell->is_locally_owned())
   {
+    // query the MPI ranks set by deal.II to see whether the neighbor cell is
+    // owned by another MPI process (given by hte subdomain_id of deal.II) or
+    // if we are at the boundary. In those cases, we need to compute the
+    // fluxes, so they are given separate type, which we then use to group
+    // cells further down
     unsigned int boundary_type = 0;
     for(unsigned int d = 0; d < dim; ++d)
       if(cell->at_boundary(2 * d) || cell->neighbor(2 * d)->subdomain_id() != cell->subdomain_id())
@@ -108,24 +119,32 @@ group_cells_by_left_neighbors(
       }
     cells_per_neighbor_value[boundary_type].emplace_back(lexicographic_index, cell);
   }
-  else if(cell->has_children() && cell->n_children() == dealii::Utilities::pow(2, dim))
-    for(unsigned int child = 0, d2 = 0; d2 < (dim > 2 ? 2 : 1); ++d2)
-      for(unsigned int d1 = 0; d1 < (dim > 1 ? 2 : 1); ++d1)
-        for(unsigned int d0 = 0; d0 < 2; ++d0, ++child)
-        {
-          std::array<int, dim> child_lexicographic;
-          child_lexicographic[dim - 1] = lexicographic_index[dim - 1] * 2 + d0;
-          if constexpr(dim > 1)
-            child_lexicographic[dim - 2] = lexicographic_index[dim - 2] * 2 + d1;
-          if constexpr(dim > 2)
-            child_lexicographic[dim - 3] = lexicographic_index[dim - 3] * 2 + d2;
-          group_cells_by_left_neighbors(child_lexicographic,
-                                        cell->child(child),
-                                        cells_per_neighbor_value);
-        }
-  else
-    AssertThrow(cell->has_children() == false,
+  else if(cell->has_children())
+  {
+    AssertThrow(cell->n_children() == dealii::Utilities::pow(2, dim) &&
+                cell->reference_cell().is_hyper_cube(),
                 dealii::ExcMessage("Only hypercube elements allowed for this code path"));
+
+    for(unsigned int child = 0; child < cell->n_children(); ++child)
+    {
+      std::array<int, dim> child_lexicographic;
+      // retrieve the lexicographic index from the linear index of cell
+      // children. Note that we switch the index to have the last index in
+      // the first index array because we later want to sort data
+      // lexicographically
+
+      for(unsigned int d = 0; d < dim; ++d)
+      {
+        // compute bitmask along current direction
+        const unsigned int bit           = (child >> d) & 1;
+        child_lexicographic[dim - 1 - d] = lexicographic_index[dim - 1 - d] * 2 + bit;
+      }
+
+      group_cells_by_left_neighbors(child_lexicographic,
+                                    cell->child(child),
+                                    cells_per_neighbor_value);
+    }
+  }
 }
 
 
@@ -167,11 +186,16 @@ compute_vectorization_category(const dealii::Triangulation<dim> & tria)
   //             the physical boundary
   std::array<std::vector<CellLexEntry>, 8> cells_per_neighbor_value;
 
-  // Limit the number of levels we use for the lexicographic traversal,
-  // avoiding bad cache usage. For low degrees, it might actually make sense
-  // to allow for one more level, but in general the utilization with 8^dim
-  // cells is already very good in this case and improvements are rather
-  // minor from allowing up to 16^dim cells.
+  // Limit the number of levels of cells that will be traversed
+  // lexicographically. This is because lexicographic ordering in the limit
+  // case leads to worse cache usage than a hierarchical (Morton-like)
+  // ordering, and the reason we do this is like the cache blocking strategies
+  // for finite differences, namely to switch to loop tiling. Using this
+  // setting will slightly reduce the ratio of faces that can use the flux
+  // buffer, but in comparison the cost is lower. For low degrees, it might
+  // make sense to allow for one more level, but in general the flux buffer
+  // utilization with 8^dim cells is already very good in this case and
+  // improvements are rather minor from allowing up to 16^dim cells.
   unsigned int blocking_level = 0;
   if(tria.n_levels() > 4)
     blocking_level = tria.n_levels() - 4;
@@ -211,8 +235,8 @@ compute_vectorization_category(const dealii::Triangulation<dim> & tria)
        cells_per_neighbor_value[2].end()}};
 
     // First fill up the lanes with the previously accumulated info,
-    // making sure that the remaining parts also fit within the available
-    // lanes to ensure a good utilization
+    // making sure that the remaining parts also fits within the available
+    // lanes to ensure a good utilization.
     auto assign_category = [&](auto & it) {
       cell_vectorization_category[it->second->active_cell_index()] = category_counter++;
       ++it;
@@ -223,7 +247,7 @@ compute_vectorization_category(const dealii::Triangulation<dim> & tria)
     // either had category 3 or some previous one; in either case, we should
     // expect that categories 1 and 2 fit well; we first try to use cells of
     // those categories until they are divisible by the SIMD length
-    // themselves, then we use some of the remaining cells
+    // themselves, then we use some of the remaining cells.
     while(category_counter % n_lanes != 0)
     {
       if(lex_ptrs[2] != lex_ends[2] && (lex_ends[2] - lex_ptrs[2]) % n_lanes > 0)
