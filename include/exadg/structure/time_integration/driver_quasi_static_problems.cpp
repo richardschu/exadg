@@ -163,7 +163,10 @@ DriverQuasiStatic<dim, Number>::do_solve()
       try
       {
         // extrapolate solution
-        solution.add(load_increment / last_load_increment, displacement_increment);
+        if(this->param.use_extrapolation)
+        {
+          solution.add(load_increment / last_load_increment, displacement_increment);
+        }
 
         iter    = solve_step(load_factor + load_increment, update_preconditioner);
         success = true;
@@ -233,8 +236,6 @@ void
 DriverQuasiStatic<dim, Number>::initialize_vectors()
 {
   pde_operator->initialize_dof_vector(solution);
-
-  pde_operator->initialize_dof_vector(rhs_vector);
 
   pde_operator->initialize_dof_vector(displacement_increment);
 }

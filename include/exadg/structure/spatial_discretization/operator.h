@@ -101,7 +101,7 @@ public:
 
   /*
    * The implementation of the Newton solver requires a function called
-   * 'evaluate_residual'.
+   * `evaluate_residual()`.
    */
   void
   evaluate_residual(VectorType & dst, VectorType const & src) const
@@ -151,7 +151,7 @@ public:
 
   /*
    * The implementation of the Newton solver requires a function called
-   * 'set_solution_linearization'.
+   * `set_solution_linearization()`.
    */
   void
   set_solution_linearization(VectorType const & solution_linearization) const
@@ -174,7 +174,7 @@ public:
   }
 
   /*
-   * The implementation of linear solvers in deal.ii requires that a function called 'vmult' is
+   * The implementation of linear solvers in deal.ii requires that a function called `vmult()` is
    * provided.
    */
   void
@@ -305,6 +305,26 @@ public:
 
   void
   set_solution_linearization(VectorType const & vector) const;
+
+  /*
+   * Set the current reference configuration to be the initial reference configuration shifted by
+   * the vector in the argument.
+   */
+  void
+  shift_reference_configuration(VectorType const & vector) final;
+
+  /*
+   * Export the configuration the operator is evaluated in. For the spatial integration approach,
+   * this is the spatial configuration, and for the inverse analysis it is the current (iteratively
+   * updated) reference configuration. For the standard Lagrangian approach, this duplicates
+   * standard postprocessing functionality and is hence not supported. The non-empty vector provided
+   * is exported as well (in the same configuration).
+   */
+  void
+  export_configuration(std::string const & folder, VectorType const & vector) const final;
+
+  void
+  get_reference_coordinates(VectorType & vector) const final;
 
   void
   assemble_matrix_if_necessary_for_linear_elasticity_operator() const;

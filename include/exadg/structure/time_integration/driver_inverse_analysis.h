@@ -27,6 +27,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
@@ -77,6 +78,12 @@ private:
   void
   initialize_solution();
 
+  bool
+  check_convergence(VectorType const & update,
+                    VectorType const & iterate,
+                    unsigned int const step_number,
+                    double const       load_factor);
+
   void
   do_solve();
 
@@ -87,7 +94,7 @@ private:
   solve_step(double const load_factor, bool const update_preconditioner);
 
   void
-  postprocessing(bool const errors_only = false) const;
+  postprocessing(bool const errors_only = false, bool const export_configuration = false) const;
 
   std::shared_ptr<Interface::Operator<Number>> pde_operator;
 
@@ -103,7 +110,6 @@ private:
 
   // vectors
   VectorType solution;
-  VectorType rhs_vector;
 
   // We need to store a vector in order to extrapolate the solution to the next
   // load step and obtain an accurate initial guess for the Newton solver.
@@ -112,8 +118,16 @@ private:
   // For the purpose of extrapolating the displacements, we also need to store the
   // load_increment of the last load step.
   double last_load_increment;
+  bool   use_extrapolation;
 
   unsigned int step_number;
+
+  // The inverse problem is solved by solving a sequence of forward problems. Once the full load is
+  // applied, iterate until the displacement increment is sufficiently small.
+  Newton::SolverData inverse_analysis_solver_data;
+
+  // tolerance for `load_factor` to be considered as fully applied
+  static double constexpr eps_load_factor = 1.e-10;
 
   std::shared_ptr<TimerTree> timer_tree;
 

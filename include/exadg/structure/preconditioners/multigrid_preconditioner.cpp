@@ -122,7 +122,7 @@ MultigridPreconditioner<dim, Number>::update()
       vector_multigrid_type_ptr = &vector_multigrid_type_copy;
     }
 
-    // TODO the mappings of the coarser grids levels are not updated
+    // TODO the mappings of the coarser grid levels are not updated
     // for renumbered DoFs on the MG levels.
     bool const update_mapping = this->dof_renumbering.empty();
 
@@ -143,29 +143,14 @@ MultigridPreconditioner<dim, Number>::update()
         auto vector_coarse_level =
           this->get_operator_nonlinear(coarse_level)->get_solution_linearization();
         this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
-        // Note: This function also re-assembles the sparse matrix in case a matrix-based
-        // implementation is used
+        // The mappings on the coarse levels are not updated to save costs.
+        bool constexpr update_coarse_level_mapping = false;
         this->get_operator_nonlinear(coarse_level)
           ->set_solution_linearization(vector_coarse_level,
                                        true /* update_cell_data */,
-                                       false /* update_mapping */,
+                                       update_coarse_level_mapping,
                                        true /* update_matrix_if_necessary */);
       });
-
-    // Update the coarse h level mappings in the spatial integration approach.
-    bool constexpr update_coarse_mappings = false;
-    if constexpr(update_coarse_mappings)
-    {
-      OperatorData<dim> const & operator_data =
-        this->get_operator_nonlinear(this->get_number_of_levels() - 1)->get_data();
-      if(operator_data.spatial_integration)
-      {
-        // This is expensive and hence disabled since `mapping_degree_coarse_grids`
-        // and `level_info[level].degree` are rarely the same.
-        this->multigrid_mappings->initialize_coarse_mappings(
-          *this->grid, this->grid->coarse_triangulations.size() + 1);
-      }
-    }
   }
   else // linear problems
   {
@@ -178,6 +163,69 @@ MultigridPreconditioner<dim, Number>::update()
   this->update_coarse_solver();
 
   this->update_needed = false;
+}
+
+template<int dim, typename Number>
+void
+MultigridPreconditioner<dim, Number>::shift_reference_configuration(VectorType const & vector)
+{
+  if(nonlinear)
+  {
+    // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
+    VectorTypeMG         vector_multigrid_type_copy;
+    VectorTypeMG const * vector_multigrid_type_ptr;
+    if(std::is_same<MultigridNumber, Number>::value)
+    {
+      vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&vector);
+    }
+    else
+    {
+      if(this->dof_renumbering.empty())
+      {
+        vector_multigrid_type_copy = vector;
+      }
+      else
+      {
+        // TODO: enable reordering when shifting the reference configuration.
+        AssertThrow(false,
+                    dealii::ExcMessage("Shifting the reference configuration is not implemented "
+                                       "for the case of renumbered DoFs on the MG levels."));
+
+        this->get_operator_nonlinear(this->get_number_of_levels() - 1)
+          ->get_matrix_free()
+          .initialize_dof_vector(vector_multigrid_type_copy);
+        for(unsigned int i = 0; i < vector.locally_owned_size(); ++i)
+        {
+          vector_multigrid_type_copy.local_element(i) =
+            vector.local_element(this->dof_renumbering[i]);
+        }
+      }
+      vector_multigrid_type_ptr = &vector_multigrid_type_copy;
+    }
+
+    // Shift reference configuration on finest level
+    this->get_operator_nonlinear(this->get_number_of_levels() - 1)
+      ->shift_reference_configuration(*vector_multigrid_type_ptr);
+
+    // interpolate shift vector from fine to coarse level
+    this->transfer_from_fine_to_coarse_levels([&](unsigned int const fine_level,
+                                                  unsigned int const coarse_level) {
+      auto const & vector_fine_level = this->get_operator_nonlinear(fine_level)->get_shift_vector();
+      auto vector_coarse_level = this->get_operator_nonlinear(coarse_level)->get_shift_vector();
+      this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+
+      this->get_operator_nonlinear(coarse_level)
+        ->shift_reference_configuration(vector_coarse_level);
+    });
+  }
+  else // linear problems
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("For infinitesimal deformations, shifting the "
+                                   "reference configuration is not necessary. "
+                                   "Simply set the desired mapping in the "
+                                   "application's create_grid() function."));
+  }
 }
 
 template<int dim, typename Number>
@@ -295,8 +343,9 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
                                    data);
 
     // Set undeformed mapping to construct map for spatial integration.
-    if(data.spatial_integration)
+    if(data.spatial_integration or data.problem_type == ProblemType::InverseAnalysis)
     {
+      std::cout << "##+ MG: setting undeformed mapping.\n";
       pde_operator_level->set_mapping_undeformed(this->get_mapping_ptr(level));
     }
 

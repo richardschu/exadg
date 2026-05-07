@@ -197,9 +197,9 @@ public:
   }
 
   /**
-   * Initializes the dealii::MappingQCache object by providing a mapping that describes an
-   * undeformed reference configuration and a displacement dof-vector (with a corresponding
-   * dealii::DoFHandler object) that describes the displacement of the mesh compared to that
+   * Initializes the `dealii::MappingQCache` object by providing a `mapping` that describes an
+   * undeformed reference configuration and a displacement DoF-vector (with a corresponding
+   * `dealii::DoFHandler` object) that describes the displacement of the mesh compared to that
    * reference configuration. There are two special cases:
    *
    * If the mapping pointer is invalid, this implies that the reference coordinates are interpreted
@@ -209,7 +209,7 @@ public:
    * be added to the grid coordinates of the reference configuration described by mapping.
    */
   void
-  initialize_mapping_from_dof_vector(std::shared_ptr<dealii::Mapping<dim> const> mapping,
+  initialize_mapping_from_dof_vector(dealii::Mapping<dim> const *    mapping,
                                      VectorType const &              displacement_vector,
                                      dealii::DoFHandler<dim> const & dof_handler)
   {
@@ -241,7 +241,7 @@ public:
     // rather than dealii::DoFHandler::cell_iterator).
     dealii::FE_Nothing<dim> fe_nothing;
 
-    if(mapping.get() != 0)
+    if(mapping != nullptr)
     {
       fe_values = std::make_shared<dealii::FEValues<dim>>(*mapping,
                                                           fe_nothing,
@@ -261,7 +261,7 @@ public:
 
         std::vector<dealii::Point<dim>> grid_coordinates(scalar_dofs_per_cell);
 
-        if(mapping.get() != 0)
+        if(mapping != nullptr)
         {
           fe_values->reinit(cell_tria);
           // extract displacement and add to original position
@@ -556,9 +556,10 @@ initialize_coarse_mappings_from_mapping_dof_vector(
     // grid_coordinates_all_levels describes absolute coordinates -> use an uninitialized mapping
     // in order to interpret the grid coordinates vector as absolute coordinates and not as
     // displacements.
-    std::shared_ptr<dealii::Mapping<dim> const> mapping_dummy;
     coarse_mappings[h_level]->initialize_mapping_from_dof_vector(
-      mapping_dummy, grid_coordinates_all_levels[h_level], dof_handlers_all_levels[h_level]);
+      nullptr /* mapping */,
+      grid_coordinates_all_levels[h_level],
+      dof_handlers_all_levels[h_level]);
   }
 }
 

@@ -43,7 +43,9 @@ DriverInverseAnalysis<dim, Number>::DriverInverseAnalysis(
     is_test(is_test_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_in) == 0),
     last_load_increment(param.load_increment),
+    use_extrapolation(param.use_extrapolation),
     step_number(1),
+    inverse_analysis_solver_data(param.inverse_analysis_solver_data),
     timer_tree(new TimerTree()),
     iterations({0, {0, 0}})
 {
@@ -71,11 +73,11 @@ DriverInverseAnalysis<dim, Number>::solve()
   dealii::Timer timer;
   timer.restart();
 
-  postprocessing(true /* errors_only */);
+  postprocessing(true /* errors_only */, false /* export_configuration */);
 
   do_solve();
 
-  postprocessing(false /* errors_only */);
+  postprocessing(false /* errors_only */, true /* export_configuration */);
 
   timer_tree->insert({"DriverInverseAnalysis"}, timer.wall_time());
 }
@@ -139,8 +141,10 @@ DriverInverseAnalysis<dim, Number>::do_solve()
   if(step_number == 0)
     load_increment *= reduction_load_factor_step_0;
 
-  double const eps = 1.e-10;
-  while(load_factor < 1.0 - eps)
+  // Once the full load is applied, iterate until the displacement increment is sufficiently small.
+  bool converged = false;
+
+  while((load_factor < 1.0 - eps_load_factor) or not converged)
   {
     std::tuple<unsigned int, unsigned int> iter;
 
@@ -162,7 +166,10 @@ DriverInverseAnalysis<dim, Number>::do_solve()
       try
       {
         // extrapolate solution
-        solution.add(load_increment / last_load_increment, displacement_increment);
+        if(use_extrapolation)
+        {
+          solution.add(load_increment / last_load_increment, displacement_increment);
+        }
 
         iter    = solve_step(load_factor + load_increment, update_preconditioner);
         success = true;
@@ -200,23 +207,43 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     displacement_increment = solution;
     displacement_increment.add(-1.0, old_solution);
 
+    // check convergence of inverse analysis
+    converged = check_convergence(displacement_increment,
+                                  solution,
+                                  step_number,
+                                  load_factor + load_increment);
+
+    // Update the mapping to give *initial* reference configuration shifted by `-solution`.
+    solution *= -1.0;
+    pde_operator->shift_reference_configuration(solution);
+    solution *= -1.0;
+
     iterations.first += 1;
     std::get<0>(iterations.second) += std::get<0>(iter);
     std::get<1>(iterations.second) += std::get<1>(iter);
 
-    // increment load factor
-    last_load_increment = load_increment;
-    load_factor += load_increment;
-
-    // re-init increment for next load step
-    if(step_number == 0)
-      load_increment = param.load_increment - last_load_increment;
+    // Keep loading constant after initial ramp.
+    if(load_factor + load_increment >= 1.0 - eps_load_factor)
+    {
+      load_factor    = 1.0;
+      load_increment = 0.0;
+    }
     else
-      load_increment = param.load_increment;
+    {
+      // increment load factor
+      last_load_increment = load_increment;
+      load_factor += load_increment;
 
-    // make sure to hit maximum load exactly
-    if(load_factor + load_increment >= 1.0)
-      load_increment = 1.0 - load_factor;
+      // re-init increment for next load step
+      if(step_number == 0)
+        load_increment = param.load_increment - last_load_increment;
+      else
+        load_increment = param.load_increment;
+
+      // make sure to hit maximum load exactly
+      if(load_factor + load_increment >= 1.0)
+        load_increment = 1.0 - load_factor;
+    }
 
     // finally, increment step number
     ++step_number;
@@ -228,12 +255,49 @@ DriverInverseAnalysis<dim, Number>::do_solve()
 }
 
 template<int dim, typename Number>
+bool
+DriverInverseAnalysis<dim, Number>::check_convergence(VectorType const & update,
+                                                      VectorType const & iterate,
+                                                      unsigned int const step_number,
+                                                      double const       load_factor_plus_increment)
+{
+  // Compute relative and absolute errors once load is fully applied.
+  bool const load_fully_applied = (load_factor_plus_increment >= 1.0 - eps_load_factor);
+  if(load_fully_applied)
+  {
+    double const abs_error = update.l2_norm();
+    double const rel_error = abs_error / iterate.l2_norm();
+
+    pcout << "\n"
+          << "Inverse analysis errors :\n"
+          << std::scientific << std::setprecision(5)
+          << "  ||d_k+1 - d_k||           = " << abs_error << "\n"
+          << "  ||d_k+1 - d_k||/||d_k+1|| = " << rel_error << "\n";
+
+    bool const converged = (abs_error < inverse_analysis_solver_data.abs_tol) or
+                           (rel_error < inverse_analysis_solver_data.rel_tol);
+
+    if(not(converged))
+    {
+      AssertThrow(step_number < inverse_analysis_solver_data.max_iter,
+                  dealii::ExcMessage(
+                    "Inverse analysis did not converge within the maximum number of iterations."
+                    "Consider increasing the number of load steps or relaxing the tolerances."));
+    }
+
+    return converged;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+template<int dim, typename Number>
 void
 DriverInverseAnalysis<dim, Number>::initialize_vectors()
 {
   pde_operator->initialize_dof_vector(solution);
-
-  pde_operator->initialize_dof_vector(rhs_vector);
 
   pde_operator->initialize_dof_vector(displacement_increment);
 }
@@ -287,12 +351,29 @@ DriverInverseAnalysis<dim, Number>::solve_step(double const load_factor,
 
 template<int dim, typename Number>
 void
-DriverInverseAnalysis<dim, Number>::postprocessing(bool const errors_only) const
+DriverInverseAnalysis<dim, Number>::postprocessing(bool const errors_only,
+                                                   bool const export_configuration) const
 {
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(solution, errors_only);
+  // The solution postprocessed is the displacement vector describing the mapping from the initial
+  // reference configuration to the stress-free configuration. Since the `solution` is the solution
+  // to the forward elasticity problem from the iteratively updated current reference configuration,
+  // the vector`s sign is inverted for the standard output such that one can get the final reference
+  // configuration by mapping with the solution vector provided in the output.
+  VectorType tmp(solution);
+  tmp *= -1.0;
+  postprocessor->do_postprocessing(tmp, errors_only);
+
+  // For comparison, output the current reference configuration considered and the `solution`
+  // vector. Mapping the current reference configuration with that vector will yield the initial
+  // reference configuration up to the specified tolerance. The mapping is not immediately available
+  // after setup, only after calling `NonLinearOperator::set_solution_linearization()`.
+  if(export_configuration)
+  {
+    pde_operator->export_configuration(postprocessor->get_data().output_data.directory, solution);
+  }
 
   timer_tree->insert({"DriverInverseAnalysis", "Postprocessing"}, timer.wall_time());
 }

@@ -103,7 +103,6 @@ private:
 
   // vectors
   VectorType solution;
-  VectorType rhs_vector;
 
   // We need to store a vector in order to extrapolate the solution to the next
   // load step and obtain an accurate initial guess for the Newton solver.

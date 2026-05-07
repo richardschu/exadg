@@ -237,10 +237,10 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type            = problem_type;
-    this->param.body_force              = use_volume_force;
-    this->param.large_deformation       = large_deformation;
-    // The inverse problem needs the pull-back of the loading in caseit immediately converges.
+    this->param.problem_type      = problem_type;
+    this->param.body_force        = use_volume_force;
+    this->param.large_deformation = large_deformation;
+    // The inverse problem needs the pull-back of the loading in case it immediately converges.
     this->param.pull_back_body_force    = problem_type == ProblemType::InverseAnalysis;
     this->param.pull_back_traction      = problem_type == ProblemType::InverseAnalysis;
     this->param.spatial_integration     = spatial_integration;
@@ -279,13 +279,15 @@ private:
       this->param.grid.create_coarse_triangulations = false; // can also be set to true if desired
     }
 
-    this->param.load_increment = load_increment;
+    this->param.load_increment    = load_increment;
+    this->param.use_extrapolation = true;
 
-    this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);
-    this->param.solver              = Solver::FGMRES;
-    this->param.solver_data         = SolverData(1e3, 1.e-14, 1.e-8, 30);
-    this->param.preconditioner      = preconditioner;
-    this->param.multigrid_data.type = MultigridType::phMG;
+    this->param.inverse_analysis_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.newton_solver_data           = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.solver                       = Solver::FGMRES;
+    this->param.solver_data                  = SolverData(1e3, 1.e-14, 1.e-8, 30);
+    this->param.preconditioner               = preconditioner;
+    this->param.multigrid_data.type          = MultigridType::phMG;
 
     this->param.multigrid_data.p_sequence             = PSequenceType::DecreaseByOne; // Bisect;
     this->param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
@@ -309,12 +311,12 @@ private:
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.elliptic = true;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.higher_order_elements =
       this->param.degree > 1;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.n_cycles              = 2;
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.n_cycles              = 1;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.w_cycle               = false;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.aggregation_threshold = 1e-4;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_sweeps       = 2;
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_sweeps       = 12;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_overlap      = 2;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_type         = "ILU";
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_type         = "Chebyshev";
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.coarse_type           = "Amesos-KLU";
 #endif
 

@@ -327,6 +327,7 @@ Operator<dim, Number>::setup_operators()
   operator_data.large_deformation   = param.large_deformation;
   operator_data.mapping_degree      = param.mapping_degree;
   operator_data.stable_formulation  = param.stable_formulation;
+  operator_data.problem_type        = param.problem_type;
   if(param.large_deformation)
   {
     operator_data.pull_back_traction      = param.pull_back_traction;
@@ -345,8 +346,8 @@ Operator<dim, Number>::setup_operators()
   {
     elasticity_operator_nonlinear.initialize(*matrix_free, affine_constraints, operator_data);
 
-    // Set undeformed mapping to construct map for spatial integration
-    if(param.spatial_integration)
+    // Set undeformed mapping to construct map for spatial integration or inverse analysis.
+    if(param.spatial_integration or param.problem_type == ProblemType::InverseAnalysis)
     {
       elasticity_operator_nonlinear.set_mapping_undeformed(mapping);
     }
@@ -1366,6 +1367,53 @@ Operator<dim, Number>::set_solution_linearization(VectorType const & vector) con
 
 template<int dim, typename Number>
 void
+Operator<dim, Number>::export_configuration(std::string const & folder,
+                                            VectorType const &  vector) const
+{
+  if(param.large_deformation)
+  {
+    elasticity_operator_nonlinear.export_configuration(folder, vector);
+  }
+  else
+  {
+    AssertThrow(param.large_deformation == true,
+                dealii::ExcMessage("Exporting the configuration in the "
+                                   "small train case is not implemented."));
+  }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::shift_reference_configuration(VectorType const & vector)
+{
+  // Update the mapping of the matrix-free object in the fine level operator.
+  elasticity_operator_nonlinear.shift_reference_configuration(vector);
+
+  // Update the matrix-free objects' mappings on coarse multigrid levels.
+  if(param.preconditioner == Preconditioner::Multigrid)
+  {
+    std::shared_ptr<MultigridPreconditioner<dim, Number>> mg_preconditioner =
+      std::dynamic_pointer_cast<MultigridPreconditioner<dim, Number>>(preconditioner);
+    mg_preconditioner->shift_reference_configuration(vector);
+  }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::get_reference_coordinates(VectorType & grid_coordinates) const
+{
+  if(param.large_deformation)
+  {
+    elasticity_operator_nonlinear.get_reference_coordinates(grid_coordinates);
+  }
+  else
+  {
+    elasticity_operator_linear.get_reference_coordinates(grid_coordinates);
+  }
+}
+
+template<int dim, typename Number>
+void
 Operator<dim, Number>::assemble_matrix_if_necessary_for_linear_elasticity_operator() const
 {
   elasticity_operator_linear.assemble_matrix_if_necessary();
@@ -1450,7 +1498,7 @@ Operator<dim, Number>::solve_nonlinear(VectorType &       sol,
   linearized_operator.update(scaling_factor_mass, scaling_factor_velocity, time);
 
   // Matrix-based implementation: note that the re-assembly of the matrix is done in the function
-  // set_solution_linearization() called by the Newton solver.
+  // `set_solution_linearization()` called by the Newton solver.
 
   // set inhomogeneous Dirichlet values, hanging node and periodicity constraints in order to
   // evaluate the nonlinear residual correctly
