@@ -116,8 +116,7 @@ NonLinearOperator<dim, Number>::valid_deformation(VectorType const & displacemen
 
   // sum over all MPI processes
   Number valid = 0.0;
-  valid        = dealii::Utilities::MPI::sum(
-    dst, this->matrix_free->get_dof_handler(this->operator_data.dof_index).get_mpi_communicator());
+  valid        = dealii::Utilities::MPI::sum(dst, displacement.get_mpi_communicator());
 
   return (valid == 0.0);
 }
@@ -176,8 +175,10 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
                                      "and spatial integration requires additional "
                                      "MatrixFree and Mapping objects."));
 
-      this->mapping_spatial->initialize_mapping_from_dof_vector(
-        this->mapping_undeformed.get(), displacement_lin, this->matrix_free->get_dof_handler());
+      this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
+                                                                displacement_lin,
+                                                                this->matrix_free->get_dof_handler(
+                                                                  this->operator_data.dof_index));
 
       this->matrix_free_spatial.update_mapping(*mapping_spatial->get_mapping());
     }
@@ -232,18 +233,19 @@ NonLinearOperator<dim, Number>::export_configuration(std::string const & folder,
   else
   {
     // No vector given, just export the mapped triangulation.
-    write_grid(this->matrix_free->get_dof_handler().get_triangulation(),
-               *mapping_spatial->get_mapping(),
-               n_subdivisions,
-               folder,
-               filename,
-               0 /* counter */,
-               mpi_comm);
+    write_grid(
+      this->matrix_free->get_dof_handler(this->operator_data.dof_index).get_triangulation(),
+      *mapping_spatial->get_mapping(),
+      n_subdivisions,
+      folder,
+      filename,
+      0 /* counter */,
+      mpi_comm);
   }
 
   // Export initial reference configuration.
   AssertThrow(mapping_undeformed.get() != nullptr, dealii::ExcMessage("Mapping not initialized."));
-  write_grid(this->matrix_free->get_dof_handler().get_triangulation(),
+  write_grid(this->matrix_free->get_dof_handler(this->operator_data.dof_index).get_triangulation(),
              *mapping_undeformed,
              n_subdivisions,
              folder,
@@ -254,12 +256,11 @@ NonLinearOperator<dim, Number>::export_configuration(std::string const & folder,
 
 template<int dim, typename Number>
 void
-NonLinearOperator<dim, Number>::shift_reference_configuration(VectorType const & vector)
+NonLinearOperator<dim, Number>::shift_reference_configuration(
+  VectorType const &              vector,
+  dealii::DoFHandler<dim> const * dof_handler,
+  unsigned int const              level)
 {
-  std::cout << "##+ Shift reference configuration: "
-            << "||vector|| = " << vector.l2_norm() << ", "
-            << "vector.size() = " << vector.size() << std::endl;
-
   // Invalid state in `mapping_undeformed` would lead to different behavior in
   // `MappingDoFVector::initialize_mapping_from_dof_vector`.
   AssertThrow(this->mapping_undeformed != nullptr,
@@ -269,17 +270,17 @@ NonLinearOperator<dim, Number>::shift_reference_configuration(VectorType const &
               dealii::ExcMessage("Mapping defining current reference "
                                  "configuration is not initialized."));
 
-  // TODO: fix multigrid preconditioner mapping update ##+
-  AssertThrow(this->matrix_free->get_dof_handler().n_dofs() == vector.size(),
-              dealii::ExcMessage("Size of input vector does not match number of DoFs."));
-
   // Check for valid deformation state.
   bool const valid_deformation_field = valid_deformation(vector);
   AssertThrow(valid_deformation_field,
               dealii::ExcMessage("Invalid deformation field; cannot "
                                  "shift reference configuration."));
 
-  vector.update_ghost_values();
+  AssertThrow(shift_vector.size() == vector.size(),
+              dealii::ExcMessage("Provided vector does not match the internal vector."));
+
+  // Set internal copy of the shift vector tracing the state and udpate ghost values.
+  set_shift_vector(vector);
 
   // Update the mapping describing the current reference configuration:
   // .) `mapping_undeformed` is the initial reference configuration
@@ -289,13 +290,26 @@ NonLinearOperator<dim, Number>::shift_reference_configuration(VectorType const &
   // the summed effect of the two arguments `mapping_undeformed` and `vector`. Note that the
   // behavior of `MappingDoFVector::initialize_mapping_from_dof_vector` is different if any of the
   // two arguments is empty.
-  this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
-                                                            vector,
-                                                            this->matrix_free->get_dof_handler());
+  if(dof_handler == nullptr)
+  {
+    // `dof_handler` input argument is invalid; use `DoFHandler` given in own `MatrixFree` object.
+    // This is the call variant on the fine grid with easier interface.
+    this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
+                                                              this->shift_vector,
+                                                              this->matrix_free->get_dof_handler(
+                                                                this->operator_data.dof_index));
+  }
+  else
+  {
+    // `dof_handler` input argument is valid and can be used. This is the call variant to update the
+    // mappings of the coarse level operators within multigrid.
+    this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
+                                                              this->shift_vector,
+                                                              *dof_handler,
+                                                              level);
+  }
 
   this->matrix_free_spatial.update_mapping(*mapping_spatial->get_mapping());
-
-  vector.zero_out_ghost_values();
 }
 
 template<int dim, typename Number>

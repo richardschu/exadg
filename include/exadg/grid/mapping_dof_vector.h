@@ -92,7 +92,9 @@ public:
    * Initializes the `dealii::MappingQCache` object by providing a `mapping` that describes an
    * undeformed reference configuration and a displacement DoF-vector (with a corresponding
    * `dealii::DoFHandler` object) that describes the displacement of the mesh compared to that
-   * reference configuration. There are two special cases:
+   * reference configuration. This function might also be used if the object of this class refers
+   * to a mapping of a specific multigrid level. In both cases, the `displacement_vector` and
+   * `dof_handler` need to be compatible. There are two special cases:
    *
    * If the mapping pointer is invalid, this implies that the reference coordinates are interpreted
    * as zero, i.e., the displacement vector describes the absolute coordinates of the grid points.
@@ -101,9 +103,11 @@ public:
    * be added to the grid coordinates of the reference configuration described by mapping.
    */
   void
-  initialize_mapping_from_dof_vector(dealii::Mapping<dim> const *    mapping,
-                                     VectorType const &              displacement_vector,
-                                     dealii::DoFHandler<dim> const & dof_handler);
+  initialize_mapping_from_dof_vector(
+    dealii::Mapping<dim> const *    mapping,
+    VectorType const &              displacement_vector,
+    dealii::DoFHandler<dim> const & dof_handler,
+    unsigned int const              level = dealii::numbers::invalid_unsigned_int);
 
   std::vector<unsigned int> hierarchic_to_lexicographic_numbering;
   std::vector<unsigned int> lexicographic_to_hierarchic_numbering;

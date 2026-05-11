@@ -19,9 +19,6 @@
  *  ______________________________________________________________________
  */
 
-#include <cstdlib> // for std::rand, std::srand
-#include <ctime>   // for std::time  // ##+ remove
-
 // deal.II
 #include <deal.II/fe/fe_values.h>
 
@@ -150,39 +147,64 @@ void
 MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
   dealii::Mapping<dim> const *    mapping,
   VectorType const &              displacement_vector,
-  dealii::DoFHandler<dim> const & dof_handler)
+  dealii::DoFHandler<dim> const & dof_handler,
+  unsigned int const              level)
 {
   AssertThrow(dealii::MultithreadInfo::n_threads() == 1, dealii::ExcNotImplemented());
-
-  AssertThrow(mapping_q_cache.get(),
-              dealii::ExcMessage("Mapping object mapping_q_cache is not initialized."));
-
-  std::cout << "displacement_vector.size() = " << displacement_vector.size() << "\n";
-  std::cout << "dof_handler.n_dofs() = " << dof_handler.n_dofs() << "\n";
-
-  VectorType displacement_vector_ghosted;
-  if(dof_handler.n_dofs() > 0 and displacement_vector.size() == dof_handler.n_dofs())
-  {
-    dealii::IndexSet const locally_relevant_dofs =
-      dealii::DoFTools::extract_locally_relevant_dofs(dof_handler);
-    displacement_vector_ghosted.reinit(dof_handler.locally_owned_dofs(),
-                                       locally_relevant_dofs,
-                                       dof_handler.get_mpi_communicator());
-    displacement_vector_ghosted.copy_locally_owned_data_from(displacement_vector);
-    displacement_vector_ghosted.update_ghost_values();
-  }
 
   AssertThrow(get_element_type(dof_handler.get_triangulation()) == ElementType::Hypercube,
               dealii::ExcMessage("Only implemented for hypercube elements."));
 
+  AssertThrow(mapping_q_cache.get(),
+              dealii::ExcMessage("Mapping object mapping_q_cache is not initialized."));
+
+  bool const mapping_valid      = mapping != nullptr;
+  bool const vector_initialized = displacement_vector.size() > 0;
+  AssertThrow(mapping_valid or vector_initialized,
+              dealii::ExcMessage("Provide either mapping or displacement DoF vector."));
+
+  bool const   is_mg  = level != dealii::numbers::invalid_unsigned_int;
+  unsigned int n_dofs = is_mg ? dof_handler.n_dofs(level) : dof_handler.n_dofs();
+  if(vector_initialized)
+  {
+    AssertThrow(n_dofs > 0,
+                dealii::ExcMessage("DoFHandler has no DoFs distributed; this "
+                                   "is required for adding a displacement."));
+  }
+
+  // Setup ghosted displacement vector to interpolate.
+  VectorType displacement_vector_ghosted;
+  if(vector_initialized)
+  {
+    if(is_mg)
+    {
+      dealii::IndexSet const locally_relevant_dofs =
+        dealii::DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
+
+      displacement_vector_ghosted.reinit(dof_handler.locally_owned_mg_dofs(level),
+                                         locally_relevant_dofs,
+                                         dof_handler.get_mpi_communicator());
+    }
+    else
+    {
+      dealii::IndexSet const locally_relevant_dofs =
+        dealii::DoFTools::extract_locally_relevant_dofs(dof_handler);
+
+      displacement_vector_ghosted.reinit(dof_handler.locally_owned_dofs(),
+                                         locally_relevant_dofs,
+                                         dof_handler.get_mpi_communicator());
+    }
+
+    displacement_vector_ghosted.copy_locally_owned_data_from(displacement_vector);
+    displacement_vector_ghosted.update_ghost_values();
+  }
+
+  // Set up `dealii::FEValues` with `dealii::FE_Nothing` and the Gauss-Lobatto quadrature to reduce
+  // setup cost, as we only use the geometry information (this means we need to call
+  // `fe_values.reinit(cell)` with `Triangulation::cell_iterator` rather than the more standard call
+  // using `dealii::DoFHandler::cell_iterator`).
+  dealii::FE_Nothing<dim>                fe_nothing;
   std::shared_ptr<dealii::FEValues<dim>> fe_values;
-
-  // Set up dealii::FEValues with FE_Nothing and the Gauss-Lobatto quadrature to
-  // reduce setup cost, as we only use the geometry information (this means
-  // we need to call fe_values.reinit(cell) with Triangulation::cell_iterator
-  // rather than dealii::DoFHandler::cell_iterator).
-  dealii::FE_Nothing<dim> fe_nothing;
-
   if(mapping != nullptr)
   {
     fe_values = std::make_shared<dealii::FEValues<dim>>(*mapping,
@@ -192,63 +214,76 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
                                                         dealii::update_quadrature_points);
   }
 
-  // take the grid coordinates described by mapping and add deformation described by displacement
-  // vector
   mapping_q_cache->initialize(
     dof_handler.get_triangulation(),
     [&](const typename dealii::Triangulation<dim>::cell_iterator & cell_tria)
       -> std::vector<dealii::Point<dim>> {
+      unsigned int const cell_tria_level = cell_tria->level();
+
+      // We have to return *some* grid coordinates also for *all* levels. On the other levels, we
+      // return a zero vector.
       unsigned int const scalar_dofs_per_cell =
         dealii::Utilities::pow(mapping_q_cache->get_degree() + 1, dim);
 
       std::vector<dealii::Point<dim>> grid_coordinates(scalar_dofs_per_cell);
 
-      if(mapping != nullptr)
+      // Skip cells that are not on the target level (DoF Vector also does not match).
+      if(not(is_mg) or cell_tria_level == level)
       {
-        fe_values->reinit(cell_tria);
-        // extract displacement and add to original position
-        for(unsigned int i = 0; i < scalar_dofs_per_cell; ++i)
+        // If the `mapping` is valid, write the interpolated point coordinates to add displacement
+        // vector in a second step.
+        if(mapping != nullptr)
         {
-          grid_coordinates[i] =
-            fe_values->quadrature_point(this->hierarchic_to_lexicographic_numbering[i]);
+          fe_values->reinit(cell_tria);
+          // extract displacement and add to original position
+          for(unsigned int i = 0; i < scalar_dofs_per_cell; ++i)
+          {
+            grid_coordinates[i] =
+              fe_values->quadrature_point(this->hierarchic_to_lexicographic_numbering[i]);
+          }
         }
-      }
 
-      // if this function is called with an empty dof-vector, this indicates that the
-      // displacements are zero and the points do not have to be moved
-      if(dof_handler.n_dofs() > 0 and displacement_vector.size() > 0 and cell_tria->is_active() and
-         not(cell_tria->is_artificial()))
-      {
         typename dealii::DoFHandler<dim>::cell_iterator cell(&cell_tria->get_triangulation(),
-                                                             cell_tria->level(),
+                                                             cell_tria_level,
                                                              cell_tria->index(),
                                                              &dof_handler);
 
-        dealii::FiniteElement<dim> const & fe = dof_handler.get_fe();
-        AssertThrow(fe.element_multiplicity(0) == dim,
-                    dealii::ExcMessage("Expected finite element with dim components."));
+        // if this function is called with an empty DoF vector, this indicates that the
+        // displacements are zero and the points do not have to be moved
+        bool const relevant_cell =
+          is_mg ? vector_initialized and
+                    cell->level_subdomain_id() != dealii::numbers::artificial_subdomain_id :
+                  cell_tria->is_active() and not(cell_tria->is_artificial());
 
-        std::vector<dealii::types::global_dof_index> dof_indices(fe.dofs_per_cell);
-        cell->get_dof_indices(dof_indices);
-
-        for(unsigned int i = 0; i < dof_indices.size(); ++i)
+        if(vector_initialized and relevant_cell)
         {
-          std::pair<unsigned int, unsigned int> const id = fe.system_to_component_index(i);
+          dealii::FiniteElement<dim> const & fe = dof_handler.get_fe();
+          AssertThrow(fe.element_multiplicity(0) == dim,
+                      dealii::ExcMessage("Expected finite element with dim components."));
 
-          if(fe.dofs_per_vertex > 0) // dealii::FE_Q
+          std::vector<dealii::types::global_dof_index> dof_indices(fe.dofs_per_cell);
+          if(is_mg)
           {
-            std::srand(std::time(nullptr));
-            double const val = std::rand();
-            std::cout << "displacement_vector_ghosted.size() = "
-                      << displacement_vector_ghosted.size() << " val = " << val << "\n";
-            grid_coordinates[id.second][id.first] += displacement_vector_ghosted(dof_indices[i]);
-            std::cout << "passed."
-                      << " val = " << val << "\n";
+            cell->get_mg_dof_indices(dof_indices);
           }
-          else // dealii::FE_DGQ
+          else
           {
-            grid_coordinates[this->lexicographic_to_hierarchic_numbering[id.second]][id.first] +=
-              displacement_vector_ghosted(dof_indices[i]);
+            cell->get_dof_indices(dof_indices);
+          }
+
+          for(unsigned int i = 0; i < dof_indices.size(); ++i)
+          {
+            std::pair<unsigned int, unsigned int> const id = fe.system_to_component_index(i);
+
+            if(fe.dofs_per_vertex > 0) // dealii::FE_Q
+            {
+              grid_coordinates[id.second][id.first] += displacement_vector_ghosted(dof_indices[i]);
+            }
+            else // dealii::FE_DGQ
+            {
+              grid_coordinates[this->lexicographic_to_hierarchic_numbering[id.second]][id.first] +=
+                displacement_vector_ghosted(dof_indices[i]);
+            }
           }
         }
       }

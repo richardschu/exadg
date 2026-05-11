@@ -137,14 +137,22 @@ Parameters::check() const
     AssertThrow(mapping_degree == degree,
                 dealii::ExcMessage("Mapping degree and approximation degree "
                                    "need to match for inverse analysis."));
+    if(involves_h_multigrid())
+    {
+      AssertThrow(mapping_degree_coarse_grids == degree,
+                  dealii::ExcMessage("Mapping degree on coarse grids and approximation"
+                                     "degree need to match to update coarse mappings."));
+    }
     AssertThrow(spatial_integration == false,
                 dealii::ExcMessage("Spatial integration not implemented for inverse analysis."));
     AssertThrow(large_deformation == true,
                 dealii::ExcMessage("Inverse analysis only implemented for nonlinear formulation."));
     AssertThrow(pull_back_body_force == true,
-                dealii::ExcMessage("Pull back body force not implemented for inverse analysis."));
+                dealii::ExcMessage("Not pulling back the body force is "
+                                   "inconsistent for inverse analysis."));
     AssertThrow(pull_back_traction == true,
-                dealii::ExcMessage("Pull back traction not implemented for inverse analysis."));
+                dealii::ExcMessage("Not pulling back the traction is "
+                                   "inconsistent for inverse analysis."));
   }
 
   // SPATIAL DISCRETIZATION

@@ -215,8 +215,81 @@ MultigridPreconditioner<dim, Number>::shift_reference_configuration(VectorType c
       auto vector_coarse_level = this->get_operator_nonlinear(coarse_level)->get_shift_vector();
       this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
 
-      this->get_operator_nonlinear(coarse_level)
-        ->shift_reference_configuration(vector_coarse_level);
+      // Get multiplicity of `DoFHandler` and relative levels.
+      std::vector<dealii::DoFHandler<dim> const *> dof_handler_ptrs;
+      std::vector<unsigned int>                    dof_handler_multiplicity;
+      std::vector<unsigned int> relative_level_in_dof_handler(this->get_number_of_levels() - 1);
+      for(unsigned int i = 0; i < this->get_number_of_levels() - 1 /* fine level excluded */; ++i)
+      {
+        unsigned int dof_handler_match = dealii::numbers::invalid_unsigned_int;
+        for(unsigned int j = 0; j < dof_handler_ptrs.size(); ++j)
+        {
+          if(this->dof_handlers[i].get() == dof_handler_ptrs[j])
+          {
+            dof_handler_match = j;
+          }
+        }
+        if(dof_handler_match == dealii::numbers::invalid_unsigned_int)
+        {
+          // append `DoFHandler`
+          dof_handler_ptrs.push_back(this->dof_handlers[i].get());
+          dof_handler_multiplicity.push_back(1);
+
+          relative_level_in_dof_handler[i] = 0;
+        }
+        else
+        {
+          dof_handler_multiplicity[dof_handler_match] += 1;
+
+          relative_level_in_dof_handler[i] = relative_level_in_dof_handler[i - 1] + 1;
+        }
+      }
+
+      // Identify the absolute and relative level the vector corresponds based on the vector size.
+      // TODO: There might be grids or coarsening strategies, where the DoF number does not uniquely
+      // determine the correct grid level.
+      unsigned int level_absolute                  = 0;
+      unsigned int n_matches                       = 0;
+      bool         matching_dof_handler_has_levels = false;
+      for(unsigned int i = 0; i < this->get_number_of_levels() - 1 /* fine level excluded */; ++i)
+      {
+        bool dof_handler_has_levels = false;
+        for(unsigned int j = 0; j < dof_handler_ptrs.size(); ++j)
+        {
+          if(this->dof_handlers[i].get() == dof_handler_ptrs[j])
+          {
+            dof_handler_has_levels = dof_handler_multiplicity[j] > 1;
+            break;
+          }
+        }
+        unsigned int const n_dofs = dof_handler_has_levels ? this->dof_handlers[i]->n_dofs(i) :
+                                                             this->dof_handlers[i]->n_dofs();
+
+        if(n_dofs == vector_coarse_level.size())
+        {
+          n_matches += 1;
+          level_absolute                  = i;
+          matching_dof_handler_has_levels = dof_handler_has_levels;
+        }
+      }
+      AssertThrow(n_matches == 1,
+                  dealii::ExcMessage("DoF number does not uniquely map to level. "
+                                     "Cannot identify vector size to multigrid level index map."));
+
+      // The function call for `shift_reference_configuration()` with `dof_handler` and `level`
+      // argument is used if the `DoFHandler` has multiple levels only.
+      if(matching_dof_handler_has_levels)
+      {
+        this->get_operator_nonlinear(level_absolute)
+          ->shift_reference_configuration(vector_coarse_level,
+                                          this->dof_handlers[level_absolute].get(),
+                                          relative_level_in_dof_handler[level_absolute]);
+      }
+      else
+      {
+        this->get_operator_nonlinear(level_absolute)
+          ->shift_reference_configuration(vector_coarse_level);
+      }
     });
   }
   else // linear problems
@@ -346,7 +419,6 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
     // Set undeformed mapping to construct map for spatial integration.
     if(data.spatial_integration or data.problem_type == ProblemType::InverseAnalysis)
     {
-      std::cout << "##+ MG: setting undeformed mapping.\n";
       pde_operator_level->set_mapping_undeformed(this->get_mapping_ptr(level));
     }
 

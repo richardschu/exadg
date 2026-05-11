@@ -99,10 +99,13 @@ public:
 
   /**
    * Set the current reference configuration to be the initial reference configuration shifted by
-   * the vector in the argument.
+   * the vector in the argument. In the multigrid case, the `DoFHandler` and suitable multigrid
+   * level index have to be provided.
    */
   void
-  shift_reference_configuration(VectorType const & vector);
+  shift_reference_configuration(VectorType const &              vector,
+                                dealii::DoFHandler<dim> const * dof_handler = nullptr,
+                                unsigned int const level = dealii::numbers::invalid_unsigned_int);
 
   /**
    * Export the current configuration the operator is defined in. For the spatial integration
