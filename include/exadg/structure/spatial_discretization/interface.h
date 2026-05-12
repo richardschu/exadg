@@ -63,6 +63,15 @@ public:
                                double const       time) const = 0;
 
   virtual void
+  shift_reference_configuration(VectorType const & vector) = 0;
+
+  virtual void
+  export_configuration(std::string const & folder, VectorType const & vector) const = 0;
+
+  virtual void
+  get_reference_coordinates(VectorType & grid_coordinates) const = 0;
+
+  virtual void
   evaluate_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void

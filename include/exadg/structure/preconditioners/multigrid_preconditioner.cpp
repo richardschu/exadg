@@ -19,6 +19,7 @@
  *  ______________________________________________________________________
  */
 
+// ExaDG
 #include <exadg/grid/grid_data.h>
 #include <exadg/operators/quadrature.h>
 #include <exadg/structure/preconditioners/multigrid_preconditioner.h>
@@ -122,7 +123,7 @@ MultigridPreconditioner<dim, Number>::update()
       vector_multigrid_type_ptr = &vector_multigrid_type_copy;
     }
 
-    // TODO the mappings of the coarser grids levels are not updated
+    // TODO the mappings of the coarser grid levels are not updated
     // for renumbered DoFs on the MG levels.
     bool const update_mapping = this->dof_renumbering.empty();
 
@@ -143,29 +144,14 @@ MultigridPreconditioner<dim, Number>::update()
         auto vector_coarse_level =
           this->get_operator_nonlinear(coarse_level)->get_solution_linearization();
         this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
-        // Note: This function also re-assembles the sparse matrix in case a matrix-based
-        // implementation is used
+        // The mappings on the coarse levels are not updated to save costs.
+        bool constexpr update_coarse_level_mapping = false;
         this->get_operator_nonlinear(coarse_level)
           ->set_solution_linearization(vector_coarse_level,
                                        true /* update_cell_data */,
-                                       false /* update_mapping */,
+                                       update_coarse_level_mapping,
                                        true /* update_matrix_if_necessary */);
       });
-
-    // Update the coarse h level mappings in the spatial integration approach.
-    bool constexpr update_coarse_mappings = false;
-    if constexpr(update_coarse_mappings)
-    {
-      OperatorData<dim> const & operator_data =
-        this->get_operator_nonlinear(this->get_number_of_levels() - 1)->get_data();
-      if(operator_data.spatial_integration)
-      {
-        // This is expensive and hence disabled since `mapping_degree_coarse_grids`
-        // and `level_info[level].degree` are rarely the same.
-        this->multigrid_mappings->initialize_coarse_mappings(
-          *this->grid, this->grid->coarse_triangulations.size() + 1);
-      }
-    }
   }
   else // linear problems
   {
@@ -178,6 +164,142 @@ MultigridPreconditioner<dim, Number>::update()
   this->update_coarse_solver();
 
   this->update_needed = false;
+}
+
+template<int dim, typename Number>
+void
+MultigridPreconditioner<dim, Number>::shift_reference_configuration(VectorType const & vector)
+{
+  if(nonlinear)
+  {
+    // convert Number --> MultigridNumber, e.g., double --> float, but only if necessary
+    VectorTypeMG         vector_multigrid_type_copy;
+    VectorTypeMG const * vector_multigrid_type_ptr;
+    if(std::is_same<MultigridNumber, Number>::value)
+    {
+      vector_multigrid_type_ptr = reinterpret_cast<VectorTypeMG const *>(&vector);
+    }
+    else
+    {
+      if(this->dof_renumbering.empty())
+      {
+        vector_multigrid_type_copy = vector;
+      }
+      else
+      {
+        // TODO: enable reordering when shifting the reference configuration.
+        AssertThrow(false,
+                    dealii::ExcMessage("Shifting the reference configuration is not implemented "
+                                       "for the case of renumbered DoFs on the MG levels."));
+
+        this->get_operator_nonlinear(this->get_number_of_levels() - 1)
+          ->get_matrix_free()
+          .initialize_dof_vector(vector_multigrid_type_copy);
+        for(unsigned int i = 0; i < vector.locally_owned_size(); ++i)
+        {
+          vector_multigrid_type_copy.local_element(i) =
+            vector.local_element(this->dof_renumbering[i]);
+        }
+      }
+      vector_multigrid_type_ptr = &vector_multigrid_type_copy;
+    }
+
+    // Shift reference configuration on finest level
+    this->get_operator_nonlinear(this->get_number_of_levels() - 1)
+      ->shift_reference_configuration(*vector_multigrid_type_ptr);
+
+    // interpolate shift vector from fine to coarse level
+    this->transfer_from_fine_to_coarse_levels([&](unsigned int const fine_level,
+                                                  unsigned int const coarse_level) {
+      auto const & vector_fine_level = this->get_operator_nonlinear(fine_level)->get_shift_vector();
+      auto vector_coarse_level = this->get_operator_nonlinear(coarse_level)->get_shift_vector();
+      this->transfers->interpolate(fine_level, vector_coarse_level, vector_fine_level);
+
+      // Get multiplicity of `DoFHandler` and relative levels.
+      std::vector<dealii::DoFHandler<dim> const *> dof_handler_ptrs;
+      std::vector<unsigned int>                    dof_handler_multiplicity;
+      std::vector<unsigned int> relative_level_in_dof_handler(this->get_number_of_levels() - 1);
+      for(unsigned int i = 0; i < this->get_number_of_levels() - 1 /* fine level excluded */; ++i)
+      {
+        unsigned int dof_handler_match = dealii::numbers::invalid_unsigned_int;
+        for(unsigned int j = 0; j < dof_handler_ptrs.size(); ++j)
+        {
+          if(this->dof_handlers[i].get() == dof_handler_ptrs[j])
+          {
+            dof_handler_match = j;
+          }
+        }
+        if(dof_handler_match == dealii::numbers::invalid_unsigned_int)
+        {
+          // append `DoFHandler`
+          dof_handler_ptrs.push_back(this->dof_handlers[i].get());
+          dof_handler_multiplicity.push_back(1);
+
+          relative_level_in_dof_handler[i] = 0;
+        }
+        else
+        {
+          dof_handler_multiplicity[dof_handler_match] += 1;
+
+          relative_level_in_dof_handler[i] = relative_level_in_dof_handler[i - 1] + 1;
+        }
+      }
+
+      // Identify the absolute and relative level the vector corresponds based on the vector size.
+      // TODO: There might be grids or coarsening strategies, where the DoF number does not uniquely
+      // determine the correct grid level.
+      unsigned int level_absolute                  = 0;
+      unsigned int n_matches                       = 0;
+      bool         matching_dof_handler_has_levels = false;
+      for(unsigned int i = 0; i < this->get_number_of_levels() - 1 /* fine level excluded */; ++i)
+      {
+        bool dof_handler_has_levels = false;
+        for(unsigned int j = 0; j < dof_handler_ptrs.size(); ++j)
+        {
+          if(this->dof_handlers[i].get() == dof_handler_ptrs[j])
+          {
+            dof_handler_has_levels = dof_handler_multiplicity[j] > 1;
+            break;
+          }
+        }
+        unsigned int const n_dofs = dof_handler_has_levels ? this->dof_handlers[i]->n_dofs(i) :
+                                                             this->dof_handlers[i]->n_dofs();
+
+        if(n_dofs == vector_coarse_level.size())
+        {
+          n_matches += 1;
+          level_absolute                  = i;
+          matching_dof_handler_has_levels = dof_handler_has_levels;
+        }
+      }
+      AssertThrow(n_matches == 1,
+                  dealii::ExcMessage("DoF number does not uniquely map to level. "
+                                     "Cannot identify vector size to multigrid level index map."));
+
+      // The function call for `shift_reference_configuration()` with `dof_handler` and `level`
+      // argument is used if the `DoFHandler` has multiple levels only.
+      if(matching_dof_handler_has_levels)
+      {
+        this->get_operator_nonlinear(level_absolute)
+          ->shift_reference_configuration(vector_coarse_level,
+                                          this->dof_handlers[level_absolute].get(),
+                                          relative_level_in_dof_handler[level_absolute]);
+      }
+      else
+      {
+        this->get_operator_nonlinear(level_absolute)
+          ->shift_reference_configuration(vector_coarse_level);
+      }
+    });
+  }
+  else // linear problems
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("For infinitesimal deformations, shifting the "
+                                   "reference configuration is not necessary. "
+                                   "Simply set the desired mapping in the "
+                                   "application's create_grid() function."));
+  }
 }
 
 template<int dim, typename Number>
@@ -295,7 +417,7 @@ MultigridPreconditioner<dim, Number>::initialize_operator(unsigned int const lev
                                    data);
 
     // Set undeformed mapping to construct map for spatial integration.
-    if(data.spatial_integration)
+    if(data.spatial_integration or data.problem_type == ProblemType::InverseAnalysis)
     {
       pde_operator_level->set_mapping_undeformed(this->get_mapping_ptr(level));
     }

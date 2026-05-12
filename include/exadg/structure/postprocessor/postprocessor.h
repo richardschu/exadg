@@ -67,6 +67,9 @@ public:
                     double const           time             = 0.0,
                     types::time_step const time_step_number = numbers::steady_timestep) override;
 
+  PostProcessorData<dim> const &
+  get_data() const;
+
 private:
   void
   initialize_derived_fields();

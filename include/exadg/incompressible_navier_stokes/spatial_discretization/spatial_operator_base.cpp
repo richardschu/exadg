@@ -2061,18 +2061,17 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         unsigned int const index = matrix_free.get_shape_info(dof_index_u, quad_index)
                                      .face_to_cell_index_nodal[local_face_number][q];
 
-        // compute traction acting on structure with normal vector in opposite direction
-        // as compared to the fluid domain
-        vector normal = integrator_u.normal_vector(q);
-        vector u      = integrator_u.get_value(q);
-        tensor grad_u = integrator_u.get_gradient(q);
-        scalar p      = integrator_p.get_value(q);
+        // Compute traction vector based on unit *outward* normal.
+        vector const normal = integrator_u.normal_vector(q);
+        vector const u      = integrator_u.get_value(q);
+        tensor const grad_u = integrator_u.get_gradient(q);
+        scalar const p      = integrator_p.get_value(q);
 
-        scalar viscosity = get_viscosity_boundary_face(face, q);
+        scalar const viscosity = get_viscosity_boundary_face(face, q);
 
         // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
         // pressure, hence multiply by density to get true traction in N/m^2.
-        vector traction =
+        vector const traction =
           this->robin_parameter_traction_output * u +
           param.density * (viscosity * ((grad_u + transpose(grad_u)) * normal) - p * normal);
 

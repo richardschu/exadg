@@ -183,6 +183,10 @@ public:
   // choose a value in [0,1] where 1 = maximum load (Neumann or Dirichlet)
   double load_increment;
 
+  // Enable the use of extrapolation in inverse analysis to obtain improved initial guess for Newton
+  // solver in each load step
+  bool use_extrapolation;
+
   /**************************************************************************************/
   /*                                                                                    */
   /*                              SPATIAL DISCRETIZATION                                */
@@ -212,6 +216,9 @@ public:
   /*                                       SOLVER                                       */
   /*                                                                                    */
   /**************************************************************************************/
+
+  // Inverse analysis solver data only relevant for `ProblemType::InverseAnalysis`.
+  Newton::SolverData inverse_analysis_solver_data;
 
   // Newton solver data (only relevant for nonlinear problems)
   Newton::SolverData newton_solver_data;

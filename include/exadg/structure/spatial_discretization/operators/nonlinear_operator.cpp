@@ -19,6 +19,8 @@
  *  ______________________________________________________________________
  */
 
+// ExaDG
+#include <exadg/postprocessor/write_output.h>
 #include <exadg/structure/spatial_discretization/operators/boundary_conditions.h>
 #include <exadg/structure/spatial_discretization/operators/continuum_mechanics.h>
 #include <exadg/structure/spatial_discretization/operators/nonlinear_operator.h>
@@ -43,15 +45,21 @@ NonLinearOperator<dim, Number>::initialize(
 
   // It should not make a difference here whether we use dof_index or dof_index_inhomogeneous.
   this->matrix_free->initialize_dof_vector(displacement_lin, this->operator_data.dof_index);
-  displacement_lin.update_ghost_values();
 
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    // Deep copy of matrix_free to use different mappings.
+    this->matrix_free->initialize_dof_vector(shift_vector, this->operator_data.dof_index);
+  }
+
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
+  {
+    // A deep copy of the `matrix_free` object is required to update the underlying mapping.
     this->matrix_free_spatial.copy_from(*this->matrix_free);
 
-    // Setup spatial mapping based on linearization vector and undeformed mapping,
-    // where parameter check enforces mapping_degree == degree.
+    // The spatial mapping is based on the linearization vector and the undeformed mapping. This
+    // mapping is also used to store the mapping to the (iteratively computed) stress-free reference
+    // configuration in the inverse analysis setting.
     this->mapping_spatial =
       std::make_shared<MappingDoFVector<dim, Number>>(this->operator_data.mapping_degree);
   }
@@ -61,11 +69,17 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType const & src) const
 {
-  if(this->operator_data.spatial_integration and (not this->operator_data.force_material_residual))
+  bool const spatial_integration_residual =
+    this->operator_data.spatial_integration and (not this->operator_data.force_material_residual);
+  if(spatial_integration_residual or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    AssertThrow(this->operator_data.pull_back_traction == false,
-                dealii::ExcMessage("Neumann data expected in respective "
-                                   "configuration for comparison."));
+    if(spatial_integration_residual)
+    {
+      AssertThrow(this->operator_data.pull_back_traction == false,
+                  dealii::ExcMessage("Neumann data expected in respective "
+                                     "configuration for comparison."));
+    }
 
     this->matrix_free_spatial.loop(&This::cell_loop_nonlinear,
                                    &This::face_loop_empty,
@@ -102,8 +116,7 @@ NonLinearOperator<dim, Number>::valid_deformation(VectorType const & displacemen
 
   // sum over all MPI processes
   Number valid = 0.0;
-  valid        = dealii::Utilities::MPI::sum(
-    dst, this->matrix_free->get_dof_handler(this->operator_data.dof_index).get_mpi_communicator());
+  valid        = dealii::Utilities::MPI::sum(dst, displacement.get_mpi_communicator());
 
   return (valid == 0.0);
 }
@@ -128,8 +141,13 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
   bool const valid_deformation_field = valid_deformation(vector);
   if(not valid_deformation_field)
   {
-    std::cout << "the linearization vector does not correspond to an invertible mapping on lvl "
-              << this->get_level() << "  ## \n";
+    if(dealii::Utilities::MPI::this_mpi_process(
+         this->matrix_free->get_dof_handler(this->operator_data.dof_index)
+           .get_mpi_communicator()) == 0)
+    {
+      std::cout << "WARNING: Linearization vector does not "
+                << "correspond to an invertible mapping\n";
+    }
   }
 
   if(valid_deformation_field or this->operator_data.check_type != 1)
@@ -143,11 +161,25 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
       this->set_cell_linearization_data(displacement_lin);
     }
 
-    // update mapping to spatial configuration
-    if(this->operator_data.spatial_integration and update_mapping)
+    // Update the mapping of the spatial configuration given the current solution. This is invalid
+    // for in the inverse analysis setting, were the `mapping_spatial` refers to the iteratively
+    // updated reference configuraion.
+    bool const spatial_integration_update_mapping =
+      this->operator_data.spatial_integration and update_mapping;
+    if(spatial_integration_update_mapping)
     {
-      this->mapping_spatial->initialize_mapping_from_dof_vector(
-        this->mapping_undeformed, displacement_lin, this->matrix_free->get_dof_handler());
+      bool const using_inverse_analysis =
+        this->operator_data.problem_type == ProblemType::InverseAnalysis;
+      AssertThrow(not using_inverse_analysis,
+                  dealii::ExcMessage("The combination of an inverse analysis problem "
+                                     "and spatial integration requires additional "
+                                     "MatrixFree and Mapping objects."));
+
+      this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
+                                                                displacement_lin,
+                                                                this->matrix_free->get_dof_handler(
+                                                                  this->operator_data.dof_index));
+
       this->matrix_free_spatial.update_mapping(*mapping_spatial->get_mapping());
     }
 
@@ -159,10 +191,147 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
 }
 
 template<int dim, typename Number>
+void
+NonLinearOperator<dim, Number>::export_configuration(std::string const & folder,
+                                                     VectorType const &  vector) const
+{
+  AssertThrow(this->operator_data.spatial_integration or
+                this->operator_data.problem_type == ProblemType::InverseAnalysis,
+              dealii::ExcMessage("For the Lagrangian approach, use standard postprocessing "
+                                 "tools to map the grid by the solution vector."));
+
+  // Export current spatial or reference configuration.
+  dealii::DoFHandler<dim> const & dof_handler =
+    this->matrix_free->get_dof_handler(this->operator_data.dof_index);
+  unsigned int const n_subdivisions = dof_handler.get_fe().degree + 1;
+  MPI_Comm const     mpi_comm       = dof_handler.get_mpi_communicator();
+  std::string const  filename =
+    this->operator_data.spatial_integration ? "spatial_configuration" : "reference_configuration";
+
+  AssertThrow(mapping_spatial.get() != nullptr, dealii::ExcMessage("Mapping not initialized."));
+  if(vector.size() > 0)
+  {
+    AssertThrow(vector.size() == dof_handler.n_dofs(),
+                dealii::ExcMessage("Vector provided does not match the operator's DoFHandler."));
+
+    // Set up `VectorWriter` to export the vector in the mapped triangulation.
+    OutputDataBase output_data;
+    output_data.directory          = folder;
+    output_data.filename           = filename;
+    output_data.degree             = dof_handler.get_fe().degree;
+    output_data.write_higher_order = output_data.degree > 1;
+
+    VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
+    std::vector<std::string>  component_names(dim, "vector");
+    std::vector<bool>         component_is_part_of_vector(dim, true);
+    vector_writer.add_data_vector(vector,
+                                  dof_handler,
+                                  component_names,
+                                  component_is_part_of_vector);
+    vector_writer.write_pvtu(mapping_spatial->get_mapping().get());
+  }
+  else
+  {
+    // No vector given, just export the mapped triangulation.
+    write_grid(
+      this->matrix_free->get_dof_handler(this->operator_data.dof_index).get_triangulation(),
+      *mapping_spatial->get_mapping(),
+      n_subdivisions,
+      folder,
+      filename,
+      0 /* counter */,
+      mpi_comm);
+  }
+
+  // Export initial reference configuration.
+  AssertThrow(mapping_undeformed.get() != nullptr, dealii::ExcMessage("Mapping not initialized."));
+  write_grid(this->matrix_free->get_dof_handler(this->operator_data.dof_index).get_triangulation(),
+             *mapping_undeformed,
+             n_subdivisions,
+             folder,
+             "initial_reference_configuration",
+             0 /* counter */,
+             mpi_comm);
+}
+
+template<int dim, typename Number>
+void
+NonLinearOperator<dim, Number>::shift_reference_configuration(
+  VectorType const &              vector,
+  dealii::DoFHandler<dim> const * dof_handler,
+  unsigned int const              level)
+{
+  // Invalid state in `mapping_undeformed` would lead to different behavior in
+  // `MappingDoFVector::initialize_mapping_from_dof_vector`.
+  AssertThrow(this->mapping_undeformed != nullptr,
+              dealii::ExcMessage("Mapping defining initial reference "
+                                 "configuration is not set."));
+  AssertThrow(this->mapping_spatial != nullptr,
+              dealii::ExcMessage("Mapping defining current reference "
+                                 "configuration is not initialized."));
+
+  // Check for valid deformation state.
+  bool const valid_deformation_field = valid_deformation(vector);
+  AssertThrow(valid_deformation_field,
+              dealii::ExcMessage("Invalid deformation field; cannot "
+                                 "shift reference configuration."));
+
+  AssertThrow(shift_vector.size() == vector.size(),
+              dealii::ExcMessage("Provided vector does not match the internal vector."));
+
+  // Set internal copy of the shift vector tracing the state and udpate ghost values.
+  set_shift_vector(vector);
+
+  // Update the mapping describing the current reference configuration:
+  // .) `mapping_undeformed` is the initial reference configuration
+  // .) `vector` is the deformation from the initial to the current reference configuration
+  // .) `mapping_spatial` is the current reference configuration
+  // Since both `mapping_undeformed` and `vector` are filled, the final grid position is given by
+  // the summed effect of the two arguments `mapping_undeformed` and `vector`. Note that the
+  // behavior of `MappingDoFVector::initialize_mapping_from_dof_vector` is different if any of the
+  // two arguments is empty.
+  if(dof_handler == nullptr)
+  {
+    // `dof_handler` input argument is invalid; use `DoFHandler` given in own `MatrixFree` object.
+    // This is the call variant on the fine grid with easier interface.
+    this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
+                                                              this->shift_vector,
+                                                              this->matrix_free->get_dof_handler(
+                                                                this->operator_data.dof_index));
+  }
+  else
+  {
+    // `dof_handler` input argument is valid and can be used. This is the call variant to update the
+    // mappings of the coarse level operators within multigrid.
+    this->mapping_spatial->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
+                                                              this->shift_vector,
+                                                              *dof_handler,
+                                                              level);
+  }
+
+  this->matrix_free_spatial.update_mapping(*mapping_spatial->get_mapping());
+}
+
+template<int dim, typename Number>
 typename NonLinearOperator<dim, Number>::VectorType const &
 NonLinearOperator<dim, Number>::get_solution_linearization() const
 {
   return displacement_lin;
+}
+
+template<int dim, typename Number>
+typename NonLinearOperator<dim, Number>::VectorType const &
+NonLinearOperator<dim, Number>::get_shift_vector() const
+{
+  return shift_vector;
+}
+
+template<int dim, typename Number>
+void
+NonLinearOperator<dim, Number>::set_shift_vector(VectorType const & vector)
+{
+  shift_vector.copy_locally_owned_data_from(vector);
+  shift_vector.update_ghost_values();
 }
 
 template<int dim, typename Number>
@@ -171,7 +340,8 @@ NonLinearOperator<dim, Number>::apply(VectorType & dst, VectorType const & src) 
 {
   AssertThrow(not this->is_dg, dealii::ExcMessage("NonLinearOperator::apply supports CG only"));
 
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     // Compute matrix-vector product. Constrained degrees of freedom in the src-vector will not be
     // used. The function read_dof_values() (or gather_evaluate()) uses the homogeneous boundary
@@ -217,7 +387,8 @@ NonLinearOperator<dim, Number>::apply_before_after(
 {
   AssertThrow(not this->is_dg, dealii::ExcMessage("NonLinearOperator::apply supports CG only"));
 
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     // Compute matrix-vector product. Constrained degrees of freedom in the src-vector will not be
     // used. The function read_dof_values() (or gather_evaluate()) uses the homogeneous boundary
@@ -304,7 +475,8 @@ NonLinearOperator<dim, Number>::add_diagonal(VectorType & diagonal) const
   AssertThrow(not this->is_dg,
               dealii::ExcMessage("NonLinearOperator::add_diagonal supports CG only"));
 
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     dealii::MatrixFreeTools::
       compute_diagonal<dim, -1, 0, dim /* n_components */, Number, dealii::VectorizedArray<Number>>(
@@ -366,11 +538,12 @@ NonLinearOperator<dim, Number>::cell_loop_nonlinear(
     reinit_cell_nonlinear(integrator_inhom, cell);
     integrator.reinit(cell);
 
-    // Evaluating the stress terms requires interpolation in the reference
-    // configuration. Since we call cell_loop_nonlinear() on the most recent
-    // iterate, this is only needed for the spatial integration approach.
-    if(this->operator_data.spatial_integration and
-       (not this->operator_data.force_material_residual))
+    // Evaluating the stress terms requires interpolation in the reference configuration. Since we
+    // call `cell_loop_nonlinear()` on the most recent iterate, this is only needed for the spatial
+    // integration approach (and *not* for `ProblemType::InverseAnalysis`).
+    bool const spatial_integration_residual =
+      this->operator_data.spatial_integration and (not this->operator_data.force_material_residual);
+    if(spatial_integration_residual)
     {
       integrator_lin->reinit(cell);
       integrator_lin->read_dof_values(displacement_lin);
@@ -523,7 +696,7 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
 
     // In case of a pull-back of the traction vector, we need to evaluate the displacement gradient
     // to obtain the surface area ratio da/dA. We write the integrator flags explicitly in this case
-    // since they depend on the parameter pull_back_traction. On Robin boundaries, we need the
+    // since they depend on the parameter `pull_back_traction`. On Robin boundaries, we need the
     // solution values.
     BoundaryType const boundary_type =
       this->operator_data.bc->get_boundary_type(matrix_free.get_boundary_id(face));
@@ -582,8 +755,8 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   }
 #endif
 
-  bool const spatial_residual_evaluation =
-    this->operator_data.spatial_integration and not this->operator_data.force_material_residual;
+  bool const spatial_integration_residual =
+    this->operator_data.spatial_integration and (not this->operator_data.force_material_residual);
 
   vector traction;
 
@@ -602,7 +775,7 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
         traction -= calculate_neumann_value<dim, Number>(
           q, integrator, boundary_type, boundary_id, this->operator_data.bc, this->time);
 
-        if(spatial_residual_evaluation)
+        if(spatial_integration_residual)
         {
           if(this->operator_data.pull_back_traction)
           {
@@ -808,9 +981,8 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
   }
   else
   {
-    // Evaluate the residual operator in the material configuration.
-    // `integrator_lin` is not initialized on this cell, since we call
-    // this cell loop only on the most recent iterate.
+    // Evaluate the residual operator in the material configuration. `integrator_lin` is not
+    // initialized on this cell, since we call this cell loop only on the most recent iterate.
     if(this->operator_data.stable_formulation)
     {
       for(unsigned int q = 0; q < integrator.n_q_points; ++q)
@@ -1042,8 +1214,6 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
       {
         for(unsigned int q = 0; q < integrator.n_q_points; ++q)
         {
-          // TODO: compare these variants.
-          // tensor const Grad_d_lin = integrator_lin->get_gradient(q);
           tensor const Grad_d_lin =
             material->gradient_displacement(integrator.get_current_cell_index(), q);
 
@@ -1071,8 +1241,6 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
       {
         for(unsigned int q = 0; q < integrator.n_q_points; ++q)
         {
-          // TODO: compare these variants.
-          // tensor const Grad_d_lin = integrator_lin->get_gradient(q);
           tensor const Grad_d_lin =
             material->gradient_displacement(integrator.get_current_cell_index(), q);
 
@@ -1107,7 +1275,8 @@ NonLinearOperator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> const 
                                           VectorType const &                      src,
                                           Range const &                           range) const
 {
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     IntegratorCell integrator = IntegratorCell(this->matrix_free_spatial,
                                                this->operator_data.dof_index,
@@ -1137,7 +1306,8 @@ void
 NonLinearOperator<dim, Number>::calculate_system_matrix(
   dealii::TrilinosWrappers::SparseMatrix & system_matrix) const
 {
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     this->matrix_free_spatial.cell_loop(&This::cell_loop_calculate_system_matrix,
                                         this,
@@ -1161,7 +1331,8 @@ void
 NonLinearOperator<dim, Number>::calculate_system_matrix(
   dealii::PETScWrappers::MPI::SparseMatrix & system_matrix) const
 {
-  if(this->operator_data.spatial_integration)
+  if(this->operator_data.spatial_integration or
+     this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     this->matrix_free_spatial.cell_loop(&This::cell_loop_calculate_system_matrix,
                                         this,

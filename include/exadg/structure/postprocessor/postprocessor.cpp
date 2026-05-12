@@ -53,6 +53,13 @@ PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator_in)
 }
 
 template<int dim, typename Number>
+PostProcessorData<dim> const &
+PostProcessor<dim, Number>::get_data() const
+{
+  return pp_data;
+}
+
+template<int dim, typename Number>
 bool
 PostProcessor<dim, Number>::requires_scalar_postprocessing_field() const
 {

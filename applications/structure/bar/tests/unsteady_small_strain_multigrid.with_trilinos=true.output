@@ -74,9 +74,9 @@ Linear solver:
   Relative solver tolerance:                 1.0000e-03
   Maximum size of Krylov space:              30
       AMG type:                              ML
-      Smoother sweeps:                       2
-      Number of cycles:                      2
-      Smoother type:                         ILU
+      Smoother sweeps:                       12
+      Number of cycles:                      1
+      Smoother type:                         Chebyshev
 
 Generating grid for 3-dimensional problem:
 

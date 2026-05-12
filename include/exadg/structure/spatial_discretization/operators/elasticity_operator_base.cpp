@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/evaluate_functions.h>
+#include <exadg/grid/mapping_dof_vector.h>
 #include <exadg/structure/spatial_discretization/operators/elasticity_operator_base.h>
 
 namespace ExaDG
@@ -235,6 +236,27 @@ ElasticityOperatorBase<dim, Number>::set_inhomogeneous_boundary_values(VectorTyp
     }
   }
 }
+
+template<int dim, typename Number>
+void
+ElasticityOperatorBase<dim, Number>::get_reference_coordinates(VectorType & grid_coordinates) const
+{
+  // Construct `MappingDoFVector` and return grid coordinate vector.
+  dealii::DoFHandler<dim> const & dof_handler =
+    this->matrix_free->get_dof_handler(operator_data.dof_index);
+  dealii::FiniteElement<dim> const & fe = dof_handler.get_fe();
+
+  MappingDoFVector<dim, Number> mapping_dof_vector(fe.degree);
+
+  dealii::Mapping<dim> const & mapping_undeformed = *this->matrix_free->get_mapping_info().mapping;
+  // Empty input argument signals that no displacements shall be added to the grid coordinates
+  // defined by `mapping_undeformed`. Initializes `dealii::MappingQCache` internally.
+  VectorType dummy;
+  mapping_dof_vector.initialize_mapping_from_dof_vector(&mapping_undeformed, dummy, dof_handler);
+
+  mapping_dof_vector.fill_grid_coordinates_vector(grid_coordinates, dof_handler);
+}
+
 
 template<int dim, typename Number>
 void

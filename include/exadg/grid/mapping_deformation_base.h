@@ -67,7 +67,9 @@ public:
     // described by mapping_undeformed.
     dealii::DoFHandler<dim> dof_handler(triangulation);
     VectorType              displacement_vector;
-    this->initialize_mapping_from_dof_vector(mapping_undeformed, displacement_vector, dof_handler);
+    this->initialize_mapping_from_dof_vector(mapping_undeformed.get(),
+                                             displacement_vector,
+                                             dof_handler);
   }
 
   /**

@@ -37,6 +37,7 @@ struct OperatorData : public OperatorBaseData
 {
   OperatorData()
     : OperatorBaseData(),
+      problem_type(ProblemType::Undefined),
       large_deformation(false),
       pull_back_traction(false),
       spatial_integration(false),
@@ -53,6 +54,8 @@ struct OperatorData : public OperatorBaseData
 
   std::shared_ptr<BoundaryDescriptor<dim> const> bc;
   std::shared_ptr<MaterialDescriptor const>      material_descriptor;
+
+  ProblemType problem_type;
 
   // Boolean parameter differentiating between linear elasticity and finite strain theory
   bool large_deformation;
@@ -171,6 +174,13 @@ public:
 
   void
   set_inhomogeneous_boundary_values(VectorType & dst) const final;
+
+  /*
+   * Fill a DoF vector with the grid coordinates using the mapping stored in `this->matrix_free`,
+   * which always refers to the Lagrangian reference frame.
+   */
+  void
+  get_reference_coordinates(VectorType & grid_coordinates) const;
 
 protected:
   void

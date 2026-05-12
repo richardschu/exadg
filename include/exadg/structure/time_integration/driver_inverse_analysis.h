@@ -2,7 +2,7 @@
  *
  *  ExaDG - High-Order Discontinuous Galerkin for the Exa-Scale
  *
- *  Copyright (C) 2021 by the ExaDG authors
+ *  Copyright (C) 2026 by the ExaDG authors
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,14 +19,15 @@
  *  ______________________________________________________________________
  */
 
-#ifndef EXADG_STRUCTURE_TIME_INTEGRATION_DRIVER_QUASI_STATIC_PROBLEMS_H_
-#define EXADG_STRUCTURE_TIME_INTEGRATION_DRIVER_QUASI_STATIC_PROBLEMS_H_
+#ifndef EXADG_STRUCTURE_TIME_INTEGRATION_DRIVER_INVERSE_ANALYSIS_H_
+#define EXADG_STRUCTURE_TIME_INTEGRATION_DRIVER_INVERSE_ANALYSIS_H_
 
 // deal.II
 #include <deal.II/base/timer.h>
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
@@ -46,17 +47,17 @@ class Operator;
 }
 
 template<int dim, typename Number>
-class DriverQuasiStatic
+class DriverInverseAnalysis
 {
 private:
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
 
 public:
-  DriverQuasiStatic(std::shared_ptr<Interface::Operator<Number>> operator_in,
-                    std::shared_ptr<PostProcessor<dim, Number>>  postprocessor_in,
-                    Parameters const &                           param_in,
-                    MPI_Comm const &                             mpi_comm_in,
-                    bool const                                   is_test_in);
+  DriverInverseAnalysis(std::shared_ptr<Interface::Operator<Number>> operator_in,
+                        std::shared_ptr<PostProcessor<dim, Number>>  postprocessor_in,
+                        Parameters const &                           param_in,
+                        MPI_Comm const &                             mpi_comm_in,
+                        bool const                                   is_test_in);
 
   void
   setup();
@@ -77,6 +78,12 @@ private:
   void
   initialize_solution();
 
+  bool
+  check_convergence(VectorType const & update,
+                    VectorType const & iterate,
+                    unsigned int const step_number,
+                    double const       load_factor);
+
   void
   do_solve();
 
@@ -87,7 +94,7 @@ private:
   solve_step(double const load_factor, bool const update_preconditioner);
 
   void
-  postprocessing(bool const errors_only = false) const;
+  postprocessing(bool const errors_only = false, bool const export_configuration = false) const;
 
   std::shared_ptr<Interface::Operator<Number>> pde_operator;
 
@@ -111,8 +118,16 @@ private:
   // For the purpose of extrapolating the displacements, we also need to store the
   // load_increment of the last load step.
   double last_load_increment;
+  bool   use_extrapolation;
 
   unsigned int step_number;
+
+  // The inverse problem is solved by solving a sequence of forward problems. Once the full load is
+  // applied, iterate until the displacement increment is sufficiently small.
+  Newton::SolverData inverse_analysis_solver_data;
+
+  // tolerance for `load_factor` to be considered as fully applied
+  static double constexpr eps_load_factor = 1.e-10;
 
   std::shared_ptr<TimerTree> timer_tree;
 
@@ -125,4 +140,4 @@ private:
 } // namespace Structure
 } // namespace ExaDG
 
-#endif /* EXADG_STRUCTURE_TIME_INTEGRATION_DRIVER_QUASI_STATIC_PROBLEMS_H_ */
+#endif /* EXADG_STRUCTURE_TIME_INTEGRATION_DRIVER_INVERSE_ANALYSIS_H_ */

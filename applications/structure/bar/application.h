@@ -33,78 +33,42 @@ class DisplacementDBC : public dealii::Function<dim>
 {
 public:
   DisplacementDBC(double const displacement,
-                  bool const   quasistatic_solver,
+                  bool const   load_ramping,
                   bool const   unsteady,
+                  bool const   is_displacement_else_acceleration,
                   double const end_time)
     : dealii::Function<dim>(dim),
       displacement(displacement),
-      quasistatic(quasistatic_solver),
+      load_ramping(load_ramping),
       unsteady(unsteady),
+      is_displacement_else_acceleration(is_displacement_else_acceleration),
       end_time(end_time)
   {
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  value(dealii::Point<dim> const & point, unsigned int const component) const final
   {
-    (void)p;
+    (void)point;
 
-    double factor = 1.0;
-    if(quasistatic)
-      factor *= this->get_time();
-
-    if(unsteady)
-      factor = std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0);
-
-    if(c == 0)
-      return displacement * factor;
-    else
-      return 0.0;
-  }
-
-private:
-  double const displacement;
-  bool const   quasistatic;
-  bool const   unsteady;
-  double const end_time;
-};
-
-// TODO: only the time factor is different compared to the above function -> refactor and unify the
-// code
-template<int dim>
-class AccelerationDBC : public dealii::Function<dim>
-{
-public:
-  AccelerationDBC(double const displacement,
-                  bool const   quasistatic_solver,
-                  bool const   unsteady,
-                  double const end_time)
-    : dealii::Function<dim>(dim),
-      displacement(displacement),
-      quasistatic(quasistatic_solver),
-      unsteady(unsteady),
-      end_time(end_time)
-  {
-  }
-
-  double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
-  {
-    (void)p;
-
-    double factor = 1.0;
-    if(quasistatic)
-      factor *= this->get_time();
+    double factor = load_ramping ? this->get_time() : 1.0;
 
     if(unsteady)
     {
-      factor =
-        2 * std::pow(2.0 * dealii::numbers::PI / end_time, 2.0) *
-        (1.0 -
-         2.0 * std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0));
+      if(is_displacement_else_acceleration)
+      {
+        factor = std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0);
+      }
+      else
+      {
+        factor =
+          2 * std::pow(2.0 * dealii::numbers::PI / end_time, 2.0) *
+          (1.0 -
+           2.0 * std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0));
+      }
     }
 
-    if(c == 0)
+    if(component == 0)
       return displacement * factor;
     else
       return 0.0;
@@ -112,8 +76,9 @@ public:
 
 private:
   double const displacement;
-  bool const   quasistatic;
+  bool const   load_ramping;
   bool const   unsteady;
+  bool const   is_displacement_else_acceleration;
   double const end_time;
 };
 
@@ -121,21 +86,19 @@ template<int dim>
 class VolumeForce : public dealii::Function<dim>
 {
 public:
-  VolumeForce(double volume_force, bool quasistatic_solver)
-    : dealii::Function<dim>(dim), volume_force(volume_force), quasistatic(quasistatic_solver)
+  VolumeForce(double volume_force, bool load_ramping)
+    : dealii::Function<dim>(dim), volume_force(volume_force), load_ramping(load_ramping)
   {
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  value(dealii::Point<dim> const & point, unsigned int const component) const final
   {
-    (void)p;
+    (void)point;
 
-    double factor = 1.0;
-    if(quasistatic)
-      factor *= this->get_time();
+    double factor = load_ramping ? this->get_time() : 1.0;
 
-    if(c == 0)
+    if(component == 0)
       return volume_force * factor; // volume force in x-direction
     else
       return 0.0;
@@ -143,28 +106,26 @@ public:
 
 private:
   double const volume_force;
-  bool const   quasistatic;
+  bool const   load_ramping;
 };
 
 template<int dim>
 class AreaForce : public dealii::Function<dim>
 {
 public:
-  AreaForce(double areaforce, bool const quasistatic_solver)
-    : dealii::Function<dim>(dim), areaforce(areaforce), quasistatic(quasistatic_solver)
+  AreaForce(double areaforce, bool const load_ramping)
+    : dealii::Function<dim>(dim), areaforce(areaforce), load_ramping(load_ramping)
   {
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  value(dealii::Point<dim> const & point, unsigned int const component) const final
   {
-    (void)p;
+    (void)point;
 
-    double factor = 1.0;
-    if(quasistatic)
-      factor *= this->get_time();
+    double factor = load_ramping ? this->get_time() : 1.0;
 
-    if(c == 0)
+    if(component == 0)
       return areaforce * factor; // area force  in x-direction
     else
       return 0.0;
@@ -172,7 +133,7 @@ public:
 
 private:
   double const areaforce;
-  bool const   quasistatic;
+  bool const   load_ramping;
 };
 
 // analytical solution (if a Neumann BC is used at the right boundary)
@@ -276,11 +237,12 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type            = problem_type;
-    this->param.body_force              = use_volume_force;
-    this->param.large_deformation       = large_deformation;
-    this->param.pull_back_body_force    = false;
-    this->param.pull_back_traction      = false;
+    this->param.problem_type      = problem_type;
+    this->param.body_force        = use_volume_force;
+    this->param.large_deformation = large_deformation;
+    // The inverse problem needs the pull-back of the loading in case it immediately converges.
+    this->param.pull_back_body_force    = problem_type == ProblemType::InverseAnalysis;
+    this->param.pull_back_traction      = problem_type == ProblemType::InverseAnalysis;
     this->param.spatial_integration     = spatial_integration;
     this->param.cache_level             = cache_level;
     this->param.check_type              = check_type;
@@ -317,13 +279,15 @@ private:
       this->param.grid.create_coarse_triangulations = false; // can also be set to true if desired
     }
 
-    this->param.load_increment = load_increment;
+    this->param.load_increment    = load_increment;
+    this->param.use_extrapolation = true;
 
-    this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);
-    this->param.solver              = Solver::FGMRES;
-    this->param.solver_data         = SolverData(1e3, 1.e-14, 1.e-8, 30);
-    this->param.preconditioner      = preconditioner;
-    this->param.multigrid_data.type = MultigridType::phMG;
+    this->param.inverse_analysis_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.newton_solver_data           = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.solver                       = Solver::FGMRES;
+    this->param.solver_data                  = SolverData(1e3, 1.e-14, 1.e-8, 30);
+    this->param.preconditioner               = preconditioner;
+    this->param.multigrid_data.type          = MultigridType::phMG;
 
     this->param.multigrid_data.p_sequence             = PSequenceType::DecreaseByOne; // Bisect;
     this->param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
@@ -347,12 +311,12 @@ private:
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.elliptic = true;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.higher_order_elements =
       this->param.degree > 1;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.n_cycles              = 2;
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.n_cycles              = 1;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.w_cycle               = false;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.aggregation_threshold = 1e-4;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_sweeps       = 2;
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_sweeps       = 12;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_overlap      = 2;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_type         = "ILU";
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_type         = "Chebyshev";
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.coarse_type           = "Amesos-KLU";
 #endif
 
@@ -520,10 +484,8 @@ private:
     this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(1, mask_left));
 
     // right face: Dirichlet or Neumann BC
-
-    bool quasistatic_solver = false;
-    if(this->param.problem_type == ProblemType::QuasiStatic)
-      quasistatic_solver = true;
+    bool const load_ramping = this->param.problem_type == ProblemType::QuasiStatic or
+                              this->param.problem_type == ProblemType::InverseAnalysis;
 
     if(boundary_type == BoundaryType::Dirichlet)
     {
@@ -536,16 +498,26 @@ private:
 
       bool const unsteady = (this->param.problem_type == ProblemType::Unsteady);
       this->boundary_descriptor->dirichlet_bc.insert(
-        pair(2, new DisplacementDBC<dim>(displacement, quasistatic_solver, unsteady, end_time)));
+        pair(2,
+             new DisplacementDBC<dim>(displacement,
+                                      load_ramping,
+                                      unsteady,
+                                      true /* is_displacement_else_acceleration */,
+                                      end_time)));
       this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
-        pair(2, new AccelerationDBC<dim>(displacement, quasistatic_solver, unsteady, end_time)));
+        pair(2,
+             new DisplacementDBC<dim>(displacement,
+                                      load_ramping,
+                                      unsteady,
+                                      false /* is_displacement_else_acceleration */,
+                                      end_time)));
 
       this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(2, mask_right));
     }
     else if(boundary_type == BoundaryType::Neumann)
     {
       this->boundary_descriptor->neumann_bc.insert(
-        pair(2, new AreaForce<dim>(area_force, quasistatic_solver)));
+        pair(2, new AreaForce<dim>(area_force, load_ramping)));
     }
     else
     {
@@ -683,13 +655,12 @@ private:
   void
   set_field_functions() final
   {
-    bool quasistatic_solver = false;
-    if(this->param.problem_type == ProblemType::QuasiStatic)
-      quasistatic_solver = true;
+    bool load_ramping = this->param.problem_type == ProblemType::QuasiStatic or
+                        this->param.problem_type == ProblemType::InverseAnalysis;
 
     if(use_volume_force)
       this->field_functions->right_hand_side.reset(
-        new VolumeForce<dim>(this->volume_force, quasistatic_solver));
+        new VolumeForce<dim>(this->volume_force, load_ramping));
     else
       this->field_functions->right_hand_side.reset(new dealii::Functions::ZeroFunction<dim>(dim));
 

@@ -77,6 +77,14 @@ public:
   void
   update() final;
 
+  /*
+   * This function shifts the reference configuration of the multigrid operators by interpolating
+   * `vector` and calling `NonLinearOperator::shift_reference_configuration()`. Hence, this is only
+   * relevant for finite deformations, i.e., `large_deformation == true`.
+   */
+  void
+  shift_reference_configuration(VectorType const & vector);
+
 private:
   void
   initialize_dof_handler_and_constraints(

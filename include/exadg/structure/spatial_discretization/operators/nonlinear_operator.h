@@ -98,10 +98,42 @@ public:
   set_mapping_undeformed(std::shared_ptr<dealii::Mapping<dim> const> mapping) const;
 
   /**
+   * Set the current reference configuration to be the initial reference configuration shifted by
+   * the vector in the argument. In the multigrid case, the `DoFHandler` and suitable multigrid
+   * level index have to be provided.
+   */
+  void
+  shift_reference_configuration(VectorType const &              vector,
+                                dealii::DoFHandler<dim> const * dof_handler = nullptr,
+                                unsigned int const level = dealii::numbers::invalid_unsigned_int);
+
+  /**
+   * Export the current configuration the operator is defined in. For the spatial integration
+   * approach, this is the spatial configuration (material configuration plus displacement map), for
+   * the inverse analysis, this is the current reference configuration considered (initial material
+   * configuration minus prestress displacement map). The vector, if non-empty, is exported as well.
+   */
+  void
+  export_configuration(std::string const & folder, VectorType const & vector) const;
+
+  /**
    * Linearized operator: Returns the linearization vector.
    */
   VectorType const &
   get_solution_linearization() const;
+
+  /**
+   * Returns the shift vector used for shifting the reference configuration for inverse analysis
+   * problems.
+   */
+  VectorType const &
+  get_shift_vector() const;
+
+  /**
+   * Set the shift vector used for shifting the initial reference configuration.
+   */
+  void
+  set_shift_vector(VectorType const & vector);
 
   /**
    * Set cell data given a linearization vector.
@@ -296,8 +328,9 @@ private:
   do_cell_integral(IntegratorCell & integrator) const override;
 
   /**
-   * Overwrite members in OperatorBase to optionally use spatial integration
-   * via matrix_free_spatial.
+   * Overwrite members in OperatorBase to optionally use spatial integration via
+   * `matrix_free_spatial`. This is also used for inverse analysis, since we have to update the
+   * mapping *and* potentially check results solving the forward problem.
    */
   void
   cell_loop(dealii::MatrixFree<dim, Number> const & matrix_free,
@@ -307,6 +340,8 @@ private:
 
   mutable std::shared_ptr<IntegratorCell> integrator_lin;
   mutable VectorType                      displacement_lin;
+
+  VectorType shift_vector;
 
   mutable dealii::MatrixFree<dim, Number>                matrix_free_spatial;
   mutable std::shared_ptr<MappingDoFVector<dim, Number>> mapping_spatial;

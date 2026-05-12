@@ -75,6 +75,7 @@ SET(TARGET_SRC
      include/exadg/time_integration/time_int_bdf_base.cpp
      include/exadg/time_integration/time_int_explicit_runge_kutta_base.cpp
      include/exadg/time_integration/time_int_gen_alpha_base.cpp
+     include/exadg/grid/mapping_dof_vector.cpp
      include/exadg/functions_and_boundary_conditions/container_interface_data.cpp
      include/exadg/functions_and_boundary_conditions/linear_interpolation.cpp
      include/exadg/functions_and_boundary_conditions/interface_coupling.cpp
@@ -186,6 +187,7 @@ SET(TARGET_SRC
      include/exadg/structure/preconditioners/multigrid_preconditioner.cpp
      include/exadg/structure/time_integration/driver_steady_problems.cpp
      include/exadg/structure/time_integration/driver_quasi_static_problems.cpp
+     include/exadg/structure/time_integration/driver_inverse_analysis.cpp
      include/exadg/structure/time_integration/time_int_gen_alpha.cpp
      include/exadg/structure/postprocessor/output_generator.cpp
      include/exadg/structure/postprocessor/postprocessor.cpp

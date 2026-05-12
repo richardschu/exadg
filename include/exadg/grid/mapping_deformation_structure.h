@@ -157,7 +157,7 @@ public:
       }
     }
 
-    this->initialize_mapping_from_dof_vector(this->mapping_undeformed,
+    this->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
                                              displacement,
                                              pde_operator->get_dof_handler());
   }

@@ -66,6 +66,11 @@ Parameters::Parameters()
     // quasi-static solver
     load_increment(1.0),
 
+    // The inverse analysis and quasi static solvers use extrapolation during the load ramping to
+    // get an improved initial guess. This might be less robust than taking the previous load step's
+    // solution, and is hence optional.
+    use_extrapolation(true),
+
     // SPATIAL DISCRETIZATION
     grid(GridData()),
     mapping_degree(1),
@@ -75,6 +80,7 @@ Parameters::Parameters()
     sparse_matrix_type(SparseMatrixType::Undefined),
 
     // SOLVER
+    inverse_analysis_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
     solver(Solver::Undefined),
     solver_data(SolverData(1e4, 1.e-12, 1.e-6, 100)),
@@ -94,11 +100,11 @@ Parameters::check() const
   AssertThrow(problem_type != ProblemType::Undefined,
               dealii::ExcMessage("Parameter must be defined."));
 
-  if(problem_type == ProblemType::QuasiStatic)
+  if(problem_type == ProblemType::QuasiStatic or problem_type == ProblemType::InverseAnalysis)
   {
     AssertThrow(large_deformation == true,
-                dealii::ExcMessage(
-                  "QuasiStatic solver only implemented for nonlinear formulation."));
+                dealii::ExcMessage("QuasiStatic and InverseAnalysis solvers only "
+                                   "implemented for nonlinear formulation."));
   }
 
   if(problem_type == ProblemType::Unsteady)
@@ -117,7 +123,7 @@ Parameters::check() const
 
   if(spatial_integration)
   {
-    AssertThrow(large_deformation,
+    AssertThrow(large_deformation == true,
                 dealii::ExcMessage("Spatial integration only different from "
                                    "material configuration for finite strain problems."));
 
@@ -126,10 +132,39 @@ Parameters::check() const
                                    "need to match for spatial integration."));
   }
 
+  if(problem_type == ProblemType::InverseAnalysis)
+  {
+    AssertThrow(mapping_degree == degree,
+                dealii::ExcMessage("Mapping degree and approximation degree "
+                                   "need to match for inverse analysis."));
+    if(involves_h_multigrid())
+    {
+      AssertThrow(mapping_degree_coarse_grids == degree,
+                  dealii::ExcMessage("Mapping degree on coarse grids and approximation"
+                                     "degree need to match to update coarse mappings."));
+    }
+    AssertThrow(spatial_integration == false,
+                dealii::ExcMessage("Spatial integration not implemented for inverse analysis."));
+    AssertThrow(large_deformation == true,
+                dealii::ExcMessage("Inverse analysis only implemented for nonlinear formulation."));
+    AssertThrow(pull_back_body_force == true,
+                dealii::ExcMessage("Not pulling back the body force is "
+                                   "inconsistent for inverse analysis."));
+    AssertThrow(pull_back_traction == true,
+                dealii::ExcMessage("Not pulling back the traction is "
+                                   "inconsistent for inverse analysis."));
+  }
+
   // SPATIAL DISCRETIZATION
   grid.check();
 
   AssertThrow(degree > 0, dealii::ExcMessage("Polynomial degree must be larger than zero."));
+  AssertThrow(mapping_degree > 0, dealii::ExcMessage("Mapping degree must be larger than zero."));
+  if(involves_h_multigrid())
+  {
+    AssertThrow(mapping_degree_coarse_grids > 0,
+                dealii::ExcMessage("Mapping degree for coarse grids must be larger than zero."));
+  }
 
   if(use_matrix_based_implementation)
   {
@@ -211,7 +246,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 {
   pcout << std::endl << "Temporal discretization:" << std::endl;
 
-  if(problem_type == ProblemType::QuasiStatic)
+  if(problem_type == ProblemType::QuasiStatic or problem_type == ProblemType::InverseAnalysis)
   {
     print_parameter(pcout, "load_increment", load_increment);
   }
@@ -256,6 +291,13 @@ void
 Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) const
 {
   pcout << std::endl << "Solver:" << std::endl;
+
+  // Inverse Analysis solver
+  if(problem_type == ProblemType::InverseAnalysis)
+  {
+    pcout << std::endl << "Inverse analysis solver:" << std::endl;
+    inverse_analysis_solver_data.print(pcout);
+  }
 
   // nonlinear solver
   if(large_deformation)
