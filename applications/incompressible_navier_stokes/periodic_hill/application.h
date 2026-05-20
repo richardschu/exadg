@@ -35,8 +35,13 @@ template<int dim>
 class InitialSolutionVelocity : public dealii::Function<dim>
 {
 public:
-  InitialSolutionVelocity(double const bulk_velocity, double const H, double const height)
-    : dealii::Function<dim>(dim, 0.0), bulk_velocity(bulk_velocity), H(H), height(height)
+  InitialSolutionVelocity(double const bulk_velocity,
+                          double const height_hill,
+                          double const height_channel_minimum)
+    : dealii::Function<dim>(dim, 0.0),
+      bulk_velocity(bulk_velocity),
+      height_hill(height_hill),
+      height_channel_minimum(height_channel_minimum)
   {
   }
 
@@ -48,8 +53,10 @@ public:
     if(component == 0)
     {
       // initial conditions
-      if(p[1] > H and p[1] < (H + height))
-        result = bulk_velocity * (p[1] - H) * ((H + height) - p[1]) / std::pow(height / 2.0, 2.0);
+      if(p[1] > height_hill and p[1] < (height_hill + height_channel_minimum))
+        result = bulk_velocity * (p[1] - height_hill) *
+                 ((height_hill + height_channel_minimum) - p[1]) /
+                 std::pow(height_channel_minimum / 2.0, 2.0);
 
       // add some random perturbations
       result *= (1.0 + 0.1 * (((double)rand() / RAND_MAX - 0.5) / 0.5));
@@ -59,7 +66,7 @@ public:
   }
 
 private:
-  double const bulk_velocity, H, height;
+  double const bulk_velocity, height_hill, height_channel_minimum;
 };
 
 template<int dim>
@@ -138,31 +145,50 @@ public:
 
     prm.enter_subsection("Application");
     {
-      prm.add_parameter("WriteRestart", write_restart, "Should restart files be written?");
-      prm.add_parameter("ReadRestart", read_restart, "Is this a restarted simulation?");
+      prm.add_parameter("ConsiderMapping",
+                        consider_mapping,
+                        "Should the box domain be deformed?",
+                        dealii::Patterns::Bool());
+      prm.add_parameter("WriteRestart",
+                        write_restart,
+                        "Should restart files be written?",
+                        dealii::Patterns::Bool());
+      prm.add_parameter("ReadRestart",
+                        read_restart,
+                        "Is this a restarted simulation?",
+                        dealii::Patterns::Bool());
       prm.add_parameter("RestartDirectory",
                         restart_directory,
                         "Directory with restart data to start the simulation from.");
       prm.add_parameter("RestartIntervalTime",
                         restart_interval_time,
-                        "Time between writes of restart data in multiples of flow-through time.");
+                        "Time between writes of restart data in multiples of flow-through time.",
+                        dealii::Patterns::Double());
       prm.add_parameter("TriangulationType", triangulation_type, "Type of triangulation");
       prm.add_parameter("TemporalDiscretization",
                         temporal_discretization,
                         "Temporal discretization");
       prm.add_parameter("SpatialDiscretization", spatial_discretization, "Spatial discretization");
-      prm.add_parameter("Inviscid", inviscid, "Is this an inviscid simulation?");
-      prm.add_parameter("ReynoldsNumber", Re, "Reynolds number (ignored if Inviscid = true)");
+      prm.add_parameter("Inviscid",
+                        inviscid,
+                        "Is this an inviscid simulation?",
+                        dealii::Patterns::Bool());
+      prm.add_parameter("ReynoldsNumber",
+                        Re,
+                        "Reynolds number (ignored if Inviscid = true)",
+                        dealii::Patterns::Double());
       prm.add_parameter("EndTime",
                         end_time_multiples,
                         "End time in multiples of flow-through time.",
                         dealii::Patterns::Double(0.0, 1000.0));
       prm.add_parameter("GridStretchFactor",
                         grid_stretch_factor,
-                        "Factor describing grid stretching in vertical direction.");
+                        "Factor describing grid stretching in vertical direction.",
+                        dealii::Patterns::Double());
       prm.add_parameter("CalculateStatistics",
                         calculate_statistics,
-                        "Decides whether statistics are calculated.");
+                        "Decides whether statistics are calculated.",
+                        dealii::Patterns::Bool());
       prm.add_parameter("SampleStartTime",
                         sample_start_time_multiples,
                         "Start time of sampling in multiples of flow-through time.",
@@ -190,7 +216,7 @@ private:
 
     // viscosity needs to be recomputed since the parameters inviscid, Re are
     // read from the input file
-    viscosity = inviscid ? 0.0 : bulk_velocity * H / Re;
+    viscosity = inviscid ? 0.0 : bulk_velocity * height_hill / Re;
 
     // depend on values defined in input file
     end_time              = end_time_multiples * flow_through_time;
@@ -202,16 +228,16 @@ private:
 
     // need to recompute the width, since we make it dependent on the number of elements in z
     // direction, or rather, the ratio between elements in x and z direction
-    width = length * coarse_mesh_refinements[2] / coarse_mesh_refinements[0];
+    width_channel = length_channel * coarse_mesh_refinements[2] / coarse_mesh_refinements[0];
 
     // recompute target flow rate as it depends on the width
-    target_flow_rate = bulk_velocity * width * height;
+    target_flow_rate = bulk_velocity * width_channel * height_channel_minimum;
 
     // finally refresh the flow rate controller
     flow_rate_controller.reset(
       new FlowRateController(bulk_velocity,
                              target_flow_rate,
-                             H,
+                             height_hill,
                              start_time,
                              true /* assert_non_matching_parameters_at_restart */));
   }
@@ -370,15 +396,15 @@ private:
 
       dealii::Point<dim> p_1;
       p_1[0] = 0.;
-      p_1[1] = H;
+      p_1[1] = height_hill;
       if(dim == 3)
-        p_1[2] = -width / 2.0;
+        p_1[2] = -width_channel / 2.0;
 
       dealii::Point<dim> p_2;
-      p_2[0] = length;
-      p_2[1] = H + height;
+      p_2[0] = length_channel;
+      p_2[1] = height_hill + height_channel_minimum;
       if(dim == 3)
-        p_2[2] = width / 2.0;
+        p_2[2] = width_channel / 2.0;
 
       // use 2 cells in x-direction on coarsest grid and 1 cell in y- and z-directions
       std::vector<unsigned int> refinements{
@@ -468,7 +494,10 @@ private:
       *grid.triangulation,
       [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
         -> std::vector<dealii::Point<dim>> {
-        PeriodicHillManifold<dim> manifold(H, length, height, grid_stretch_factor);
+        PeriodicHillManifold<dim> manifold(height_hill,
+                                           length_channel,
+                                           height_channel_minimum,
+                                           grid_stretch_factor);
         fe_values.reinit(cell);
 
         std::vector<dealii::Point<dim>> points_moved(fe_values.n_quadrature_points);
@@ -488,7 +517,10 @@ private:
 
     grid.mapping_function = [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
       -> std::vector<dealii::Point<dim>> {
-      PeriodicHillManifold<dim>       manifold(H, length, height, grid_stretch_factor);
+      PeriodicHillManifold<dim>       manifold(height_hill,
+                                         length_channel,
+                                         height_channel_minimum,
+                                         grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)
       {
@@ -529,7 +561,7 @@ private:
   set_field_functions() final
   {
     this->field_functions->initial_solution_velocity.reset(
-      new InitialSolutionVelocity<dim>(bulk_velocity, H, height));
+      new InitialSolutionVelocity<dim>(bulk_velocity, height_hill, height_channel_minimum));
     this->field_functions->initial_solution_pressure.reset(
       new dealii::Functions::ZeroFunction<dim>(1));
     this->field_functions->analytical_solution_pressure.reset(
@@ -639,34 +671,73 @@ private:
 
     // begin and end points of all lines
     double const eps = 1.e-12;
-    vel_0->begin     = dealii::Point<dim>(0.0 * H, H + f(0.0 * H, H, length) + eps, 0);
-    vel_0->end       = dealii::Point<dim>(0.0 * H, H + height - eps, 0);
-    vel_005->begin   = dealii::Point<dim>(0.05 * H, H + f(0.05 * H, H, length) + eps, 0);
-    vel_005->end     = dealii::Point<dim>(0.05 * H, H + height - eps, 0);
-    vel_05->begin    = dealii::Point<dim>(0.5 * H, H + f(0.5 * H, H, length) + eps, 0);
-    vel_05->end      = dealii::Point<dim>(0.5 * H, H + height - eps, 0);
-    vel_1->begin     = dealii::Point<dim>(1 * H, H + f(1 * H, H, length) + eps, 0);
-    vel_1->end       = dealii::Point<dim>(1 * H, H + height - eps, 0);
-    vel_2->begin     = dealii::Point<dim>(2 * H, H + f(2 * H, H, length) + eps, 0);
-    vel_2->end       = dealii::Point<dim>(2 * H, H + height - eps, 0);
-    vel_3->begin     = dealii::Point<dim>(3 * H, H + f(3 * H, H, length) + eps, 0);
-    vel_3->end       = dealii::Point<dim>(3 * H, H + height - eps, 0);
-    vel_4->begin     = dealii::Point<dim>(4 * H, H + f(4 * H, H, length) + eps, 0);
-    vel_4->end       = dealii::Point<dim>(4 * H, H + height - eps, 0);
-    vel_5->begin     = dealii::Point<dim>(5 * H, H + f(5 * H, H, length) + eps, 0);
-    vel_5->end       = dealii::Point<dim>(5 * H, H + height - eps, 0);
-    vel_6->begin     = dealii::Point<dim>(6 * H, H + f(6 * H, H, length) + eps, 0);
-    vel_6->end       = dealii::Point<dim>(6 * H, H + height - eps, 0);
-    vel_7->begin     = dealii::Point<dim>(7 * H, H + f(7 * H, H, length) + eps, 0);
-    vel_7->end       = dealii::Point<dim>(7 * H, H + height - eps, 0);
-    vel_8->begin     = dealii::Point<dim>(8 * H, H + f(8 * H, H, length) + eps, 0);
-    vel_8->end       = dealii::Point<dim>(8 * H, H + height - eps, 0);
-    vel_9->begin     = dealii::Point<dim>(0 * H, H + height - eps, 0);
-    vel_9->end       = dealii::Point<dim>(9 * H, H + height - eps, 0);
-    vel_10->begin    = dealii::Point<dim>(0 * H, H + eps, 0);
-    vel_10->end      = dealii::Point<dim>(9 * H, H + eps, 0);
-    vel_10->manifold =
-      std::make_shared<PeriodicHillManifold<dim>>(H, length, height, grid_stretch_factor);
+    vel_0->begin =
+      dealii::Point<dim>(0.0 * height_hill,
+                         height_hill + f(0.0 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_0->end =
+      dealii::Point<dim>(0.0 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_005->begin =
+      dealii::Point<dim>(0.05 * height_hill,
+                         height_hill + f(0.05 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_005->end =
+      dealii::Point<dim>(0.05 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_05->begin =
+      dealii::Point<dim>(0.5 * height_hill,
+                         height_hill + f(0.5 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_05->end =
+      dealii::Point<dim>(0.5 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_1->begin =
+      dealii::Point<dim>(1 * height_hill,
+                         height_hill + f(1 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_1->end = dealii::Point<dim>(1 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_2->begin =
+      dealii::Point<dim>(2 * height_hill,
+                         height_hill + f(2 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_2->end = dealii::Point<dim>(2 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_3->begin =
+      dealii::Point<dim>(3 * height_hill,
+                         height_hill + f(3 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_3->end = dealii::Point<dim>(3 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_4->begin =
+      dealii::Point<dim>(4 * height_hill,
+                         height_hill + f(4 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_4->end = dealii::Point<dim>(4 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_5->begin =
+      dealii::Point<dim>(5 * height_hill,
+                         height_hill + f(5 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_5->end = dealii::Point<dim>(5 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_6->begin =
+      dealii::Point<dim>(6 * height_hill,
+                         height_hill + f(6 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_6->end = dealii::Point<dim>(6 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_7->begin =
+      dealii::Point<dim>(7 * height_hill,
+                         height_hill + f(7 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_7->end = dealii::Point<dim>(7 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_8->begin =
+      dealii::Point<dim>(8 * height_hill,
+                         height_hill + f(8 * height_hill, height_hill, length_channel) + eps,
+                         0);
+    vel_8->end = dealii::Point<dim>(8 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_9->begin =
+      dealii::Point<dim>(0 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_9->end = dealii::Point<dim>(9 * height_hill, height_hill + height_channel_minimum - eps, 0);
+    vel_10->begin    = dealii::Point<dim>(0 * height_hill, height_hill + eps, 0);
+    vel_10->end      = dealii::Point<dim>(9 * height_hill, height_hill + eps, 0);
+    vel_10->manifold = std::make_shared<PeriodicHillManifold<dim>>(height_hill,
+                                                                   length_channel,
+                                                                   height_channel_minimum,
+                                                                   grid_stretch_factor);
 
     // set the number of points along the lines
     vel_0->n_points   = points_per_line;
@@ -797,8 +868,8 @@ private:
     my_pp_data.mean_velocity_data.write_to_file = true;
 
     std::shared_ptr<PostProcessorBase<dim, Number>> pp;
-    pp.reset(
-      new MyPostProcessor<dim, Number>(my_pp_data, this->mpi_comm, length, *flow_rate_controller));
+    pp.reset(new MyPostProcessor<dim, Number>(
+      my_pp_data, this->mpi_comm, length_channel, *flow_rate_controller));
 
     return pp;
   }
@@ -808,18 +879,18 @@ private:
   bool   inviscid = false;
   double Re       = 5600.0; // 700, 1400, 5600, 10595, 19000
 
-  double const                H      = 0.028;
-  double                      width  = 4.5 * H;
-  double const                length = 9.0 * H;
-  double const                height = 2.036 * H;
+  double const                height_hill            = 0.028;
+  double                      width_channel          = 4.5 * height_hill;
+  double const                length_channel         = 9.0 * height_hill;
+  double const                height_channel_minimum = 2.036 * height_hill;
   std::array<unsigned int, 3> coarse_mesh_refinements{{2, 1, 1}};
 
   double const bulk_velocity     = 5.6218;
-  double       target_flow_rate  = bulk_velocity * width * height;
-  double const flow_through_time = length / bulk_velocity;
+  double       target_flow_rate  = bulk_velocity * width_channel * height_channel_minimum;
+  double const flow_through_time = length_channel / bulk_velocity;
 
   // RE_H = u_b * H / nu
-  double viscosity = bulk_velocity * H / Re;
+  double viscosity = bulk_velocity * height_hill / Re;
 
   // flow rate controller
   std::shared_ptr<FlowRateController> flow_rate_controller;
@@ -830,8 +901,8 @@ private:
   double       end_time           = end_time_multiples * flow_through_time;
 
   // grid
-  bool const consider_mapping    = true;
-  double     grid_stretch_factor = 1.6;
+  bool   consider_mapping    = true;
+  double grid_stretch_factor = 1.6;
 
   // dicretization
   TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
