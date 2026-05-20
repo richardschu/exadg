@@ -1378,9 +1378,6 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
     // `project_to_restart_space()` here, since the sequence the cells are iterated through even
     // for identical triangulations might differ.
 
-    dealii::Triangulation<dim> const & triangulation =
-      matrix_free->get_dof_handler().get_triangulation();
-
     // Create dummy linear mapping in target grid, cannot use `checkpoint_mapping` since cell
     // type might differ.
     std::shared_ptr<dealii::Mapping<dim> const> target_mapping;
@@ -1393,67 +1390,72 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
     // Grid-to-grid projection in undeformed configuration: velocity to intermediate space and
     // pressure to final space. The pressure DoFs can simply be used on the deformed grid, while
     // projection is more stable in the undeformed configuration.
-    std::vector<std::vector<VectorType *>> source_vectors_per_dof_handler(2);
-    for(VectorType & vec : checkpoint_vectors_velocity)
-      source_vectors_per_dof_handler[0 /* velocity */].push_back(&vec);
-    for(VectorType & vec : checkpoint_vectors_pressure)
-      source_vectors_per_dof_handler[1 /* pressure */].push_back(&vec);
+    {
+      std::vector<std::vector<VectorType *>> source_vectors_per_dof_handler(2);
+      for(VectorType & vec : checkpoint_vectors_velocity)
+        source_vectors_per_dof_handler[0 /* velocity */].push_back(&vec);
+      for(VectorType & vec : checkpoint_vectors_pressure)
+        source_vectors_per_dof_handler[1 /* pressure */].push_back(&vec);
 
-    std::vector<std::vector<VectorType *>> target_vectors_per_dof_handler(2);
-    for(VectorType & vec : checkpoint_vectors_velocity_intermediate)
-      target_vectors_per_dof_handler[0].push_back(&vec);
-    target_vectors_per_dof_handler[1] = vectors_pressure;
+      std::vector<std::vector<VectorType *>> target_vectors_per_dof_handler(2);
+      for(VectorType & vec : checkpoint_vectors_velocity_intermediate)
+        target_vectors_per_dof_handler[0].push_back(&vec);
+      target_vectors_per_dof_handler[1] = vectors_pressure;
 
-    std::vector<dealii::DoFHandler<dim> const *> source_dof_handlers = {
-      dof_handler_u_restart.get(), dof_handler_p_restart.get()};
+      std::vector<dealii::DoFHandler<dim> const *> source_dof_handlers = {
+        dof_handler_u_restart.get(), dof_handler_p_restart.get()};
 
-    std::vector<dealii::DoFHandler<dim> const *> target_dof_handlers = {
-      dof_handler_u_restart_intermediate.get(), &this->get_dof_handler_p()};
+      std::vector<dealii::DoFHandler<dim> const *> target_dof_handlers = {
+        dof_handler_u_restart_intermediate.get(), &this->get_dof_handler_p()};
 
-    this->pcout << "\n"
-                << "PROJECTION IN UNDEFORMED GRID\n\n";
-    ExaDG::GridToGridProjection::grid_to_grid_projection<dim, Number, VectorType>(
-      checkpoint_mapping,
-      source_dof_handlers,
-      source_vectors_per_dof_handler,
-      target_mapping,
-      target_dof_handlers,
-      target_vectors_per_dof_handler,
-      projection_data);
+      this->pcout << "\n"
+                  << "PROJECTION IN UNDEFORMED GRID\n\n";
+      ExaDG::GridToGridProjection::grid_to_grid_projection<dim, Number, VectorType>(
+        checkpoint_mapping,
+        source_dof_handlers,
+        source_vectors_per_dof_handler,
+        target_mapping,
+        target_dof_handlers,
+        target_vectors_per_dof_handler,
+        projection_data);
+    }
 
     // Perform the grid-to-grid projection on the deformed grid to the final velocity space,
     // but between grids that have the same refinement level and mapping to improve stability by
     // *avoiding* `dealii::RemotePointEvaluation`.
-    projection_data.grids_and_maps_identical = true;
+    {
+      projection_data.grids_and_maps_identical = true;
 
-    this->pcout << "\n"
-                << "VELOCITY PROJECTION IN DEFORMED GRID\n\n";
+      this->pcout << "\n"
+                  << "VELOCITY PROJECTION IN DEFORMED GRID\n\n";
 
-    checkpoint_mapping = this->get_mapping();
+      checkpoint_mapping = this->get_mapping();
 
-    std::vector<std::vector<VectorType *>> source_vectors_per_dof_handler(1);
-    for(VectorType & vec : checkpoint_vectors_velocity_intermediate)
-      source_vectors_per_dof_handler[0].push_back(&vec);
+      std::vector<std::vector<VectorType *>> source_vectors_per_dof_handler(1);
+      for(VectorType & vec : checkpoint_vectors_velocity_intermediate)
+        source_vectors_per_dof_handler[0].push_back(&vec);
 
-    std::vector<std::vector<VectorType *>> target_vectors_per_dof_handler = {vectors_velocity};
+      std::vector<std::vector<VectorType *>> target_vectors_per_dof_handler = {vectors_velocity};
 
-    std::vector<dealii::DoFHandler<dim> const *> source_dof_handlers = {
-      dof_handler_u_restart_intermediate.get()};
+      std::vector<dealii::DoFHandler<dim> const *> source_dof_handlers = {
+        dof_handler_u_restart_intermediate.get()};
 
-    std::vector<dealii::DoFHandler<dim> const *> target_dof_handlers = {&this->get_dof_handler_u()};
+      std::vector<dealii::DoFHandler<dim> const *> target_dof_handlers = {
+        &this->get_dof_handler_u()};
 
-    ExaDG::GridToGridProjection::do_grid_to_grid_projection<dim, Number, VectorType>(
-      checkpoint_mapping,
-      source_dof_handlers,
-      source_vectors_per_dof_handler,
-      target_dof_handlers,
-      *matrix_free,
-      target_vectors_per_dof_handler,
-      projection_data);
+      ExaDG::GridToGridProjection::do_grid_to_grid_projection<dim, Number, VectorType>(
+        checkpoint_mapping,
+        source_dof_handlers,
+        source_vectors_per_dof_handler,
+        target_dof_handlers,
+        *matrix_free,
+        target_vectors_per_dof_handler,
+        projection_data);
 
-    // Set pointers to velocity vectors for plotting.
-    checkpoint_vectors[0 /* velocity */]      = source_vectors_per_dof_handler[0];
-    checkpoint_dof_handlers[0 /* velocity */] = source_dof_handlers[0];
+      // Set pointers to velocity vectors for plotting.
+      checkpoint_vectors[0 /* velocity */]      = source_vectors_per_dof_handler[0];
+      checkpoint_dof_handlers[0 /* velocity */] = source_dof_handlers[0];
+    }
   }
   else
   {
