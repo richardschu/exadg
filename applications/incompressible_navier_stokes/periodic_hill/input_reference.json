@@ -15,6 +15,7 @@
         "RefineTimeMax": "0"
     },
     "Application": {
+        "ConsiderBoxDistort": "false",
         "ConsiderMapping": "true",
         "TriangulationType": "Serial",
         "ReadRestart": "false",

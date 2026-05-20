@@ -145,9 +145,13 @@ public:
 
     prm.enter_subsection("Application");
     {
+      prm.add_parameter("ConsiderBoxDistort",
+                        consider_box_distort,
+                        "Should the box domain be distorted before mapping?",
+                        dealii::Patterns::Bool());
       prm.add_parameter("ConsiderMapping",
                         consider_mapping,
-                        "Should the box domain be deformed?",
+                        "Should the box domain be mapped to form the periodic hill?",
                         dealii::Patterns::Bool());
       prm.add_parameter("WriteRestart",
                         write_restart,
@@ -488,6 +492,35 @@ private:
     const std::vector<unsigned int> hierarchic_to_lexicographic_numbering =
       dealii::FETools::hierarchic_to_lexicographic_numbering<dim>(this->param.mapping_degree);
 
+    // function to distort the undeformed box grid in
+    // [0, length] x [0, height_hill+height_channel_minimum] x [-width, width]
+    // by a smooth trigonometric function |f(x)| < 1 that is zero on the boundaries in the
+    // respective direction and is scaled with some scaling factor and has `n_periods` periods.
+    // Lambda has no effect if `consider_box_distort == false`.
+    auto const box_distort = [&](dealii::Point<dim> const & point_in) {
+      dealii::Point<dim> point_out = point_in;
+
+      if(consider_box_distort)
+      {
+        double const n_periods_length = 2.0;
+        double const n_periods_height = 1.0;
+        double const scale_length =
+          0.02 * std::sin(dealii::numbers::PI * point_in[0] / length_channel);
+        double const scale_hight =
+          0.08 *
+          std::sin(dealii::numbers::PI * (point_in[1] - height_hill) / height_channel_minimum);
+
+        point_out[0] +=
+          length_channel * scale_length *
+          std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_minimum);
+        point_out[1] +=
+          height_channel_minimum * scale_hight *
+          std::sin(dealii::numbers::PI * n_periods_height * point_in[0] / length_channel);
+      }
+
+      return point_out;
+    };
+
     const auto mapping_q_cache =
       std::make_shared<dealii::MappingQCache<dim>>(this->param.mapping_degree);
     mapping_q_cache->initialize(
@@ -505,11 +538,12 @@ private:
         {
           // need to adjust for hierarchic numbering of
           // dealii::MappingQCache
+          dealii::Point<dim> const point_in_box =
+            box_distort(fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
           if(consider_mapping)
-            points_moved[i] = manifold.push_forward(
-              fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
+            points_moved[i] = manifold.push_forward(point_in_box);
           else
-            points_moved[i] = fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]);
+            points_moved[i] = point_in_box;
         }
 
         return points_moved;
@@ -526,10 +560,11 @@ private:
       {
         // need to adjust for hierarchic numbering of
         // dealii::MappingQCache
+        dealii::Point<dim> const point_in_box = box_distort(cell->vertex(i));
         if(consider_mapping)
-          points_moved[i] = manifold.push_forward(cell->vertex(i));
+          points_moved[i] = manifold.push_forward(point_in_box);
         else
-          points_moved[i] = cell->vertex(i);
+          points_moved[i] = point_in_box;
       }
 
       return points_moved;
@@ -879,17 +914,21 @@ private:
   bool   inviscid = false;
   double Re       = 5600.0; // 700, 1400, 5600, 10595, 19000
 
-  double const                height_hill            = 0.028;
-  double                      width_channel          = 4.5 * height_hill;
-  double const                length_channel         = 9.0 * height_hill;
-  double const                height_channel_minimum = 2.036 * height_hill;
+  // The undeformed box occupies the region
+  // [0, length] x [0, height_hill+height_channel_minimum] x [-width, width],
+  // while after applying the mapping, the lower bottom of the box (lying at y = height_hill) is
+  // mapped in negative y direction to form the classical periodic hill domain.
+  static double constexpr height_hill            = 0.028;
+  double width_channel                           = 4.5 * height_hill;
+  static double constexpr length_channel         = 9.0 * height_hill;
+  static double constexpr height_channel_minimum = 2.036 * height_hill;
   std::array<unsigned int, 3> coarse_mesh_refinements{{2, 1, 1}};
 
   double const bulk_velocity     = 5.6218;
   double       target_flow_rate  = bulk_velocity * width_channel * height_channel_minimum;
   double const flow_through_time = length_channel / bulk_velocity;
 
-  // RE_H = u_b * H / nu
+  // RE_H = u_b * height_hill / nu
   double viscosity = bulk_velocity * height_hill / Re;
 
   // flow rate controller
@@ -901,8 +940,9 @@ private:
   double       end_time           = end_time_multiples * flow_through_time;
 
   // grid
-  bool   consider_mapping    = true;
-  double grid_stretch_factor = 1.6;
+  bool   consider_box_distort = false; // distort the box grid before mapping
+  bool   consider_mapping     = true;  // map the box to give the classic periodic hill geometry
+  double grid_stretch_factor  = 1.6;
 
   // dicretization
   TemporalDiscretization temporal_discretization = TemporalDiscretization::Undefined;
