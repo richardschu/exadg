@@ -55,7 +55,7 @@ enum class BoundaryCondition
  *
  * with
  *
- * sigma := -p * I + 2 * nu * rho * sym_grad(u)
+ * sigma := -p * I + 2 * nu * sym_grad(u)
  *
  * such that with variable viscosity we have
  *

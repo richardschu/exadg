@@ -72,6 +72,7 @@ template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::allocate_vectors()
 {
+ std::cout << "##+ TimeIntBDF<dim, Number>::allocate_vectors()\n"; 
   // convective term
   if(needs_vector_convective_term)
   {
@@ -100,6 +101,8 @@ TimeIntBDF<dim, Number>::allocate_vectors()
     for(unsigned int i = 0; i < vec_grid_coordinates.size(); ++i)
       this->operator_base->initialize_vector_velocity(vec_grid_coordinates[i]);
   }
+
+   std::cout << "##+ TimeIntBDF<dim, Number>::allocate_vectors() END\n"; 
 }
 
 template<int dim, typename Number>

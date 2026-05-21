@@ -31,13 +31,17 @@ namespace ExaDG
 {
 namespace IncNS
 {
+/*
+ * Initial condition for the velocity for the standard periodic hill benchmark. Qudratic flow
+ * profile in upper part of the channel with added Gaussian noise.
+ */
 template<int dim>
-class InitialSolutionVelocity : public dealii::Function<dim>
+class InitialConditionVelocity : public dealii::Function<dim>
 {
 public:
-  InitialSolutionVelocity(double const bulk_velocity,
-                          double const height_hill,
-                          double const height_channel_minimum)
+  InitialConditionVelocity(double const bulk_velocity,
+                           double const height_hill,
+                           double const height_channel_minimum)
     : dealii::Function<dim>(dim, 0.0),
       bulk_velocity(bulk_velocity),
       height_hill(height_hill),
@@ -69,6 +73,10 @@ private:
   double const bulk_velocity, height_hill, height_channel_minimum;
 };
 
+/*
+ * The driving force on the right hand side is controlled by the flow rate exiting the domain to
+ * achieve the desired target flow rate in the periodic hill benchmark.
+ */
 template<int dim>
 class RightHandSide : public SerializableFunction<dim>
 {
@@ -129,6 +137,217 @@ private:
   FlowRateController const & flow_rate_controller;
 };
 
+/*
+ * Manufactured solution for incompressible flow of a Newtonian fluid in a channel of height H,
+ * width W, and length L, where the convective term may be disabled.
+ * u  ... velocity vector
+ * p  ... kinematic pressure
+ * nu ... kinematic viscosity
+ * f  ... body force vector
+ *
+ * d/dt(u) + (grad(u)) * u + grad(p) - nu * div(grad(u)) = f
+ *
+ * In 3D, we derive a solution by selecting the stream function
+ *
+ * psi = cos(a*x) * cos^2(b*y) * cos(t),
+ *
+ * u1 = d/dy psi = - 2 * b * cos(a*x) * cos(b*y) * sin(b*y) * cos(t),
+ *
+ * u2 = -d/dx psi = a * sin(a*x) * cos^2(b*y) * cos(t),
+ *
+ * u3 = 0,
+ *
+ * p  = cos(a*x) * cos(t),
+ *
+ * where
+ *
+ * a = 2*pi/L, b = pi/H
+ *
+ * which is periodic in [0, length], i.e., the channel's longitudinal axis, constant in z, and
+ * fulfills no-slip conditions at y = +-H/2. This means we have to modify the incoming y coordinate.
+ *
+ * The force vector follows from the momentum balance equation.
+ */
+template<int dim>
+class ManufacturedSolutionVelocity : public dealii::Function<dim>
+{
+public:
+  ManufacturedSolutionVelocity(double const & height, double const & length, double const & y_shift)
+    : dealii::Function<dim>(dim /* n_components */, 0.0), height(height), length(length), y_shift(y_shift)
+  {
+  }
+
+  double
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
+  {
+    double const a = 2.0 * dealii::numbers::PI / length;
+    double const b = dealii::numbers::PI / height;
+
+    double const t = this->get_time();
+    double const x = p[0];
+    // shift incoming y coordinate since channel is not symmetric around 0.
+    double const y      = p[1] - y_shift;
+    double const sin_ax = std::sin(a * x);
+    double const sin_by = std::sin(b * y);
+    double const cos_ax = std::cos(a * x);
+    double const cos_by = std::cos(b * y);
+    double const cos_t  = std::cos(t);
+
+    if(component == 0)
+      return -2.0 * b * cos_ax * cos_by * sin_by * cos_t;
+    else if(component == 1)
+      return a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
+    else
+      return 0.0;
+  }
+
+private:
+  double const height;
+  double const length;
+  double const y_shift;
+};
+
+
+template<int dim>
+class ManufacturedSolutionPressure : public dealii::Function<dim>
+{
+public:
+  ManufacturedSolutionPressure(double const & length)
+    : dealii::Function<dim>(1, 0.0), length(length)
+  {
+  }
+
+  double
+  value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
+  {
+    double const a = 2.0 * dealii::numbers::PI / length;
+
+    double const t      = this->get_time();
+    double const x      = p[0];
+    double const cos_ax = std::cos(a * x);
+    double const cos_t  = std::cos(t);
+
+    return cos_ax * cos_t;
+  }
+
+private:
+  double const length;
+};
+
+
+template<int dim>
+class ManufacturedRightHandSide : public dealii::Function<dim>
+{
+public:
+  ManufacturedRightHandSide(bool const     include_convective_term,
+                            double const & height,
+                            double const & length,
+                            double const & y_shift,
+                            double const & kinematic_viscosity)
+    : dealii::Function<dim>(dim, 0.0),
+      include_convective_term(include_convective_term),
+      height(height),
+      length(length),
+      y_shift(y_shift),
+      kinematic_viscosity(kinematic_viscosity)
+  {
+  }
+
+  double
+  value(dealii::Point<dim> const & p, unsigned int const component = 0) const final
+  {
+    /*
+     * The solution laid out above is inserted into the momentum balance
+     * equation to derive the vector f on the right-hand side.
+     *
+     * f = d/dt(u) + (grad(u)) * u + grad(p) - nu * div(grad(u))
+     *
+     * Note that the solution is constant in z, such that the respective entries in the gradients
+     * are empty and we can adapt a case corresponding to a 2D solution.
+     */
+
+    if constexpr(dim == 3)
+      if(component == 2)
+        return 0.0;
+
+    double const a = 2.0 * dealii::numbers::PI / length;
+    double const b = dealii::numbers::PI / height;
+
+    double const t = this->get_time();
+    double const x = p[0];
+    // shift incoming y coordinate since channel is not symmetric around 0.
+    double const y      = p[1] - y_shift;
+    double const sin_ax = std::sin(a * x);
+    double const sin_by = std::sin(b * y);
+    double const cos_ax = std::cos(a * x);
+    double const cos_by = std::cos(b * y);
+    double const sin_t  = std::sin(t);
+    double const cos_t  = std::cos(t);
+
+    double const u1 = -2.0 * b * cos_ax * cos_by * sin_by * cos_t;
+
+    double const du1_dt = 2.0 * b * cos_ax * cos_by * sin_by * sin_t;
+    double const du1_dx = 2.0 * b * a * sin_ax * cos_by * sin_by * cos_t;
+    double const du1_dy = 2.0 * b * b * cos_ax * cos_t * (sin_by * sin_by - cos_by * cos_by);
+
+    double const du1_dxx = 2.0 * b * a * a * cos_ax * cos_by * sin_by * cos_t;
+    double const du1_dyy = 8.0 * b * b * b * cos_ax * cos_t * cos_by * sin_by;
+
+    double const u2 = a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
+
+    double const du2_dt = -a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * sin_t;
+    double const du2_dx = a * a * cos_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
+    double const du2_dy = -2.0 * a * b * sin_ax * cos_by * sin_by * cos_t;
+
+    double const du2_dxx = -a * a * a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
+    double const du2_dyy = 2.0 * a * b * b * sin_ax * cos_t * (sin_by * sin_by - cos_by * cos_by);
+
+    // p = cos_ax * cos_t;
+    double const dp_dx = -a * sin_ax * cos_t;
+    double const dp_dy = 0.0;
+
+    dealii::Tensor<2, dim> grad_u;
+    grad_u[0][0] = du1_dx;
+    grad_u[0][1] = du1_dy;
+    grad_u[1][0] = du2_dx;
+    grad_u[1][1] = du2_dy;
+
+    dealii::Tensor<1, dim> div_grad_u;
+    div_grad_u[0] = du1_dxx + du1_dyy;
+    div_grad_u[1] = du2_dxx + du2_dyy;
+
+    // add time derivative terms
+    dealii::Tensor<1, dim> rhs;
+    rhs[0] += du1_dt;
+    rhs[1] += du2_dt;
+
+    // convective term
+    if(include_convective_term)
+    {
+      dealii::Tensor<1, dim> u;
+      u[0] = u1;
+      u[1] = u2;
+      rhs += grad_u * u;
+    }
+
+    // pressure gradient
+    rhs[0] += dp_dx;
+    rhs[1] += dp_dy;
+
+    // viscous term
+    rhs -= kinematic_viscosity * div_grad_u;
+
+    return rhs[component];
+  }
+
+private:
+  bool const   include_convective_term;
+  double const height;
+  double const length;
+  double const y_shift;
+  double const kinematic_viscosity;
+};
+
 template<int dim, typename Number>
 class Application : public ApplicationBase<dim, Number>
 {
@@ -145,6 +364,10 @@ public:
 
     prm.enter_subsection("Application");
     {
+      prm.add_parameter("UseManufacturedSolution",
+                        use_manufactured_solution,
+                        "Use the manufactured solution to compute errors in the box domain?",
+                        dealii::Patterns::Bool());
       prm.add_parameter("ConsiderBoxDistort",
                         consider_box_distort,
                         "Should the box domain be distorted before mapping?",
@@ -595,13 +818,36 @@ private:
   void
   set_field_functions() final
   {
-    this->field_functions->initial_solution_velocity.reset(
-      new InitialSolutionVelocity<dim>(bulk_velocity, height_hill, height_channel_minimum));
-    this->field_functions->initial_solution_pressure.reset(
-      new dealii::Functions::ZeroFunction<dim>(1));
-    this->field_functions->analytical_solution_pressure.reset(
-      new dealii::Functions::ZeroFunction<dim>(1));
-    this->field_functions->right_hand_side.reset(new RightHandSide<dim>(*flow_rate_controller));
+    if(use_manufactured_solution)
+    {
+      AssertThrow(use_manufactured_solution == true and consider_mapping == false,
+                  dealii::ExcMessage("Manufactured solution is defined on the box grid, "
+                                     "cannot consider mapping to periodic hill."));
+
+      this->field_functions->initial_solution_velocity.reset(
+        new ManufacturedSolutionVelocity<dim>(height_channel_minimum, length_channel, y_shift));
+      this->field_functions->initial_solution_pressure.reset(
+        new ManufacturedSolutionPressure<dim>(length_channel));
+
+      this->field_functions->analytical_solution_pressure.reset(
+        new ManufacturedSolutionPressure<dim>(length_channel));
+      this->field_functions->analytical_solution_velocity.reset(
+        new ManufacturedSolutionVelocity<dim>(height_channel_minimum, length_channel, y_shift));
+
+      bool const include_convective_term = this->param.equation_type == EquationType::NavierStokes;
+      this->field_functions->right_hand_side.reset(new ManufacturedRightHandSide<dim>(
+        include_convective_term, height_channel_minimum, length_channel, y_shift, viscosity));
+    }
+    else
+    {
+      this->field_functions->initial_solution_velocity.reset(
+        new InitialConditionVelocity<dim>(bulk_velocity, height_hill, height_channel_minimum));
+      this->field_functions->initial_solution_pressure.reset(
+        new dealii::Functions::ZeroFunction<dim>(1));
+      this->field_functions->analytical_solution_pressure.reset(
+        new dealii::Functions::ZeroFunction<dim>(1));
+      this->field_functions->right_hand_side.reset(new RightHandSide<dim>(*flow_rate_controller));
+    }
   }
 
   std::shared_ptr<PostProcessorBase<dim, Number>>
@@ -626,6 +872,28 @@ private:
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.write_aspect_ratio = false;
     pp_data.output_data.write_processor_id = true;
+
+    // calculation of velocity error
+    pp_data.error_data_u.time_control_data.is_active        = true;
+    pp_data.error_data_u.time_control_data.start_time       = start_time;
+    pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time);
+    pp_data.error_data_u.analytical_solution.reset(
+      new ManufacturedSolutionVelocity<dim>(height_channel_minimum, length_channel, y_shift));
+    pp_data.error_data_u.name                      = "velocity";
+    pp_data.error_data_u.compute_convergence_table = use_manufactured_solution;
+    pp_data.error_data_u.write_errors_to_file      = use_manufactured_solution;
+    pp_data.error_data_u.calculate_relative_errors = true;
+    pp_data.error_data_u.directory                 = this->output_parameters.directory;
+
+    pp_data.error_data_p.time_control_data = pp_data.error_data_u.time_control_data;
+    pp_data.error_data_p.time_control_data.trigger_interval = (end_time - start_time);
+    pp_data.error_data_p.analytical_solution.reset(
+      new ManufacturedSolutionPressure<dim>(length_channel));
+    pp_data.error_data_p.name                      = "pressure";
+    pp_data.error_data_p.compute_convergence_table = use_manufactured_solution;
+    pp_data.error_data_p.write_errors_to_file      = use_manufactured_solution;
+    pp_data.error_data_p.calculate_relative_errors = true;
+    pp_data.error_data_p.directory                 = this->output_parameters.directory;
 
     MyPostProcessorData<dim> my_pp_data;
     my_pp_data.pp_data = pp_data;
@@ -924,6 +1192,10 @@ private:
   static double constexpr height_channel_minimum = 2.036 * height_hill;
   std::array<unsigned int, 3> coarse_mesh_refinements{{2, 1, 1}};
 
+  // The manufactured solution is defined in a channel domain centered around the origin with
+  // respect to the y coordinate. This compensates for the offset of the constructed domain.
+  static double constexpr y_shift = height_hill + 0.5 * height_channel_minimum;
+
   double const bulk_velocity     = 5.6218;
   double       target_flow_rate  = bulk_velocity * width_channel * height_channel_minimum;
   double const flow_through_time = length_channel / bulk_velocity;
@@ -938,6 +1210,9 @@ private:
   double const start_time         = 0.0;
   double       end_time_multiples = 10;
   double       end_time           = end_time_multiples * flow_through_time;
+
+  // compute convergence study else execute benchmark
+  bool use_manufactured_solution = true;
 
   // grid
   bool   consider_box_distort = false; // distort the box grid before mapping

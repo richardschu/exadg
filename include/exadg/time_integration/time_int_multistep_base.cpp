@@ -51,11 +51,12 @@ TimeIntMultistepBase::setup(bool const do_restart)
   this->pcout << std::endl << "Setup Multistep time integrator ..." << std::endl << std::flush;
 
   // allocate global solution vectors
+  std::cout << "##+ ALLOCATING STUFF 1\n";
   allocate_vectors();
-
+  std::cout << "##+ ALLOCATING STUFF 2\n";
   // initializes the solution and the time step size
   initialize_solution_and_time_step_size(do_restart);
-
+  std::cout << "##+ ALLOCATING STUFF 3\n";
   // this is where the setup of derived classes is performed
   setup_derived();
 

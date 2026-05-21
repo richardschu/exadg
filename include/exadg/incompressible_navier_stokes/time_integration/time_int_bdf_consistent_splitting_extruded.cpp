@@ -153,11 +153,12 @@ template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
 {
+  std::cout << "##+ 0 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   Base::allocate_vectors();
 
   // velocity
   pde_operator->initialize_vector_velocity(velocity_np);
-
+  std::cout << "##+ 1 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   // pressure
   pde_operator->initialize_vector_pressure(pressure_np);
   pde_operator->initialize_vector_pressure(pressure_rhs);
@@ -165,7 +166,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
     pde_operator->initialize_vector_pressure(vector);
   for(VectorType & vector : convective_divergence_rhs)
     pde_operator->initialize_vector_pressure(vector);
-
+  std::cout << "##+ 3 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   // do test for matrix-free operator of optimized kind
   const std::vector<unsigned int> cell_vectorization_category =
     Helper::compute_vectorization_category(pde_operator->get_dof_handler_u().get_triangulation());
@@ -175,7 +176,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
                 cell_vectorization_category,
                 dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1),
                 this->is_test);
-
+  std::cout << "##+ 4 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   op_rt->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
   op_rt->initialize_dof_vector(solution_rt);
   op_rt->initialize_dof_vector(rhs_rt);
@@ -187,7 +188,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
                       cell_vectorization_category,
                       dealii::QGauss<1>(pde_operator->get_dof_handler_u().get_fe().degree + 1),
                       this->is_test);
-
+  std::cout << "##+ 5 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   op_rt_float->set_penalty_parameters(pde_operator->get_viscous_kernel_data().IP_factor);
 
   op_rt_float->set_parameters(1.0, 0.0);
@@ -203,7 +204,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
   }
   op_rt_float->set_parameters(0.0, 1.0);
   op_rt_float->compute_diagonal(diagonal_laplace);
-
+    std::cout << "##+ 6 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   for(VectorType & vector : velocity)
     op_rt->initialize_dof_vector(vector);
 
@@ -219,7 +220,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
   for(auto & vector : velocity_matvec)
     op_rt_float->initialize_dof_vector(vector);
   op_rt_float->initialize_dof_vector(rhs_float);
-
+  std::cout << "##+ 7 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   laplace_op = std::make_shared<LaplaceOperator::LaplaceOperatorDG<dim, Number>>();
   laplace_op->reinit(*pde_operator->get_mapping(),
                      pde_operator->get_dof_handler_p(),
@@ -233,7 +234,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
   op_rt->verify_other_cell_level_index(laplace_op->get_cell_level_index());
   op_rt->initialize_coupling_pressure(pde_operator->get_dof_handler_p().get_fe(),
                                       laplace_op->get_dof_indices());
-
+  std::cout << "##+ 8 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   poisson_preconditioner = std::make_shared<LaplaceOperator::PoissonPreconditionerMG<dim, float>>(
     *pde_operator->get_mapping(),
     pde_operator->get_dof_handler_p(),
@@ -241,11 +242,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()
     pde_operator->get_grid().mapping_function,
     pde_operator->laplace_operator.get_data().kernel_data.IP_factor,
     this->is_test);
-
+  std::cout << "##+ 9 TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
   for(unsigned int i = 0; i < pressure.size(); ++i)
     poisson_preconditioner->get_dg_matrix().initialize_dof_vector(pressure[i]);
   for(unsigned int i = 0; i < pressure_matvec.size(); ++i)
     poisson_preconditioner->get_dg_matrix().initialize_dof_vector(pressure_matvec[i]);
+
+  std::cout << "##+ END TimeIntBDFConsistentSplittingExtruded<dim, Number>::allocate_vectors()\n";
 }
 
 template<int dim, typename Number>
@@ -752,6 +755,7 @@ template<int dim, typename Number>
 double
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::calculate_time_step_size()
 {
+  std::cout << "##+ TimeIntBDFConsistentSplittingExtruded<dim, Number>::calculate_time_step_size()\n";
   double time_step = 1.0;
 
   if(this->param.calculation_of_time_step_size == TimeStepCalculation::CFL)

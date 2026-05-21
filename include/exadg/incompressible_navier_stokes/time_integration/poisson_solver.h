@@ -96,6 +96,8 @@ public:
       max_level(dof_handler.get_triangulation().n_global_levels() - 1 + fe_hierarchy.max_level()),
       is_test(is_test)
   {
+
+    std::cout << "##+ 1 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
     dof_handler_hierarchy.resize(min_level, max_level);
 
     level_constraints.resize(min_level, max_level);
@@ -105,7 +107,7 @@ public:
     rhs.resize(min_level, max_level);
     temp_vector.resize(min_level, max_level);
     solution_update.resize(min_level, max_level);
-
+    std::cout << "##+ 2 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
     // initialize levels
     for(unsigned int level = min_level; level <= max_level; level++)
     {
@@ -202,17 +204,19 @@ public:
         mg_transfers[level - 1] = std::move(transfer);
       }
     }
-
+    std::cout << "##+ 2 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
     // initialize levels
     for(unsigned int level = min_level; level <= max_level; level++)
     {
       // ... initialize smoother
+      std::cout << "##+ 2.1 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
+      std::cout << "##+ 2.2 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       typename SmootherType::AdditionalData smoother_data;
       smoother_data.preconditioner = std::make_shared<SmootherPreconditionerType>();
       mg_matrices[level].compute_inverse_diagonal(smoother_data.preconditioner->get_vector());
       smoother_data.smoothing_range = 20.;
       smoother_data.degree          = 4;
-
+      std::cout << "##+ 2.3 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       // manually compute the eigenvalue estimate for Chebyshev because we
       // need to be careful with the constrained indices
       dealii::IterationNumberControl control(12, 1e-6, false, false);
@@ -223,27 +227,28 @@ public:
         [&eigenvalue_tracker](const std::vector<double> & eigenvalues) {
           eigenvalue_tracker.slot(eigenvalues);
         });
-
+      std::cout << "##+ 2.4 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       mg_matrices[level].initialize_dof_vector(solution_update[level]);
       mg_matrices[level].initialize_dof_vector(temp_vector[level]);
       mg_matrices[level].initialize_dof_vector(rhs[level]);
-
+      std::cout << "##+ 2.5 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       dealii::internal::set_initial_guess(rhs[level]);
       make_zero_mean(mg_matrices[level].get_matrix_free().get_constrained_dofs(), rhs[level]);
       solver.solve(mg_matrices[level],
                    temp_vector[level],
                    rhs[level],
                    *smoother_data.preconditioner);
-
+      std::cout << "##+ 2.6 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       smoother_data.eig_cg_n_iterations = 0;
       if(eigenvalue_tracker.values.empty())
         smoother_data.max_eigenvalue = 1.0;
       else
         smoother_data.max_eigenvalue = eigenvalue_tracker.values.back();
-
+      std::cout << "##+ 2.7 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       mg_smoother[level].initialize(mg_matrices[level], smoother_data);
+      std::cout << "##+ 2.8 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
     }
-
+    std::cout << "##+ 3 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
     // create a different matrix on the finest level due to enable the
     // efficient implementation of the DG discretization
     dealii::AffineConstraints<Number> empty_constraints;
@@ -261,7 +266,7 @@ public:
       dg_matrix.compute_inverse_diagonal(smoother_data_dg.preconditioner->get_vector());
       smoother_data_dg.smoothing_range = 20.;
       smoother_data_dg.degree          = 4;
-
+    std::cout << "##+ 4 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       // manually compute the eigenvalue estimate for Chebyshev because of
       // mean values
       dealii::IterationNumberControl control(12, 1e-6, false, false);
@@ -279,7 +284,7 @@ public:
       dealii::internal::set_initial_guess(rhs_dg);
       make_zero_mean({}, rhs_dg);
       solver.solve(dg_matrix, solution_update_dg, rhs_dg, *smoother_data_dg.preconditioner);
-
+    std::cout << "##+ 5 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
       smoother_data_dg.eig_cg_n_iterations = 0;
       if(eigenvalue_tracker.values.empty())
         smoother_data_dg.max_eigenvalue = 1.0;
@@ -295,7 +300,7 @@ public:
     transfer->enable_inplace_operations_if_possible(
       mg_matrices[max_level].get_matrix_free().get_dof_info().vector_partitioner,
       dg_matrix.get_matrix_free().get_dof_info().vector_partitioner);
-
+    std::cout << "##+ 6 PoissonPreconditionerMG<dim, Number>::PoissonPreconditionerMG()\n";
     mg_transfers[max_level] = std::move(transfer);
 
     timings.clear();
