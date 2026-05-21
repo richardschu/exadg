@@ -5,31 +5,31 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "4",
-        "DegreeMax": "4",
-        "RefineSpaceMin": "1",
-        "RefineSpaceMax": "1"
+        "DegreeMin": "2",
+        "DegreeMax": "2",
+        "RefineSpaceMin": "0",
+        "RefineSpaceMax": "4"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
         "RefineTimeMax": "0"
     },
     "Application": {
-        "UseManufacturedSolution": "false",
-        "ConsiderBoxDistort": "false",
-        "ConsiderMapping": "true",
+        "UseManufacturedSolution": "true",
+        "ConsiderBoxDistort": "true",
+        "ConsiderMapping": "false",
         "TriangulationType": "Distributed",
-        "ReadRestart": "true",
+        "ReadRestart": "false",
         "WriteRestart": "false",
         "RestartDirectory": "./output/",
         "RestartIntervalTime": "0.8",
         "TemporalDiscretization": "BDFConsistentSplittingExtruded",
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
-        "ReynoldsNumber": "5600.0e-3",
-        "EndTime": "1",
+        "ReynoldsNumber": "1.0e-6",
+        "EndTime": "0.1",
         "GridStretchFactor": "2.0",
-        "CalculateStatistics": "true",
+        "CalculateStatistics": "false",
         "SampleStartTime": "0",
         "SampleEveryTimeSteps": "1",
         "PointsPerLine": "400",
@@ -37,7 +37,7 @@
     },
     "Output": {
         "OutputDirectory": "output/",
-        "OutputName": "rt_8_k5",
-        "WriteOutput": "true"
+        "OutputName": "flow",
+        "WriteOutput": "false"
     }
 }
