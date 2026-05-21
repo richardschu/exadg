@@ -31,9 +31,13 @@
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q_cache.h>
 #include <deal.II/lac/affine_constraints.h>
+#include <deal.II/lac/diagonal_matrix.h>
+#include <deal.II/lac/precondition.h>
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tensor_product_kernels.h>
+#include <deal.II/multigrid/mg_transfer_global_coarsening.h>
 #include <deal.II/multigrid/mg_transfer_matrix_free.h>
 #include <deal.II/numerics/vector_tools.h>
 

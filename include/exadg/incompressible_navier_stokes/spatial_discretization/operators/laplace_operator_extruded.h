@@ -23,13 +23,16 @@
 
 #include <deal.II/base/floating_point_comparator.h>
 #include <deal.II/base/memory_space_data.h>
+#include <deal.II/base/timer.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/lac/affine_constraints.h>
+#include <deal.II/matrix_free/evaluation_kernels.h>
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tensor_product_kernels.h>
+#include <deal.II/matrix_free/vector_access_internal.h>
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/extruded_mapping_info.h>
 
