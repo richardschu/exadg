@@ -32,6 +32,44 @@ namespace ExaDG
 namespace IncNS
 {
 /*
+ * function to distort the undeformed box grid in
+ * [0, length] x [0, height_hill+height_channel_minimum] x [-width, width]
+ * by a smooth trigonometric function |f(x)| < 1 that is zero on the boundaries in the
+ * respective direction and is scaled with some scaling factor and has `n_periods` periods.
+ * Lambda has no effect if `consider_box_distort == false`.
+ */
+template<int dim>
+dealii::Point<dim>
+box_distort (dealii::Point<dim> const & point_in,
+             bool const consider_box_distort,
+             double const length_channel,
+             double const height_hill,
+             double const height_channel_minimum)
+{
+  dealii::Point<dim> point_out = point_in;
+
+  if(consider_box_distort)
+  {
+    double const n_periods_length = 2.0;
+    double const n_periods_height = 1.0;
+    double const scale_length =
+      0.02 * std::sin(dealii::numbers::PI * point_in[0] / length_channel);
+    double const scale_hight =
+      0.08 *
+      std::sin(dealii::numbers::PI * (point_in[1] - height_hill) / height_channel_minimum);
+
+    point_out[0] +=
+      length_channel * scale_length *
+      std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_minimum);
+    point_out[1] +=
+      height_channel_minimum * scale_hight *
+      std::sin(dealii::numbers::PI * n_periods_height * point_in[0] / length_channel);
+  }
+
+  return point_out;
+};
+
+/*
  * Initial condition for the velocity for the standard periodic hill benchmark. Qudratic flow
  * profile in upper part of the channel with added Gaussian noise.
  */
@@ -715,35 +753,6 @@ private:
     const std::vector<unsigned int> hierarchic_to_lexicographic_numbering =
       dealii::FETools::hierarchic_to_lexicographic_numbering<dim>(this->param.mapping_degree);
 
-    // function to distort the undeformed box grid in
-    // [0, length] x [0, height_hill+height_channel_minimum] x [-width, width]
-    // by a smooth trigonometric function |f(x)| < 1 that is zero on the boundaries in the
-    // respective direction and is scaled with some scaling factor and has `n_periods` periods.
-    // Lambda has no effect if `consider_box_distort == false`.
-    auto const box_distort = [&](dealii::Point<dim> const & point_in) {
-      dealii::Point<dim> point_out = point_in;
-
-      if(consider_box_distort)
-      {
-        double const n_periods_length = 2.0;
-        double const n_periods_height = 1.0;
-        double const scale_length =
-          0.02 * std::sin(dealii::numbers::PI * point_in[0] / length_channel);
-        double const scale_hight =
-          0.08 *
-          std::sin(dealii::numbers::PI * (point_in[1] - height_hill) / height_channel_minimum);
-
-        point_out[0] +=
-          length_channel * scale_length *
-          std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_minimum);
-        point_out[1] +=
-          height_channel_minimum * scale_hight *
-          std::sin(dealii::numbers::PI * n_periods_height * point_in[0] / length_channel);
-      }
-
-      return point_out;
-    };
-
     const auto mapping_q_cache =
       std::make_shared<dealii::MappingQCache<dim>>(this->param.mapping_degree);
     mapping_q_cache->initialize(
@@ -762,7 +771,8 @@ private:
           // need to adjust for hierarchic numbering of
           // dealii::MappingQCache
           dealii::Point<dim> const point_in_box =
-            box_distort(fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
+            box_distort(fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]), 
+  consider_box_distort, length_channel, height_hill, height_channel_minimum);
           if(consider_mapping)
             points_moved[i] = manifold.push_forward(point_in_box);
           else
@@ -783,7 +793,9 @@ private:
       {
         // need to adjust for hierarchic numbering of
         // dealii::MappingQCache
-        dealii::Point<dim> const point_in_box = box_distort(cell->vertex(i));
+        dealii::Point<dim> const point_in_box = box_distort(cell->vertex(i), 
+          consider_box_distort, length_channel, height_hill, height_channel_minimum);
+
         if(consider_mapping)
           points_moved[i] = manifold.push_forward(point_in_box);
         else
