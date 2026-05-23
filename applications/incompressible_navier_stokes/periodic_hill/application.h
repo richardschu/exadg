@@ -32,6 +32,41 @@ namespace ExaDG
 namespace IncNS
 {
 /*
+ * function to distort the undeformed box grid in
+ * [0, length] x [0, height_hill+height_channel_minimum] x [-width, width]
+ * by a smooth trigonometric function |f(x)| < 1 that is zero on the boundaries in the
+ * respective direction and is scaled with some scaling factor and has `n_periods` periods.
+ * Lambda has no effect if `consider_box_distort == false`.
+ */
+template<int dim>
+dealii::Point<dim>
+box_distort(dealii::Point<dim> const & point_in,
+            bool const                 consider_box_distort,
+            double const               length_channel,
+            double const               height_hill,
+            double const               height_channel_minimum)
+{
+  dealii::Point<dim> point_out = point_in;
+
+  if(consider_box_distort)
+  {
+    double const n_periods_length = 2.0;
+    double const n_periods_height = 1.0;
+    double const scale_length = 0.02 * std::sin(dealii::numbers::PI * point_in[0] / length_channel);
+    double const scale_hight =
+      0.08 * std::sin(dealii::numbers::PI * (point_in[1] - height_hill) / height_channel_minimum);
+
+    point_out[0] +=
+      length_channel * scale_length *
+      std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_minimum);
+    point_out[1] += height_channel_minimum * scale_hight *
+                    std::sin(dealii::numbers::PI * n_periods_height * point_in[0] / length_channel);
+  }
+
+  return point_out;
+};
+
+/*
  * Initial condition for the velocity for the standard periodic hill benchmark. Qudratic flow
  * profile in upper part of the channel with added Gaussian noise.
  */
@@ -149,19 +184,19 @@ private:
  *
  * In 3D, we derive a solution by selecting the stream function
  *
- * psi = cos(a*x) * cos^2(b*y) * cos(t),
+ * psi = cos(a*x) * cos^2(b*y) * cos(c*t),
  *
- * u1 = d/dy psi = - 2 * b * cos(a*x) * cos(b*y) * sin(b*y) * cos(t),
+ * u1 = d/dy psi = - 2 * b * cos(a*x) * cos(b*y) * sin(b*y) * cos(c*t),
  *
- * u2 = -d/dx psi = a * sin(a*x) * cos^2(b*y) * cos(t),
+ * u2 = -d/dx psi = a * sin(a*x) * cos^2(b*y) * cos(c*t),
  *
  * u3 = 0,
  *
- * p  = cos(a*x) * cos(t),
+ * p  = cos(a*x) * cos(c*t),
  *
  * where
  *
- * a = 2*pi/L, b = pi/H
+ * a = 2*pi/L, b = pi/H, c = 2*pi/T, and T is the period of the solution in time.
  *
  * which is periodic in [0, length], i.e., the channel's longitudinal axis, constant in z, and
  * fulfills no-slip conditions at y = +-H/2. This means we have to modify the incoming y coordinate.
@@ -172,11 +207,15 @@ template<int dim>
 class ManufacturedSolutionVelocity : public dealii::Function<dim>
 {
 public:
-  ManufacturedSolutionVelocity(double const & height, double const & length, double const & y_shift)
+  ManufacturedSolutionVelocity(double const & height,
+                               double const & length,
+                               double const & y_shift,
+                               double const & time_period)
     : dealii::Function<dim>(dim /* n_components */, 0.0),
       height(height),
       length(length),
-      y_shift(y_shift)
+      y_shift(y_shift),
+      time_period(time_period)
   {
   }
 
@@ -185,6 +224,7 @@ public:
   {
     double const a = 2.0 * dealii::numbers::PI / length;
     double const b = dealii::numbers::PI / height;
+    double const c = 2.0 * dealii::numbers::PI / time_period;
 
     double const t = this->get_time();
     double const x = p[0];
@@ -194,12 +234,12 @@ public:
     double const sin_by = std::sin(b * y);
     double const cos_ax = std::cos(a * x);
     double const cos_by = std::cos(b * y);
-    double const cos_t  = std::cos(t);
+    double const cos_ct = std::cos(c * t);
 
     if(component == 0)
-      return -2.0 * b * cos_ax * cos_by * sin_by * cos_t;
+      return -2.0 * b * cos_ax * cos_by * sin_by * cos_ct;
     else if(component == 1)
-      return a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
+      return a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_ct;
     else
       return 0.0;
   }
@@ -208,6 +248,7 @@ private:
   double const height;
   double const length;
   double const y_shift;
+  double const time_period;
 };
 
 
@@ -215,8 +256,8 @@ template<int dim>
 class ManufacturedSolutionPressure : public dealii::Function<dim>
 {
 public:
-  ManufacturedSolutionPressure(double const & length)
-    : dealii::Function<dim>(1, 0.0), length(length)
+  ManufacturedSolutionPressure(double const & length, double const & time_period)
+    : dealii::Function<dim>(1, 0.0), length(length), time_period(time_period)
   {
   }
 
@@ -224,17 +265,19 @@ public:
   value(dealii::Point<dim> const & p, unsigned int const /*component*/) const final
   {
     double const a = 2.0 * dealii::numbers::PI / length;
+    double const c = 2.0 * dealii::numbers::PI / time_period;
 
     double const t      = this->get_time();
     double const x      = p[0];
     double const cos_ax = std::cos(a * x);
-    double const cos_t  = std::cos(t);
+    double const cos_ct = std::cos(c * t);
 
-    return cos_ax * cos_t;
+    return cos_ax * cos_ct;
   }
 
 private:
   double const length;
+  double const time_period;
 };
 
 
@@ -246,12 +289,14 @@ public:
                             double const & height,
                             double const & length,
                             double const & y_shift,
+                            double const & time_period,
                             double const & kinematic_viscosity)
     : dealii::Function<dim>(dim, 0.0),
       include_convective_term(include_convective_term),
       height(height),
       length(length),
       y_shift(y_shift),
+      time_period(time_period),
       kinematic_viscosity(kinematic_viscosity)
   {
   }
@@ -275,6 +320,7 @@ public:
 
     double const a = 2.0 * dealii::numbers::PI / length;
     double const b = dealii::numbers::PI / height;
+    double const c = 2.0 * dealii::numbers::PI / time_period;
 
     double const t = this->get_time();
     double const x = p[0];
@@ -284,29 +330,29 @@ public:
     double const sin_by = std::sin(b * y);
     double const cos_ax = std::cos(a * x);
     double const cos_by = std::cos(b * y);
-    double const sin_t  = std::sin(t);
-    double const cos_t  = std::cos(t);
+    double const sin_ct = std::sin(c * t);
+    double const cos_ct = std::cos(c * t);
 
-    double const u1 = -2.0 * b * cos_ax * cos_by * sin_by * cos_t;
+    double const u1 = -2.0 * b * cos_ax * cos_by * sin_by * cos_ct;
 
-    double const du1_dt = 2.0 * b * cos_ax * cos_by * sin_by * sin_t;
-    double const du1_dx = 2.0 * b * a * sin_ax * cos_by * sin_by * cos_t;
-    double const du1_dy = 2.0 * b * b * cos_ax * cos_t * (sin_by * sin_by - cos_by * cos_by);
+    double const du1_dt = 2.0 * b * cos_ax * cos_by * sin_by * sin_ct * c;
+    double const du1_dx = 2.0 * b * a * sin_ax * cos_by * sin_by * cos_ct;
+    double const du1_dy = 2.0 * b * b * cos_ax * cos_ct * (sin_by * sin_by - cos_by * cos_by);
 
-    double const du1_dxx = 2.0 * b * a * a * cos_ax * cos_by * sin_by * cos_t;
-    double const du1_dyy = 8.0 * b * b * b * cos_ax * cos_t * cos_by * sin_by;
+    double const du1_dxx = 2.0 * b * a * a * cos_ax * cos_by * sin_by * cos_ct;
+    double const du1_dyy = 8.0 * b * b * b * cos_ax * cos_ct * cos_by * sin_by;
 
-    double const u2 = a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
+    double const u2 = a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_ct;
 
-    double const du2_dt = -a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * sin_t;
-    double const du2_dx = a * a * cos_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
-    double const du2_dy = -2.0 * a * b * sin_ax * cos_by * sin_by * cos_t;
+    double const du2_dt = -a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * sin_ct * c;
+    double const du2_dx = a * a * cos_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_ct;
+    double const du2_dy = -2.0 * a * b * sin_ax * cos_by * sin_by * cos_ct;
 
-    double const du2_dxx = -a * a * a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_t;
-    double const du2_dyy = 2.0 * a * b * b * sin_ax * cos_t * (sin_by * sin_by - cos_by * cos_by);
+    double const du2_dxx = -a * a * a * sin_ax * dealii::Utilities::fixed_power<2>(cos_by) * cos_ct;
+    double const du2_dyy = 2.0 * a * b * b * sin_ax * cos_ct * (sin_by * sin_by - cos_by * cos_by);
 
-    // p = cos_ax * cos_t;
-    double const dp_dx = -a * sin_ax * cos_t;
+    // p = cos_ax * cos_ct;
+    double const dp_dx = -a * sin_ax * cos_ct;
     double const dp_dy = 0.0;
 
     dealii::Tensor<2, dim> grad_u;
@@ -348,6 +394,7 @@ private:
   double const height;
   double const length;
   double const y_shift;
+  double const time_period;
   double const kinematic_viscosity;
 };
 
@@ -718,35 +765,6 @@ private:
     const std::vector<unsigned int> hierarchic_to_lexicographic_numbering =
       dealii::FETools::hierarchic_to_lexicographic_numbering<dim>(this->param.mapping_degree);
 
-    // function to distort the undeformed box grid in
-    // [0, length] x [0, height_hill+height_channel_minimum] x [-width, width]
-    // by a smooth trigonometric function |f(x)| < 1 that is zero on the boundaries in the
-    // respective direction and is scaled with some scaling factor and has `n_periods` periods.
-    // Lambda has no effect if `consider_box_distort == false`.
-    auto const box_distort = [&](dealii::Point<dim> const & point_in) {
-      dealii::Point<dim> point_out = point_in;
-
-      if(consider_box_distort)
-      {
-        double const n_periods_length = 2.0;
-        double const n_periods_height = 1.0;
-        double const scale_length =
-          0.02 * std::sin(dealii::numbers::PI * point_in[0] / length_channel);
-        double const scale_hight =
-          0.08 *
-          std::sin(dealii::numbers::PI * (point_in[1] - height_hill) / height_channel_minimum);
-
-        point_out[0] +=
-          length_channel * scale_length *
-          std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_minimum);
-        point_out[1] +=
-          height_channel_minimum * scale_hight *
-          std::sin(dealii::numbers::PI * n_periods_height * point_in[0] / length_channel);
-      }
-
-      return point_out;
-    };
-
     const auto mapping_q_cache =
       std::make_shared<dealii::MappingQCache<dim>>(this->param.mapping_degree);
     mapping_q_cache->initialize(
@@ -765,7 +783,11 @@ private:
           // need to adjust for hierarchic numbering of
           // dealii::MappingQCache
           dealii::Point<dim> const point_in_box =
-            box_distort(fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]));
+            box_distort(fe_values.quadrature_point(hierarchic_to_lexicographic_numbering[i]),
+                        consider_box_distort,
+                        length_channel,
+                        height_hill,
+                        height_channel_minimum);
           if(consider_mapping)
             points_moved[i] = manifold.push_forward(point_in_box);
           else
@@ -786,7 +808,12 @@ private:
       {
         // need to adjust for hierarchic numbering of
         // dealii::MappingQCache
-        dealii::Point<dim> const point_in_box = box_distort(cell->vertex(i));
+        dealii::Point<dim> const point_in_box = box_distort(cell->vertex(i),
+                                                            consider_box_distort,
+                                                            length_channel,
+                                                            height_hill,
+                                                            height_channel_minimum);
+
         if(consider_mapping)
           points_moved[i] = manifold.push_forward(point_in_box);
         else
@@ -827,19 +854,25 @@ private:
                   dealii::ExcMessage("Manufactured solution is defined on the box grid, "
                                      "cannot consider mapping to periodic hill."));
 
-      this->field_functions->initial_solution_velocity.reset(
-        new ManufacturedSolutionVelocity<dim>(height_channel_minimum, length_channel, y_shift));
+      this->field_functions->initial_solution_velocity.reset(new ManufacturedSolutionVelocity<dim>(
+        height_channel_minimum, length_channel, y_shift, time_period));
       this->field_functions->initial_solution_pressure.reset(
-        new ManufacturedSolutionPressure<dim>(length_channel));
+        new ManufacturedSolutionPressure<dim>(length_channel, time_period));
 
       this->field_functions->analytical_solution_pressure.reset(
-        new ManufacturedSolutionPressure<dim>(length_channel));
+        new ManufacturedSolutionPressure<dim>(length_channel, time_period));
       this->field_functions->analytical_solution_velocity.reset(
-        new ManufacturedSolutionVelocity<dim>(height_channel_minimum, length_channel, y_shift));
+        new ManufacturedSolutionVelocity<dim>(
+          height_channel_minimum, length_channel, y_shift, time_period));
 
       bool const include_convective_term = this->param.equation_type == EquationType::NavierStokes;
-      this->field_functions->right_hand_side.reset(new ManufacturedRightHandSide<dim>(
-        include_convective_term, height_channel_minimum, length_channel, y_shift, viscosity));
+      this->field_functions->right_hand_side.reset(
+        new ManufacturedRightHandSide<dim>(include_convective_term,
+                                           height_channel_minimum,
+                                           length_channel,
+                                           y_shift,
+                                           time_period,
+                                           viscosity));
     }
     else
     {
@@ -880,22 +913,22 @@ private:
     pp_data.error_data_u.time_control_data.is_active        = true;
     pp_data.error_data_u.time_control_data.start_time       = start_time;
     pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time);
-    pp_data.error_data_u.analytical_solution.reset(
-      new ManufacturedSolutionVelocity<dim>(height_channel_minimum, length_channel, y_shift));
+    pp_data.error_data_u.analytical_solution.reset(new ManufacturedSolutionVelocity<dim>(
+      height_channel_minimum, length_channel, y_shift, time_period));
     pp_data.error_data_u.name                      = "velocity";
     pp_data.error_data_u.compute_convergence_table = use_manufactured_solution;
     pp_data.error_data_u.write_errors_to_file      = use_manufactured_solution;
-    pp_data.error_data_u.calculate_relative_errors = true;
+    pp_data.error_data_u.calculate_relative_errors = false;
     pp_data.error_data_u.directory                 = this->output_parameters.directory;
 
     pp_data.error_data_p.time_control_data = pp_data.error_data_u.time_control_data;
     pp_data.error_data_p.time_control_data.trigger_interval = (end_time - start_time);
     pp_data.error_data_p.analytical_solution.reset(
-      new ManufacturedSolutionPressure<dim>(length_channel));
+      new ManufacturedSolutionPressure<dim>(length_channel, time_period));
     pp_data.error_data_p.name                      = "pressure";
     pp_data.error_data_p.compute_convergence_table = use_manufactured_solution;
     pp_data.error_data_p.write_errors_to_file      = use_manufactured_solution;
-    pp_data.error_data_p.calculate_relative_errors = true;
+    pp_data.error_data_p.calculate_relative_errors = false;
     pp_data.error_data_p.directory                 = this->output_parameters.directory;
 
     MyPostProcessorData<dim> my_pp_data;
@@ -1198,6 +1231,11 @@ private:
   // The manufactured solution is defined in a channel domain centered around the origin with
   // respect to the y coordinate. This compensates for the offset of the constructed domain.
   static double constexpr y_shift = height_hill + 0.5 * height_channel_minimum;
+
+  // For temporal convergence studies, we increase the frequency to increase the temporal error.
+  static bool constexpr spatial_convergence = true;
+  static double constexpr time_period =
+    2.0 * dealii::numbers::PI * (spatial_convergence ? 1.0 : 1e-5);
 
   static double constexpr bulk_velocity = 5.6218;
   double target_flow_rate               = bulk_velocity * width_channel * height_channel_minimum;

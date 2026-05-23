@@ -2,13 +2,13 @@
     "General": {
         "Precision": "double",
         "Dim": "3",
-        "IsTest": "false"
+        "IsTest": "true"
     },
     "SpatialResolution": {
-        "DegreeMin": "2",
-        "DegreeMax": "2",
-        "RefineSpaceMin": "0",
-        "RefineSpaceMax": "4"
+        "DegreeMin": "4",
+        "DegreeMax": "4",
+        "RefineSpaceMin": "2",
+        "RefineSpaceMax": "2"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
@@ -21,13 +21,13 @@
         "TriangulationType": "Distributed",
         "ReadRestart": "false",
         "WriteRestart": "false",
-        "RestartDirectory": "./output/",
+        "RestartDirectory": "./dummy/",
         "RestartIntervalTime": "0.8",
         "TemporalDiscretization": "BDFConsistentSplittingExtruded",
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
-        "ReynoldsNumber": "1.0e-6",
-        "EndTime": "0.1",
+        "ReynoldsNumber": "1.0",
+        "EndTime": "0.05",
         "GridStretchFactor": "2.0",
         "CalculateStatistics": "false",
         "SampleStartTime": "0",
@@ -36,7 +36,7 @@
         "CoarseMeshRefinements": "4,3,2"
     },
     "Output": {
-        "OutputDirectory": "output/",
+        "OutputDirectory": "output_test/",
         "OutputName": "flow",
         "WriteOutput": "false"
     }
