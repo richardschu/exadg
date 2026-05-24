@@ -5,18 +5,18 @@
         "IsTest": "false"
     },
     "SpatialResolution": {
-        "DegreeMin": "4",
-        "DegreeMax": "4",
-        "RefineSpaceMin": "3",
-        "RefineSpaceMax": "3"
+        "DegreeMin": "7",
+        "DegreeMax": "7",
+        "RefineSpaceMin": "2",
+        "RefineSpaceMax": "2"
     },
     "TemporalResolution": {
         "RefineTimeMin": "0",
-        "RefineTimeMax": "2"
+        "RefineTimeMax": "6"
     },
     "Application": {
         "UseManufacturedSolution": "true",
-        "ConsiderBoxDistort": "true",
+        "ConsiderBoxDistort": "false",
         "ConsiderMapping": "false",
         "TriangulationType": "Distributed",
         "ReadRestart": "false",
@@ -27,7 +27,7 @@
         "SpatialDiscretization": "HDIV",
         "Inviscid": "false",
         "ReynoldsNumber": "1.0",
-        "EndTime": "0.1",
+        "EndTime": "1e-1",
         "GridStretchFactor": "2.0",
         "CalculateStatistics": "false",
         "SampleStartTime": "0",
@@ -36,8 +36,8 @@
         "CoarseMeshRefinements": "4,3,2"
     },
     "Output": {
-        "OutputDirectory": "output/",
+        "OutputDirectory": "output_convergence_test/",
         "OutputName": "flow",
-        "WriteOutput": "false"
+        "WriteOutput": "true"
     }
 }

@@ -496,7 +496,7 @@ private:
     viscosity = inviscid ? 0.0 : bulk_velocity * height_hill / Re;
 
     // depend on values defined in input file
-    end_time              = end_time_multiples * flow_through_time;
+    end_time              = convergence_study ? 0.1 : end_time_multiples * flow_through_time;
     sample_start_time     = double(sample_start_time_multiples) * flow_through_time;
     restart_interval_time = restart_interval_time * flow_through_time;
 
@@ -540,15 +540,16 @@ private:
 
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                     = SolverType::Unsteady;
-    this->param.temporal_discretization         = temporal_discretization;
-    this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
-    this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
-    this->param.adaptive_time_stepping          = true;
+    this->param.solver_type                  = SolverType::Unsteady;
+    this->param.temporal_discretization      = temporal_discretization;
+    this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
+    this->param.calculation_of_time_step_size =
+      convergence_study ? TimeStepCalculation::UserSpecified : TimeStepCalculation::CFL;
+    this->param.adaptive_time_stepping          = convergence_study ? false : true;
     this->param.max_velocity                    = bulk_velocity;
     this->param.cfl                             = 0.32; // 0.375;
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
-    this->param.time_step_size                  = 1.0e-1;
+    this->param.time_step_size                  = 1.0e-4;
     this->param.order_time_integrator           = 3;
     this->param.start_with_low_order            = read_restart ? false : true;
 
@@ -621,8 +622,13 @@ private:
     // PROJECTION METHODS
 
     // pressure Poisson equation
+    double const abs_tol_lin            = convergence_study ? 1.0e-18 : 1.0e-12;
+    double const rel_tol_lin_ppe        = convergence_study ? 1.0e-9 : 1.0e-5;
+    double const rel_tol_lin_projection = convergence_study ? 1.0e-9 : 1.0e-6;
+    double const rel_tol_lin_momentum   = convergence_study ? 1.0e-9 : 1.0e-8;
+    double const rel_tol_lin_mass       = convergence_study ? 1.0e-9 : 1.0e-4;
     this->param.solver_data_pressure_poisson =
-      SolverData(1000, 1.e-12, 1.e-5, LinearSolver::CG, 100);
+      SolverData(1000, abs_tol_lin, rel_tol_lin_ppe, LinearSolver::CG, 100);
     this->param.preconditioner_pressure_poisson      = PreconditionerPressurePoisson::Multigrid;
     this->param.multigrid_data_pressure_poisson.type = MultigridType::cphMG;
     this->param.multigrid_data_pressure_poisson.coarse_problem.solver =
@@ -631,8 +637,9 @@ private:
       MultigridCoarseGridPreconditioner::PointJacobi;
 
     // projection step
-    this->param.solver_data_projection    = SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG);
-    this->param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+    this->param.solver_data_projection =
+      SolverData(1000, abs_tol_lin, rel_tol_lin_projection, LinearSolver::CG);
+    this->param.preconditioner_projection        = PreconditionerProjection::InverseMassMatrix;
     this->param.update_preconditioner_projection = true;
 
 
@@ -642,14 +649,16 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    this->param.solver_data_momentum    = SolverData(1000, 1.e-12, 1.e-8, LinearSolver::CG);
+    this->param.solver_data_momentum =
+      SolverData(1000, abs_tol_lin, rel_tol_lin_momentum, LinearSolver::CG);
     this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                             MomentumPreconditioner::InverseMassMatrix :
                                             MomentumPreconditioner::PointJacobi;
 
     this->param.inverse_mass_operator.implementation_type = InverseMassType::GlobalKrylovSolver;
     this->param.inverse_mass_operator.preconditioner      = PreconditionerMass::PointJacobi;
-    this->param.inverse_mass_operator.solver_data = SolverData(1000, 1e-12, 1e-4, LinearSolver::CG);
+    this->param.inverse_mass_operator.solver_data =
+      SolverData(1000, abs_tol_lin, rel_tol_lin_mass, LinearSolver::CG);
 
     // CONSISTENT SPLITTING SCHEME
     this->param.order_extrapolation_pressure_rhs = 2;
@@ -894,7 +903,7 @@ private:
     // write output for visualization of results
     pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
     pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = flow_through_time / 5.0;
+    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 10.0;
     pp_data.output_data.directory                 = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename                  = this->output_parameters.filename;
     pp_data.output_data.write_velocity_magnitude  = false;
@@ -912,7 +921,7 @@ private:
     // calculation of velocity error
     pp_data.error_data_u.time_control_data.is_active        = true;
     pp_data.error_data_u.time_control_data.start_time       = start_time;
-    pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time);
+    pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time) / 10.0;
     pp_data.error_data_u.analytical_solution.reset(new ManufacturedSolutionVelocity<dim>(
       height_channel_minimum, length_channel, y_shift, time_period));
     pp_data.error_data_u.name                      = "velocity";
@@ -922,7 +931,7 @@ private:
     pp_data.error_data_u.directory                 = this->output_parameters.directory;
 
     pp_data.error_data_p.time_control_data = pp_data.error_data_u.time_control_data;
-    pp_data.error_data_p.time_control_data.trigger_interval = (end_time - start_time);
+    pp_data.error_data_p.time_control_data.trigger_interval = (end_time - start_time) / 10.0;
     pp_data.error_data_p.analytical_solution.reset(
       new ManufacturedSolutionPressure<dim>(length_channel, time_period));
     pp_data.error_data_p.name                      = "pressure";
@@ -1233,9 +1242,10 @@ private:
   static double constexpr y_shift = height_hill + 0.5 * height_channel_minimum;
 
   // For temporal convergence studies, we increase the frequency to increase the temporal error.
+  static bool constexpr convergence_study   = false;
   static bool constexpr spatial_convergence = true;
   static double constexpr time_period =
-    2.0 * dealii::numbers::PI * (spatial_convergence ? 1.0 : 1e-5);
+    2.0 * dealii::numbers::PI * (spatial_convergence ? 1.0 : 1e-4);
 
   static double constexpr bulk_velocity = 5.6218;
   double target_flow_rate               = bulk_velocity * width_channel * height_channel_minimum;
@@ -1249,8 +1259,8 @@ private:
 
   // start and end time
   double const start_time         = 0.0;
-  double       end_time_multiples = 10;
-  double       end_time           = end_time_multiples * flow_through_time;
+  double       end_time_multiples = 10.0;
+  double       end_time = convergence_study ? 0.1 : end_time_multiples * flow_through_time;
 
   // compute convergence study else execute benchmark
   bool use_manufactured_solution = true;
