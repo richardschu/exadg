@@ -44,7 +44,7 @@ For citing base functionality, please check the respective section at the [centr
 
 ## Authors
 
-The current principal developers of this fork of **ExaDG** are [Richard Schussnig](https://oden.utexas.edu/people/directory/Richard-Schussnig/) ([@richardschu](https://github.com/richardschu) and [Martin Kronbichler](https://math.ruhr-uni-bochum.de/en/faculty/professorships/numerics/kronbichler-group/team/prof-dr-martin-kronbichler/).
+The current principal developers of this fork of **ExaDG** are [Richard Schussnig](https://oden.utexas.edu/people/directory/Richard-Schussnig/) [@richardschu](https://github.com/richardschu) and [Martin Kronbichler](https://math.ruhr-uni-bochum.de/en/faculty/professorships/numerics/kronbichler-group/team/prof-dr-martin-kronbichler/) [@kronbichler](https://github.com/kronbichler).
 
 
 ## License
