@@ -162,64 +162,64 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.2886e-04:
-  Absolute error (L2-norm): 6.15774e-05
+  Absolute error (L2-norm): 6.15783e-05
 
 Calculate error for pressure at time t = 2.2886e-04:
-  Absolute error (L2-norm): 1.41321e-03
+  Absolute error (L2-norm): 1.41288e-03
 
 Calculate error for velocity at time t = 4.5010e-04:
-  Absolute error (L2-norm): 6.16391e-05
+  Absolute error (L2-norm): 6.16418e-05
 
 Calculate error for pressure at time t = 4.5010e-04:
-  Absolute error (L2-norm): 1.41962e-03
+  Absolute error (L2-norm): 1.41869e-03
 
 Calculate error for velocity at time t = 6.7896e-04:
-  Absolute error (L2-norm): 6.16831e-05
+  Absolute error (L2-norm): 6.16878e-05
 
 Calculate error for pressure at time t = 6.7896e-04:
-  Absolute error (L2-norm): 1.42594e-03
+  Absolute error (L2-norm): 1.42692e-03
 
 Calculate error for velocity at time t = 9.0020e-04:
-  Absolute error (L2-norm): 6.17153e-05
+  Absolute error (L2-norm): 6.17194e-05
 
 Calculate error for pressure at time t = 9.0020e-04:
-  Absolute error (L2-norm): 1.43451e-03
+  Absolute error (L2-norm): 1.43405e-03
 
 Calculate error for velocity at time t = 1.1214e-03:
-  Absolute error (L2-norm): 6.17389e-05
+  Absolute error (L2-norm): 6.17423e-05
 
 Calculate error for pressure at time t = 1.1214e-03:
-  Absolute error (L2-norm): 1.43922e-03
+  Absolute error (L2-norm): 1.43957e-03
 
 Calculate error for velocity at time t = 1.3503e-03:
-  Absolute error (L2-norm): 6.17592e-05
+  Absolute error (L2-norm): 6.17598e-05
 
 Calculate error for pressure at time t = 1.3503e-03:
-  Absolute error (L2-norm): 1.44408e-03
+  Absolute error (L2-norm): 1.44367e-03
 
 Calculate error for velocity at time t = 1.5715e-03:
-  Absolute error (L2-norm): 6.17741e-05
+  Absolute error (L2-norm): 6.17724e-05
 
 Calculate error for pressure at time t = 1.5715e-03:
-  Absolute error (L2-norm): 1.44706e-03
+  Absolute error (L2-norm): 1.44641e-03
 
 Calculate error for velocity at time t = 1.8004e-03:
-  Absolute error (L2-norm): 6.17862e-05
+  Absolute error (L2-norm): 6.17823e-05
 
 Calculate error for pressure at time t = 1.8004e-03:
-  Absolute error (L2-norm): 1.44902e-03
+  Absolute error (L2-norm): 1.44824e-03
 
 Calculate error for velocity at time t = 2.0216e-03:
-  Absolute error (L2-norm): 6.17953e-05
+  Absolute error (L2-norm): 6.17898e-05
 
 Calculate error for pressure at time t = 2.0216e-03:
-  Absolute error (L2-norm): 1.45114e-03
+  Absolute error (L2-norm): 1.44960e-03
 
 Calculate error for velocity at time t = 2.2429e-03:
-  Absolute error (L2-norm): 6.18029e-05
+  Absolute error (L2-norm): 6.17957e-05
 
 Calculate error for pressure at time t = 2.2429e-03:
-  Absolute error (L2-norm): 1.45288e-03
+  Absolute error (L2-norm): 1.45040e-03
 Only detected files with run_id = 0 matching "output_test/run_". Not enough data to display convergence table.
 _________________________________________________________________________________
 
