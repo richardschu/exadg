@@ -416,23 +416,23 @@ public:
     {
       prm.add_parameter("UseManufacturedSolution",
                         use_manufactured_solution,
-                        "Use the manufactured solution to compute errors in the box domain?",
+                        "Use a manufactured solution to compute errors in the box domain",
                         dealii::Patterns::Bool());
       prm.add_parameter("ConsiderBoxDistort",
                         consider_box_distort,
-                        "Should the box domain be distorted before mapping?",
+                        "Set whether to distort the box domain before mapping to the hill",
                         dealii::Patterns::Bool());
       prm.add_parameter("ConsiderMapping",
                         consider_mapping,
-                        "Should the box domain be mapped to form the periodic hill?",
+                        "Set whether to map the box domain to form the periodic hill?",
                         dealii::Patterns::Bool());
       prm.add_parameter("WriteRestart",
                         write_restart,
-                        "Should restart files be written?",
+                        "Set whether to write restart files be written",
                         dealii::Patterns::Bool());
       prm.add_parameter("ReadRestart",
                         read_restart,
-                        "Is this a restarted simulation?",
+                        "Set whether to restart the restarted simulation from restart data",
                         dealii::Patterns::Bool());
       prm.add_parameter("RestartDirectory",
                         restart_directory,
@@ -1228,9 +1228,10 @@ private:
   double Re       = 5600.0; // 700, 1400, 5600, 10595, 19000
 
   // The undeformed box occupies the region
-  // [0, length] x [0, height_hill+height_channel_minimum] x [-width, width],
+  // [0, length] x [height_hill, height_hill+height_channel_minimum] x [-width, width],
   // while after applying the mapping, the lower bottom of the box (lying at y = height_hill) is
-  // mapped in negative y direction to form the classical periodic hill domain.
+  // mapped in negative y direction to form the classical periodic hill domain, with the
+  // minimum position in y direction being y=0.
   static double constexpr height_hill            = 0.028;
   double width_channel                           = 4.5 * height_hill;
   static double constexpr length_channel         = 9.0 * height_hill;
