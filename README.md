@@ -38,18 +38,18 @@ Please feel free to start a [discussion](https://github.com/exadg/exadg/discussi
 
 ## Citing this work
 
-Please consider citing this github project in scientific contributions for acknowledging this software contribution.
+Please consider citing this github fork in scientific contributions for acknowledging this software contribution.
 
-There is currently no paper dedicated to the software project **ExaDG**. A detailed list of publications with information on **ExaDG** and its numerical methods can be found on the wiki page [Publications](https://github.com/exadg/exadg/wiki/Publications). The most comprehensive overview of **ExaDG** is currently provided in [Fehn (2021)](https://mediatum.ub.tum.de/1601025).
+For citing base functionality, please check the respective section at the [central **ExaDG** repository](https://github.com/exadg/exadg). For using particular features on some of the branches, you are invited to discuss with one of the developers of these codes as listed below. Publications describing new features are currently work in progress and will be added in the future as they become available.
 
 ## Authors
 
-ExaDG's principal developer is [Niklas Fehn](https://scholar.google.de/citations?user=8Dm3CikAAAAJ&hl=de&oi=ao) ([@nfehn](https://github.com/nfehn)).
+The current principal developers of this fork of **ExaDG** are [Richard Schussnig](https://oden.utexas.edu/people/directory/Richard-Schussnig/) ([@richardschu](https://github.com/richardschu) and [Martin Kronbichler](https://math.ruhr-uni-bochum.de/en/faculty/professorships/numerics/kronbichler-group/team/prof-dr-martin-kronbichler/).
 
 
 ## License
 
-**ExaDG** is published under the [GPL-3.0 License](LICENSE). This project is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+**ExaDG** is published under the [GPL-3.0 License](LICENSE). This project is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. Portions of the code with development beyond the main **ExaDG** branch are published under more permissive licenses, as indicated in the respective files.
 
 **ExaDG** contains third party libraries. These libraries are located in the bundled folder and are **copyrighted by their authors**. You can find the licence files and links to the original sources in the bundled folder. 
 
