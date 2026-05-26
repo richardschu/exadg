@@ -33,7 +33,7 @@ namespace IncNS
 {
 /*
  * function to distort the undeformed box grid in
- * [0, length] x [0, height_hill+height_channel_minimum] x [-width, width]
+ * [0, length] x [0, height_hill+height_channel_at_hill_top] x [-width, width]
  * by a smooth trigonometric function |f(x)| < 1 that is zero on the boundaries in the
  * respective direction and is scaled with some scaling factor and has `n_periods` periods.
  * Lambda has no effect if `consider_box_distort == false`.
@@ -44,7 +44,7 @@ box_distort(dealii::Point<dim> const & point_in,
             bool const                 consider_box_distort,
             double const               length_channel,
             double const               height_hill,
-            double const               height_channel_minimum)
+            double const               height_channel_at_hill_top)
 {
   dealii::Point<dim> point_out = point_in;
 
@@ -53,13 +53,13 @@ box_distort(dealii::Point<dim> const & point_in,
     double const n_periods_length = 2.0;
     double const n_periods_height = 1.0;
     double const scale_length = 0.02 * std::sin(dealii::numbers::PI * point_in[0] / length_channel);
-    double const scale_hight =
-      0.08 * std::sin(dealii::numbers::PI * (point_in[1] - height_hill) / height_channel_minimum);
+    double const scale_hight  = 0.08 * std::sin(dealii::numbers::PI * (point_in[1] - height_hill) /
+                                               height_channel_at_hill_top);
 
     point_out[0] +=
       length_channel * scale_length *
-      std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_minimum);
-    point_out[1] += height_channel_minimum * scale_hight *
+      std::sin(dealii::numbers::PI * n_periods_length * point_in[1] / height_channel_at_hill_top);
+    point_out[1] += height_channel_at_hill_top * scale_hight *
                     std::sin(dealii::numbers::PI * n_periods_height * point_in[0] / length_channel);
   }
 
@@ -76,11 +76,11 @@ class InitialConditionVelocity : public dealii::Function<dim>
 public:
   InitialConditionVelocity(double const bulk_velocity,
                            double const height_hill,
-                           double const height_channel_minimum)
+                           double const height_channel_at_hill_top)
     : dealii::Function<dim>(dim, 0.0),
       bulk_velocity(bulk_velocity),
       height_hill(height_hill),
-      height_channel_minimum(height_channel_minimum)
+      height_channel_at_hill_top(height_channel_at_hill_top)
   {
   }
 
@@ -92,10 +92,10 @@ public:
     if(component == 0)
     {
       // initial conditions
-      if(p[1] > height_hill and p[1] < (height_hill + height_channel_minimum))
+      if(p[1] > height_hill and p[1] < (height_hill + height_channel_at_hill_top))
         result = bulk_velocity * (p[1] - height_hill) *
-                 ((height_hill + height_channel_minimum) - p[1]) /
-                 std::pow(height_channel_minimum / 2.0, 2.0);
+                 ((height_hill + height_channel_at_hill_top) - p[1]) /
+                 std::pow(height_channel_at_hill_top / 2.0, 2.0);
 
       // add some random perturbations
       result *= (1.0 + 0.1 * (((double)rand() / RAND_MAX - 0.5) / 0.5));
@@ -105,7 +105,7 @@ public:
   }
 
 private:
-  double const bulk_velocity, height_hill, height_channel_minimum;
+  double const bulk_velocity, height_hill, height_channel_at_hill_top;
 };
 
 /*
@@ -416,15 +416,15 @@ public:
     {
       prm.add_parameter("UseManufacturedSolution",
                         use_manufactured_solution,
-                        "Use a manufactured solution to compute errors in the box domain",
+                        "Use a manufactured solution to compute errors in the box domain.",
                         dealii::Patterns::Bool());
       prm.add_parameter("ConsiderBoxDistort",
                         consider_box_distort,
-                        "Set whether to distort the box domain before mapping to the hill",
+                        "Set whether to distort the box domain before mapping to the hill.",
                         dealii::Patterns::Bool());
       prm.add_parameter("ConsiderMapping",
                         consider_mapping,
-                        "Set whether to map the box domain to form the periodic hill?",
+                        "Set whether to map the box domain to form the periodic hill.",
                         dealii::Patterns::Bool());
       prm.add_parameter("WriteRestart",
                         write_restart,
@@ -448,7 +448,7 @@ public:
       prm.add_parameter("SpatialDiscretization", spatial_discretization, "Spatial discretization");
       prm.add_parameter("Inviscid",
                         inviscid,
-                        "Is this an inviscid simulation?",
+                        "Consider inviscid flow, i.e., zero viscosity.",
                         dealii::Patterns::Bool());
       prm.add_parameter("ReynoldsNumber",
                         Re,
@@ -496,8 +496,8 @@ private:
     viscosity = inviscid ? 0.0 : bulk_velocity * height_hill / Re;
 
     // depend on values defined in input file
-    end_time              = convergence_study ? 0.1 : end_time_multiples * flow_through_time;
-    sample_start_time     = double(sample_start_time_multiples) * flow_through_time;
+    end_time          = temporal_convergence_study ? 0.1 : end_time_multiples * flow_through_time;
+    sample_start_time = double(sample_start_time_multiples) * flow_through_time;
     restart_interval_time = restart_interval_time * flow_through_time;
 
     // sample end time is equal to end time, which is read from the input file
@@ -508,7 +508,7 @@ private:
     width_channel = length_channel * coarse_mesh_refinements[2] / coarse_mesh_refinements[0];
 
     // recompute target flow rate as it depends on the width
-    target_flow_rate = bulk_velocity * width_channel * height_channel_minimum;
+    target_flow_rate = bulk_velocity * width_channel * height_channel_at_hill_top;
 
     // finally refresh the flow rate controller
     flow_rate_controller.reset(
@@ -544,8 +544,8 @@ private:
     this->param.temporal_discretization      = temporal_discretization;
     this->param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
     this->param.calculation_of_time_step_size =
-      convergence_study ? TimeStepCalculation::UserSpecified : TimeStepCalculation::CFL;
-    this->param.adaptive_time_stepping          = convergence_study ? false : true;
+      temporal_convergence_study ? TimeStepCalculation::UserSpecified : TimeStepCalculation::CFL;
+    this->param.adaptive_time_stepping          = temporal_convergence_study ? false : true;
     this->param.max_velocity                    = bulk_velocity;
     this->param.cfl                             = 0.32; // 0.375;
     this->param.cfl_exponent_fe_degree_velocity = 1.5;
@@ -554,7 +554,8 @@ private:
     this->param.start_with_low_order            = read_restart ? false : true;
 
     // output of solver information
-    this->param.solver_info_data.interval_time = flow_through_time / 10.0;
+    this->param.solver_info_data.interval_time =
+      temporal_convergence_study ? (end_time - start_time) / 10.0 : flow_through_time / 10.0;
 
     // SPATIAL DISCRETIZATION
     this->param.spatial_discretization      = spatial_discretization;
@@ -621,12 +622,14 @@ private:
 
     // PROJECTION METHODS
 
-    // pressure Poisson equation
+    // Linear solver tolerances are stricter for convergence study runs to achieve lower errors.
     double const abs_tol_lin            = convergence_study ? 1.0e-18 : 1.0e-12;
-    double const rel_tol_lin_ppe        = convergence_study ? 1.0e-9 : 1.0e-5;
-    double const rel_tol_lin_projection = convergence_study ? 1.0e-9 : 1.0e-6;
-    double const rel_tol_lin_momentum   = convergence_study ? 1.0e-9 : 1.0e-8;
-    double const rel_tol_lin_mass       = convergence_study ? 1.0e-9 : 1.0e-4;
+    double const rel_tol_lin_ppe        = convergence_study ? 1.0e-09 : 1.0e-05;
+    double const rel_tol_lin_projection = convergence_study ? 1.0e-09 : 1.0e-06;
+    double const rel_tol_lin_momentum   = convergence_study ? 1.0e-09 : 1.0e-08;
+    double const rel_tol_lin_mass       = convergence_study ? 1.0e-09 : 1.0e-04;
+
+    // pressure Poisson equation
     this->param.solver_data_pressure_poisson =
       SolverData(1000, abs_tol_lin, rel_tol_lin_ppe, LinearSolver::CG, 100);
     this->param.preconditioner_pressure_poisson      = PreconditionerPressurePoisson::Multigrid;
@@ -688,7 +691,7 @@ private:
 
       dealii::Point<dim> p_2;
       p_2[0] = length_channel;
-      p_2[1] = height_hill + height_channel_minimum;
+      p_2[1] = height_hill + height_channel_at_hill_top;
       if(dim == 3)
         p_2[2] = width_channel / 2.0;
 
@@ -782,7 +785,7 @@ private:
         -> std::vector<dealii::Point<dim>> {
         PeriodicHillManifold<dim> manifold(height_hill,
                                            length_channel,
-                                           height_channel_minimum,
+                                           height_channel_at_hill_top,
                                            grid_stretch_factor);
         fe_values.reinit(cell);
 
@@ -796,7 +799,7 @@ private:
                         consider_box_distort,
                         length_channel,
                         height_hill,
-                        height_channel_minimum);
+                        height_channel_at_hill_top);
           if(consider_mapping)
             points_moved[i] = manifold.push_forward(point_in_box);
           else
@@ -810,7 +813,7 @@ private:
       -> std::vector<dealii::Point<dim>> {
       PeriodicHillManifold<dim>       manifold(height_hill,
                                          length_channel,
-                                         height_channel_minimum,
+                                         height_channel_at_hill_top,
                                          grid_stretch_factor);
       std::vector<dealii::Point<dim>> points_moved(cell->n_vertices());
       for(unsigned int i = 0; i < cell->n_vertices(); ++i)
@@ -821,7 +824,7 @@ private:
                                                             consider_box_distort,
                                                             length_channel,
                                                             height_hill,
-                                                            height_channel_minimum);
+                                                            height_channel_at_hill_top);
 
         if(consider_mapping)
           points_moved[i] = manifold.push_forward(point_in_box);
@@ -864,7 +867,7 @@ private:
                                      "cannot consider mapping to periodic hill."));
 
       this->field_functions->initial_solution_velocity.reset(new ManufacturedSolutionVelocity<dim>(
-        height_channel_minimum, length_channel, y_shift, time_period));
+        height_channel_at_hill_top, length_channel, y_shift, time_period));
       this->field_functions->initial_solution_pressure.reset(
         new ManufacturedSolutionPressure<dim>(length_channel, time_period));
 
@@ -872,12 +875,12 @@ private:
         new ManufacturedSolutionPressure<dim>(length_channel, time_period));
       this->field_functions->analytical_solution_velocity.reset(
         new ManufacturedSolutionVelocity<dim>(
-          height_channel_minimum, length_channel, y_shift, time_period));
+          height_channel_at_hill_top, length_channel, y_shift, time_period));
 
       bool const include_convective_term = this->param.equation_type == EquationType::NavierStokes;
       this->field_functions->right_hand_side.reset(
         new ManufacturedRightHandSide<dim>(include_convective_term,
-                                           height_channel_minimum,
+                                           height_channel_at_hill_top,
                                            length_channel,
                                            y_shift,
                                            time_period,
@@ -886,7 +889,7 @@ private:
     else
     {
       this->field_functions->initial_solution_velocity.reset(
-        new InitialConditionVelocity<dim>(bulk_velocity, height_hill, height_channel_minimum));
+        new InitialConditionVelocity<dim>(bulk_velocity, height_hill, height_channel_at_hill_top));
       this->field_functions->initial_solution_pressure.reset(
         new dealii::Functions::ZeroFunction<dim>(1));
       this->field_functions->analytical_solution_pressure.reset(
@@ -901,9 +904,11 @@ private:
     PostProcessorData<dim> pp_data;
 
     // write output for visualization of results
-    pp_data.output_data.time_control_data.is_active        = this->output_parameters.write;
-    pp_data.output_data.time_control_data.start_time       = start_time;
-    pp_data.output_data.time_control_data.trigger_interval = (end_time - start_time) / 10.0;
+    pp_data.output_data.time_control_data.is_active  = this->output_parameters.write;
+    pp_data.output_data.time_control_data.start_time = start_time;
+    pp_data.output_data.time_control_data.trigger_interval =
+      convergence_study ? (end_time - start_time) / 10.0 : flow_through_time / 5.0;
+    ;
     pp_data.output_data.directory                 = this->output_parameters.directory + "vtu/";
     pp_data.output_data.filename                  = this->output_parameters.filename;
     pp_data.output_data.write_velocity_magnitude  = false;
@@ -919,11 +924,13 @@ private:
     pp_data.output_data.write_processor_id = true;
 
     // calculation of velocity error
-    pp_data.error_data_u.time_control_data.is_active        = true;
-    pp_data.error_data_u.time_control_data.start_time       = start_time;
-    pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time) / 10.0;
+    pp_data.error_data_u.time_control_data.is_active  = true;
+    pp_data.error_data_u.time_control_data.start_time = start_time;
+    pp_data.error_data_u.time_control_data.trigger_interval =
+      convergence_study ? (end_time - start_time) / 10.0 : flow_through_time / 5.0;
+    ;
     pp_data.error_data_u.analytical_solution.reset(new ManufacturedSolutionVelocity<dim>(
-      height_channel_minimum, length_channel, y_shift, time_period));
+      height_channel_at_hill_top, length_channel, y_shift, time_period));
     pp_data.error_data_u.name                      = "velocity";
     pp_data.error_data_u.compute_convergence_table = use_manufactured_solution;
     pp_data.error_data_u.write_errors_to_file      = use_manufactured_solution;
@@ -931,7 +938,9 @@ private:
     pp_data.error_data_u.directory                 = this->output_parameters.directory;
 
     pp_data.error_data_p.time_control_data = pp_data.error_data_u.time_control_data;
-    pp_data.error_data_p.time_control_data.trigger_interval = (end_time - start_time) / 10.0;
+    pp_data.error_data_p.time_control_data.trigger_interval =
+      convergence_study ? (end_time - start_time) / 10.0 : flow_through_time / 5.0;
+    ;
     pp_data.error_data_p.analytical_solution.reset(
       new ManufacturedSolutionPressure<dim>(length_channel, time_period));
     pp_data.error_data_p.name                      = "pressure";
@@ -1018,74 +1027,45 @@ private:
     vel_10->averaging_direction  = 2;
 
     // begin and end points of all lines
-    double const eps = 1.e-12;
-    vel_0->begin =
-      dealii::Point<dim>(0.0 * height_hill,
-                         height_hill + f(0.0 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_0->end =
-      dealii::Point<dim>(0.0 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_005->begin =
-      dealii::Point<dim>(0.05 * height_hill,
-                         height_hill + f(0.05 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_005->end =
-      dealii::Point<dim>(0.05 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_05->begin =
-      dealii::Point<dim>(0.5 * height_hill,
-                         height_hill + f(0.5 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_05->end =
-      dealii::Point<dim>(0.5 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_1->begin =
-      dealii::Point<dim>(1 * height_hill,
-                         height_hill + f(1 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_1->end = dealii::Point<dim>(1 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_2->begin =
-      dealii::Point<dim>(2 * height_hill,
-                         height_hill + f(2 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_2->end = dealii::Point<dim>(2 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_3->begin =
-      dealii::Point<dim>(3 * height_hill,
-                         height_hill + f(3 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_3->end = dealii::Point<dim>(3 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_4->begin =
-      dealii::Point<dim>(4 * height_hill,
-                         height_hill + f(4 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_4->end = dealii::Point<dim>(4 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_5->begin =
-      dealii::Point<dim>(5 * height_hill,
-                         height_hill + f(5 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_5->end = dealii::Point<dim>(5 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_6->begin =
-      dealii::Point<dim>(6 * height_hill,
-                         height_hill + f(6 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_6->end = dealii::Point<dim>(6 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_7->begin =
-      dealii::Point<dim>(7 * height_hill,
-                         height_hill + f(7 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_7->end = dealii::Point<dim>(7 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_8->begin =
-      dealii::Point<dim>(8 * height_hill,
-                         height_hill + f(8 * height_hill, height_hill, length_channel) + eps,
-                         0);
-    vel_8->end = dealii::Point<dim>(8 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_9->begin =
-      dealii::Point<dim>(0 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_9->end = dealii::Point<dim>(9 * height_hill, height_hill + height_channel_minimum - eps, 0);
-    vel_10->begin    = dealii::Point<dim>(0 * height_hill, height_hill + eps, 0);
-    vel_10->end      = dealii::Point<dim>(9 * height_hill, height_hill + eps, 0);
-    vel_10->manifold = std::make_shared<PeriodicHillManifold<dim>>(height_hill,
-                                                                   length_channel,
-                                                                   height_channel_minimum,
-                                                                   grid_stretch_factor);
+    {
+      double constexpr eps     = 1.e-12;
+      double const H           = height_hill;
+      double const L           = length_channel;
+      double const top         = height_hill + height_channel_at_hill_top - eps;
+      double const flat_bottom = height_hill + eps;
+      vel_0->begin             = dealii::Point<dim>(0.0 * H, H + f(0.0 * H, H, L) + eps, 0);
+      vel_0->end               = dealii::Point<dim>(0.0 * H, top, 0);
+      vel_005->begin           = dealii::Point<dim>(0.05 * H, H + f(0.05 * H, H, L) + eps, 0);
+      vel_005->end             = dealii::Point<dim>(0.05 * H, top, 0);
+      vel_05->begin            = dealii::Point<dim>(0.5 * H, H + f(0.5 * H, H, L) + eps, 0);
+      vel_05->end              = dealii::Point<dim>(0.5 * H, top, 0);
+      vel_1->begin             = dealii::Point<dim>(1 * H, H + f(1 * H, H, L) + eps, 0);
+      vel_1->end               = dealii::Point<dim>(1 * H, top, 0);
+      vel_2->begin             = dealii::Point<dim>(2 * H, H + f(2 * H, H, L) + eps, 0);
+      vel_2->end               = dealii::Point<dim>(2 * H, top, 0);
+      vel_3->begin             = dealii::Point<dim>(3 * H, H + f(3 * H, H, L) + eps, 0);
+      vel_3->end               = dealii::Point<dim>(3 * H, top, 0);
+      vel_4->begin             = dealii::Point<dim>(4 * H, H + f(4 * H, H, L) + eps, 0);
+      vel_4->end               = dealii::Point<dim>(4 * H, top, 0);
+      vel_5->begin             = dealii::Point<dim>(5 * H, H + f(5 * H, H, L) + eps, 0);
+      vel_5->end               = dealii::Point<dim>(5 * H, top, 0);
+      vel_6->begin             = dealii::Point<dim>(6 * H, H + f(6 * H, H, L) + eps, 0);
+      vel_6->end               = dealii::Point<dim>(6 * H, top, 0);
+      vel_7->begin             = dealii::Point<dim>(7 * H, H + f(7 * H, H, L) + eps, 0);
+      vel_7->end               = dealii::Point<dim>(7 * H, top, 0);
+      vel_8->begin             = dealii::Point<dim>(8 * H, H + f(8 * H, H, L) + eps, 0);
+      vel_8->end               = dealii::Point<dim>(8 * H, top, 0);
+
+      vel_9->begin = dealii::Point<dim>(0 * H, top, 0);
+      vel_9->end   = dealii::Point<dim>(9 * H, top, 0);
+
+      vel_10->begin    = dealii::Point<dim>(0 * H, flat_bottom, 0);
+      vel_10->end      = dealii::Point<dim>(9 * H, flat_bottom, 0);
+      vel_10->manifold = std::make_shared<PeriodicHillManifold<dim>>(H,
+                                                                     L,
+                                                                     height_channel_at_hill_top,
+                                                                     grid_stretch_factor);
+    }
 
     // set the number of points along the lines
     vel_0->n_points   = points_per_line;
@@ -1228,28 +1208,30 @@ private:
   double Re       = 5600.0; // 700, 1400, 5600, 10595, 19000
 
   // The undeformed box occupies the region
-  // [0, length] x [height_hill, height_hill+height_channel_minimum] x [-width, width],
+  // [0, length] x [height_hill, height_hill+height_channel_at_hill_top] x [-width, width],
   // while after applying the mapping, the lower bottom of the box (lying at y = height_hill) is
   // mapped in negative y direction to form the classical periodic hill domain, with the
   // minimum position in y direction being y=0.
-  static double constexpr height_hill            = 0.028;
-  double width_channel                           = 4.5 * height_hill;
-  static double constexpr length_channel         = 9.0 * height_hill;
-  static double constexpr height_channel_minimum = 2.036 * height_hill;
+  static double constexpr height_hill                = 0.028;
+  double width_channel                               = 4.5 * height_hill;
+  static double constexpr length_channel             = 9.0 * height_hill;
+  static double constexpr height_channel_at_hill_top = 2.036 * height_hill;
   std::array<unsigned int, 3> coarse_mesh_refinements{{2, 1, 1}};
 
   // The manufactured solution is defined in a channel domain centered around the origin with
   // respect to the y coordinate. This compensates for the offset of the constructed domain.
-  static double constexpr y_shift = height_hill + 0.5 * height_channel_minimum;
+  static double constexpr y_shift = height_hill + 0.5 * height_channel_at_hill_top;
 
   // For temporal convergence studies, we increase the frequency to increase the temporal error.
-  static bool constexpr convergence_study   = false;
-  static bool constexpr spatial_convergence = true;
+  static bool constexpr convergence_study         = true;
+  static bool constexpr spatial_convergence_study = true;
+  static bool constexpr temporal_convergence_study =
+    convergence_study and not spatial_convergence_study;
   static double constexpr time_period =
-    2.0 * dealii::numbers::PI * (spatial_convergence ? 1.0 : 1e-4);
+    2.0 * dealii::numbers::PI * (spatial_convergence_study ? 1.0 : 1e-4);
 
   static double constexpr bulk_velocity = 5.6218;
-  double target_flow_rate               = bulk_velocity * width_channel * height_channel_minimum;
+  double target_flow_rate = bulk_velocity * width_channel * height_channel_at_hill_top;
   static double constexpr flow_through_time = length_channel / bulk_velocity;
 
   // RE_H = u_b * height_hill / nu
@@ -1261,7 +1243,7 @@ private:
   // start and end time
   double const start_time         = 0.0;
   double       end_time_multiples = 10.0;
-  double       end_time = convergence_study ? 0.1 : end_time_multiples * flow_through_time;
+  double       end_time = temporal_convergence_study ? 0.1 : end_time_multiples * flow_through_time;
 
   // compute convergence study else execute benchmark
   bool use_manufactured_solution = true;
