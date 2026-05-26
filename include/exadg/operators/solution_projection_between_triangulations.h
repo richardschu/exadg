@@ -24,7 +24,6 @@
 
 // C/C++
 #include <algorithm>
-#include <chrono>
 
 // deal.II
 #include <deal.II/base/conditional_ostream.h>
@@ -57,21 +56,16 @@ struct GridToGridProjectionData
       solver_data(SolverData(1e3, 1e-20, 1e-6, LinearSolver::CG)),
       preconditioner(PreconditionerMass::PointJacobi),
       amg_data(AMGData()),
-      additional_quadrature_points(1),
-      grids_and_maps_identical(false)
+      additional_quadrature_points(1)
   {
   }
 
   void
   print(dealii::ConditionalOStream const & pcout) const
   {
-    print_parameter(pcout, "Grids and maps are assumed identical", grids_and_maps_identical);
-    if(not grids_and_maps_identical)
-    {
-      print_parameter(pcout, "RPE tolerance", rpe_data.tolerance);
-      print_parameter(pcout, "RPE enforce unique mapping", rpe_data.enforce_unique_mapping);
-      print_parameter(pcout, "RPE rtree level", rpe_data.rtree_level);
-    }
+    print_parameter(pcout, "RPE tolerance", rpe_data.tolerance);
+    print_parameter(pcout, "RPE enforce unique mapping", rpe_data.enforce_unique_mapping);
+    print_parameter(pcout, "RPE rtree level", rpe_data.rtree_level);
 
     // These parameters play only a role if an iterative scheme is used for projection.
     // That is for `InverseMassType != InverseMassType::MatrixfreeOperator` determined at runtime.
@@ -89,15 +83,11 @@ struct GridToGridProjectionData
   // The default `additional_quadrature_points = 1` considers `fe_degree + 1` quadrature points in
   // 1D using the `fe_degree` of the target grid's finite element.
   unsigned int additional_quadrature_points;
-
-  // Having identical grids and mappings, one can avoid RPE for mapped configurations. This flag has
-  // to be provided by the user, to avoid an expensive check for independent copies of identical
-  // grids and mappings.
-  bool grids_and_maps_identical;
 };
 
 /**
- * Utility function to collect integration points in the exact sequence they are encountered in.
+ * Utility function to collect integration points in the exact sequence they are encountered
+ * in.
  */
 template<int dim, int n_components, typename Number>
 std::vector<dealii::Point<dim>>
@@ -135,73 +125,6 @@ collect_integration_points(
   }
 
   return integration_points;
-}
-
-/**
- * Utility function to compute the right-hand side of a projection (mass matrix solve), assuming the
- * `dealii::DoFHandler`s corresponding to *identical* grids with *identical* mappings, which are
- * distributed *identically*. The function space, however, might be different. We interpolate the
- * source and assemble the projection right-hand side with the target finite element.
- */
-template<int dim, int n_components, typename Number, typename VectorType>
-VectorType
-assemble_projection_rhs(VectorType &                              system_rhs,
-                        VectorType const &                        source_vector,
-                        dealii::DoFHandler<dim> const &           source_dof_handler,
-                        dealii::Mapping<dim> const &              source_and_target_mapping,
-                        dealii::DoFHandler<dim> const &           target_dof_handler,
-                        dealii::AffineConstraints<Number> const & target_constraints,
-                        dealii::Quadrature<dim> const &           quadrature_dim)
-{
-  // Check if the triangulations *might* be identical, assuming there is no adaptive refinement.
-  dealii::Triangulation<dim> const & source_triangulation = source_dof_handler.get_triangulation();
-  dealii::Triangulation<dim> const & target_triangulation = target_dof_handler.get_triangulation();
-  bool const                         spatial_resolution_identical =
-    source_triangulation.n_global_levels() == target_triangulation.n_global_levels() and
-    source_triangulation.n_global_active_cells() == target_triangulation.n_global_active_cells();
-  AssertThrow(spatial_resolution_identical == true,
-              dealii::ExcMessage("The triangulations used cannot be identical."));
-
-  dealii::FiniteElement<dim> const & source_fe = source_dof_handler.get_fe();
-  dealii::FiniteElement<dim> const & target_fe = target_dof_handler.get_fe();
-
-  const dealii::Quadrature<1> & quadrature = quadrature_dim.get_tensor_basis()[0];
-
-  dealii::FEEvaluation<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number, 1>>
-    fe_values_source(source_and_target_mapping, source_fe, quadrature, dealii::update_values);
-  dealii::FEEvaluation<dim, -1, 0, n_components, Number, dealii::VectorizedArray<Number, 1>>
-    fe_values_target(source_and_target_mapping,
-                     target_fe,
-                     quadrature,
-                     dealii::update_values | dealii::update_JxW_values);
-
-  dealii::Vector<Number>                       cell_rhs(target_fe.dofs_per_cell);
-  std::vector<dealii::types::global_dof_index> dof_indices(target_fe.dofs_per_cell);
-
-  for(const auto & cell_target : target_dof_handler.active_cell_iterators())
-  {
-    const auto cell_source = cell_target->as_dof_handler_iterator(source_dof_handler);
-    if(cell_target->is_locally_owned())
-    {
-      fe_values_source.reinit(cell_source);
-      fe_values_target.reinit(cell_target);
-
-      fe_values_source.read_dof_values(source_vector);
-      fe_values_source.evaluate(dealii::EvaluationFlags::values);
-      for(const unsigned int q : fe_values_source.quadrature_point_indices())
-        fe_values_target.submit_value(fe_values_source.get_value(q), q);
-
-      fe_values_target.integrate(dealii::EvaluationFlags::values);
-      for(unsigned int i = 0; i < cell_rhs.size(); ++i)
-        cell_rhs(fe_values_target.get_internal_dof_numbering()[i]) =
-          fe_values_target.begin_dof_values()[i][0];
-      cell_target->get_dof_indices(dof_indices);
-      target_constraints.distribute_local_to_global(cell_rhs, dof_indices, system_rhs);
-    }
-  }
-  system_rhs.compress(dealii::VectorOperation::add);
-
-  return system_rhs;
 }
 
 /**
@@ -302,137 +225,77 @@ project_vectors(
   InverseMassOperator<dim, n_components, Number> inverse_mass_operator;
   inverse_mass_operator.initialize(target_matrix_free, inverse_mass_operator_data);
 
-  MPI_Comm const             mpi_comm = source_dof_handler.get_mpi_communicator();
-  dealii::ConditionalOStream pcout(std::cout,
-                                   (dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0));
-  pcout << std::scientific << std::setprecision(4);
-  std::chrono::time_point<std::chrono::high_resolution_clock> time_start, time_end;
+  dealii::Utilities::MPI::RemotePointEvaluation<dim> rpe_source(data.rpe_data);
 
-  // If the grids and maps are *not* identical, interpolate the source grid in the target grid's
-  // integration points using `dealii::RemotePointEvaluation`.
-  std::shared_ptr<dealii::Utilities::MPI::RemotePointEvaluation<dim>> rpe_source =
-    std::make_shared<dealii::Utilities::MPI::RemotePointEvaluation<dim>>(data.rpe_data);
-  if(not data.grids_and_maps_identical)
+  // The sequence of integration points follows from the sequence of points as encountered during
+  // cell batch loop.
+  std::vector<dealii::Point<dim>> integration_points_target =
+    collect_integration_points<dim, n_components, Number>(target_matrix_free,
+                                                          dof_index,
+                                                          quad_index);
+
+  rpe_source.reinit(integration_points_target,
+                    source_dof_handler.get_triangulation(),
+                    *source_mapping);
+
+  if(not rpe_source.all_points_found())
   {
-    // The sequence of integration points follows from the sequence of points as encountered during
-    // cell batch loop.
-    std::vector<dealii::Point<dim>> integration_points_target =
-      collect_integration_points<dim, n_components, Number>(target_matrix_free,
-                                                            dof_index,
-                                                            quad_index);
+    MPI_Comm const     mpi_comm         = source_dof_handler.get_mpi_communicator();
+    unsigned int const this_mpi_process = dealii::Utilities::MPI::this_mpi_process(mpi_comm);
+    write_points_in_dummy_triangulation(
+      integration_points_target, "./", "points_all", this_mpi_process, mpi_comm);
 
-    time_start = std::chrono::high_resolution_clock::now();
-    rpe_source->reinit(integration_points_target,
-                       source_dof_handler.get_triangulation(),
-                       *source_mapping);
-    time_end = std::chrono::high_resolution_clock::now();
-
-    std::chrono::duration<double> time_elapsed_rpe_reinit = time_end - time_start;
-
-    pcout << "time: RPE reinit         " << time_elapsed_rpe_reinit.count() << " s\n";
-
-    if(not rpe_source->all_points_found())
+    std::vector<dealii::Point<dim>> points_not_found;
+    points_not_found.reserve(integration_points_target.size());
+    for(unsigned int i = 0; i < integration_points_target.size(); ++i)
     {
-      write_points_in_dummy_triangulation(integration_points_target,
-                                          "./",
-                                          "points_all",
-                                          dealii::Utilities::MPI::this_mpi_process(mpi_comm),
-                                          mpi_comm);
-
-      std::vector<dealii::Point<dim>> points_not_found;
-      points_not_found.reserve(integration_points_target.size());
-      for(unsigned int i = 0; i < integration_points_target.size(); ++i)
+      if(not rpe_source.point_found(i))
       {
-        if(not rpe_source->point_found(i))
-        {
-          points_not_found.push_back(integration_points_target[i]);
-        }
+        points_not_found.push_back(integration_points_target[i]);
       }
-
-      write_points_in_dummy_triangulation(points_not_found, "./", "points_not_found", 0, mpi_comm);
-
-      MPI_Barrier(mpi_comm);
-
-      AssertThrow(
-        rpe_source->all_points_found(),
-        dealii::ExcMessage(
-          "Could not interpolate source grid vector in target grid. "
-          "Points exported to `./points_all_points.pvtu` and `./points_not_found_points.pvtu`"));
     }
+
+    write_points_in_dummy_triangulation(
+      points_not_found, "./", "points_not_found", this_mpi_process, mpi_comm);
+
+    AssertThrow(
+      rpe_source.all_points_found(),
+      dealii::ExcMessage(
+        "Could not interpolate source grid vector in target grid. "
+        "Points exported to `./points_all_points.pvtu` and `./points_not_found_points.pvtu`"));
   }
 
   // Loop over vectors and project.
-  double time_elapsed_rpe_interpolate    = 0.0;
-  double time_elapsed_inverse_mass_rhs   = 0.0;
-  double time_elapsed_inverse_mass_apply = 0.0;
   for(unsigned int i = 0; i < target_vectors.size(); ++i)
   {
     // Evaluate the source vector at the target integration points.
     VectorType const & source_vector = *source_vectors.at(i);
     source_vector.update_ghost_values();
 
-    // Assemble right-hand side for the projection.
-    VectorType system_rhs;
-    if(data.grids_and_maps_identical)
-    {
-      time_start = std::chrono::high_resolution_clock::now();
-      target_matrix_free.initialize_dof_vector(system_rhs, dof_index);
-      assemble_projection_rhs<dim, n_components, Number, VectorType>(
-        system_rhs,
-        source_vector,
-        source_dof_handler,
-        *source_mapping /* source_and_target_mapping */,
-        target_matrix_free.get_dof_handler(dof_index),
-        target_matrix_free.get_affine_constraints(dof_index),
-        target_matrix_free.get_quadrature(quad_index));
-      time_end = std::chrono::high_resolution_clock::now();
-      time_elapsed_inverse_mass_rhs += std::chrono::duration<double>(time_end - time_start).count();
-    }
-    else
-    {
-      time_start = std::chrono::high_resolution_clock::now();
-      std::vector<
-        typename dealii::FEPointEvaluation<n_components, dim, dim, Number>::value_type> const
-        values_source_in_q_points_target = dealii::VectorTools::point_values<n_components>(
-          *rpe_source,
-          source_dof_handler,
-          source_vector,
-          dealii::VectorTools::EvaluationFlags::avg);
-      time_end = std::chrono::high_resolution_clock::now();
-      time_elapsed_rpe_interpolate += std::chrono::duration<double>(time_end - time_start).count();
+    std::vector<
+      typename dealii::FEPointEvaluation<n_components, dim, dim, Number>::value_type> const
+      values_source_in_q_points_target = dealii::VectorTools::point_values<n_components>(
+        rpe_source, source_dof_handler, source_vector, dealii::VectorTools::EvaluationFlags::avg);
 
-      time_start = std::chrono::high_resolution_clock::now();
-      system_rhs = assemble_projection_rhs<dim, n_components, Number, VectorType>(
-        target_matrix_free, values_source_in_q_points_target, dof_index, quad_index);
-      time_end = std::chrono::high_resolution_clock::now();
-      time_elapsed_inverse_mass_rhs += std::chrono::duration<double>(time_end - time_start).count();
-    }
+    // Assemble right-hand side vector for the projection.
+    VectorType system_rhs = assemble_projection_rhs<dim, n_components, Number, VectorType>(
+      target_matrix_free, values_source_in_q_points_target, dof_index, quad_index);
 
     // Solve linear system starting from zero initial guess.
     VectorType sol;
     sol.reinit(system_rhs, false /* omit_zeroing_entries */);
 
-    time_start = std::chrono::high_resolution_clock::now();
     inverse_mass_operator.apply(sol, system_rhs);
-    time_end = std::chrono::high_resolution_clock::now();
-    time_elapsed_inverse_mass_apply += std::chrono::duration<double>(time_end - time_start).count();
-
-    pcout << "global CG iterations in projection : "
-          << inverse_mass_operator.get_n_iter_global_last() << "\n";
 
     // Copy solution to target vector.
     *target_vectors[i] = sol;
   }
-
-  pcout << "time: RPE interpolate    " << time_elapsed_rpe_interpolate << " s\n";
-  pcout << "time: inverse mass rhs   " << time_elapsed_inverse_mass_rhs << " s\n";
-  pcout << "time: inverse mass apply " << time_elapsed_inverse_mass_apply << " s\n";
 }
 
 /**
  * Utility function to perform matrix-free grid-to-grid projection. We assume we only have a single
- * `dealii::FiniteElement` per `dealii::DoFHandler`. This function requires a `MatrixFree` object,
- * that contains the `DoFHandler` and a suitable integration rule at the specified indices.
+ * `dealii::FiniteElement` per `dealii::DoFHandler`. This function requires a suitable `MatrixFree`
+ * object.
  */
 template<int dim, typename Number, typename VectorType>
 void
@@ -443,9 +306,7 @@ do_grid_to_grid_projection(
   std::vector<dealii::DoFHandler<dim> const *> const & target_dof_handlers,
   dealii::MatrixFree<dim, Number, dealii::VectorizedArray<Number>> const & target_matrix_free,
   std::vector<std::vector<VectorType *>> & target_vectors_per_dof_handler,
-  GridToGridProjectionData<dim> const &    data,
-  std::vector<unsigned int> const &        dof_index_per_dof_handler  = {},
-  std::vector<unsigned int> const &        quad_index_per_dof_handler = {})
+  GridToGridProjectionData<dim> const &    data)
 {
   // Check input dimensions.
   AssertThrow(source_vectors_per_dof_handler.size() == source_dof_handlers.size(),
@@ -464,21 +325,10 @@ do_grid_to_grid_projection(
                   target_vectors_per_dof_handler.at(i).size(),
                 dealii::ExcMessage("Vectors of source and target vectors need to have same size."));
   }
-  AssertThrow(dof_index_per_dof_handler.size() == target_dof_handlers.size() or
-                dof_index_per_dof_handler.size() == 0,
-              dealii::ExcMessage("Provide DoF indices matching MatrixFree or none."));
-  AssertThrow(quad_index_per_dof_handler.size() == target_dof_handlers.size() or
-                quad_index_per_dof_handler.size() == 0,
-              dealii::ExcMessage("Provide quadrature indices matching MatrixFree or none."));
 
   // Project vectors per `dealii::DoFHandler`.
   for(unsigned int i = 0; i < target_dof_handlers.size(); ++i)
   {
-    unsigned int const dof_index =
-      dof_index_per_dof_handler.size() == 0 ? i : dof_index_per_dof_handler[i];
-    unsigned int const quad_index =
-      quad_index_per_dof_handler.size() == 0 ? i : quad_index_per_dof_handler[i];
-
     unsigned int const n_components = target_dof_handlers[i]->get_fe().n_components();
     if(n_components == 1)
     {
@@ -488,8 +338,8 @@ do_grid_to_grid_projection(
         source_vectors_per_dof_handler.at(i),
         target_matrix_free,
         target_vectors_per_dof_handler.at(i),
-        dof_index,
-        quad_index,
+        i /* dof_index */,
+        i /* quad_index */,
         data);
     }
     else if(n_components == dim)
@@ -500,8 +350,8 @@ do_grid_to_grid_projection(
         source_vectors_per_dof_handler.at(i),
         target_matrix_free,
         target_vectors_per_dof_handler.at(i),
-        dof_index,
-        quad_index,
+        i /* dof_index */,
+        i /* quad_index */,
         data);
     }
     else if(n_components == dim + 2)
@@ -512,8 +362,8 @@ do_grid_to_grid_projection(
         source_vectors_per_dof_handler.at(i),
         target_matrix_free,
         target_vectors_per_dof_handler.at(i),
-        dof_index,
-        quad_index,
+        i /* dof_index */,
+        i /* quad_index */,
         data);
     }
     else

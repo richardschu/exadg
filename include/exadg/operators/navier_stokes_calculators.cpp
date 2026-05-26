@@ -254,8 +254,10 @@ VorticityCalculator<dim, Number>::cell_loop(
       vector omega_vector;
       if constexpr(dim == 3)
         omega_vector = omega;
-      else
+      else if constexpr(dim == 2)
         omega_vector[0] = omega;
+      else
+        AssertThrow(dim == 3 or dim == 2, dealii::ExcMessage("Curl only defined for 2D and 3D."));
 
       integrator.submit_value(omega_vector, q);
     }
