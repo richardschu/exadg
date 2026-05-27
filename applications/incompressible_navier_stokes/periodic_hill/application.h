@@ -1246,7 +1246,7 @@ private:
   double       end_time = temporal_convergence_study ? 0.1 : end_time_multiples * flow_through_time;
 
   // compute convergence study else execute benchmark
-  bool use_manufactured_solution = true;
+  bool use_manufactured_solution = false;
 
   // grid
   bool   consider_box_distort = false; // distort the box grid before mapping

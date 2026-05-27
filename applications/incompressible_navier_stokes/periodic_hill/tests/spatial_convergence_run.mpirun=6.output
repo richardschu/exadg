@@ -119,26 +119,6 @@ Setup incompressible Navier-Stokes operator ...
 ... done!
 
 Setup Multistep time integrator ...
-Pre-/post distance > 1/2 size 1.3441e-01  [p4] 2.0091e-01  3.1579e-01  [p2]
-Pre-/post distance > 10       2.6344e-01  [p4] 3.3924e-01  4.7895e-01  [p2]
-Pre-/post distance > 1/2 size 8.0526e-01  [p2] 8.7928e-01  9.4086e-01  [p4]
-Pre-/post distance > 10       8.4737e-01  [p2] 8.9694e-01  9.4624e-01  [p4]
-Face flux buffer efficiency   6.7708e-01  [p2] 7.0486e-01  7.1875e-01  [p0]
-Pre-/post distance > 1/2 size 9.6774e-02  [p4] 1.7664e-01  3.2105e-01  [p2]
-Pre-/post distance > 10       9.6774e-02  [p4] 1.7664e-01  3.2105e-01  [p2]
-Pre-/post distance > 1/2 size 8.0526e-01  [p2] 8.7233e-01  9.3011e-01  [p4]
-Pre-/post distance > 10       8.0526e-01  [p2] 8.7233e-01  9.3011e-01  [p4]
-Face flux buffer efficiency   6.4583e-01  [p2] 7.0139e-01  7.2917e-01  [p0]
-Pre-/post distance > 1/2 size 2.3438e-02  [p0] 5.7292e-02  1.2500e-01  [p2]
-Pre-/post distance > 10       1.2500e-01  [p0] 1.5625e-01  2.1875e-01  [p2]
-Pre-/post distance > 1/2 size 6.7188e-01  [p2] 7.5000e-01  7.8906e-01  [p0]
-Pre-/post distance > 10       6.9531e-01  [p2] 7.7344e-01  8.1250e-01  [p0]
-Face flux buffer efficiency   6.7708e-01  [p2] 7.0486e-01  7.1875e-01  [p0]
-Pre-/post distance > 1/2 size 7.8125e-03  [p0] 4.6875e-02  1.2500e-01  [p2]
-Pre-/post distance > 10       7.8125e-03  [p0] 4.6875e-02  1.2500e-01  [p2]
-Pre-/post distance > 1/2 size 6.7188e-01  [p2] 7.4479e-01  7.8125e-01  [p0]
-Pre-/post distance > 10       6.7188e-01  [p2] 7.4479e-01  7.8125e-01  [p0]
-Face flux buffer efficiency   6.4583e-01  [p2] 7.0139e-01  7.2917e-01  [p0]
 
 Calculation of time step size according to CFL condition:
 

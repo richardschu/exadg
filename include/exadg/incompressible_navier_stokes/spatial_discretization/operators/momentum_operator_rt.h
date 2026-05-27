@@ -1791,6 +1791,9 @@ private:
       AssertThrow(index != numbers::invalid_unsigned_int, ExcInternalError());
     for(const auto & index : touched_last_by)
       AssertThrow(index != numbers::invalid_unsigned_int, ExcInternalError());
+
+    // debug output to assess sanity of implementation
+    if(false)
     {
       unsigned int n_batches_half = 0, n_batches_10 = 0;
       for(unsigned int i = 0; i < touched_first_by.size(); ++i)
@@ -1858,6 +1861,8 @@ private:
     std::cout << std::endl;
 #endif
 
+    // debug output to assess sanity of implementation
+    if(false)
     {
       unsigned int n_batches_half = 0, n_batches_10 = 0;
       for(unsigned int i = 0; i < touched_first_by.size(); ++i)
@@ -6686,9 +6691,11 @@ private:
         else
           ++count_1;
 
-    Helper::print_time(static_cast<double>(count_1) / (count_0 + count_1),
-                       "Face flux buffer efficiency",
-                       MPI_COMM_WORLD);
+    // debug output to assess sanity of implementation
+    if(false)
+      Helper::print_time(static_cast<double>(count_1) / (count_0 + count_1),
+                         "Face flux buffer efficiency",
+                         MPI_COMM_WORLD);
 
 #if 0
     std::cout << "Identified storage of length " << size_of_storage << " with "
