@@ -61,7 +61,6 @@ CONFIGURE_FILE(
   ${CMAKE_BINARY_DIR}/include/exadg/utilities/exadg_revision.h
   )
 
-
 # Set the source files to be compiled
 SET(TARGET_SRC
      include/exadg/utilities/timer_tree.cpp
@@ -219,9 +218,16 @@ ADD_LIBRARY(exadg ${TARGET_SRC})
 SET(EXADG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/bundled ${CMAKE_BINARY_DIR}/include)
 TARGET_INCLUDE_DIRECTORIES(exadg PUBLIC ${EXADG_INCLUDE_DIRS})
 
+# ExaDG-Bio
+OPTION(EXADG_WITH_EXADG_BIO "Use ExaDG-Bio" EXADG_WITH_EXADG_BIO)
+IF(${EXADG_WITH_EXADG_BIO})
+    target_compile_definitions(exadg PUBLIC EXADG_WITH_EXADG_BIO=1)
+    target_include_directories(exadg PUBLIC ${EXADG_BIO_INCLUDE})
+ENDIF()
+
 # FFTW
 OPTION(EXADG_WITH_FFTW "Use FFTW" OFF)
-IF(${EXADG_WITH_FFTW})
+IF(${EXADG_WITH_FFTW})  
     ADD_DEFINITIONS(-DEXADG_WITH_FFTW)
     INCLUDE_DIRECTORIES(${FFTW_INCLUDE})
     IF(${BUILD_SHARED_LIBS})

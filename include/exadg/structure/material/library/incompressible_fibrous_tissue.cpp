@@ -33,9 +33,8 @@
 #include <exadg/structure/spatial_discretization/operators/continuum_mechanics.h>
 
 // ExaDG-Bio
-#define LINK_TO_EXADGBIO
-#ifdef LINK_TO_EXADGBIO
-#  include "../../../../../../../exadg-bio/include/match_cell_data.h"
+#if EXADG_WITH_EXADG_BIO
+#include <exadg-bio/match_cell_data.h>
 #endif
 
 namespace ExaDG
@@ -208,7 +207,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     }
   }
 
-#ifdef LINK_TO_EXADGBIO
+#if EXADG_WITH_EXADG_BIO
   dealii::DoFHandler<dim> const & dof_handler = matrix_free.get_dof_handler(dof_index);
   unsigned int const              degree      = dof_handler.get_fe().base_element(0).degree;
   MPI_Comm const &                mpi_comm    = dof_handler.get_mpi_communicator();
@@ -248,7 +247,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     matrix_free.initialize_dof_vector(*e1_orientation_dof_vector, dof_index);
     matrix_free.initialize_dof_vector(*e2_orientation_dof_vector, dof_index);
 
-#ifdef LINK_TO_EXADGBIO
+#if EXADG_WITH_EXADG_BIO
     // Read the suitable vector from binary format by matching the initialized vector with the
     // vectors given for all multigrid levels.
     bool found_match = false;
@@ -302,7 +301,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     stiffness_scaling_dof_vector = std::make_shared<VectorType>();
     matrix_free.initialize_dof_vector(*stiffness_scaling_dof_vector, dof_index);
 
-#ifdef LINK_TO_EXADGBIO
+#if EXADG_WITH_EXADG_BIO
     // Read the suitable vector from binary format by matching the initialized vector with the
     // vectors given for all multigrid levels.
     bool found_match = false;
@@ -381,7 +380,7 @@ IncompressibleFibrousTissue<dim, Number, check_type, stable_formulation, cache_l
     robin_k_scaling_dof_vector = std::make_shared<VectorType>();
     matrix_free.initialize_dof_vector(*robin_k_scaling_dof_vector, dof_index);
 
-#ifdef LINK_TO_EXADGBIO
+#if EXADG_WITH_EXADG_BIO
     // Read the suitable vector from binary format by matching the initialized vector with the
     // vectors given for all multigrid levels.
     bool found_match = false;
