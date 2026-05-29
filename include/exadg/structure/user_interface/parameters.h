@@ -187,6 +187,12 @@ public:
   // solver in each load step
   bool use_extrapolation;
 
+  // inverse analysis solver
+
+  // Export the initial reference configuration and the configuration being the solution of the
+  // inverse elasticity problem for visualization and use as additional mapping in forward problems.
+  bool export_configuration_inverse_analysis;
+
   /**************************************************************************************/
   /*                                                                                    */
   /*                              SPATIAL DISCRETIZATION                                */

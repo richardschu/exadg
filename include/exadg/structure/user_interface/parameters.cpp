@@ -71,6 +71,9 @@ Parameters::Parameters()
     // solution, and is hence optional.
     use_extrapolation(true),
 
+    // inverse_analysis solver
+    export_configuration_inverse_analysis(false),
+
     // SPATIAL DISCRETIZATION
     grid(GridData()),
     mapping_degree(1),

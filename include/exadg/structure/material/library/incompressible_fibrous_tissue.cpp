@@ -34,7 +34,7 @@
 
 // ExaDG-Bio
 #if EXADG_WITH_EXADG_BIO
-#include <exadg-bio/match_cell_data.h>
+#  include <exadg-bio/match_cell_data.h>
 #endif
 
 namespace ExaDG
