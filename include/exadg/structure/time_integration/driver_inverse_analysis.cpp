@@ -185,6 +185,11 @@ DriverInverseAnalysis<dim, Number>::do_solve()
         solution = old_solution;
         ++re_try_counter;
 
+        // move domain to previous position
+        solution *= -1.0;
+        pde_operator->shift_reference_configuration(solution);
+        solution *= -1.0;
+
         // reduce load increment by factor of 2
         load_increment *= 0.5;
         pcout << std::endl
@@ -370,7 +375,7 @@ DriverInverseAnalysis<dim, Number>::postprocessing(bool const errors_only,
   // vector. Mapping the current reference configuration with that vector will yield the initial
   // reference configuration up to the specified tolerance. The mapping is not immediately available
   // after setup, only after calling `NonLinearOperator::set_solution_linearization()`.
-  if(export_configuration)
+  if(export_configuration and this->param.export_configuration_inverse_analysis)
   {
     pde_operator->export_configuration(postprocessor->get_data().output_data.directory, solution);
   }

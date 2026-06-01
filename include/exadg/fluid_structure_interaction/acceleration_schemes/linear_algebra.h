@@ -23,6 +23,7 @@
 #define EXADG_FLUID_STRUCTURE_INTERACTION_ACCELERATION_SCHEMES_LINEAR_ALGEBRA_H_
 
 // C/C++
+#include <memory>
 #include <vector>
 
 // deal.II

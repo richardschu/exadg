@@ -27,7 +27,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
-#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
