@@ -26,7 +26,7 @@
 #include <deal.II/base/exceptions.h>
 
 // ExaDG
-#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 
 namespace ExaDG
 {

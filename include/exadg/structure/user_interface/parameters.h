@@ -26,7 +26,7 @@
 #include <exadg/grid/grid_data.h>
 #include <exadg/operators/enum_types.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 #include <exadg/structure/user_interface/enum_types.h>
 #include <exadg/time_integration/enum_types.h>

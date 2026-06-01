@@ -33,7 +33,7 @@
 #include <exadg/operators/mass_operator.h>
 #include <exadg/operators/navier_stokes_calculators.h>
 #include <exadg/operators/structure_calculators.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
 #include <exadg/structure/spatial_discretization/interface.h>
 #include <exadg/structure/spatial_discretization/operators/body_force_operator.h>
