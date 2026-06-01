@@ -249,6 +249,9 @@ private:
     this->param.force_material_residual = force_material_residual;
     this->param.stable_formulation      = stable_formulation;
 
+    this->param.export_configuration_inverse_analysis =
+      problem_type == ProblemType::InverseAnalysis and this->output_parameters.write;
+
     this->param.density = density;
     if(this->param.problem_type == ProblemType::Unsteady and weak_damping_coefficient > 0.0)
     {
