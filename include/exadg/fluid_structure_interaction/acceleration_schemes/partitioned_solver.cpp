@@ -19,7 +19,7 @@
  *  ______________________________________________________________________
  */
 
- // ExaDG
+// ExaDG
 #include <exadg/fluid_structure_interaction/acceleration_schemes/partitioned_solver.h>
 
 namespace ExaDG
@@ -186,8 +186,9 @@ PartitionedSolver<dim, Number>::solve(
 
 template class PartitionedSolver<2, float>;
 template class PartitionedSolver<2, double>;
+
 template class PartitionedSolver<3, float>;
 template class PartitionedSolver<3, double>;
 
-}
-}
+} // namespace FSI
+} // namespace ExaDG
