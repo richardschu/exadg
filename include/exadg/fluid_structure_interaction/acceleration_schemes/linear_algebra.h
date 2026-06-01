@@ -24,6 +24,7 @@
 
 // C/C++
 #include <vector>
+#include <memory>
 
 // deal.II
 #include <deal.II/base/exceptions.h>
