@@ -22,14 +22,59 @@
 #ifndef EXADG_SOLVERS_AND_PRECONDITIONERS_FIXED_POINT_SOLVER_H_
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_FIXED_POINT_SOLVER_H_
 
+// deal.II
+#include <deal.II/base/conditional_ostream.h>
+
 // ExaDG
-#include <exadg/fluid_structure_interaction/acceleration_schemes/parameters.h>
+#include <exadg/utilities/print_functions.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
 {
 namespace FixedPointSolver
 {
+enum class AccelerationMethod
+{
+  Undefined,
+  FixedRelaxation,
+  Aitken,
+  IQN_ILS,
+  IQN_IMVLS
+};
+
+struct Parameters
+{
+  Parameters()
+    : acceleration_method(AccelerationMethod::Undefined),
+      abs_tol(1.e-12),
+      rel_tol(1.e-3),
+      omega_init(0.1),
+      reused_time_steps(0),
+      max_iter(100),
+      print_solver_info(true)
+  {
+  }
+
+  void
+  print(dealii::ConditionalOStream const & pcout) const
+  {
+    print_parameter(pcout, "Maximum number of iterations", max_iter);
+    print_parameter(pcout, "Absolute solver tolerance", abs_tol);
+    print_parameter(pcout, "Relative solver tolerance", rel_tol);
+    print_parameter(pcout, "Initial relaxation parameter", omega_init);
+    print_parameter(pcout, "Reused time steps", reused_time_steps);
+    print_parameter(pcout, "Acceleration method", acceleration_method);
+  }
+
+  AccelerationMethod acceleration_method;
+  double             abs_tol;
+  double             rel_tol;
+  double             omega_init;
+  unsigned int       reused_time_steps;
+  unsigned int       max_iter;
+  bool               print_solver_info;
+};
+
 /**
  * Class implementing a fixed-point iteration with various acceleration methods. The actual
  * (single!) fixed-point iteration is performed in the provided lambda function

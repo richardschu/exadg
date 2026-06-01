@@ -69,10 +69,10 @@ Parameters::Parameters()
     // The inverse analysis and quasi static solvers use extrapolation during the load ramping to
     // get an improved initial guess. This might be less robust than taking the previous load step's
     // solution, and is hence optional.
-    use_extrapolation(true),
+    use_extrapolation_continuation(true),
 
     // inverse_analysis solver
-    export_configuration_inverse_analysis(false),
+    inverse_analysis_export_configuration(false),
 
     // SPATIAL DISCRETIZATION
     grid(GridData()),
@@ -83,7 +83,7 @@ Parameters::Parameters()
     sparse_matrix_type(SparseMatrixType::Undefined),
 
     // SOLVER
-    inverse_analysis_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
+    inverse_analysis_solver_parameters(FixedPointSolver::Parameters()),
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
     solver(Solver::Undefined),
     solver_data(SolverData(1e4, 1.e-12, 1.e-6, 100)),
@@ -299,7 +299,7 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
   if(problem_type == ProblemType::InverseAnalysis)
   {
     pcout << std::endl << "Inverse analysis solver:" << std::endl;
-    inverse_analysis_solver_data.print(pcout);
+    inverse_analysis_solver_parameters.print(pcout);
   }
 
   // nonlinear solver

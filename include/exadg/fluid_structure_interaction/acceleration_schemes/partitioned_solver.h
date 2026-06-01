@@ -23,6 +23,7 @@
 #define EXADG_FLUID_STRUCTURE_INTERACTION_ACCELERATION_SCHEMES_PARTITIONED_SOLVER_H_
 
 // ExaDG
+#include <exadg/fluid_structure_interaction/acceleration_schemes/parameters.h>
 #include <exadg/fluid_structure_interaction/single_field_solvers/fluid.h>
 #include <exadg/fluid_structure_interaction/single_field_solvers/structure.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>

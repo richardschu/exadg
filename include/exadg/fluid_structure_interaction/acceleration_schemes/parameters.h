@@ -27,44 +27,11 @@
 #include <deal.II/base/patterns.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 #include <exadg/utilities/enum_patterns.h>
 
 namespace ExaDG
 {
-namespace FixedPointSolver
-{
-enum class AccelerationMethod
-{
-  Undefined,
-  FixedRelaxation,
-  Aitken,
-  IQN_ILS,
-  IQN_IMVLS
-};
-
-struct Parameters
-{
-  Parameters()
-    : acceleration_method(AccelerationMethod::Undefined),
-      abs_tol(1.e-12),
-      rel_tol(1.e-3),
-      omega_init(0.1),
-      reused_time_steps(0),
-      max_iter(100),
-      print_solver_info(true)
-  {
-  }
-
-  AccelerationMethod acceleration_method;
-  double             abs_tol;
-  double             rel_tol;
-  double             omega_init;
-  unsigned int       reused_time_steps;
-  unsigned int       max_iter;
-  bool               print_solver_info;
-};
-} // namespace FixedPointSolver
-
 namespace FSI
 {
 enum class UpdateMethod

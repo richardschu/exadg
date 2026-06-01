@@ -43,9 +43,8 @@ DriverInverseAnalysis<dim, Number>::DriverInverseAnalysis(
     is_test(is_test_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_in) == 0),
     last_load_increment(param.load_increment),
-    use_extrapolation(param.use_extrapolation),
     step_number(1),
-    inverse_analysis_solver_data(param.inverse_analysis_solver_data),
+    inverse_analysis_solver_parameters(param.inverse_analysis_solver_parameters),
     timer_tree(new TimerTree()),
     iterations({0, {0, 0}})
 {
@@ -166,7 +165,7 @@ DriverInverseAnalysis<dim, Number>::do_solve()
       try
       {
         // extrapolate solution
-        if(use_extrapolation)
+        if(this->param.use_extrapolation_continuation)
         {
           solution.add(load_increment / last_load_increment, displacement_increment);
         }
@@ -273,18 +272,21 @@ DriverInverseAnalysis<dim, Number>::check_convergence(VectorType const & update,
     double const abs_error = update.l2_norm();
     double const rel_error = abs_error / iterate.l2_norm();
 
-    pcout << "\n"
-          << "Inverse analysis errors :\n"
-          << std::scientific << std::setprecision(5)
-          << "  ||d_k+1 - d_k||           = " << abs_error << "\n"
-          << "  ||d_k+1 - d_k||/||d_k+1|| = " << rel_error << "\n";
+    if(inverse_analysis_solver_parameters.print_solver_info)
+    {
+      pcout << "\n"
+            << "Inverse analysis errors :\n"
+            << std::scientific << std::setprecision(5)
+            << "  ||d_k+1 - d_k||           = " << abs_error << "\n"
+            << "  ||d_k+1 - d_k||/||d_k+1|| = " << rel_error << "\n";
+    }
 
-    bool const converged = (abs_error < inverse_analysis_solver_data.abs_tol) or
-                           (rel_error < inverse_analysis_solver_data.rel_tol);
+    bool const converged = (abs_error < inverse_analysis_solver_parameters.abs_tol) or
+                           (rel_error < inverse_analysis_solver_parameters.rel_tol);
 
     if(not(converged))
     {
-      AssertThrow(step_number < inverse_analysis_solver_data.max_iter,
+      AssertThrow(step_number < inverse_analysis_solver_parameters.max_iter,
                   dealii::ExcMessage(
                     "Inverse analysis did not converge within the maximum number of iterations."
                     "Consider increasing the number of load steps or relaxing the tolerances."));
@@ -375,7 +377,7 @@ DriverInverseAnalysis<dim, Number>::postprocessing(bool const errors_only,
   // vector. Mapping the current reference configuration with that vector will yield the initial
   // reference configuration up to the specified tolerance. The mapping is not immediately available
   // after setup, only after calling `NonLinearOperator::set_solution_linearization()`.
-  if(export_configuration and this->param.export_configuration_inverse_analysis)
+  if(export_configuration and this->param.inverse_analysis_export_configuration)
   {
     pde_operator->export_configuration(postprocessor->get_data().output_data.directory, solution);
   }

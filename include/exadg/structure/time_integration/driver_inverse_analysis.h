@@ -27,6 +27,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/utilities/timer_tree.h>
 
@@ -111,20 +112,19 @@ private:
   // vectors
   VectorType solution;
 
-  // We need to store a vector in order to extrapolate the solution to the next
-  // load step and obtain an accurate initial guess for the Newton solver.
+  // We need to store a vector in order to extrapolate the solution to the next load step and obtain
+  // an accurate initial guess for the Newton solver.
   VectorType displacement_increment;
 
-  // For the purpose of extrapolating the displacements, we also need to store the
-  // load_increment of the last load step.
+  // For the purpose of extrapolating the displacements, we also need to store the load_increment
+  // of the last load step.
   double last_load_increment;
-  bool   use_extrapolation;
 
   unsigned int step_number;
 
   // The inverse problem is solved by solving a sequence of forward problems. Once the full load is
   // applied, iterate until the displacement increment is sufficiently small.
-  Newton::SolverData inverse_analysis_solver_data;
+  FixedPointSolver::Parameters inverse_analysis_solver_parameters;
 
   // tolerance for `load_factor` to be considered as fully applied
   static double constexpr eps_load_factor = 1.e-10;

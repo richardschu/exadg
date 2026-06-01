@@ -23,6 +23,7 @@
 #define STRUCTURE_BAR
 
 #include <exadg/grid/deformed_cube_manifold.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 
 namespace ExaDG
 {
@@ -249,7 +250,7 @@ private:
     this->param.force_material_residual = force_material_residual;
     this->param.stable_formulation      = stable_formulation;
 
-    this->param.export_configuration_inverse_analysis =
+    this->param.inverse_analysis_export_configuration =
       problem_type == ProblemType::InverseAnalysis and this->output_parameters.write;
 
     this->param.density = density;
@@ -282,15 +283,22 @@ private:
       this->param.grid.create_coarse_triangulations = false; // can also be set to true if desired
     }
 
-    this->param.load_increment    = load_increment;
-    this->param.use_extrapolation = true;
+    this->param.load_increment                 = load_increment;
+    this->param.use_extrapolation_continuation = true;
 
-    this->param.inverse_analysis_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-4);
-    this->param.newton_solver_data           = Newton::SolverData(1e2, 1.e-9, 1.e-4);
-    this->param.solver                       = Solver::FGMRES;
-    this->param.solver_data                  = SolverData(1e3, 1.e-14, 1.e-8, 30);
-    this->param.preconditioner               = preconditioner;
-    this->param.multigrid_data.type          = MultigridType::phMG;
+    this->param.inverse_analysis_solver_parameters.acceleration_method =
+      FixedPointSolver::AccelerationMethod::FixedRelaxation;
+    this->param.inverse_analysis_solver_parameters.abs_tol           = 1.0e-9;
+    this->param.inverse_analysis_solver_parameters.rel_tol           = 1.0e-4;
+    this->param.inverse_analysis_solver_parameters.omega_init        = 1.0;
+    this->param.inverse_analysis_solver_parameters.reused_time_steps = 10;
+    this->param.inverse_analysis_solver_parameters.max_iter          = 100;
+
+    this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.solver              = Solver::FGMRES;
+    this->param.solver_data         = SolverData(1e3, 1.e-14, 1.e-8, 30);
+    this->param.preconditioner      = preconditioner;
+    this->param.multigrid_data.type = MultigridType::phMG;
 
     this->param.multigrid_data.p_sequence             = PSequenceType::DecreaseByOne; // Bisect;
     this->param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;

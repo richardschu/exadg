@@ -50,6 +50,9 @@ Inverse analysis solver:
   Maximum number of iterations:              100
   Absolute solver tolerance:                 1.0000e-09
   Relative solver tolerance:                 1.0000e-04
+  Initial relaxation parameter:              1.0000e+00
+  Reused time steps:                         10
+  Acceleration method:                       FixedRelaxation
 
 Newton:
   Maximum number of iterations:              100
