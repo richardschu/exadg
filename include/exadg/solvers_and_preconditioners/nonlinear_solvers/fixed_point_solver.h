@@ -23,11 +23,7 @@
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_FIXED_POINT_SOLVER_H_
 
 // ExaDG
-#include <exadg/fluid_structure_interaction/acceleration_schemes/linear_algebra.h>
 #include <exadg/fluid_structure_interaction/acceleration_schemes/parameters.h>
-#include <exadg/fluid_structure_interaction/single_field_solvers/fluid.h>
-#include <exadg/fluid_structure_interaction/single_field_solvers/structure.h>
-#include <exadg/utilities/print_solver_results.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
