@@ -51,6 +51,8 @@ struct Parameters
       omega_init(0.1),
       reused_time_steps(0),
       max_iter(100),
+      delay_acceleration(0),
+      drop_tol_QR(1.0e-2),
       print_solver_info(true)
   {
   }
@@ -64,6 +66,8 @@ struct Parameters
     print_parameter(pcout, "Initial relaxation parameter", omega_init);
     print_parameter(pcout, "Reused time steps", reused_time_steps);
     print_parameter(pcout, "Acceleration method", acceleration_method);
+    print_parameter(pcout, "Delay acceleration", delay_acceleration);
+    print_parameter(pcout, "QR decomposition tolerance", drop_tol_QR);
   }
 
   AccelerationMethod acceleration_method;
@@ -72,6 +76,8 @@ struct Parameters
   double             omega_init;
   unsigned int       reused_time_steps;
   unsigned int       max_iter;
+  unsigned int       delay_acceleration;
+  double             drop_tol_QR;
   bool               print_solver_info;
 };
 

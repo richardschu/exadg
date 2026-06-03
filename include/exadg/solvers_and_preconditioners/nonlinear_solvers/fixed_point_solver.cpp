@@ -158,9 +158,7 @@ FixedPointSolver<Number, VectorType>::solve(
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
-
       lambda_get_iterate(x, iteration_counter);
-
       lambda_fixed_point_iteration(x_tilde, x, iteration_counter);
 
       // compute residual and check convergence
@@ -174,16 +172,22 @@ FixedPointSolver<Number, VectorType>::solve(
         dealii::Timer timer;
         timer.restart();
 
-        if(iteration_counter == 0 and (parameters.reused_time_steps == 0 or iqn_initial_call))
+        if(iteration_counter < parameters.delay_acceleration or
+           (iteration_counter == 0 and (parameters.reused_time_steps == 0 or iqn_initial_call)))
         {
           x.add(parameters.omega_init, residual);
 
-          // Update flag for future calls since this is reached only in iteration 0.
+          // Update flag for future calls since this is reached only in first iterations.
           iqn_initial_call = false;
         }
         else
         {
-          if(iteration_counter >= 1)
+          if(iteration_counter == parameters.delay_acceleration)
+          {
+            // Finite differences are only contructed from vectors from within the same `solve()`
+            // call. Do not incorporate differences across time or load steps.
+          }
+          else if(iteration_counter > parameters.delay_acceleration)
           {
             // append D, R matrices
             VectorType delta_x_tilde = x_tilde;
@@ -193,6 +197,11 @@ FixedPointSolver<Number, VectorType>::solve(
             VectorType delta_residual = residual;
             delta_residual.add(-1.0, residual_old);
             R->push_back(delta_residual);
+          }
+          else
+          {
+            AssertThrow(iteration_counter < parameters.delay_acceleration,
+                        dealii::ExcMessage("Logical error, check control flow."));
           }
 
           // fill vectors (including reuse)
@@ -213,7 +222,9 @@ FixedPointSolver<Number, VectorType>::solve(
           {
             // compute QR-decomposition
             LinearAlgebra::Matrix<Number> U(iteration_counter_all);
-            compute_QR_decomposition(Q, U);
+            LinearAlgebra::compute_QR_decomposition<VectorType, Number>(Q,
+                                                                        U,
+                                                                        parameters.drop_tol_QR);
 
             std::vector<Number> rhs(iteration_counter_all, 0.0);
             for(unsigned int i = 0; i < iteration_counter_all; ++i)
@@ -303,11 +314,12 @@ FixedPointSolver<Number, VectorType>::solve(
         // compute b vector
         LinearAlgebra::inv_jacobian_times_residual(b, D_history, R_history, Z_history, residual);
 
-        if(iteration_counter == 0 and (parameters.reused_time_steps == 0 or iqn_initial_call))
+        if(iteration_counter < parameters.delay_acceleration or
+           (iteration_counter == 0 and (parameters.reused_time_steps == 0 or iqn_initial_call)))
         {
           x.add(parameters.omega_init, residual);
 
-          // Update flag for future calls since this is reached only in iteration 0.
+          // Update flag for future calls since this is reached only in first iterations.
           iqn_initial_call = false;
         }
         else
@@ -315,7 +327,12 @@ FixedPointSolver<Number, VectorType>::solve(
           x = x_tilde;
           x.add(-1.0, b);
 
-          if(iteration_counter >= 1)
+          if(iteration_counter == parameters.delay_acceleration)
+          {
+            // Finite differences are only contructed from vectors from within the same `solve()`
+            // call. Do not incorporate differences across time or load steps.
+          }
+          else if(iteration_counter > parameters.delay_acceleration)
           {
             // append D, R, B matrices
             VectorType delta_x_tilde = x_tilde;
@@ -332,20 +349,28 @@ FixedPointSolver<Number, VectorType>::solve(
             B.push_back(delta_b);
 
             // compute QR-decomposition
-            U = std::make_shared<LinearAlgebra::Matrix<Number>>(iteration_counter);
-            Q = *R;
-            compute_QR_decomposition(Q, *U);
+            unsigned int const size_QR = R->size();
+            U                          = std::make_shared<LinearAlgebra::Matrix<Number>>(size_QR);
+            Q                          = *R;
+            LinearAlgebra::compute_QR_decomposition<VectorType, Number>(Q,
+                                                                        *U,
+                                                                        parameters.drop_tol_QR);
 
-            std::vector<Number> rhs(iteration_counter, 0.0);
-            for(unsigned int i = 0; i < iteration_counter; ++i)
+            std::vector<Number> rhs(size_QR, 0.0);
+            for(unsigned int i = 0; i < size_QR; ++i)
               rhs[i] = -Number(Q[i] * residual);
 
             // alpha = U^{-1} rhs
-            std::vector<Number> alpha(iteration_counter, 0.0);
+            std::vector<Number> alpha(size_QR, 0.0);
             backward_substitution(*U, alpha, rhs);
 
-            for(unsigned int i = 0; i < iteration_counter; ++i)
+            for(unsigned int i = 0; i < size_QR; ++i)
               x.add(alpha[i], B[i]);
+          }
+          else
+          {
+            AssertThrow(iteration_counter < parameters.delay_acceleration,
+                        dealii::ExcMessage("Logical error, check control flow."));
           }
         }
 

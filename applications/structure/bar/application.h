@@ -287,12 +287,15 @@ private:
     this->param.use_extrapolation_continuation = true;
 
     this->param.inverse_analysis_solver_parameters.acceleration_method =
-      FixedPointSolver::AccelerationMethod::FixedRelaxation;
-    this->param.inverse_analysis_solver_parameters.abs_tol           = 1.0e-9;
-    this->param.inverse_analysis_solver_parameters.rel_tol           = 1.0e-4;
-    this->param.inverse_analysis_solver_parameters.omega_init        = 1.0;
-    this->param.inverse_analysis_solver_parameters.reused_time_steps = 10;
+      FixedPointSolver::AccelerationMethod::IQN_ILS;
+    this->param.inverse_analysis_solver_parameters.abs_tol           = 1.0e-18;
+    this->param.inverse_analysis_solver_parameters.rel_tol           = 1.0e-9;
+    this->param.inverse_analysis_solver_parameters.omega_init        = 0.1;
+    this->param.inverse_analysis_solver_parameters.reused_time_steps = 0;
     this->param.inverse_analysis_solver_parameters.max_iter          = 100;
+    this->param.inverse_analysis_solver_parameters.delay_acceleration =
+      0 + 1 * static_cast<unsigned int>(1.0 / load_increment);
+    this->param.inverse_analysis_solver_parameters.drop_tol_QR = 1.0e-2;
 
     this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);
     this->param.solver              = Solver::FGMRES;

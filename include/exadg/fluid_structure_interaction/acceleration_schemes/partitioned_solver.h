@@ -76,7 +76,7 @@ private:
   std::shared_ptr<TimerTree> timer_tree;
 
   // Fixed-point solver with persistent memory initialized at setup.
-  std::shared_ptr<ExaDG::FixedPointSolver::FixedPointSolver<Number, VectorType>> fixed_point_solver;
+  std::shared_ptr<FixedPointSolver::FixedPointSolver<Number, VectorType>> fixed_point_solver;
 
   /*
    * The first number counts the number of time steps, the second number the total number

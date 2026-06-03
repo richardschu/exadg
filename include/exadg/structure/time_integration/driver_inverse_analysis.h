@@ -92,7 +92,7 @@ private:
   output_solver_info_header(double const load_factor);
 
   std::tuple<unsigned int, unsigned int>
-  solve_step(double const load_factor, bool const update_preconditioner);
+  solve_step(VectorType & iterate, double const load_factor, bool const update_preconditioner);
 
   void
   postprocessing(bool const errors_only = false, bool const export_configuration = false) const;
@@ -126,10 +126,14 @@ private:
   // applied, iterate until the displacement increment is sufficiently small.
   FixedPointSolver::Parameters inverse_analysis_solver_parameters;
 
+  // Fixed-point solver with persistent memory initialized at setup.
+  std::shared_ptr<FixedPointSolver::FixedPointSolver<Number, VectorType>> fixed_point_solver;
+
   // tolerance for `load_factor` to be considered as fully applied
   static double constexpr eps_load_factor = 1.e-10;
 
   std::shared_ptr<TimerTree> timer_tree;
+  std::shared_ptr<TimerTree> timer_tree_fixed_point_solver;
 
   std::pair<
     unsigned int /* calls */,

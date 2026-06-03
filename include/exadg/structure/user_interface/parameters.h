@@ -186,7 +186,8 @@ public:
 
   // Enable the use of extrapolation in continuation methods like `ProblemType::InverseAnalysis` and
   // `ProblemType::QuasiStatic` to obtain an improved initial guess for the Newton solver executed
-  // in each load step.
+  // in each load step. In `ProblemType::InverseAnlysis`, the extrapolation is only used up until
+  // the point where the full load is applied.
   bool use_extrapolation_continuation;
 
   // inverse analysis solver
