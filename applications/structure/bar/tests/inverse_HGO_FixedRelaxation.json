@@ -37,7 +37,8 @@
         "Traction": "100.0",
         "SpringCoefficient": "1e5",
         "DashpotCoefficient": "1e3",
-        "ExteriorPressure": "0"
+        "ExteriorPressure": "0",
+        "InverseAnalysisAccelerationMethod": "FixedRelaxation"
     },
     "Output": {
         "OutputDirectory": "output_test_inverse_HGO/",

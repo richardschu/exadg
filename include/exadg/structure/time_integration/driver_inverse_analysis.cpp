@@ -286,13 +286,14 @@ DriverInverseAnalysis<dim, Number>::do_solve()
   };
 
   auto const lambda_check_convergence = [&](VectorType const & residual) {
+    // Check if the update and definition of the residual is consistent.
     displacement_increment -= residual;
     AssertThrow(displacement_increment.l2_norm() < 1e-18,
-                dealii::ExcMessage("Update error: displacement increment is equal residual."));
+                dealii::ExcMessage("Update error: displacement increment "
+                                   "has to be equal to residual."));
+    displacement_increment = residual;
 
     return check_convergence(residual, solution, step_number, load_factor);
-
-    displacement_increment = residual;
   };
 
   fixed_point_solver->solve(lambda_set_up_vector,

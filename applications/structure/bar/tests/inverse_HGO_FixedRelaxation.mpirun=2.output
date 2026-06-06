@@ -1,0 +1,659 @@
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       2
+
+Setting up elasticity solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              InverseAnalysis
+  Body force:                                false
+  Large deformation:                         true
+  Pull back body force:                      true
+  Pull back traction:                        true
+  Perform cell integral in spatial configuration:false
+
+Physical quantities:
+
+Temporal discretization:
+  load_increment:                            1.0000e-01
+
+Spatial Discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              2
+  Create coarse triangulations:              false
+  Mapping degree:                            2
+  Mapping degree coarse grids:               2
+  Polynomial degree:                         2
+  Use matrix-based implementation:           false
+
+Solver:
+
+Inverse analysis solver:
+  Maximum number of iterations:              200
+  Absolute solver tolerance:                 1.0000e-16
+  Relative solver tolerance:                 1.0000e-09
+  Initial relaxation parameter:              3.0000e-01
+  Reused time steps:                         0
+  Acceleration method:                       FixedRelaxation
+  Delay acceleration:                        10
+  QR decomposition tolerance:                1.0000e-02
+
+Newton:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-09
+  Relative solver tolerance:                 1.0000e-04
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-08
+  Maximum size of Krylov space:              30
+  Preconditioner:                            Multigrid
+  Multigrid type:                            phMG
+  p-sequence:                                DecreaseByOne
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       12
+  Smoothing range:                           6.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                AMG
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Maximum size of Krylov space:              30
+      AMG type:                              ML
+      Smoother sweeps:                       12
+      Number of cycles:                      1
+      Smoother type:                         Chebyshev
+
+Generating grid for 3-dimensional problem:
+
+  Max. number of refinements:                2
+  Number of cells:                           64
+
+Construct elasticity operator ...
+
+Continuous Galerkin finite element discretization:
+
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   81
+  number of dofs (total):                    2187
+
+Discontinuous Galerkin finite element discretization of scalar field:
+
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   27
+  number of dofs (total):                    1728
+
+Discontinuous Galerkin finite element discretization of vector field:
+
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   81
+  number of dofs (total):                    5184
+
+... done!
+
+Setup elasticity operator ...
+
+... done!
+
+Calculate error for all fields for initial data:
+  Relative error (L2-norm): 1.00000e+00
+
+Solving inverse problem ...
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+ solve non-linear problem for load factor = 2.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+ solve non-linear problem for load factor = 3.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+ solve non-linear problem for load factor = 4.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 5       
+======================================================================
+ solve non-linear problem for load factor = 5.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 6       
+======================================================================
+ solve non-linear problem for load factor = 6.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 7       
+======================================================================
+ solve non-linear problem for load factor = 7.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 8       
+======================================================================
+ solve non-linear problem for load factor = 8.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 9       
+======================================================================
+ solve non-linear problem for load factor = 9.0000e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 10      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 4.81178e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 1.52587e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 11      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.33943e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 1.05994e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 12      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.31761e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 7.36077e-02
+
+======================================================================
+ Fixed-point iteration: iteration counter = 13      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.60845e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 5.11072e-02
+
+======================================================================
+ Fixed-point iteration: iteration counter = 14      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.11628e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 3.54799e-02
+
+======================================================================
+ Fixed-point iteration: iteration counter = 15      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 7.74715e-01
+  ||d_k+1 - d_k||/||d_k+1|| = 2.46287e-02
+
+======================================================================
+ Fixed-point iteration: iteration counter = 16      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.37662e-01
+  ||d_k+1 - d_k||/||d_k+1|| = 1.70952e-02
+
+======================================================================
+ Fixed-point iteration: iteration counter = 17      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.73144e-01
+  ||d_k+1 - d_k||/||d_k+1|| = 1.18655e-02
+
+======================================================================
+ Fixed-point iteration: iteration counter = 18      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.58967e-01
+  ||d_k+1 - d_k||/||d_k+1|| = 8.23537e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 19      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.79726e-01
+  ||d_k+1 - d_k||/||d_k+1|| = 5.71573e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 20      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.24732e-01
+  ||d_k+1 - d_k||/||d_k+1|| = 3.96692e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 21      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 8.65656e-02
+  ||d_k+1 - d_k||/||d_k+1|| = 2.75316e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 22      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 6.00776e-02
+  ||d_k+1 - d_k||/||d_k+1|| = 1.91076e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 23      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 4.16946e-02
+  ||d_k+1 - d_k||/||d_k+1|| = 1.32611e-03
+
+======================================================================
+ Fixed-point iteration: iteration counter = 24      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.89366e-02
+  ||d_k+1 - d_k||/||d_k+1|| = 9.20341e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 25      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.00824e-02
+  ||d_k+1 - d_k||/||d_k+1|| = 6.38731e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 26      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.39374e-02
+  ||d_k+1 - d_k||/||d_k+1|| = 4.43289e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 27      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 9.67273e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 3.07649e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 28      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 6.71299e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 2.13513e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 29      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 4.65890e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 1.48181e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 30      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.23334e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 1.02839e-04
+
+======================================================================
+ Fixed-point iteration: iteration counter = 31      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.24397e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 7.13718e-05
+
+======================================================================
+ Fixed-point iteration: iteration counter = 32      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.55735e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 4.95329e-05
+
+======================================================================
+ Fixed-point iteration: iteration counter = 33      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.08082e-03
+  ||d_k+1 - d_k||/||d_k+1|| = 3.43765e-05
+
+======================================================================
+ Fixed-point iteration: iteration counter = 34      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 7.50101e-04
+  ||d_k+1 - d_k||/||d_k+1|| = 2.38577e-05
+
+======================================================================
+ Fixed-point iteration: iteration counter = 35      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.20579e-04
+  ||d_k+1 - d_k||/||d_k+1|| = 1.65575e-05
+
+======================================================================
+ Fixed-point iteration: iteration counter = 36      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.61289e-04
+  ||d_k+1 - d_k||/||d_k+1|| = 1.14911e-05
+
+======================================================================
+ Fixed-point iteration: iteration counter = 37      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.50739e-04
+  ||d_k+1 - d_k||/||d_k+1|| = 7.97500e-06
+
+======================================================================
+ Fixed-point iteration: iteration counter = 38      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.74016e-04
+  ||d_k+1 - d_k||/||d_k+1|| = 5.53475e-06
+
+======================================================================
+ Fixed-point iteration: iteration counter = 39      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.20769e-04
+  ||d_k+1 - d_k||/||d_k+1|| = 3.84118e-06
+
+======================================================================
+ Fixed-point iteration: iteration counter = 40      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 8.38153e-05
+  ||d_k+1 - d_k||/||d_k+1|| = 2.66583e-06
+
+======================================================================
+ Fixed-point iteration: iteration counter = 41      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.81688e-05
+  ||d_k+1 - d_k||/||d_k+1|| = 1.85012e-06
+
+======================================================================
+ Fixed-point iteration: iteration counter = 42      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 4.03699e-05
+  ||d_k+1 - d_k||/||d_k+1|| = 1.28400e-06
+
+======================================================================
+ Fixed-point iteration: iteration counter = 43      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.80172e-05
+  ||d_k+1 - d_k||/||d_k+1|| = 8.91115e-07
+
+======================================================================
+ Fixed-point iteration: iteration counter = 44      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.94443e-05
+  ||d_k+1 - d_k||/||d_k+1|| = 6.18445e-07
+
+======================================================================
+ Fixed-point iteration: iteration counter = 45      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.34946e-05
+  ||d_k+1 - d_k||/||d_k+1|| = 4.29208e-07
+
+======================================================================
+ Fixed-point iteration: iteration counter = 46      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 9.36540e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 2.97876e-07
+
+======================================================================
+ Fixed-point iteration: iteration counter = 47      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 6.49970e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 2.06730e-07
+
+======================================================================
+ Fixed-point iteration: iteration counter = 48      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 4.51087e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 1.43473e-07
+
+======================================================================
+ Fixed-point iteration: iteration counter = 49      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.13060e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 9.95720e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 50      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.17268e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 6.91042e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 51      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.50786e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 4.79592e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 52      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.04648e-06
+  ||d_k+1 - d_k||/||d_k+1|| = 3.32842e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 53      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 7.26268e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 2.30997e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 54      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.04039e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 1.60315e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 55      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.49809e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 1.11260e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 56      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.42772e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 7.72160e-09
+
+======================================================================
+ Fixed-point iteration: iteration counter = 57      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.68487e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 5.35889e-09
+
+======================================================================
+ Fixed-point iteration: iteration counter = 58      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 1.16932e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 3.71914e-09
+
+======================================================================
+ Fixed-point iteration: iteration counter = 59      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 8.11521e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 2.58112e-09
+
+======================================================================
+ Fixed-point iteration: iteration counter = 60      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.63205e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 1.79133e-09
+
+======================================================================
+ Fixed-point iteration: iteration counter = 61      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.90871e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 1.24320e-09
+
+======================================================================
+ Fixed-point iteration: iteration counter = 62      
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.71270e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 8.62801e-10
+
+Fixed-point iteration converged in 63 iterations.
+
+... done!
+
+OUTPUT << Write initial data
+
+Calculate error for all fields for solution data:
+  Relative error (L2-norm): 1.03913e+00
