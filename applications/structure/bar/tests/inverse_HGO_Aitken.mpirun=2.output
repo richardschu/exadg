@@ -52,9 +52,11 @@ Inverse analysis solver:
   Relative solver tolerance:                 1.0000e-09
   Initial relaxation parameter:              3.0000e-01
   Reused time steps:                         0
-  Acceleration method:                       Aitken
+  Acceleration method:                       Undefined
   Delay acceleration:                        10
   QR decomposition tolerance:                1.0000e-02
+  Acceleration method (ramp phase):          Aitken
+  Acceleration method (final phase):         Aitken
 
 Newton:
   Maximum number of iterations:              100

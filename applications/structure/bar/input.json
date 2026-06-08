@@ -37,7 +37,9 @@
         "Traction": "0.0",
         "SpringCoefficient": "1e5",
         "DashpotCoefficient": "1e3",
-        "ExteriorPressure": "0"
+        "ExteriorPressure": "0",
+        "InvAnalAccelMethRamp": "Undefined",
+        "InvAnalAccelMethFinal": "Undefined"
     },
     "Output": {
         "OutputDirectory": "output/bar/",

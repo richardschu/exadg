@@ -126,9 +126,6 @@ private:
   // applied, iterate until the displacement increment is sufficiently small.
   FixedPointSolver::Parameters inverse_analysis_solver_parameters;
 
-  // Fixed-point solver with persistent memory initialized at setup.
-  std::shared_ptr<FixedPointSolver::FixedPointSolver<Number, VectorType>> fixed_point_solver;
-
   // tolerance for `load_factor` to be considered as fully applied
   static double constexpr eps_load_factor = 1.e-10;
 

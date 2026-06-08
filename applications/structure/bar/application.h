@@ -206,30 +206,31 @@ public:
     // clang-format off
     prm.enter_subsection("Application");
     {            
-      prm.add_parameter("Length",                            length,                               "Length of domain.");
-      prm.add_parameter("Height",                            height,                               "Height of domain.");
-      prm.add_parameter("Width",                             width,                                "Width of domain.");
-      prm.add_parameter("UseVolumeForce",                    use_volume_force,                     "Use volume force.");
-      prm.add_parameter("SpatialIntegration",                spatial_integration,                  "Use spatial integration.");
-      prm.add_parameter("ForceMaterialResidual",             force_material_residual,              "Use undeformed configuration to evaluate the residual.");
-      prm.add_parameter("StableFormulation",                 stable_formulation,                   "Use a stable formulation.");
-      prm.add_parameter("LoadIncrement",                     load_increment,                       "Load increment used in QuasiStatic solver.");
-      prm.add_parameter("CacheLevel",                        cache_level,                          "Cache level: 0 none, 1 scalars, 2 tensors.");
-      prm.add_parameter("CheckType",                         check_type,                           "Check type for deformation gradient.");
-      prm.add_parameter("MappingStrength",                   mapping_strength,                     "Strength of the mapping applied.");
-      prm.add_parameter("VolumeForce",                       volume_force,                         "Volume force.");
-      prm.add_parameter("BoundaryType",                      boundary_type,                        "Type of boundary condition, Dirichlet vs Neumann.");
-      prm.add_parameter("ProblemType",                       problem_type,                         "Problem type considered, QuasiStatic vs Unsteady vs. Steady");
-      prm.add_parameter("MaterialType",                      material_type,                        "StVenantKirchhoff vs. IncompressibleNeoHookean");
-      prm.add_parameter("WeakDamping",                       weak_damping_coefficient,             "Weak damping coefficient for unsteady problems.");
-      prm.add_parameter("Displacement",                      displacement,                         "Displacement of right boundary in case of Dirichlet BC.");
-      prm.add_parameter("Traction",                          area_force,                           "Traction acting on right boundary in case of Neumann BC.");
-      prm.add_parameter("LargeDeformation",                  large_deformation,                    "Consider finite strains or linear elasticity.");
-      prm.add_parameter("Preconditioner",                    preconditioner,                       "None, PointJacobi, AMG, AdditiveSchwarz or Multigrid");
-      prm.add_parameter("SpringCoefficient",                 spring_coefficient,                   "Exterior spring stiffness.");
-      prm.add_parameter("DashpotCoefficient",                dashpot_coefficient,                  "Exterior daspot coefficient.");
-      prm.add_parameter("ExteriorPressure",                  exterior_pressure,                    "Exterior pressure.");
-      prm.add_parameter("InverseAnalysisAccelerationMethod", inverse_analysis_acceleration_method, "Acceleration method for inverse analysis.");
+      prm.add_parameter("Length",                length,                                     "Length of domain.");
+      prm.add_parameter("Height",                height,                                     "Height of domain.");
+      prm.add_parameter("Width",                 width,                                      "Width of domain.");
+      prm.add_parameter("UseVolumeForce",        use_volume_force,                           "Use volume force.");
+      prm.add_parameter("SpatialIntegration",    spatial_integration,                        "Use spatial integration.");
+      prm.add_parameter("ForceMaterialResidual", force_material_residual,                    "Use undeformed configuration to evaluate the residual.");
+      prm.add_parameter("StableFormulation",     stable_formulation,                         "Use a stable formulation.");
+      prm.add_parameter("LoadIncrement",         load_increment,                             "Load increment used in QuasiStatic solver.");
+      prm.add_parameter("CacheLevel",            cache_level,                                "Cache level: 0 none, 1 scalars, 2 tensors.");
+      prm.add_parameter("CheckType",             check_type,                                 "Check type for deformation gradient.");
+      prm.add_parameter("MappingStrength",       mapping_strength,                           "Strength of the mapping applied.");
+      prm.add_parameter("VolumeForce",           volume_force,                               "Volume force.");
+      prm.add_parameter("BoundaryType",          boundary_type,                              "Type of boundary condition, Dirichlet vs Neumann.");
+      prm.add_parameter("ProblemType",           problem_type,                               "Problem type considered, QuasiStatic vs Unsteady vs. Steady");
+      prm.add_parameter("MaterialType",          material_type,                              "StVenantKirchhoff vs. IncompressibleNeoHookean");
+      prm.add_parameter("WeakDamping",           weak_damping_coefficient,                   "Weak damping coefficient for unsteady problems.");
+      prm.add_parameter("Displacement",          displacement,                               "Displacement of right boundary in case of Dirichlet BC.");
+      prm.add_parameter("Traction",              area_force,                                 "Traction acting on right boundary in case of Neumann BC.");
+      prm.add_parameter("LargeDeformation",      large_deformation,                          "Consider finite strains or linear elasticity.");
+      prm.add_parameter("Preconditioner",        preconditioner,                             "None, PointJacobi, AMG, AdditiveSchwarz or Multigrid");
+      prm.add_parameter("SpringCoefficient",     spring_coefficient,                         "Exterior spring stiffness.");
+      prm.add_parameter("DashpotCoefficient",    dashpot_coefficient,                        "Exterior daspot coefficient.");
+      prm.add_parameter("ExteriorPressure",      exterior_pressure,                          "Exterior pressure.");
+      prm.add_parameter("InvAnalAccelMethRamp",  inverse_analysis_acceleration_method_ramp,  "Acceleration method for inverse analysis (ramp phase).");
+      prm.add_parameter("InvAnalAccelMethFinal", inverse_analysis_acceleration_method_final, "Acceleration method for inverse analysis (final phase).");
     }
     prm.leave_subsection();
     // clang-format on
@@ -287,8 +288,10 @@ private:
     this->param.load_increment                 = load_increment;
     this->param.use_extrapolation_continuation = true;
 
-    this->param.inverse_analysis_solver_parameters.acceleration_method =
-      inverse_analysis_acceleration_method;
+    this->param.inverse_analysis_acceleration_method_ramp =
+      inverse_analysis_acceleration_method_ramp;
+    this->param.inverse_analysis_acceleration_method_final =
+      inverse_analysis_acceleration_method_final;
     this->param.inverse_analysis_solver_parameters.abs_tol           = 1.0e-16;
     this->param.inverse_analysis_solver_parameters.rel_tol           = 1.0e-9;
     this->param.inverse_analysis_solver_parameters.omega_init        = 0.3;
@@ -785,7 +788,9 @@ private:
 
   double mapping_strength = 0.0;
 
-  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method =
+  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_ramp =
+    FixedPointSolver::AccelerationMethod::FixedRelaxation;
+  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_final =
     FixedPointSolver::AccelerationMethod::IQN_ILS;
 };
 

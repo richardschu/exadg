@@ -64,10 +64,6 @@ DriverInverseAnalysis<dim, Number>::setup()
 
   // initialize solution by interpolation of initial data
   initialize_solution();
-
-  // Set up fixed-point solver with persistent memory copying parameters.
-  fixed_point_solver = std::make_shared<FixedPointSolver::FixedPointSolver<Number, VectorType>>(
-    param.inverse_analysis_solver_parameters, pcout, timer_tree_fixed_point_solver);
 }
 
 template<int dim, typename Number>
@@ -296,11 +292,28 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     return check_convergence(residual, solution, step_number, load_factor);
   };
 
-  fixed_point_solver->solve(lambda_set_up_vector,
-                            lambda_get_iterate,
-                            lambda_set_iterate,
-                            lambda_fixed_point_iteration,
-                            lambda_check_convergence);
+  // Set up and execute fixed-point solver. Since we call `do_solve()` only once, there is no need
+  // to setup the `FixedPointSolver` in the constructor to track history over calls.
+  if(param.inverse_analysis_acceleration_method_ramp !=
+     param.inverse_analysis_acceleration_method_final)
+  {
+    // The loading phase utilizes a different acceleration method.
+    AssertThrow(false, dealii::ExcMessage("NOT IMPLEMENTED."));
+  }
+
+  // Execute final phase with constant loading.
+  {
+    FixedPointSolver::Parameters solver_param = param.inverse_analysis_solver_parameters;
+    solver_param.acceleration_method          = param.inverse_analysis_acceleration_method_final;
+    FixedPointSolver::FixedPointSolver<Number, VectorType> fixed_point_solver(
+      solver_param, pcout, timer_tree_fixed_point_solver);
+
+    fixed_point_solver.solve(lambda_set_up_vector,
+                             lambda_get_iterate,
+                             lambda_set_iterate,
+                             lambda_fixed_point_iteration,
+                             lambda_check_convergence);
+  }
 
   pcout << std::endl << "... done!" << std::endl;
 

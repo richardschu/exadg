@@ -84,6 +84,8 @@ Parameters::Parameters()
 
     // SOLVER
     inverse_analysis_solver_parameters(FixedPointSolver::Parameters()),
+    inverse_analysis_acceleration_method_ramp(FixedPointSolver::AccelerationMethod::IQN_ILS),
+    inverse_analysis_acceleration_method_final(FixedPointSolver::AccelerationMethod::IQN_ILS),
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
     solver(Solver::Undefined),
     solver_data(SolverData(1e4, 1.e-12, 1.e-6, 100)),
@@ -94,6 +96,9 @@ Parameters::Parameters()
     update_preconditioner_once_newton_converged(false),
     multigrid_data(MultigridData())
 {
+  // Reset the acceleration method since `DriverInverseAnalysis` fills the data structure.
+  inverse_analysis_solver_parameters.acceleration_method =
+    FixedPointSolver::AccelerationMethod::Undefined;
 }
 
 void
@@ -156,6 +161,11 @@ Parameters::check() const
     AssertThrow(pull_back_traction == true,
                 dealii::ExcMessage("Not pulling back the traction is "
                                    "inconsistent for inverse analysis."));
+
+    AssertThrow(inverse_analysis_solver_parameters.acceleration_method ==
+                  FixedPointSolver::AccelerationMethod::Undefined,
+                dealii::ExcMessage("Acceleration method is overwritten by "
+                                   "`inverse_analysis_acceleration_method_ramp`/`_final`."));
   }
 
   // SPATIAL DISCRETIZATION
@@ -300,6 +310,12 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
   {
     pcout << std::endl << "Inverse analysis solver:" << std::endl;
     inverse_analysis_solver_parameters.print(pcout);
+    print_parameter(pcout,
+                    "Acceleration method (ramp phase)",
+                    inverse_analysis_acceleration_method_ramp);
+    print_parameter(pcout,
+                    "Acceleration method (final phase)",
+                    inverse_analysis_acceleration_method_final);
   }
 
   // nonlinear solver

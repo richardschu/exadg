@@ -38,7 +38,8 @@
         "SpringCoefficient": "1e5",
         "DashpotCoefficient": "1e3",
         "ExteriorPressure": "0",
-        "InverseAnalysisAccelerationMethod": "Aitken"
+        "InvAnalAccelMethRamp": "Aitken",
+        "InvAnalAccelMethFinal": "Aitken"
     },
     "Output": {
         "OutputDirectory": "output_test_inverse_HGO/",
