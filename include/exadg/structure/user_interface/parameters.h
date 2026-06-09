@@ -228,9 +228,9 @@ public:
 
   // Inverse analysis solver parameters only relevant for `ProblemType::InverseAnalysis`.
   FixedPointSolver::Parameters inverse_analysis_solver_parameters;
-  // acceleration method used *in* ramp phase
+  // acceleration methods used *in* or *after* ramp phase
+  bool                                 inverse_analysis_use_separate_ramp_solver;
   FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_ramp;
-  // acceleration method used *after* ramp phase
   FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_final;
 
   // Newton solver data (only relevant for nonlinear problems)

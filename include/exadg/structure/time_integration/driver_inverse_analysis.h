@@ -130,7 +130,8 @@ private:
   static double constexpr eps_load_factor = 1.e-10;
 
   std::shared_ptr<TimerTree> timer_tree;
-  std::shared_ptr<TimerTree> timer_tree_fixed_point_solver;
+  std::shared_ptr<TimerTree> timer_tree_fixed_point_solver_ramp;
+  std::shared_ptr<TimerTree> timer_tree_fixed_point_solver_final;
 
   std::pair<
     unsigned int /* calls */,

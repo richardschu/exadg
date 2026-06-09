@@ -46,7 +46,8 @@ DriverInverseAnalysis<dim, Number>::DriverInverseAnalysis(
     step_number(1),
     inverse_analysis_solver_parameters(param.inverse_analysis_solver_parameters),
     timer_tree(new TimerTree()),
-    timer_tree_fixed_point_solver(new TimerTree()),
+    timer_tree_fixed_point_solver_ramp(new TimerTree()),
+    timer_tree_fixed_point_solver_final(new TimerTree()),
     iterations({0, {0, 0}})
 {
 }
@@ -118,7 +119,12 @@ std::shared_ptr<TimerTree>
 DriverInverseAnalysis<dim, Number>::get_timings() const
 {
   // merge the timer tree of the fixed-point solver into the timer tree of the driver
-  //  timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer_tree_fixed_point_solver);
+  if(param.inverse_analysis_use_separate_ramp_solver)
+  {
+    timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer_tree_fixed_point_solver_ramp);
+  }
+  timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer_tree_fixed_point_solver_final);
+
   return timer_tree;
 }
 
@@ -157,12 +163,14 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     if(this->param.use_extrapolation_continuation and
        load_factor + load_increment < 1.0 - eps_load_factor)
     {
+      // std::cout << "using extrapolation ##+ \n";
       // extrapolate solution
       solution.add(load_increment / last_load_increment, displacement_increment);
       vector = solution;
     }
     else
     {
+      // std::cout << "using last iterate : ||vector||2 = " << solution.l2_norm() << " ##+\n";
       vector = solution;
     }
   };
@@ -279,6 +287,10 @@ DriverInverseAnalysis<dim, Number>::do_solve()
 
     // finally, increment step number
     ++step_number;
+
+    // pcout << "##+ ||src||      = " << src.l2_norm() << std::endl;
+    // pcout << "##+ ||solution|| = " << solution.l2_norm() << std::endl;
+    // pcout << "##+ ||dst||      = " << dst.l2_norm() << std::endl;
   };
 
   auto const lambda_check_convergence = [&](VectorType const & residual) {
@@ -292,30 +304,66 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     return check_convergence(residual, solution, step_number, load_factor);
   };
 
+  auto const lambda_check_load_applied = [&](VectorType const & residual) {
+    // Check if the load will be *fully applied in next call* as the second fixed point solver
+    // starts with cleared history and does a relaxation step fist; this does *not* check the
+    // residual!
+    (void)residual;
+
+    bool const load_fully_applied = (load_factor + load_increment >= 1.0 - eps_load_factor);
+
+    // std::cout << "load fully applied : " << load_fully_applied << "\n"; // ##+
+
+    return load_fully_applied;
+  };
+
   // Set up and execute fixed-point solver. Since we call `do_solve()` only once, there is no need
   // to setup the `FixedPointSolver` in the constructor to track history over calls.
-  if(param.inverse_analysis_acceleration_method_ramp !=
-     param.inverse_analysis_acceleration_method_final)
+  if(param.inverse_analysis_use_separate_ramp_solver)
   {
-    // The loading phase utilizes a different acceleration method.
-    AssertThrow(false, dealii::ExcMessage("NOT IMPLEMENTED."));
-  }
+    pcout << std::endl << "... executing loading phase ..." << std::endl;
 
-  // Execute final phase with constant loading.
-  {
+    // The ramping phase utilizes a different acceleration method.
     FixedPointSolver::Parameters solver_param = param.inverse_analysis_solver_parameters;
-    solver_param.acceleration_method          = param.inverse_analysis_acceleration_method_final;
+    solver_param.acceleration_method          = param.inverse_analysis_acceleration_method_ramp;
     FixedPointSolver::FixedPointSolver<Number, VectorType> fixed_point_solver(
-      solver_param, pcout, timer_tree_fixed_point_solver);
+      solver_param, pcout, timer_tree_fixed_point_solver_ramp);
 
     fixed_point_solver.solve(lambda_set_up_vector,
                              lambda_get_iterate,
                              lambda_set_iterate,
                              lambda_fixed_point_iteration,
-                             lambda_check_convergence);
+                             lambda_check_load_applied,
+                             true /* force_relaxation */);
+
+    // pcout << "restart norm = " << solution.l2_norm() << std::endl; // ##+
+  }
+
+  // Execute final phase with constant loading.
+  {
+    pcout << std::endl << "... solving inverse problem up to tolerance ..." << std::endl;
+
+    FixedPointSolver::Parameters solver_param = param.inverse_analysis_solver_parameters;
+    solver_param.acceleration_method          = param.inverse_analysis_acceleration_method_final;
+    FixedPointSolver::FixedPointSolver<Number, VectorType> fixed_point_solver(
+      solver_param, pcout, timer_tree_fixed_point_solver_final);
+
+    fixed_point_solver.solve(lambda_set_up_vector,
+                             lambda_get_iterate,
+                             lambda_set_iterate,
+                             lambda_fixed_point_iteration,
+                             lambda_check_convergence,
+                             false /* force_relaxation */);
   }
 
   pcout << std::endl << "... done!" << std::endl;
+
+  pcout << "\n"
+        << "The entire ramp/solve phase took:\n"
+        << "  " << std::to_string(iterations.first) << " fixed point evaluations"
+        << "\n"
+        << "  " << std::to_string(std::get<0>(iterations.second)) << " nonlinear iterations."
+        << "\n";
 
   timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer.wall_time());
 }

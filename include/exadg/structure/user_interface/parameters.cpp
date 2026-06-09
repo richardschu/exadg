@@ -84,6 +84,7 @@ Parameters::Parameters()
 
     // SOLVER
     inverse_analysis_solver_parameters(FixedPointSolver::Parameters()),
+    inverse_analysis_use_separate_ramp_solver(false),
     inverse_analysis_acceleration_method_ramp(FixedPointSolver::AccelerationMethod::IQN_ILS),
     inverse_analysis_acceleration_method_final(FixedPointSolver::AccelerationMethod::IQN_ILS),
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
@@ -310,6 +311,10 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
   {
     pcout << std::endl << "Inverse analysis solver:" << std::endl;
     inverse_analysis_solver_parameters.print(pcout);
+    print_parameter(pcout,
+                    "Use separate fixed point solvers",
+                    inverse_analysis_use_separate_ramp_solver);
+    print_parameter(pcout, "Use extrapolation in ramp phase", use_extrapolation_continuation);
     print_parameter(pcout,
                     "Acceleration method (ramp phase)",
                     inverse_analysis_acceleration_method_ramp);

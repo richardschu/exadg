@@ -47,7 +47,8 @@ FixedPointSolver<Number, VectorType>::solve(
   std::function<void(VectorType const &)> const &               lambda_set_iterate,
   std::function<void(VectorType &, VectorType const &, unsigned int const)> const &
                                                   lambda_fixed_point_iteration,
-  std::function<bool(VectorType const &)> const & lambda_check_convergence)
+  std::function<bool(VectorType const &)> const & lambda_check_convergence,
+  bool const                                      force_relaxation)
 {
   unsigned int iteration_counter = 0;
   if(parameters.acceleration_method == AccelerationMethod::FixedRelaxation)
@@ -73,7 +74,7 @@ FixedPointSolver<Number, VectorType>::solve(
       converged = lambda_check_convergence(residual);
 
       // relaxation
-      if(not(converged))
+      if(not(converged) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -112,7 +113,7 @@ FixedPointSolver<Number, VectorType>::solve(
       converged = lambda_check_convergence(residual);
 
       // relaxation
-      if(not(converged))
+      if(not(converged) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -167,7 +168,7 @@ FixedPointSolver<Number, VectorType>::solve(
       converged = lambda_check_convergence(residual);
 
       // relaxation
-      if(not(converged))
+      if(not(converged) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -306,7 +307,7 @@ FixedPointSolver<Number, VectorType>::solve(
       converged = lambda_check_convergence(residual);
 
       // relaxation
-      if(not(converged))
+      if(not(converged) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();

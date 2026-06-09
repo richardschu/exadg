@@ -285,20 +285,25 @@ private:
       this->param.grid.create_coarse_triangulations = false; // can also be set to true if desired
     }
 
-    this->param.load_increment                 = load_increment;
-    this->param.use_extrapolation_continuation = true;
+    this->param.load_increment = load_increment;
+    this->param.use_extrapolation_continuation =
+      problem_type == ProblemType::InverseAnalysis ? false : true;
 
+    this->param.inverse_analysis_use_separate_ramp_solver = true;
     this->param.inverse_analysis_acceleration_method_ramp =
       inverse_analysis_acceleration_method_ramp;
     this->param.inverse_analysis_acceleration_method_final =
       inverse_analysis_acceleration_method_final;
+
     this->param.inverse_analysis_solver_parameters.abs_tol           = 1.0e-16;
     this->param.inverse_analysis_solver_parameters.rel_tol           = 1.0e-9;
     this->param.inverse_analysis_solver_parameters.omega_init        = 0.3;
     this->param.inverse_analysis_solver_parameters.reused_time_steps = 0;
     this->param.inverse_analysis_solver_parameters.max_iter          = 200;
     this->param.inverse_analysis_solver_parameters.delay_acceleration =
-      static_cast<unsigned int>(1.0 / load_increment);
+      this->param.inverse_analysis_use_separate_ramp_solver ?
+        0 :
+        static_cast<unsigned int>(1.0 / load_increment);
     this->param.inverse_analysis_solver_parameters.drop_tol_QR = 1.0e-2;
 
     this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);

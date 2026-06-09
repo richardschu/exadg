@@ -103,6 +103,9 @@ public:
    * `lambda_set_iterate`           copy the data of the provided vector into the iterate vector
    * `lambda_fixed_point_iteration` perform a single fixed point iteration
    * `lambda_check_convergence`     check convergence of the fixed point scheme
+   * The parameter `force_relaxation` forces the relaxation step, even if the new iterate
+   * `x_tilde = fixed_point_iteration(x_old)` fulfills the convergence criterion. This option is
+   * introduced for a warm start of two separate `FixedPointSolver`s solving the same problem.
    */
   unsigned int
   solve(std::function<void(VectorType &)> const &                     lambda_set_up_vector,
@@ -110,7 +113,8 @@ public:
         std::function<void(VectorType const &)> const &               lambda_set_iterate,
         std::function<void(VectorType &, VectorType const &, unsigned int const)> const &
                                                         lambda_fixed_point_iteration,
-        std::function<bool(VectorType const &)> const & lambda_check_convergence);
+        std::function<bool(VectorType const &)> const & lambda_check_convergence,
+        bool const                                      force_relaxation = false);
 
 private:
   void
