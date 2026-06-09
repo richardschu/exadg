@@ -53,10 +53,10 @@ FixedPointSolver<Number, VectorType>::solve(
   unsigned int iteration_counter = 0;
   if(parameters.acceleration_method == AccelerationMethod::FixedRelaxation)
   {
+    // Fixed point iteration with fixed relaxation parameter `omega_init`.
     VectorType x;
     lambda_set_up_vector(x);
 
-    // Fixed point iteration with fixed relaxation parameter `omega_init`.
     bool         converged = false;
     double const omega     = parameters.omega_init;
     while(not(converged) and iteration_counter < parameters.max_iter)
@@ -91,13 +91,14 @@ FixedPointSolver<Number, VectorType>::solve(
   }
   else if(parameters.acceleration_method == AccelerationMethod::Aitken)
   {
+    // Fixed point iteration with vector version of Aitken acceleration, using finite differences on
+    // two consecutive iterates and residuals to minimize the expected future residual.
     VectorType residual_old, x;
     lambda_set_up_vector(residual_old);
     lambda_set_up_vector(x);
 
-    // Fixed point iteration with Aitken acceleration.
     bool   converged = false;
-    double omega     = 1.0;
+    double omega     = parameters.omega_init;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
@@ -141,8 +142,110 @@ FixedPointSolver<Number, VectorType>::solve(
       ++iteration_counter;
     }
   }
+  else if(parameters.acceleration_method == AccelerationMethod::Armijo or
+          parameters.acceleration_method == AccelerationMethod::ArmijoAitken)
+  {
+    // Fixed point iteration with Armijo backtracking and (optional) Aitken relaxation.
+    VectorType x, residual_old;
+    lambda_set_up_vector(x);
+    lambda_set_up_vector(residual_old);
+
+    bool   converged = false;
+    double omega     = parameters.omega_init;
+    while(not(converged) and iteration_counter < parameters.max_iter)
+    {
+      print_solver_info_header(iteration_counter);
+
+      // Get iterate/initial guess.
+      lambda_get_iterate(x, iteration_counter);
+
+      // Forward solve potentially including multiple attempts and/or continuation.
+      VectorType x_tilde(x);
+      lambda_fixed_point_iteration(x_tilde, x, iteration_counter);
+
+      // Compute unrelaxed residual and check convergence.
+      VectorType residual = x_tilde;
+      residual.add(-1.0, x);
+      converged = lambda_check_convergence(residual);
+
+      // Relaxation and globalization
+      if(not(converged) or force_relaxation)
+      {
+        dealii::Timer timer;
+        timer.restart();
+
+        // Aitken relaxation: the relaxation factor is updated independent of the Armijo factor.
+        if(iteration_counter == 0 or parameters.acceleration_method == AccelerationMethod::Armijo)
+        {
+          omega = parameters.omega_init;
+        }
+        else
+        {
+          VectorType delta_residual = residual;
+          delta_residual.add(-1.0, residual_old);
+          omega *= -(residual_old * delta_residual) / delta_residual.norm_sqr();
+        }
+
+        // Armijo globalization strategy: take the direction, but vary the scaling of the update,
+        // and select the vector with the smallest residual.
+        {
+          std::vector<double> armijo_factors(parameters.armijo_vector_size);
+          std::vector<double> armijo_residuals(parameters.armijo_vector_size);
+          for(unsigned int i = 0; i < parameters.armijo_vector_size; ++i)
+          {
+            armijo_factors[i] = std::pow(2.0, -static_cast<Number>(i));
+
+            // compute iterate
+            VectorType armijo_vector(x);
+            armijo_vector.add(-armijo_factors[i] * omega, residual);
+
+            // compute residual in-place
+            armijo_vector.add(-1.0, x);
+
+            armijo_residuals[i] = armijo_vector.l2_norm();
+          }
+
+          // Output Armijo factors and residuals and select candidate with the smallest residual.
+          pcout << "  Armijo factors   = [";
+          for(unsigned int i = 0; i < armijo_factors.size(); ++i)
+          {
+            pcout << std::scientific << std::setprecision(5) << "  " << armijo_factors[i];
+          }
+          pcout << "  ]\n";
+
+          pcout << "  Armijo residuals = [";
+          unsigned int min_residual_idx = 0;
+          for(unsigned int i = 0; i < armijo_residuals.size(); ++i)
+          {
+            if(armijo_residuals[i] < armijo_residuals[min_residual_idx])
+            {
+              min_residual_idx = i;
+            }
+            pcout << std::scientific << std::setprecision(5) << "  " << armijo_residuals[i];
+          }
+          pcout << "  ]\n";
+
+          // Compute the relaxed solution vector and update linearization point.
+          x.add(-armijo_factors[min_residual_idx] * omega, residual);
+          lambda_set_iterate(x);
+        }
+
+        // Update residual at previous iteration; this is defined in the non-relaxed form.
+        residual_old = residual;
+
+        timer_tree->insert({"Armijo/-Aitken"}, timer.wall_time());
+      }
+
+      // Increment counter of partitioned iteration.
+      ++iteration_counter;
+    }
+  }
   else if(parameters.acceleration_method == AccelerationMethod::IQN_ILS)
   {
+    // Fixed point iteration with IQN-ILS acceleration approximating the inverse of the interface
+    // Jacobian, utilizing pairs of iterates and residuals. The finite differences are *not* formed
+    // over time steps, but only within. The drop tolerance in the QR decomposition is essential to
+    // remove duplicate entries and get a stable algorithm.
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
     R = std::make_shared<std::vector<VectorType>>();
@@ -154,7 +257,6 @@ FixedPointSolver<Number, VectorType>::solve(
     lambda_set_up_vector(residual);
     lambda_set_up_vector(residual_old);
 
-    // Fixed point iteration with IQN-ILS acceleration.
     bool converged = false;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
@@ -273,6 +375,8 @@ FixedPointSolver<Number, VectorType>::solve(
   }
   else if(parameters.acceleration_method == AccelerationMethod::IQN_IMVLS)
   {
+    // Fixed point iteration with IQN-IMVLS acceleration. Compared to IQN-ILS, we do not need to
+    // choose the number of reused time steps, reducing the number of required parameters.
     std::shared_ptr<std::vector<VectorType>> D, R;
     D = std::make_shared<std::vector<VectorType>>();
     R = std::make_shared<std::vector<VectorType>>();
@@ -291,7 +395,6 @@ FixedPointSolver<Number, VectorType>::solve(
     std::shared_ptr<LinearAlgebra::Matrix<Number>> U;
     std::vector<VectorType>                        Q;
 
-    // Fixed point iteration with IQN-IMVLS acceleration.
     bool converged = false;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {

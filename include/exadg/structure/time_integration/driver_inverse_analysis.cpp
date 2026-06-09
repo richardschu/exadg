@@ -118,13 +118,6 @@ template<int dim, typename Number>
 std::shared_ptr<TimerTree>
 DriverInverseAnalysis<dim, Number>::get_timings() const
 {
-  // merge the timer tree of the fixed-point solver into the timer tree of the driver
-  if(param.inverse_analysis_use_separate_ramp_solver)
-  {
-    timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer_tree_fixed_point_solver_ramp);
-  }
-  timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer_tree_fixed_point_solver_final);
-
   return timer_tree;
 }
 
@@ -160,17 +153,15 @@ DriverInverseAnalysis<dim, Number>::do_solve()
 
     // We use extrapolation as long as the load is not fully applied, then we switch to using the
     // initial guess provided by the acceleration scheme.
-    if(this->param.use_extrapolation_continuation and
+    if(param.use_extrapolation_continuation and
        load_factor + load_increment < 1.0 - eps_load_factor)
     {
-      // std::cout << "using extrapolation ##+ \n";
       // extrapolate solution
       solution.add(load_increment / last_load_increment, displacement_increment);
       vector = solution;
     }
     else
     {
-      // std::cout << "using last iterate : ||vector||2 = " << solution.l2_norm() << " ##+\n";
       vector = solution;
     }
   };
@@ -197,13 +188,13 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     solution = src;
 
     bool const update_preconditioner =
-      this->param.update_preconditioner and
-      ((this->step_number - 1) % this->param.update_preconditioner_every_time_steps == 0);
+      param.update_preconditioner and
+      ((this->step_number - 1) % param.update_preconditioner_every_time_steps == 0);
 
     // compute displacement for current load factor, catch non-converging load step
-    bool         success        = false;
-    unsigned int re_try_counter = 0;
-    while(not(success) and re_try_counter < 10)
+    bool         success       = false;
+    unsigned int retry_counter = 0;
+    while(not(success) and retry_counter <= param.inverse_analysis_max_retries_per_step)
     {
       try
       {
@@ -219,7 +210,7 @@ DriverInverseAnalysis<dim, Number>::do_solve()
 
         // undo changes in solution vector
         solution = src;
-        ++re_try_counter;
+        ++retry_counter;
 
         // reduce load increment in factors of 2 until the current step can be solved successfully
         load_increment *= 0.5;
@@ -237,7 +228,9 @@ DriverInverseAnalysis<dim, Number>::do_solve()
 
     AssertThrow(success,
                 dealii::ExcMessage(
-                  "Could not solve inverse problem even after reducing the load increment."));
+                  std::string("Could not solve load step in inverse problem within ") +
+                  std::to_string(param.inverse_analysis_max_retries_per_step + 1) +
+                  std::string(" tries.")));
 
     // copy solution vector to output
     dst = solution;
@@ -287,10 +280,6 @@ DriverInverseAnalysis<dim, Number>::do_solve()
 
     // finally, increment step number
     ++step_number;
-
-    // pcout << "##+ ||src||      = " << src.l2_norm() << std::endl;
-    // pcout << "##+ ||solution|| = " << solution.l2_norm() << std::endl;
-    // pcout << "##+ ||dst||      = " << dst.l2_norm() << std::endl;
   };
 
   auto const lambda_check_convergence = [&](VectorType const & residual) {
@@ -311,8 +300,6 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     (void)residual;
 
     bool const load_fully_applied = (load_factor + load_increment >= 1.0 - eps_load_factor);
-
-    // std::cout << "load fully applied : " << load_fully_applied << "\n"; // ##+
 
     return load_fully_applied;
   };
@@ -335,8 +322,6 @@ DriverInverseAnalysis<dim, Number>::do_solve()
                              lambda_fixed_point_iteration,
                              lambda_check_load_applied,
                              true /* force_relaxation */);
-
-    // pcout << "restart norm = " << solution.l2_norm() << std::endl; // ##+
   }
 
   // Execute final phase with constant loading.
@@ -484,7 +469,7 @@ DriverInverseAnalysis<dim, Number>::postprocessing(bool const errors_only,
   // vector. Mapping the current reference configuration with that vector will yield the initial
   // reference configuration up to the specified tolerance. The mapping is not immediately available
   // after setup, only after calling `NonLinearOperator::set_solution_linearization()`.
-  if(export_configuration and this->param.inverse_analysis_export_configuration)
+  if(export_configuration and param.inverse_analysis_export_configuration)
   {
     pde_operator->export_configuration(postprocessor->get_data().output_data.directory, solution);
   }

@@ -232,6 +232,7 @@ public:
   bool                                 inverse_analysis_use_separate_ramp_solver;
   FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_ramp;
   FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_final;
+  unsigned int                         inverse_analysis_max_retries_per_step;
 
   // Newton solver data (only relevant for nonlinear problems)
   Newton::SolverData newton_solver_data;

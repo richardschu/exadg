@@ -87,6 +87,7 @@ Parameters::Parameters()
     inverse_analysis_use_separate_ramp_solver(false),
     inverse_analysis_acceleration_method_ramp(FixedPointSolver::AccelerationMethod::IQN_ILS),
     inverse_analysis_acceleration_method_final(FixedPointSolver::AccelerationMethod::IQN_ILS),
+    inverse_analysis_max_retries_per_step(10),
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
     solver(Solver::Undefined),
     solver_data(SolverData(1e4, 1.e-12, 1.e-6, 100)),

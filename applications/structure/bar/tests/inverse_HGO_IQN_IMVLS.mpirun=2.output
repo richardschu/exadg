@@ -55,6 +55,7 @@ Inverse analysis solver:
   Acceleration method:                       Undefined
   Delay acceleration:                        0
   QR decomposition tolerance:                1.0000e-02
+  Armijo vector size:                        4
   Use separate fixed point solvers:          true
   Use extrapolation in ramp phase:           false
   Acceleration method (ramp phase):          IQN_IMVLS

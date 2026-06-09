@@ -39,7 +39,9 @@ enum class AccelerationMethod
   FixedRelaxation,
   Aitken,
   IQN_ILS,
-  IQN_IMVLS
+  IQN_IMVLS,
+  Armijo,
+  ArmijoAitken
 };
 
 struct Parameters
@@ -53,6 +55,7 @@ struct Parameters
       max_iter(100),
       delay_acceleration(0),
       drop_tol_QR(1.0e-2),
+      armijo_vector_size(4),
       print_solver_info(true)
   {
   }
@@ -68,6 +71,7 @@ struct Parameters
     print_parameter(pcout, "Acceleration method", acceleration_method);
     print_parameter(pcout, "Delay acceleration", delay_acceleration);
     print_parameter(pcout, "QR decomposition tolerance", drop_tol_QR);
+    print_parameter(pcout, "Armijo vector size", armijo_vector_size);
   }
 
   AccelerationMethod acceleration_method;
@@ -78,6 +82,7 @@ struct Parameters
   unsigned int       max_iter;
   unsigned int       delay_acceleration;
   double             drop_tol_QR;
+  unsigned int       armijo_vector_size;
   bool               print_solver_info;
 };
 
