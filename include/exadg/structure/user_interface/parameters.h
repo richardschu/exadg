@@ -26,6 +26,7 @@
 #include <exadg/grid/grid_data.h>
 #include <exadg/operators/enum_types.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 #include <exadg/structure/user_interface/enum_types.h>
@@ -183,15 +184,17 @@ public:
   // choose a value in [0,1] where 1 = maximum load (Neumann or Dirichlet)
   double load_increment;
 
-  // Enable the use of extrapolation in inverse analysis to obtain improved initial guess for Newton
-  // solver in each load step
-  bool use_extrapolation;
+  // Enable the use of extrapolation in continuation methods like `ProblemType::InverseAnalysis` and
+  // `ProblemType::QuasiStatic` to obtain an improved initial guess for the Newton solver executed
+  // in each load step. In `ProblemType::InverseAnlysis`, the extrapolation is only used up until
+  // the point where the full load is applied.
+  bool use_extrapolation_continuation;
 
   // inverse analysis solver
 
   // Export the initial reference configuration and the configuration being the solution of the
   // inverse elasticity problem for visualization and use as additional mapping in forward problems.
-  bool export_configuration_inverse_analysis;
+  bool inverse_analysis_export_configuration;
 
   /**************************************************************************************/
   /*                                                                                    */
@@ -223,8 +226,13 @@ public:
   /*                                                                                    */
   /**************************************************************************************/
 
-  // Inverse analysis solver data only relevant for `ProblemType::InverseAnalysis`.
-  Newton::SolverData inverse_analysis_solver_data;
+  // Inverse analysis solver parameters only relevant for `ProblemType::InverseAnalysis`.
+  FixedPointSolver::Parameters inverse_analysis_solver_parameters;
+  // acceleration methods used *in* or *after* ramp phase
+  bool                                 inverse_analysis_use_separate_ramp_solver;
+  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_ramp;
+  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_final;
+  unsigned int                         inverse_analysis_max_retries_per_step;
 
   // Newton solver data (only relevant for nonlinear problems)
   Newton::SolverData newton_solver_data;

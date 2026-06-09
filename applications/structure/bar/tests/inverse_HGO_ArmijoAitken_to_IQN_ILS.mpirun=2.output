@@ -1,0 +1,253 @@
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       2
+
+Setting up elasticity solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              InverseAnalysis
+  Body force:                                false
+  Large deformation:                         true
+  Pull back body force:                      true
+  Pull back traction:                        true
+  Perform cell integral in spatial configuration:false
+
+Physical quantities:
+
+Temporal discretization:
+  load_increment:                            1.0000e-01
+
+Spatial Discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              2
+  Create coarse triangulations:              false
+  Mapping degree:                            2
+  Mapping degree coarse grids:               2
+  Polynomial degree:                         2
+  Use matrix-based implementation:           false
+
+Solver:
+
+Inverse analysis solver:
+  Maximum number of iterations:              200
+  Absolute solver tolerance:                 1.0000e-16
+  Relative solver tolerance:                 1.0000e-09
+  Initial relaxation parameter:              3.0000e-01
+  Reused time steps:                         0
+  Acceleration method:                       Undefined
+  Delay acceleration:                        0
+  QR decomposition tolerance:                1.0000e-02
+  Armijo vector size:                        4
+  Use separate fixed point solvers:          true
+  Use extrapolation in ramp phase:           false
+  Acceleration method (ramp phase):          ArmijoAitken
+  Acceleration method (final phase):         IQN_ILS
+
+Newton:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-09
+  Relative solver tolerance:                 1.0000e-04
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-08
+  Maximum size of Krylov space:              30
+  Preconditioner:                            Multigrid
+  Multigrid type:                            phMG
+  p-sequence:                                DecreaseByOne
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       12
+  Smoothing range:                           6.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                AMG
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Maximum size of Krylov space:              30
+      AMG type:                              ML
+      Smoother sweeps:                       12
+      Number of cycles:                      1
+      Smoother type:                         Chebyshev
+
+Generating grid for 3-dimensional problem:
+
+  Max. number of refinements:                2
+  Number of cells:                           64
+
+Construct elasticity operator ...
+
+Continuous Galerkin finite element discretization:
+
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   81
+  number of dofs (total):                    2187
+
+Discontinuous Galerkin finite element discretization of scalar field:
+
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   27
+  number of dofs (total):                    1728
+
+Discontinuous Galerkin finite element discretization of vector field:
+
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   81
+  number of dofs (total):                    5184
+
+... done!
+
+Setup elasticity operator ...
+
+... done!
+
+Calculate error for all fields for initial data:
+  Relative error (L2-norm): 1.00000e+00
+
+Solving inverse problem ...
+
+... executing loading phase ...
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e-03
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  9.52249e-03  4.76125e-03  2.38062e-03  1.19031e-03  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  9.61854e-03  4.80927e-03  2.40464e-03  1.20232e-03  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+ solve non-linear problem for load factor = 2.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  1.92245e-02  9.61227e-03  4.80613e-03  2.40307e-03  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+ solve non-linear problem for load factor = 3.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  5.75261e-02  2.87631e-02  1.43815e-02  7.19077e-03  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+ solve non-linear problem for load factor = 4.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  2.29832e-01  1.14916e-01  5.74579e-02  2.87289e-02  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 5       
+======================================================================
+ solve non-linear problem for load factor = 5.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  1.13592e+00  5.67958e-01  2.83979e-01  1.41989e-01  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 6       
+======================================================================
+ solve non-linear problem for load factor = 6.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  7.05415e+00  3.52708e+00  1.76354e+00  8.81769e-01  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 7       
+======================================================================
+ solve non-linear problem for load factor = 7.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  3.97351e+01  1.98675e+01  9.93377e+00  4.96689e+00  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 8       
+======================================================================
+ solve non-linear problem for load factor = 8.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  4.65384e+02  2.32692e+02  1.16346e+02  5.81730e+01  ]
+
+======================================================================
+ Fixed-point iteration: iteration counter = 9       
+======================================================================
+ solve non-linear problem for load factor = 9.0000e-01
+  Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
+  Armijo residuals = [  2.88091e+02  1.44046e+02  7.20228e+01  3.60114e+01  ]
+
+Fixed-point iteration converged in 10 iterations.
+
+... solving inverse problem up to tolerance ...
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.17710e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 1.64134e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 3.59297e+00
+  ||d_k+1 - d_k||/||d_k+1|| = 1.14023e-01
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 5.02748e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 1.59904e-08
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+ solve non-linear problem for load factor = 1.0000e+00
+
+Inverse analysis errors :
+  ||d_k+1 - d_k||           = 2.34111e-10
+  ||d_k+1 - d_k||/||d_k+1|| = 7.44614e-12
+
+Fixed-point iteration converged in 4 iterations.
+
+... done!
+
+The entire ramp/solve phase took:
+  14 fixed point evaluations
+  28 nonlinear iterations.
+
+OUTPUT << Write initial data
+
+Calculate error for all fields for solution data:
+  Relative error (L2-norm): 1.03913e+00

@@ -69,10 +69,10 @@ Parameters::Parameters()
     // The inverse analysis and quasi static solvers use extrapolation during the load ramping to
     // get an improved initial guess. This might be less robust than taking the previous load step's
     // solution, and is hence optional.
-    use_extrapolation(true),
+    use_extrapolation_continuation(true),
 
     // inverse_analysis solver
-    export_configuration_inverse_analysis(false),
+    inverse_analysis_export_configuration(false),
 
     // SPATIAL DISCRETIZATION
     grid(GridData()),
@@ -83,7 +83,11 @@ Parameters::Parameters()
     sparse_matrix_type(SparseMatrixType::Undefined),
 
     // SOLVER
-    inverse_analysis_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
+    inverse_analysis_solver_parameters(FixedPointSolver::Parameters()),
+    inverse_analysis_use_separate_ramp_solver(false),
+    inverse_analysis_acceleration_method_ramp(FixedPointSolver::AccelerationMethod::IQN_ILS),
+    inverse_analysis_acceleration_method_final(FixedPointSolver::AccelerationMethod::IQN_ILS),
+    inverse_analysis_max_retries_per_step(10),
     newton_solver_data(Newton::SolverData(1e4, 1.e-12, 1.e-6)),
     solver(Solver::Undefined),
     solver_data(SolverData(1e4, 1.e-12, 1.e-6, 100)),
@@ -94,6 +98,9 @@ Parameters::Parameters()
     update_preconditioner_once_newton_converged(false),
     multigrid_data(MultigridData())
 {
+  // Reset the acceleration method since `DriverInverseAnalysis` fills the data structure.
+  inverse_analysis_solver_parameters.acceleration_method =
+    FixedPointSolver::AccelerationMethod::Undefined;
 }
 
 void
@@ -156,6 +163,11 @@ Parameters::check() const
     AssertThrow(pull_back_traction == true,
                 dealii::ExcMessage("Not pulling back the traction is "
                                    "inconsistent for inverse analysis."));
+
+    AssertThrow(inverse_analysis_solver_parameters.acceleration_method ==
+                  FixedPointSolver::AccelerationMethod::Undefined,
+                dealii::ExcMessage("Acceleration method is overwritten by "
+                                   "`inverse_analysis_acceleration_method_ramp`/`_final`."));
   }
 
   // SPATIAL DISCRETIZATION
@@ -299,7 +311,17 @@ Parameters::print_parameters_solver(dealii::ConditionalOStream const & pcout) co
   if(problem_type == ProblemType::InverseAnalysis)
   {
     pcout << std::endl << "Inverse analysis solver:" << std::endl;
-    inverse_analysis_solver_data.print(pcout);
+    inverse_analysis_solver_parameters.print(pcout);
+    print_parameter(pcout,
+                    "Use separate fixed point solvers",
+                    inverse_analysis_use_separate_ramp_solver);
+    print_parameter(pcout, "Use extrapolation in ramp phase", use_extrapolation_continuation);
+    print_parameter(pcout,
+                    "Acceleration method (ramp phase)",
+                    inverse_analysis_acceleration_method_ramp);
+    print_parameter(pcout,
+                    "Acceleration method (final phase)",
+                    inverse_analysis_acceleration_method_final);
   }
 
   // nonlinear solver

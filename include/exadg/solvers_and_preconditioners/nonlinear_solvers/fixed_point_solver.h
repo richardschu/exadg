@@ -22,18 +22,70 @@
 #ifndef EXADG_SOLVERS_AND_PRECONDITIONERS_FIXED_POINT_SOLVER_H_
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_FIXED_POINT_SOLVER_H_
 
+// deal.II
+#include <deal.II/base/conditional_ostream.h>
+
 // ExaDG
-#include <exadg/fluid_structure_interaction/acceleration_schemes/linear_algebra.h>
-#include <exadg/fluid_structure_interaction/acceleration_schemes/parameters.h>
-#include <exadg/fluid_structure_interaction/single_field_solvers/fluid.h>
-#include <exadg/fluid_structure_interaction/single_field_solvers/structure.h>
-#include <exadg/utilities/print_solver_results.h>
+#include <exadg/utilities/print_functions.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
 {
 namespace FixedPointSolver
 {
+enum class AccelerationMethod
+{
+  Undefined,
+  FixedRelaxation,
+  Aitken,
+  IQN_ILS,
+  IQN_IMVLS,
+  Armijo,
+  ArmijoAitken
+};
+
+struct Parameters
+{
+  Parameters()
+    : acceleration_method(AccelerationMethod::Undefined),
+      abs_tol(1.e-12),
+      rel_tol(1.e-3),
+      omega_init(0.1),
+      reused_time_steps(0),
+      max_iter(100),
+      delay_acceleration(0),
+      drop_tol_QR(1.0e-2),
+      armijo_vector_size(4),
+      print_solver_info(true)
+  {
+  }
+
+  void
+  print(dealii::ConditionalOStream const & pcout) const
+  {
+    print_parameter(pcout, "Maximum number of iterations", max_iter);
+    print_parameter(pcout, "Absolute solver tolerance", abs_tol);
+    print_parameter(pcout, "Relative solver tolerance", rel_tol);
+    print_parameter(pcout, "Initial relaxation parameter", omega_init);
+    print_parameter(pcout, "Reused time steps", reused_time_steps);
+    print_parameter(pcout, "Acceleration method", acceleration_method);
+    print_parameter(pcout, "Delay acceleration", delay_acceleration);
+    print_parameter(pcout, "QR decomposition tolerance", drop_tol_QR);
+    print_parameter(pcout, "Armijo vector size", armijo_vector_size);
+  }
+
+  AccelerationMethod acceleration_method;
+  double             abs_tol;
+  double             rel_tol;
+  double             omega_init;
+  unsigned int       reused_time_steps;
+  unsigned int       max_iter;
+  unsigned int       delay_acceleration;
+  double             drop_tol_QR;
+  unsigned int       armijo_vector_size;
+  bool               print_solver_info;
+};
+
 /**
  * Class implementing a fixed-point iteration with various acceleration methods. The actual
  * (single!) fixed-point iteration is performed in the provided lambda function
@@ -56,6 +108,9 @@ public:
    * `lambda_set_iterate`           copy the data of the provided vector into the iterate vector
    * `lambda_fixed_point_iteration` perform a single fixed point iteration
    * `lambda_check_convergence`     check convergence of the fixed point scheme
+   * The parameter `force_relaxation` forces the relaxation step, even if the new iterate
+   * `x_tilde = fixed_point_iteration(x_old)` fulfills the convergence criterion. This option is
+   * introduced for a warm start of two separate `FixedPointSolver`s solving the same problem.
    */
   unsigned int
   solve(std::function<void(VectorType &)> const &                     lambda_set_up_vector,
@@ -63,7 +118,8 @@ public:
         std::function<void(VectorType const &)> const &               lambda_set_iterate,
         std::function<void(VectorType &, VectorType const &, unsigned int const)> const &
                                                         lambda_fixed_point_iteration,
-        std::function<bool(VectorType const &)> const & lambda_check_convergence);
+        std::function<bool(VectorType const &)> const & lambda_check_convergence,
+        bool const                                      force_relaxation = false);
 
 private:
   void

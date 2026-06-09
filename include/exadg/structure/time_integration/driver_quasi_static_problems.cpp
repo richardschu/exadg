@@ -163,7 +163,7 @@ DriverQuasiStatic<dim, Number>::do_solve()
       try
       {
         // extrapolate solution
-        if(this->param.use_extrapolation)
+        if(this->param.use_extrapolation_continuation)
         {
           solution.add(load_increment / last_load_increment, displacement_increment);
         }

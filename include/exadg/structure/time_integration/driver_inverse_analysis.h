@@ -27,6 +27,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/utilities/timer_tree.h>
 
@@ -91,7 +92,7 @@ private:
   output_solver_info_header(double const load_factor);
 
   std::tuple<unsigned int, unsigned int>
-  solve_step(double const load_factor, bool const update_preconditioner);
+  solve_step(VectorType & iterate, double const load_factor, bool const update_preconditioner);
 
   void
   postprocessing(bool const errors_only = false, bool const export_configuration = false) const;
@@ -111,25 +112,26 @@ private:
   // vectors
   VectorType solution;
 
-  // We need to store a vector in order to extrapolate the solution to the next
-  // load step and obtain an accurate initial guess for the Newton solver.
+  // We need to store a vector in order to extrapolate the solution to the next load step and obtain
+  // an accurate initial guess for the Newton solver.
   VectorType displacement_increment;
 
-  // For the purpose of extrapolating the displacements, we also need to store the
-  // load_increment of the last load step.
+  // For the purpose of extrapolating the displacements, we also need to store the load_increment
+  // of the last load step.
   double last_load_increment;
-  bool   use_extrapolation;
 
   unsigned int step_number;
 
   // The inverse problem is solved by solving a sequence of forward problems. Once the full load is
   // applied, iterate until the displacement increment is sufficiently small.
-  Newton::SolverData inverse_analysis_solver_data;
+  FixedPointSolver::Parameters inverse_analysis_solver_parameters;
 
   // tolerance for `load_factor` to be considered as fully applied
   static double constexpr eps_load_factor = 1.e-10;
 
   std::shared_ptr<TimerTree> timer_tree;
+  std::shared_ptr<TimerTree> timer_tree_fixed_point_solver_ramp;
+  std::shared_ptr<TimerTree> timer_tree_fixed_point_solver_final;
 
   std::pair<
     unsigned int /* calls */,
