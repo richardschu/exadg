@@ -250,7 +250,7 @@ TimeIntBase::output_solver_info_header() const
         << std::endl
         << " Time step number = " << std::left << std::setw(8) << time_step_number
         << "t = " << std::scientific << std::setprecision(5) << time
-        << " -> t + dt = " << time + get_time_step_size() << std::endl
+        << ", dt = " << get_time_step_size() << std::endl
         << print_horizontal_line() << std::endl;
 }
 
