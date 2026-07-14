@@ -43,10 +43,10 @@ cmake \
     -D DEAL_II_DIR="$DEAL" \
     -D EXADG_WITH_EXADG_BIO=ON \
     -D EXADG_BIO_INCLUDE="$EXADG_BIO/include" \
-    -D EXADG_WITH_FFTW=ON \
+    -D EXADG_WITH_FFTW=OFF \
     -D FFTW_LIB="$FFTW/lib" \
     -D FFTW_INCLUDE="$FFTW/include" \
-    -D EXADG_WITH_LIKWID=ON \
+    -D EXADG_WITH_LIKWID=OFF \
     -D LIKWID_LIB="$LIKWID/lib" \
     -D LIKWID_INCLUDE="$LIKWID/include" \
     -D BUILD_SHARED_LIBS=ON \
