@@ -200,10 +200,11 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
     displacement_vector_ghosted.update_ghost_values();
   }
 
-  // Set up `dealii::FEValues` with `dealii::FE_Nothing` and the Gauss-Lobatto quadrature to reduce
-  // setup cost, as we only use the geometry information (this means we need to call
-  // `fe_values.reinit(cell)` with `Triangulation::cell_iterator` rather than the more standard call
-  // using `dealii::DoFHandler::cell_iterator`).
+  // Set up `dealii::FEValues` with `dealii::FE_Nothing` and the Gauss-Lobatto
+  // quadrature to reduce setup cost, as we only use the geometry information
+  // (this means we need to call `fe_values.reinit(cell)` with
+  // `Triangulation::cell_iterator` rather than the more standard call using
+  // `dealii::DoFHandler::cell_iterator`).
   dealii::FE_Nothing<dim>                fe_nothing;
   std::shared_ptr<dealii::FEValues<dim>> fe_values;
   if(mapping != nullptr)
@@ -221,18 +222,19 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
       -> std::vector<dealii::Point<dim>> {
       unsigned int const cell_tria_level = cell_tria->level();
 
-      // We have to return *some* grid coordinates also for *all* levels. On the other levels, we
-      // return a zero vector.
+      // We have to return *some* grid coordinates also for *all* levels. On the
+      // other levels, we return a zero vector.
       unsigned int const scalar_dofs_per_cell =
         dealii::Utilities::pow(mapping_q_cache->get_degree() + 1, dim);
 
       std::vector<dealii::Point<dim>> grid_coordinates(scalar_dofs_per_cell);
 
-      // Skip cells that are not on the target level (DoF Vector also does not match).
+      // Skip cells that are not on the target level (DoF Vector also does not
+      // match).
       if(not(is_mg) or cell_tria_level == level)
       {
-        // If the `mapping` is valid, write the interpolated point coordinates to add displacement
-        // vector in a second step.
+        // If the `mapping` is valid, write the interpolated point coordinates
+        // to add displacement vector in a second step.
         if(mapping != nullptr)
         {
           fe_values->reinit(cell_tria);
@@ -249,8 +251,9 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
                                                              cell_tria->index(),
                                                              &dof_handler);
 
-        // if this function is called with an empty DoF vector, this indicates that the
-        // displacements are zero and the points do not have to be moved
+        // if this function is called with an empty DoF vector, this indicates
+        // that the displacements are zero and the points do not have to be
+        // moved
         bool const relevant_cell =
           is_mg ? vector_initialized and
                     cell->level_subdomain_id() != dealii::numbers::artificial_subdomain_id :

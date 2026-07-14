@@ -35,8 +35,8 @@
 namespace ExaDG
 {
 /**
- * A mapping class based on dealii::MappingQCache equipped with practical interfaces that can be
- * used to initialize the mapping.
+ * A mapping class based on dealii::MappingQCache equipped with practical
+ * interfaces that can be used to initialize the mapping.
  */
 template<int dim, typename Number>
 class MappingDoFVector
@@ -71,9 +71,9 @@ public:
   get_mapping_q_cache() const;
 
   /**
-   * Extract the grid coordinates of the current mesh configuration described by the
-   * dealii::MappingQCache object and fill a dof-vector given a corresponding dealii::DoFHandler
-   * object.
+   * Extract the grid coordinates of the current mesh configuration described by
+   * the `dealii::MappingQCache` object and fill a DoF vector given a
+   * corresponding `dealii::DoFHandler` object.
    */
   void
   fill_grid_coordinates_vector(VectorType &                    grid_coordinates,
@@ -81,7 +81,7 @@ public:
 
   /**
    * Extract the grid coordinates for a given external mapping and fill a
-   * dof-vector given a corresponding dealii::DoFHandler object.
+   * DoF vector given a corresponding `dealii::DoFHandler` object.
    */
   void
   fill_grid_coordinates_vector(dealii::Mapping<dim> const &    mapping,
@@ -89,18 +89,22 @@ public:
                                dealii::DoFHandler<dim> const & dof_handler) const;
 
   /**
-   * Initializes the `dealii::MappingQCache` object by providing a `mapping` that describes an
-   * undeformed reference configuration and a displacement DoF-vector (with a corresponding
-   * `dealii::DoFHandler` object) that describes the displacement of the mesh compared to that
-   * reference configuration. This function might also be used if the object of this class refers
-   * to a mapping of a specific multigrid level. In both cases, the `displacement_vector` and
-   * `dof_handler` need to be compatible. There are two special cases:
+   * Initializes the `dealii::MappingQCache` object by providing a `mapping`
+   * that describes an undeformed reference configuration and a displacement
+   * DoF vector (with a corresponding `dealii::DoFHandler` object) that
+   * describes the displacement of the mesh compared to that reference
+   * configuration. This function might also be used if the object of this class
+   * refers to a mapping of a specific multigrid level. In both cases, the
+   * `displacement_vector` and `dof_handler` need to be compatible. There are
+   * two special cases:
    *
-   * If the mapping pointer is invalid, this implies that the reference coordinates are interpreted
-   * as zero, i.e., the displacement vector describes the absolute coordinates of the grid points.
+   * If the mapping pointer is invalid, this implies that the reference
+   * coordinates are interpreted as zero, i.e., the displacement vector
+   * describes the absolute coordinates of the grid points.
    *
-   * If the displacement_vector is empty or uninitialized, this implies that no displacements will
-   * be added to the grid coordinates of the reference configuration described by mapping.
+   * If the displacement_vector is empty or uninitialized, this implies that no
+   * displacements will be added to the grid coordinates of the reference
+   * configuration described by mapping.
    */
   void
   initialize_mapping_from_dof_vector(
@@ -124,13 +128,14 @@ namespace MappingTools
  *
  * The second argument describes the mapping of the fine triangulation.
  *
- * This function only takes the grid coordinates described by the fine mapping without adding
- * displacements in order to initialize the coarse mappings for all multigrid h-levels.
+ * This function only takes the grid coordinates described by the fine mapping
+ * without adding displacements in order to initialize the coarse mappings for
+ * all multigrid h-levels.
  *
- * Prior to calling this function, the vector of coarse_mappings must have the correct size
- * according to the number of h-multigrid levels (excluding the finest level). The first entry
- * corresponds to the coarsest triangulation, the last element to the level below the fine
- * triangulation.
+ * Prior to calling this function, the vector of coarse_mappings must have the
+ * correct size according to the number of h-multigrid levels (excluding the
+ * finest level). The first entry corresponds to the coarsest triangulation, the
+ * last element to the level below the fine triangulation.
  */
 template<int dim, typename Number>
 void
@@ -154,7 +159,8 @@ initialize_coarse_mappings_from_mapping_dof_vector(
   std::shared_ptr<MappingDoFVector<dim, Number>> mapping_dof_vector_all_levels =
     std::make_shared<MappingDoFVector<dim, Number>>(degree_coarse_mappings);
 
-  // fill a dof vector with grid coordinates of the fine level using degree_coarse_mappings
+  // fill a dof vector with grid coordinates of the fine level using
+  // `degree_coarse_mappings`
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
   VectorType                                                 grid_coordinates_fine_level;
 
@@ -164,7 +170,8 @@ initialize_coarse_mappings_from_mapping_dof_vector(
                                                                 dof_handler);
   }
 
-  // project the solution onto all coarse levels of the triangulation using degree_coarse_mappings
+  // project the solution onto all coarse levels of the triangulation using
+  // `degree_coarse_mappings`
   dealii::MGLevelObject<VectorType> grid_coordinates_all_levels,
     grid_coordinates_all_levels_ghosted;
   unsigned int const n_levels = triangulation.n_global_levels();
@@ -192,8 +199,9 @@ initialize_coarse_mappings_from_mapping_dof_vector(
     grid_coordinates_all_levels_ghosted[level].update_ghost_values();
   }
 
-  // Call the initialize() function of dealii::MappingQCache, which initializes the mapping for all
-  // levels according to grid_coordinates_all_levels_ghosted.
+  // Call the initialize() function of dealii::MappingQCache, which initializes
+  // the mapping for all levels according to
+  // `grid_coordinates_all_levels_ghosted`.
   mapping_dof_vector_all_levels->get_mapping_q_cache()->initialize(
     dof_handler.get_triangulation(),
     [&](const typename dealii::Triangulation<dim>::cell_iterator & cell_tria)
@@ -243,10 +251,11 @@ initialize_coarse_mappings_from_mapping_dof_vector(
     dealii::ExcMessage(
       "coarse_mappings does not have correct size relative to the number of levels of the triangulation."));
 
-  // Finally, let all coarse grid mappings point to the same MappingDoFVector object. Using the
-  // same Mapping object for all multigrid h-levels is some form of legacy code. The class
-  // dealii::MatrixFree can internally extract the coarse-level mapping information (provided
-  // through the fine-level Mapping object).
+  // Finally, let all coarse grid mappings point to the same MappingDoFVector
+  // object. Using the same Mapping object for all multigrid h-levels is some
+  // form of legacy code. The class `dealii::MatrixFree` can internally extract
+  // the coarse-level mapping information (provided through the fine-level
+  // `dealii::Mapping` object).
   for(unsigned int h_level = 0; h_level < coarse_mappings.size(); ++h_level)
   {
     coarse_mappings[h_level] = mapping_dof_vector_all_levels;
@@ -255,18 +264,20 @@ initialize_coarse_mappings_from_mapping_dof_vector(
 
 /**
  *
- * Use this function to initialize the coarse mappings for use in multigrid in case the multigrid
- * algorithm uses a separate triangulation object for each multigrid h-level.
+ * Use this function to initialize the coarse mappings for use in multigrid in
+ * case the multigrid algorithm uses a separate triangulation object for each
+ * multigrid h-level.
  *
  * The second argument describes the mapping of the fine triangulation.
  *
- * This function only takes the grid coordinates described by the fine mapping without adding
- * displacements in order to initialize the coarse mappings for all multigrid h-levels.
+ * This function only takes the grid coordinates described by the fine mapping
+ * without adding displacements in order to initialize the coarse mappings for
+ * all multigrid h-levels.
  *
- * Prior to calling this function, the vector of coarse_mappings must have the correct size
- * according to the number of h-multigrid levels (excluding the finest level). The first entry
- * corresponds to the coarsest triangulation, the last element to the level below the fine
- * triangulation.
+ * Prior to calling this function, the vector of coarse_mappings must have the
+ * correct size according to the number of h-multigrid levels (excluding the
+ * finest level). The first entry corresponds to the coarsest triangulation, the
+ * last element to the level below the fine triangulation.
  */
 template<int dim, typename Number>
 void
@@ -281,7 +292,8 @@ initialize_coarse_mappings_from_mapping_dof_vector(
   AssertThrow(mapping_q_cache.get(),
               dealii::ExcMessage("Shared pointer mapping_q_cache is invalid."));
 
-  // setup dof-handlers and constraints for all levels using degree_coarse_mappings
+  // setup dof-handlers and constraints for all levels using
+  // `degree_coarse_mappings`
   dealii::FESystem<dim>                          fe(dealii::FE_Q<dim>(degree_coarse_mappings), dim);
   unsigned int const                             n_h_levels = coarse_triangulations.size() + 1;
   std::vector<dealii::DoFHandler<dim>>           dof_handlers_all_levels(n_h_levels);
@@ -297,7 +309,8 @@ initialize_coarse_mappings_from_mapping_dof_vector(
     constraints_all_levels[h_level].close();
   }
 
-  // fill a dof vector with grid coordinates of the fine level using degree_coarse_mappings
+  // fill a dof vector with grid coordinates of the fine level using
+  // `degree_coarse_mappings`
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
   VectorType                                                 grid_coordinates_fine_level;
 
@@ -321,7 +334,8 @@ initialize_coarse_mappings_from_mapping_dof_vector(
                                                  constraints_all_levels[h_level - 1]);
   }
 
-  // a function that initializes the dof-vector for a given level and dof_handler
+  // a function that initializes the dof-vector for a given level and
+  // `dof_handler`
   const std::function<void(unsigned int const, VectorType &)> initialize_dof_vector =
     [&](unsigned int const h_level, VectorType & vector) {
       dealii::IndexSet const locally_relevant_dofs =
@@ -342,7 +356,8 @@ initialize_coarse_mappings_from_mapping_dof_vector(
                                                   grid_coordinates_all_levels,
                                                   grid_coordinates_fine_level);
 
-  // initialize mapping for all coarse h-levels using the dof-vectors with grid coordinates
+  // initialize mapping for all coarse h-levels using the dof-vectors with grid
+  // coordinates
   AssertThrow(coarse_mappings.size() == n_h_levels - 1,
               dealii::ExcMessage(
                 "coarse_mappings does not have correct size relative to coarse_triangulations."));
@@ -352,9 +367,9 @@ initialize_coarse_mappings_from_mapping_dof_vector(
     coarse_mappings[h_level] =
       std::make_shared<MappingDoFVector<dim, Number>>(degree_coarse_mappings);
 
-    // grid_coordinates_all_levels describes absolute coordinates -> use an uninitialized mapping
-    // in order to interpret the grid coordinates vector as absolute coordinates and not as
-    // displacements.
+    // grid_coordinates_all_levels describes absolute coordinates -> use an
+    // uninitialized mapping in order to interpret the grid coordinates vector
+    // as absolute coordinates and not as displacements.
     coarse_mappings[h_level]->initialize_mapping_from_dof_vector(
       nullptr /* mapping */,
       grid_coordinates_all_levels[h_level],
@@ -363,19 +378,20 @@ initialize_coarse_mappings_from_mapping_dof_vector(
 }
 
 /**
- * A function to initalize mappings for coarse multigrid h-levels in case the mapping on the fine
- * level is of type MappingDoFVector.
+ * A function to initalize mappings for coarse multigrid h-levels in case the
+ * mapping on the fine level is of type `MappingDoFVector`.
  *
- * This function unifies the two functions above depending on whether the multigrid algorithm uses
- * separate triangulation objects for the coarse triangulations or just a single triangulation
- * object for all levels. In the latter case, the last argument of this function remains unused.
+ * This function unifies the two functions above depending on whether the
+ * multigrid algorithm uses separate triangulation objects for the coarse
+ * triangulations or just a single triangulation object for all levels. In the
+ * latter case, the last argument of this function remains unused.
  *
  * In all cases, a vector of coarse grid mappings is filled.
  *
- * Prior to calling this function, the vector of coarse_mappings must have the correct size
- * according to the number of h-multigrid levels (excluding the finest level). The first entry
- * corresponds to the coarsest triangulation, the last element to the level below the fine
- * triangulation.
+ * Prior to calling this function, the vector of coarse_mappings must have the
+ * correct size according to the number of h-multigrid levels (excluding the
+ * finest level). The first entry corresponds to the coarsest triangulation, the
+ * last element to the level below the fine triangulation.
  */
 template<int dim, typename Number>
 void
