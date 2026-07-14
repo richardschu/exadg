@@ -221,6 +221,7 @@ SET(EXADG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/bundled $
 TARGET_INCLUDE_DIRECTORIES(exadg PUBLIC ${EXADG_INCLUDE_DIRS})
 
 # ExaDG-Bio
+# ExaDG is only allowed to include headers of ExaDG-Bio.
 OPTION(EXADG_WITH_EXADG_BIO "Use ExaDG-Bio" EXADG_WITH_EXADG_BIO)
 IF(${EXADG_WITH_EXADG_BIO})
     target_compile_definitions(exadg PUBLIC EXADG_WITH_EXADG_BIO=1)
