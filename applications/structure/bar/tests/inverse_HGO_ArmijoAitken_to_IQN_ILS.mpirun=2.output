@@ -199,7 +199,8 @@ Solving inverse problem ...
   Armijo factors   = [  1.00000e+00  5.00000e-01  2.50000e-01  1.25000e-01  ]
   Armijo residuals = [  2.88091e+02  1.44046e+02  7.20228e+01  3.60114e+01  ]
 
-Fixed-point iteration converged in 10 iterations.
+Fixed-point iteration took 10 iterations
+until `lambda_check_convergence()` returned `true`.
 
 ... solving inverse problem up to tolerance ...
 
@@ -239,7 +240,8 @@ Inverse analysis errors :
   ||d_k+1 - d_k||           = 2.34111e-10
   ||d_k+1 - d_k||/||d_k+1|| = 7.44614e-12
 
-Fixed-point iteration converged in 4 iterations.
+Fixed-point iteration took 4 iterations
+until `lambda_check_convergence()` returned `true`.
 
 ... done!
 

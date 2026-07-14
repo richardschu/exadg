@@ -179,7 +179,8 @@ Solving inverse problem ...
 ======================================================================
  solve non-linear problem for load factor = 9.0000e-01
 
-Fixed-point iteration converged in 10 iterations.
+Fixed-point iteration took 10 iterations
+until `lambda_check_convergence()` returned `true`.
 
 ... solving inverse problem up to tolerance ...
 
@@ -237,7 +238,8 @@ Inverse analysis errors :
   ||d_k+1 - d_k||           = 8.00386e-11
   ||d_k+1 - d_k||/||d_k+1|| = 2.54571e-12
 
-Fixed-point iteration converged in 6 iterations.
+Fixed-point iteration took 6 iterations
+until `lambda_check_convergence()` returned `true`.
 
 ... done!
 

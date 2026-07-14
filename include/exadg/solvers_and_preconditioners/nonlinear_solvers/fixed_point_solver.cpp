@@ -545,7 +545,10 @@ FixedPointSolver<Number, VectorType>::print_solver_info_converged(
   if(parameters.print_solver_info)
   {
     pcout << std::endl
-          << "Fixed-point iteration converged in " << iteration << " iterations." << std::endl;
+          << "Fixed-point iteration took " << iteration << " iterations\n"
+          << "until "
+          << "`lambda_check_convergence()` returned `true`"
+          << "." << std::endl;
   }
 }
 
