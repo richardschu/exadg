@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/time_integration/time_int_gen_alpha.h>
 
 namespace ExaDG
@@ -66,7 +67,7 @@ public:
   shift_reference_configuration(VectorType const & vector) = 0;
 
   virtual void
-  export_configuration(std::string const & folder, VectorType const & vector) const = 0;
+  export_configuration(OutputData const & output_data, VectorType const & vector) const = 0;
 
   virtual void
   get_reference_coordinates(VectorType & grid_coordinates) const = 0;

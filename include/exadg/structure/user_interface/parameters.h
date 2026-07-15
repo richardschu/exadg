@@ -70,11 +70,11 @@ private:
   print_parameters_solver(dealii::ConditionalOStream const & pcout) const;
 
 public:
-  /**************************************************************************************/
-  /*                                                                                    */
-  /*                                 MATHEMATICAL MODEL                                 */
-  /*                                                                                    */
-  /**************************************************************************************/
+  /****************************************************************************/
+  /*                                                                          */
+  /* MATHEMATICAL MODEL                                                       */
+  /*                                                                          */
+  /****************************************************************************/
 
   // description: see enum declaration
   ProblemType problem_type;
@@ -85,45 +85,49 @@ public:
   // are large deformations to be expected, than compute with non linear method
   bool large_deformation;
 
-  // For nonlinear problems with large deformations, it is important to specify whether
-  // the body forces are formulated with respect to the current deformed configuration
-  // or the reference configuration.
+  // For nonlinear problems with large deformations, it is important to specify
+  // whether the body forces are formulated with respect to the current deformed
+  // configuration or the reference configuration.
   //
   // Option 1: pull_back_body_force = false
-  // In this case, the body force is specified as force per undeformed volume. A typical
-  // use case are density-proportional forces such as the gravitational force. The body
-  // is then directly described in reference space, b_0 = rho_0 * g, and the pull-back to
-  // the reference configuration is deactivated.
+  // In this case, the body force is specified as force per undeformed volume. A
+  // typical use case are density-proportional forces such as the gravitational
+  // force. The body is then directly described in reference space,
+  // b_0 = rho_0 * g, and the pull-back to the reference configuration is
+  // deactivated.
   //
   // Option 2: pull_back_body_force = true
-  // The body force is specified as force per deformed volume, and the body force needs
-  // to be pulled-back according to b_0 = dv/dV * b, where the volume ratio dv/dV depends
-  // on the current state of deformation.
+  // The body force is specified as force per deformed volume, and the body
+  // force needs to be pulled-back according to b_0 = dv/dV * b, where the
+  // volume ratio dv/dV depends on the current state of deformation.
   bool pull_back_body_force;
 
-  // For nonlinear problems with large deformations, it is important to specify whether
-  // the traction Neumann boundary condition is formulated with respect to the current
-  // deformed configuration or the reference configuration. Both cases appear in practice,
-  // so it needs to be specified by the user which formulation is to be used.
+  // For nonlinear problems with large deformations, it is important to specify
+  // whether the traction Neumann boundary condition is formulated with respect
+  // to the current deformed configuration or the reference configuration. Both
+  // cases appear in practice, so it needs to be specified by the user which
+  // formulation is to be used.
   //
   // Option 1: pull_back_traction = false
-  // In this case, the traction is specified as a force per undeformed area, e.g., a
-  // force of fixed amount distributed uniformly over a surface of the body. The force per
-  // deformed area is an unknown. Hence, it is more natural to specify the traction in the
-  // reference configuration and deactivate the pull-back from the current to the reference
-  // configuration.
+  // In this case, the traction is specified as a force per undeformed area,
+  // e.g., a force of fixed amount distributed uniformly over a surface of the
+  // body. The force per deformed area is an unknown. Hence, it is more natural
+  // to specify the traction in the reference configuration and deactivate the
+  // pull-back from the current to the reference configuration.
   //
   // Option 2: pull_back_traction = true
-  // The traction is known as a force per area of the deformed body. In this case, the
-  // traction needs to be pulled-back to the reference configuration, i.e., t_0 = da/dA * t,
-  // where the surface area ratio da/dA depends on the current state of deformation.
-  // A typical use case would be fluid-structure-interaction problems where the fluid
-  // stresses are applied as traction boundary conditions for the structure. Note that
-  // the direction of the traction vector does not change by this pull-back operation.
+  // The traction is known as a force per area of the deformed body. In this
+  // case, the traction needs to be pulled-back to the reference configuration,
+  // i.e., t_0 = da/dA * t, where the surface area ratio da/dA depends on the
+  // current state of deformation. A typical use case would be fluid-structure
+  // interaction problems where the fluid stresses are applied as traction
+  // boundary conditions for the structure. Note that the direction of the
+  // traction vector does not change by this pull-back operation.
   bool pull_back_traction;
 
-  // For finite strain problems, integrate the stress terms in the deformed configuration
-  // and if so, possibly force the residual to be evaluated in the material configuration
+  // For finite strain problems, integrate the stress terms in the spatial
+  // configuration and if so, possibly force the residual to be evaluated in the
+  // material configuration
   bool spatial_integration;
   bool force_material_residual;
 
@@ -135,27 +139,28 @@ public:
   unsigned int check_type;
 
   // For nonlinear problems, precompute some data in the integration points
-  // if cache_level > 0. The implementation depends on the material model applied.
+  // if cache_level > 0. The implementation depends on the material model.
   unsigned int cache_level;
 
-  /**************************************************************************************/
-  /*                                                                                    */
-  /*                                 PHYSICAL QUANTITIES                                */
-  /*                                                                                    */
-  /**************************************************************************************/
+  /****************************************************************************/
+  /*                                                                          */
+  /* PHYSICAL QUANTITIES                                                      */
+  /*                                                                          */
+  /****************************************************************************/
 
-  // density rho_0 in initial configuration (only relevant for unsteady problems)
+  // density `rho_0` in material configuration; only relevant for unsteady
+  // problems
   double density;
 
   // linear weak damping coefficient (mass proportional) for unsteady problems
   bool   weak_damping_active;
   double weak_damping_coefficient;
 
-  /**************************************************************************************/
-  /*                                                                                    */
-  /*                             TEMPORAL DISCRETIZATION                                */
-  /*                                                                                    */
-  /**************************************************************************************/
+  /****************************************************************************/
+  /*                                                                          */
+  /* TEMPORAL DISCRETIZATION                                                  */
+  /*                                                                          */
+  /****************************************************************************/
 
   double       start_time;
   double       end_time;
@@ -184,23 +189,18 @@ public:
   // choose a value in [0,1] where 1 = maximum load (Neumann or Dirichlet)
   double load_increment;
 
-  // Enable the use of extrapolation in continuation methods like `ProblemType::InverseAnalysis` and
-  // `ProblemType::QuasiStatic` to obtain an improved initial guess for the Newton solver executed
-  // in each load step. In `ProblemType::InverseAnlysis`, the extrapolation is only used up until
-  // the point where the full load is applied.
+  // Enable the use of extrapolation in continuation methods like
+  // `ProblemType::InverseAnalysis` and `ProblemType::QuasiStatic` to obtain an
+  // improved initial guess for the Newton solver executed in each load step. In
+  // `ProblemType::InverseAnlysis`, the extrapolation is only used up until the
+  // point where the full load is applied.
   bool use_extrapolation_continuation;
 
-  // inverse analysis solver
-
-  // Export the initial reference configuration and the configuration being the solution of the
-  // inverse elasticity problem for visualization and use as additional mapping in forward problems.
-  bool inverse_analysis_export_configuration;
-
-  /**************************************************************************************/
-  /*                                                                                    */
-  /*                              SPATIAL DISCRETIZATION                                */
-  /*                                                                                    */
-  /**************************************************************************************/
+  /****************************************************************************/
+  /*                                                                          */
+  /* SPATIAL DISCRETIZATION                                                   */
+  /*                                                                          */
+  /****************************************************************************/
 
   // Grid data
   GridData grid;
@@ -220,13 +220,14 @@ public:
   // this parameter is only relevant if use_matrix_based_implementation == true
   SparseMatrixType sparse_matrix_type;
 
-  /**************************************************************************************/
-  /*                                                                                    */
-  /*                                       SOLVER                                       */
-  /*                                                                                    */
-  /**************************************************************************************/
+  /****************************************************************************/
+  /*                                                                          */
+  /* SOLVER                                                                   */
+  /*                                                                          */
+  /****************************************************************************/
 
-  // Inverse analysis solver parameters only relevant for `ProblemType::InverseAnalysis`.
+  // Inverse analysis solver parameters only relevant for
+  // `ProblemType::InverseAnalysis`.
   FixedPointSolver::Parameters inverse_analysis_solver_parameters;
   // acceleration methods used *in* or *after* ramp phase
   bool                                 inverse_analysis_use_separate_ramp_solver;
@@ -248,18 +249,20 @@ public:
 
   // Applies to time-dependent OR nonlinear problems: update of preconditioner
 
-  // Should the preconditioner be updated at all (set to false to never update the
-  // preconditioner)?
+  // Should the preconditioner be updated at all (set to false to never update
+  // the preconditioner)?
   bool update_preconditioner;
-  // If the above option is set to true, one can specify in more detail when to update
-  // the preconditioner exactly:
+  // If the above option is set to true, one can specify in more detail when to
+  // update the preconditioner exactly:
   // - every ... time steps (or load steps for QuasiStatic problems)
   unsigned int update_preconditioner_every_time_steps;
   // and within a time step or load step:
-  // - every ... Newton iterations (first update is invoked in the first Newton iteration)
+  // - every ... Newton iterations (first update is invoked in the first Newton
+  // iteration)
   unsigned int update_preconditioner_every_newton_iterations;
-  // - or once the Newton solver converged successfully (this option is currently used
-  // in order to avoid invalid deformation states in non-converged Newton iterations)
+  // - or once the Newton solver converged successfully (this option is
+  // currently used in order to avoid invalid deformation states in
+  // non-converged Newton iterations)
   bool update_preconditioner_once_newton_converged;
 
   // description: see declaration of MultigridData

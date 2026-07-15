@@ -47,6 +47,8 @@ struct OutputData : public OutputDataBase
       write_traction_local_full(false),
       write_traction_local_normal(false),
       write_traction_local_inplane(false),
+      write_inverse_analysis_vtu(false),
+      write_inverse_analysis_binary(false),
       deserialization_parameters(),
       restart_data(),
       deserialize_stress_qois(false)
@@ -67,6 +69,8 @@ struct OutputData : public OutputDataBase
     print_parameter(pcout, "Write traction: full", write_traction_local_full);
     print_parameter(pcout, "Write traction: normal", write_traction_local_normal);
     print_parameter(pcout, "Write traction: in-plane", write_traction_local_inplane);
+    print_parameter(pcout, "Write inverse analysis vtu", write_inverse_analysis_vtu);
+    print_parameter(pcout, "Write inverse analysis binary", write_inverse_analysis_binary);
   }
 
   // write displacement magnitude
@@ -91,7 +95,12 @@ struct OutputData : public OutputDataBase
   bool write_traction_local_normal;
   bool write_traction_local_inplane;
 
-  // `RestartData` and `DeserializationParameters` controlling the writing of snapshot data to file.
+  // Write the result of the inverse analysis to vtu and/or binary.
+  bool write_inverse_analysis_vtu;
+  bool write_inverse_analysis_binary;
+
+  // `RestartData` and `DeserializationParameters` controlling the writing of
+  // snapshot data to file.
   DeserializationParameters deserialization_parameters;
   RestartData               restart_data;
 

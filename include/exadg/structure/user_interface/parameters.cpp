@@ -66,13 +66,11 @@ Parameters::Parameters()
     // quasi-static solver
     load_increment(1.0),
 
-    // The inverse analysis and quasi static solvers use extrapolation during the load ramping to
-    // get an improved initial guess. This might be less robust than taking the previous load step's
-    // solution, and is hence optional.
+    // The inverse analysis and quasi static solvers use extrapolation during
+    // the load ramping to get an improved initial guess. This might be less
+    // robust than taking the previous load step's solution, and is hence
+    // optional.
     use_extrapolation_continuation(true),
-
-    // inverse_analysis solver
-    inverse_analysis_export_configuration(false),
 
     // SPATIAL DISCRETIZATION
     grid(GridData()),
@@ -98,7 +96,8 @@ Parameters::Parameters()
     update_preconditioner_once_newton_converged(false),
     multigrid_data(MultigridData())
 {
-  // Reset the acceleration method since `DriverInverseAnalysis` fills the data structure.
+  // Reset the acceleration method since `DriverInverseAnalysis` fills the data
+  // structure.
   inverse_analysis_solver_parameters.acceleration_method =
     FixedPointSolver::AccelerationMethod::Undefined;
 }

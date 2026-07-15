@@ -35,6 +35,7 @@
 #include <exadg/operators/structure_calculators.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
+#include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/spatial_discretization/interface.h>
 #include <exadg/structure/spatial_discretization/operators/body_force_operator.h>
 #include <exadg/structure/spatial_discretization/operators/linear_operator.h>
@@ -321,7 +322,7 @@ public:
    * is exported as well (in the same configuration).
    */
   void
-  export_configuration(std::string const & folder, VectorType const & vector) const final;
+  export_configuration(OutputData const & output_data, VectorType const & vector) const final;
 
   void
   get_reference_coordinates(VectorType & vector) const final;

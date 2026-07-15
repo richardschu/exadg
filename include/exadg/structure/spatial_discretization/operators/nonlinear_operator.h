@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/grid/mapping_dof_vector.h>
+#include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/spatial_discretization/operators/elasticity_operator_base.h>
 #ifdef DEAL_II_WITH_TRILINOS
 #  include <deal.II/lac/trilinos_sparse_matrix.h>
@@ -114,7 +115,7 @@ public:
    * configuration minus prestress displacement map). The vector, if non-empty, is exported as well.
    */
   void
-  export_configuration(std::string const & folder, VectorType const & vector) const;
+  export_configuration(OutputData const & output_data, VectorType const & vector) const;
 
   /**
    * Linearized operator: Returns the linearization vector.

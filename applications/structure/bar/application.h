@@ -252,9 +252,6 @@ private:
     this->param.force_material_residual = force_material_residual;
     this->param.stable_formulation      = stable_formulation;
 
-    this->param.inverse_analysis_export_configuration =
-      problem_type == ProblemType::InverseAnalysis and this->output_parameters.write;
-
     this->param.density = density;
     if(this->param.problem_type == ProblemType::Unsteady and weak_damping_coefficient > 0.0)
     {
@@ -715,6 +712,9 @@ private:
 
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree;
+
+    pp_data.output_data.write_inverse_analysis_vtu    = true;
+    pp_data.output_data.write_inverse_analysis_binary = true;
 
     pp_data.error_data.time_control_data.is_active        = true;
     pp_data.error_data.time_control_data.start_time       = start_time;

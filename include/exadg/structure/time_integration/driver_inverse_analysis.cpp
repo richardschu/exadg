@@ -133,17 +133,18 @@ DriverInverseAnalysis<dim, Number>::do_solve()
   // perform time loop
   double load_factor    = 0.0;
   double load_increment = param.load_increment;
-  // Step 0 is a pre step with a smaller load factor in order to make solving step 1 easier.
+  // Step 0 is a pre step with a smaller load factor in order to make solving
+  // step 1 easier.
   step_number = 0;
-  // In the first load step, we can not extrapolate the solution, so we solve the problem for a much
-  // smaller load factor and afterwards extrapolate the solution to the actual load factor in order
-  // to solve the first load step.
+  // In the first load step, we can not extrapolate the solution, so we solve
+  // the problem for a much smaller load factor and afterwards extrapolate the
+  // solution to the actual load factor in order to solve the first load step.
   double const reduction_load_factor_step_0 = 0.01;
   if(step_number == 0)
     load_increment *= reduction_load_factor_step_0;
 
-  // Define lambda functions for fixed-point iteration. Note that these lambda functions receive
-  // their arguments by reference.
+  // Define lambda functions for fixed-point iteration. Note that these lambda
+  // functions receive their arguments by reference.
   auto const lambda_set_up_vector = [&](VectorType & vector) {
     pde_operator->initialize_dof_vector(vector);
   };
@@ -151,8 +152,8 @@ DriverInverseAnalysis<dim, Number>::do_solve()
   auto const lambda_get_iterate = [&](VectorType & vector, unsigned int const iteration_counter) {
     (void)iteration_counter;
 
-    // We use extrapolation as long as the load is not fully applied, then we switch to using the
-    // initial guess provided by the acceleration scheme.
+    // We use extrapolation as long as the load is not fully applied, then we
+    // switch to using the initial guess provided by the acceleration scheme.
     if(param.use_extrapolation_continuation and
        load_factor + load_increment < 1.0 - eps_load_factor)
     {
@@ -191,7 +192,8 @@ DriverInverseAnalysis<dim, Number>::do_solve()
       param.update_preconditioner and
       ((this->step_number - 1) % param.update_preconditioner_every_time_steps == 0);
 
-    // compute displacement for current load factor, catch non-converging load step
+    // compute displacement for current load factor, catch non-converging load
+    // step
     bool         success       = false;
     unsigned int retry_counter = 0;
     while(not(success) and retry_counter <= param.inverse_analysis_max_retries_per_step)
@@ -212,7 +214,8 @@ DriverInverseAnalysis<dim, Number>::do_solve()
         solution = src;
         ++retry_counter;
 
-        // reduce load increment in factors of 2 until the current step can be solved successfully
+        // reduce load increment in factors of 2 until the current step can be
+        // solved successfully
         load_increment *= 0.5;
         pcout << std::endl
               << "  Could not solve non-linear problem. Reduce load increment to " << load_increment
@@ -235,9 +238,10 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     // copy solution vector to output
     dst = solution;
 
-    // The solution was adapted in the call to `solve_step()`, so the domain position is out of
-    // sync. However, we do not solve the problem before `lambda_set_iterate()` is called within the
-    // fixed point solver. In case the implementation is changed, we need to update the domain.
+    // The solution was adapted in the call to `solve_step()`, so the domain
+    // position is out of sync. However, we do not solve the problem before
+    // `lambda_set_iterate()` is called within the fixed point solver. In case
+    // the implementation is changed, we need to update the domain.
     bool constexpr force_domain_update = false;
     if(force_domain_update)
     {
@@ -255,7 +259,8 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     std::get<0>(iterations.second) += std::get<0>(iter);
     std::get<1>(iterations.second) += std::get<1>(iter);
 
-    // Load step control: prepare for next fixed point iteration; initial ramp followed by constant
+    // Load step control: prepare for next fixed point iteration; initial ramp
+    // followed by constant
     if(load_factor + load_increment >= 1.0 - eps_load_factor)
     {
       load_factor    = 1.0;
@@ -294,9 +299,9 @@ DriverInverseAnalysis<dim, Number>::do_solve()
   };
 
   auto const lambda_check_load_applied = [&](VectorType const & residual) {
-    // Check if the load will be *fully applied in next call* as the second fixed point solver
-    // starts with cleared history and does a relaxation step fist; this does *not* check the
-    // residual!
+    // Check if the load will be *fully applied in next call* as the second
+    // fixed point solver starts with cleared history and does a relaxation step
+    // first; this does *not* check the residual!
     (void)residual;
 
     bool const load_fully_applied = (load_factor + load_increment >= 1.0 - eps_load_factor);
@@ -304,8 +309,9 @@ DriverInverseAnalysis<dim, Number>::do_solve()
     return load_fully_applied;
   };
 
-  // Set up and execute fixed-point solver. Since we call `do_solve()` only once, there is no need
-  // to setup the `FixedPointSolver` in the constructor to track history over calls.
+  // Set up and execute fixed-point solver. Since we call `do_solve()` only
+  // once, there is no need to setup the `FixedPointSolver` in the constructor
+  // to track history over calls.
   if(param.inverse_analysis_use_separate_ramp_solver)
   {
     pcout << std::endl << "... executing loading phase ..." << std::endl;
@@ -456,22 +462,25 @@ DriverInverseAnalysis<dim, Number>::postprocessing(bool const errors_only,
   dealii::Timer timer;
   timer.restart();
 
-  // The solution postprocessed is the displacement vector describing the mapping from the initial
-  // reference configuration to the stress-free configuration. Since the `solution` is the solution
-  // to the forward elasticity problem from the iteratively updated current reference configuration,
-  // the vector`s sign is inverted for the standard output such that one can get the final reference
-  // configuration by mapping with the solution vector provided in the output.
+  // The solution postprocessed is the displacement vector describing the
+  // mapping from the initial reference configuration to the stress-free
+  // configuration. Since the `solution` is the solution to the forward
+  // elasticity problem from the iteratively updated current reference
+  // configuration, the vector`s sign is inverted for the standard output such
+  // that one can get the final reference configuration by mapping with the
+  // solution vector provided in the output.
   VectorType tmp(solution);
   tmp *= -1.0;
   postprocessor->do_postprocessing(tmp, errors_only);
 
-  // For comparison, output the current reference configuration considered and the `solution`
-  // vector. Mapping the current reference configuration with that vector will yield the initial
-  // reference configuration up to the specified tolerance. The mapping is not immediately available
-  // after setup, only after calling `NonLinearOperator::set_solution_linearization()`.
-  if(export_configuration and param.inverse_analysis_export_configuration)
+  // For comparison, output the current reference configuration considered and
+  // the `solution` vector. Mapping the current reference configuration with
+  // that vector will yield the initial reference configuration up to the
+  // specified tolerance. The mapping is not immediately available after setup,
+  // only after calling `NonLinearOperator::set_solution_linearization()`.
+  if(export_configuration)
   {
-    pde_operator->export_configuration(postprocessor->get_data().output_data.directory, solution);
+    pde_operator->export_configuration(postprocessor->get_data().output_data, solution);
   }
 
   timer_tree->insert({"DriverInverseAnalysis", "Postprocessing"}, timer.wall_time());

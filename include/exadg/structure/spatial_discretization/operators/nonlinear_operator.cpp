@@ -201,129 +201,141 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
 
 template<int dim, typename Number>
 void
-NonLinearOperator<dim, Number>::export_configuration(std::string const & folder,
-                                                     VectorType const &  vector) const
+NonLinearOperator<dim, Number>::export_configuration(OutputData const & output_data,
+                                                     VectorType const & vector) const
 {
-  AssertThrow(this->operator_data.spatial_integration or
-                this->operator_data.problem_type == ProblemType::InverseAnalysis,
-              dealii::ExcMessage("For the Lagrangian approach, use standard postprocessing "
-                                 "tools to map the grid by the solution vector."));
-
-  // Export current spatial or reference configuration.
-  dealii::DoFHandler<dim> const & dof_handler =
-    this->matrix_free->get_dof_handler(this->operator_data.dof_index);
-  dealii::Triangulation<dim> const & triangulation = dof_handler.get_triangulation();
-
-  unsigned int const n_subdivisions = dof_handler.get_fe().degree + 1;
-  MPI_Comm const     mpi_comm       = dof_handler.get_mpi_communicator();
-  std::string const  filename =
-    this->operator_data.spatial_integration ? "spatial_configuration" : "reference_configuration";
-
-  AssertThrow(mapping_spatial.get() != nullptr, dealii::ExcMessage("Mapping not initialized."));
-  if(vector.size() > 0)
+  if(output_data.write_inverse_analysis_vtu or output_data.write_inverse_analysis_binary)
   {
-    // A vector is given in the mapped configuration. This is typically the
-    // setting in inverse analysis: we have a mapped reference configuration,
-    // and the vector given maps to the initial reference configuration up to
-    // some tolerance. In general, any vector can be exported though.
-    AssertThrow(vector.size() == dof_handler.n_dofs(),
-                dealii::ExcMessage("Vector provided does not match the operator's DoFHandler."));
+    AssertThrow(this->operator_data.spatial_integration or
+                  this->operator_data.problem_type == ProblemType::InverseAnalysis,
+                dealii::ExcMessage("For the Lagrangian approach, use standard postprocessing "
+                                   "tools to map the grid by the solution vector."));
 
-    // Set up `VectorWriter` to export the vector in the mapped triangulation.
-    OutputDataBase output_data;
-    output_data.directory          = folder;
-    output_data.filename           = filename;
-    output_data.degree             = dof_handler.get_fe().degree;
-    output_data.write_higher_order = output_data.degree > 1;
+    dealii::DoFHandler<dim> const & dof_handler =
+      this->matrix_free->get_dof_handler(this->operator_data.dof_index);
+    dealii::Triangulation<dim> const & triangulation = dof_handler.get_triangulation();
+    MPI_Comm const                     mpi_comm      = dof_handler.get_mpi_communicator();
 
-    VectorWriter<dim, Number> vector_writer(output_data, 0 /* output_counter */, mpi_comm);
-    std::vector<std::string>  component_names(dim, "vector");
-    std::vector<bool>         component_is_part_of_vector(dim, true);
-    vector_writer.add_data_vector(vector,
-                                  dof_handler,
-                                  component_names,
-                                  component_is_part_of_vector);
-    vector_writer.write_pvtu(mapping_spatial->get_mapping().get());
-
-    // Export the vector to binary in the unmapped configuration for stability
-    // reasons. In the case of `ProblemType::InverseAnalysis`, the provided
-    // `vector` is the displacement from the current reference configuration to
-    // the initial reference configuration. Hence, to use it as a mapping in the
-    // forward solver, one would need to multiply by -1, which is not done here
-    // for the sake of generality.
-#if EXADG_WITH_EXADG_BIO
-    dealii::Mapping<dim> const & mapping_dummy =
-      dealii::get_default_linear_mapping<dim>(triangulation);
-    using NumberBinaryFile            = float;
-    std::string const filename_binary = "vector_in_unmapped_grid";
-    bool constexpr point_ordering_from_support_points = true;
-
-    ExaDG::MatchCellData::write_cell_data<dim, NumberBinaryFile, VectorType>(
-      vector,
-      folder,
-      filename_binary,
-      dof_handler.get_fe().degree,
-      dof_handler,
-      mapping_dummy,
-      1 /* sorting_direction */,
-      point_ordering_from_support_points,
-      false /* minimal_data */,
-      mpi_comm,
-      false /* print_data */);
-
-    bool constexpr read_binary = false;
-    if constexpr(read_binary)
+    if(output_data.write_inverse_analysis_vtu)
     {
-      // Read the vector again from binary format.
-      VectorType read_solution(vector);
-      read_solution = 0.0;
+      AssertThrow(mapping_spatial.get() != nullptr, dealii::ExcMessage("Mapping not initialized."));
+      std::string const filename = this->operator_data.spatial_integration ?
+                                     "spatial_configuration" :
+                                     "reference_configuration";
+      if(vector.size() > 0)
+      {
+        // A vector is given in the mapped configuration. This is typically the
+        // setting in inverse analysis: we have a mapped reference
+        // configuration, and the vector given maps to the initial reference
+        // configuration up to some tolerance. In general, any vector can be
+        // exported though.
+        AssertThrow(vector.size() == dof_handler.n_dofs(),
+                    dealii::ExcMessage(
+                      "Vector provided does not match the operator's DoFHandler."));
 
-      ExaDG::MatchCellData::read_cell_data<dim, NumberBinaryFile, VectorType>(
-        read_solution,
-        folder + filename_binary,
+        // Set up `VectorWriter` to export the vector in the mapped
+        // triangulation.
+        OutputDataBase output_data_inverse_analysis;
+        output_data_inverse_analysis.directory          = output_data.directory;
+        output_data_inverse_analysis.filename           = filename;
+        output_data_inverse_analysis.degree             = dof_handler.get_fe().degree;
+        output_data_inverse_analysis.write_higher_order = output_data_inverse_analysis.degree > 1;
+
+        VectorWriter<dim, Number> vector_writer(output_data_inverse_analysis,
+                                                0 /* output_counter */,
+                                                mpi_comm);
+        std::vector<std::string>  component_names(dim, "vector");
+        std::vector<bool>         component_is_part_of_vector(dim, true);
+        vector_writer.add_data_vector(vector,
+                                      dof_handler,
+                                      component_names,
+                                      component_is_part_of_vector);
+        vector_writer.write_pvtu(mapping_spatial->get_mapping().get());
+      }
+      else
+      {
+        // No vector given, just export the mapped triangulation. This is
+        // normally the case for the forward solve in the spatial configuration.
+        write_grid(triangulation,
+                   *mapping_spatial->get_mapping(),
+                   dof_handler.get_fe().degree + 1 /* n_subdivisions */,
+                   output_data.directory,
+                   filename,
+                   0 /* counter */,
+                   mpi_comm);
+      }
+
+      // Export initial reference configuration.
+      AssertThrow(mapping_undeformed.get() != nullptr,
+                  dealii::ExcMessage("mapping_undeformed not initialized."));
+      write_grid(triangulation,
+                 *mapping_undeformed,
+                 dof_handler.get_fe().degree + 1 /* n_subdivisions */,
+                 output_data.directory,
+                 "initial_reference_configuration",
+                 0 /* counter */,
+                 mpi_comm);
+    }
+
+    if(output_data.write_inverse_analysis_binary)
+    {
+      // Export the vector to binary in the unmapped configuration for stability
+      // reasons. In the case of `ProblemType::InverseAnalysis`, the provided
+      // `vector` is the displacement from the current reference configuration
+      // to the initial reference configuration. Hence, to use it as a mapping
+      // in the forward solver, one would need to multiply by -1, which is not
+      // done here for the sake of generality.
+#if EXADG_WITH_EXADG_BIO
+      dealii::Mapping<dim> const & mapping_dummy =
+        dealii::get_default_linear_mapping<dim>(triangulation);
+      using NumberBinaryFile                            = float;
+      std::string const filename_binary                 = "vector_in_unmapped_grid";
+      bool constexpr point_ordering_from_support_points = true;
+
+      ExaDG::MatchCellData::write_cell_data<dim, NumberBinaryFile, VectorType>(
+        vector,
+        output_data.directory,
+        filename_binary,
         dof_handler.get_fe().degree,
         dof_handler,
         mapping_dummy,
-        1e-6 /* point_tolerance */,
+        1 /* sorting_direction */,
         point_ordering_from_support_points,
-        dim /* n_components_read */,
+        false /* minimal_data */,
         mpi_comm,
-        false /*print_data*/);
+        false /* print_data */);
 
-      // Compute difference and log maximum absolute difference in entries.
-      read_solution -= vector;
-      double const linfty_norm = read_solution.linfty_norm();
-      if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+      bool constexpr read_binary = false;
+      if constexpr(read_binary)
       {
-        std::cout << "binary export re-read; norm check:\n"
-                  << "0 = ||vector_write - vector_read|| = " << linfty_norm << "\n";
-      }
-    }
-#endif
-  }
-  else
-  {
-    // No vector given, just export the mapped triangulation. This is typically
-    // the case for the forward solve in the spatial configuration.
-    write_grid(triangulation,
-               *mapping_spatial->get_mapping(),
-               n_subdivisions,
-               folder,
-               filename,
-               0 /* counter */,
-               mpi_comm);
-  }
+        // Read the vector again from binary format.
+        VectorType read_solution(vector);
+        read_solution = 0.0;
 
-  // Export initial reference configuration.
-  AssertThrow(mapping_undeformed.get() != nullptr,
-              dealii::ExcMessage("mapping_undeformed not initialized."));
-  write_grid(triangulation,
-             *mapping_undeformed,
-             n_subdivisions,
-             folder,
-             "initial_reference_configuration",
-             0 /* counter */,
-             mpi_comm);
+        ExaDG::MatchCellData::read_cell_data<dim, NumberBinaryFile, VectorType>(
+          read_solution,
+          output_data.directory + filename_binary,
+          dof_handler.get_fe().degree,
+          dof_handler,
+          mapping_dummy,
+          1e-6 /* point_tolerance */,
+          point_ordering_from_support_points,
+          dim /* n_components_read */,
+          mpi_comm,
+          false /*print_data*/);
+
+        // Compute difference and log maximum absolute difference in entries.
+        read_solution -= vector;
+        double const linfty_norm = read_solution.linfty_norm();
+        if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+        {
+          std::cout << "binary export re-read; norm check:\n"
+                    << "0 = ||vector_write - vector_read|| = " << linfty_norm << "\n";
+        }
+      }
+#endif
+    }
+  }
 }
 
 template<int dim, typename Number>

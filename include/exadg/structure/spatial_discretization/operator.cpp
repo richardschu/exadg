@@ -1367,18 +1367,19 @@ Operator<dim, Number>::set_solution_linearization(VectorType const & vector) con
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::export_configuration(std::string const & folder,
-                                            VectorType const &  vector) const
+Operator<dim, Number>::export_configuration(OutputData const & output_data,
+                                            VectorType const & vector) const
 {
   if(param.large_deformation)
   {
-    elasticity_operator_nonlinear.export_configuration(folder, vector);
+    elasticity_operator_nonlinear.export_configuration(output_data, vector);
   }
   else
   {
     AssertThrow(param.large_deformation == true,
                 dealii::ExcMessage("Exporting the configuration in the "
-                                   "small train case is not implemented."));
+                                   "small train case is not implemented. "
+                                   "Use standard output instead."));
   }
 }
 
