@@ -290,7 +290,7 @@ NonLinearOperator<dim, Number>::export_configuration(OutputData const & output_d
         dealii::get_default_linear_mapping<dim>(triangulation);
       using NumberBinaryFile                            = float;
       std::string const filename_binary                 = "vector_in_unmapped_grid";
-      bool constexpr point_ordering_from_support_points = true;
+      bool constexpr point_ordering_from_support_points = false;
 
       ExaDG::MatchCellData::write_cell_data<dim, NumberBinaryFile, VectorType>(
         vector,
