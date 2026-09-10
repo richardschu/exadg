@@ -149,31 +149,38 @@ private:
   // homogeneous direction for averaging in space
   unsigned int averaging_direction;
 
+  // We hold for each quantity global vectors for all lines and all points along
+  // the lines
+  // i) the accumulating time integral of values along the line
+  // and
+  // ii) instanteneous values of the last processed field
+
   // Velocity quantities
-  // For all lines: for all points along the line
-  std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_global;
+  std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_time_integral_global;
+  std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_last_global;
 
   // Skin Friction quantities
-  // For all lines: for all points along the line
-  std::vector<std::vector<double>> wall_shear_global;
+  std::vector<std::vector<double>> wall_shear_time_integral_global;
+  std::vector<std::vector<double>> wall_shear_last_global;
 
   // Reynolds Stress quantities
-  // For all lines: for all points along the line
-  std::vector<std::vector<dealii::SymmetricTensor<2, dim, double>>> reynolds_global;
+  std::vector<std::vector<dealii::SymmetricTensor<2, dim, double>>> reynolds_time_integral_global;
+  std::vector<std::vector<dealii::SymmetricTensor<2, dim, double>>> reynolds_last_global;
 
   // Dissipation quantities
-  // For all lines: for all points along the line
-  std::vector<std::vector<double>> dissipation_global; // = epsilon
+  std::vector<std::vector<double>> dissipation_time_integral_global; // = epsilon
+  std::vector<std::vector<double>> dissipation_last_global;          // = epsilon
 
   // Grid size quantities (he)
-  // For all lines: for all points along the line
-  std::vector<std::vector<double>> grid_size_global; //= he
+  std::vector<std::vector<double>> grid_size_time_integral_global; //= he
+  std::vector<std::vector<double>> grid_size_last_global;          //= he
 
   // Pressure quantities
-  // For all lines: for all points along the line
-  std::vector<std::vector<double>> pressure_global;
+  std::vector<std::vector<double>> pressure_time_integral_global;
+  std::vector<std::vector<double>> pressure_last_global;
   // For all lines
-  std::vector<double> reference_pressure_global;
+  std::vector<double> reference_pressure_time_integral_global;
+  std::vector<double> reference_pressure_last_global;
 
   // write final output
   bool write_final_output;
