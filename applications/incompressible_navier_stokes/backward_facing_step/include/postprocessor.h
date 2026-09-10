@@ -133,7 +133,10 @@ public:
            time, time_step_number))
       {
         // Choose standard averaging of samples over time integral average.
-        line_plot_calculator_statistics->evaluate(velocity, pressure, 1.0 /* time_step_size */);
+        line_plot_calculator_statistics->evaluate(velocity,
+                                                  pressure,
+                                                  time,
+                                                  1.0 /* time_step_size */);
       }
 
       if(line_plot_calculator_statistics->time_control_statistics.write_preliminary_results(

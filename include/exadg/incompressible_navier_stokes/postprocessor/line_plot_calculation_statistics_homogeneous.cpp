@@ -51,6 +51,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::LinePlotCalculatorStatisti
     mpi_comm(mpi_comm_in),
     number_of_samples(0),
     accumulated_time(0.0),
+    time_last(0.0),
     averaging_direction(2),
     write_final_output(false),
     rt_operator(nullptr)
@@ -747,9 +748,10 @@ void
 LinePlotCalculatorStatisticsHomogeneous<dim, Number>::evaluate(
   VectorType const & velocity,
   VectorType const & pressure,
+  double const       time,
   double const       time_step_size_for_sampling)
 {
-  do_evaluate(velocity, pressure, time_step_size_for_sampling);
+  do_evaluate(velocity, pressure, time, time_step_size_for_sampling);
 }
 
 
@@ -977,13 +979,15 @@ void
 LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
   VectorType const & velocity,
   VectorType const & pressure,
+  double const       time,
   double const       time_step_size_for_sampling)
 {
-  dealii::Timer time;
+  dealii::Timer timer;
   using VectorizedArrayType = dealii::VectorizedArray<Number>;
   // increment number of samples
   number_of_samples++;
   accumulated_time += time_step_size_for_sampling;
+  time_last = time;
 
   dealii::FiniteElement<dim> const & fe_u = dof_handler_velocity.get_fe();
 
@@ -1595,7 +1599,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
     offset_arrays += n_points_on_line;
   }
 
-  time_all += time.wall_time();
+  time_all += timer.wall_time();
 }
 
 
