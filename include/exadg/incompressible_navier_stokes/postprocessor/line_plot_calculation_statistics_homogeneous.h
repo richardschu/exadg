@@ -169,17 +169,26 @@ private:
 
   // We hold for each quantity global vectors for all lines and all points along
   // the lines
-  // i) the accumulating time integral of values along the line
-  // and
-  // ii) instanteneous values of the last processed field
+  // i) the accumulating time integral of values along the line,
+  // ii) instanteneous values of the last processed field, and
+  // iii) the instantaneous (not time-integrated) spatial variance of the last
+  //      processed field along the homogeneous direction. Since sample points
+  //      are not evenly spaced, we use the weighted variance
+  //      Var = (1/W) * sum_i w_i (mean - value_i)^2,
+  //      W = sum_i w_i,
+  //      with w_i the same quadrature/Jacobian weight used for the mean. Since
+  //      sum_i w_i*value_i = mean*W by definition of the mean, this yields
+  //      Var = <x^2>_z - mean^2, i.e., the weighted second moment minus mean^2.
 
   // Velocity quantities
   std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_time_integral_global;
   std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_last_global;
+  std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_variance_last_global;
 
   // Skin Friction quantities
   std::vector<std::vector<double>> wall_shear_time_integral_global;
   std::vector<std::vector<double>> wall_shear_last_global;
+  std::vector<std::vector<double>> wall_shear_variance_last_global;
 
   // Reynolds Stress quantities
   std::vector<std::vector<dealii::SymmetricTensor<2, dim, double>>> reynolds_time_integral_global;
@@ -188,14 +197,17 @@ private:
   // Dissipation quantities
   std::vector<std::vector<double>> dissipation_time_integral_global; // = epsilon
   std::vector<std::vector<double>> dissipation_last_global;          // = epsilon
+  std::vector<std::vector<double>> dissipation_variance_last_global; // = epsilon
 
   // Grid size quantities (he)
   std::vector<std::vector<double>> grid_size_time_integral_global; //= he
   std::vector<std::vector<double>> grid_size_last_global;          //= he
+  std::vector<std::vector<double>> grid_size_variance_last_global; //= he
 
   // Pressure quantities
   std::vector<std::vector<double>> pressure_time_integral_global;
   std::vector<std::vector<double>> pressure_last_global;
+  std::vector<std::vector<double>> pressure_variance_last_global;
   // For all lines
   std::vector<double> reference_pressure_time_integral_global;
   std::vector<double> reference_pressure_last_global;
