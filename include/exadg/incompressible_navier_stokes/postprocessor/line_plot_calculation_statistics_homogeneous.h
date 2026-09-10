@@ -84,7 +84,7 @@ public:
            double const       dt);
 
   void
-  write_output() const;
+  write_output(double const time) const;
 
   TimeControlStatistics time_control_statistics;
 
@@ -120,7 +120,7 @@ private:
                                    double &           pressure_local);
 
   void
-  do_write_output() const;
+  do_write_output(double const time) const;
 
   mutable bool clear_files;
 

@@ -33,6 +33,7 @@
 #include <exadg/incompressible_navier_stokes/postprocessor/line_plot_calculation_statistics_homogeneous.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operators/momentum_operator_rt.h>
 #include <exadg/utilities/create_directories.h>
+#include <exadg/utilities/filename_utilities.h>
 
 namespace ExaDG
 {
@@ -758,9 +759,9 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::evaluate(
 
 template<int dim, typename Number>
 void
-LinePlotCalculatorStatisticsHomogeneous<dim, Number>::write_output() const
+LinePlotCalculatorStatisticsHomogeneous<dim, Number>::write_output(double const time) const
 {
-  do_write_output();
+  do_write_output(time);
 }
 
 
@@ -1751,7 +1752,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::assert_all_line_points_are
 
 template<int dim, typename Number>
 void
-LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
+LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double const time) const
 {
   if(data.time_control_data_statistics.time_control_data.is_active and
      dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
@@ -1763,7 +1764,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
     unsigned int line_iterator = 0;
     for(const std::shared_ptr<Line<dim>> & line : data.lines)
     {
-      std::string filename_prefix = data.directory + line->name;
+      // Write a separate file for every call, distinguished by the simulation
+      // time, using enough significant digits to avoid overwriting files.
+      std::string filename_prefix =
+        data.directory + line->name + "_" + value_to_filename_string(time, precision);
 
       for(const std::shared_ptr<Quantity> & quantity : line->quantities)
       {

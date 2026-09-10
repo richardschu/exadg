@@ -162,7 +162,7 @@ public:
     if(line_plot_calculator_statistics->time_control_statistics.write_preliminary_results(
          time, time_step_number))
     {
-      line_plot_calculator_statistics->write_output();
+      line_plot_calculator_statistics->write_output(time);
     }
   }
 
