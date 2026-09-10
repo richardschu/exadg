@@ -772,7 +772,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::print_headline(
   unsigned int const number_of_samples) const
 {
   f << "number of samples: N = " << number_of_samples << " representing a time span of "
-    << accumulated_time << std::endl;
+    << accumulated_time << ", last evaluation at t = " << time_last << std::endl;
 }
 
 
@@ -1756,7 +1756,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
   if(data.time_control_data_statistics.time_control_data.is_active and
      dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
-    dealii::Timer      time;
+    dealii::Timer      timer;
     unsigned int const precision = data.precision;
 
     // Iterator for lines
@@ -1788,6 +1788,9 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
           for(unsigned int d = 0; d < dim; ++d)
             f << std::setw(precision + 8) << std::left
               << "u_" + dealii::Utilities::int_to_string(d + 1);
+          for(unsigned int d = 0; d < dim; ++d)
+            f << std::setw(precision + 8) << std::left
+              << "u_" + dealii::Utilities::int_to_string(d + 1) + "_last";
 
           f << std::endl;
 
@@ -1804,6 +1807,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             for(unsigned int d = 0; d < dim; ++d)
               f << std::setw(precision + 8) << std::left
                 << velocity_time_integral_global[line_iterator][p][d] / accumulated_time;
+
+            // write last computed (instantaneous) velocity
+            for(unsigned int d = 0; d < dim; ++d)
+              f << std::setw(precision + 8) << std::left
+                << velocity_last_global[line_iterator][p][d];
 
             f << std::endl;
           }
@@ -1838,6 +1846,15 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
                      dealii::Utilities::int_to_string(j + 1);
             }
           }
+          for(unsigned int i = 0; i < dim; ++i)
+          {
+            for(unsigned int j = i; j < dim; ++j)
+            {
+              f << std::setw(precision + 8) << std::left
+                << "u_" + dealii::Utilities::int_to_string(i + 1) + "u_" +
+                     dealii::Utilities::int_to_string(j + 1) + "_last";
+            }
+          }
           f << std::endl;
 
           // loop over all points
@@ -1857,6 +1874,18 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
                   << reynolds_time_integral_global[line_iterator][p][i][j] / accumulated_time -
                        (velocity_time_integral_global[line_iterator][p][i] / accumulated_time) *
                          (velocity_time_integral_global[line_iterator][p][j] / accumulated_time);
+              }
+            }
+
+            for(unsigned int i = 0; i < dim; ++i)
+            {
+              for(unsigned int j = i; j < dim; ++j)
+              {
+                // last computed (instantaneous) equivalent of <u_i' u_j'>
+                f << std::setw(precision + 8) << std::left
+                  << reynolds_last_global[line_iterator][p][i][j] -
+                       velocity_last_global[line_iterator][p][i] *
+                         velocity_last_global[line_iterator][p][j];
               }
             }
 
@@ -1887,7 +1916,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             f << std::setw(precision + 8) << std::left
               << "x_" + dealii::Utilities::int_to_string(d + 1);
 
-          f << std::setw(precision + 8) << std::left << "tau_w" << std::endl;
+          f << std::setw(precision + 8) << std::left << "tau_w";
+          f << std::setw(precision + 8) << std::left << "tau_w_last" << std::endl;
 
           // loop over all points
           for(unsigned int p = 0; p < line->n_points; ++p)
@@ -1902,6 +1932,10 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             double const viscosity = averaging_quantity->viscosity;
             f << std::setw(precision + 8) << std::left
               << viscosity * wall_shear_time_integral_global[line_iterator][p] / accumulated_time;
+
+            // last computed (instantaneous) wall shear stress
+            f << std::setw(precision + 8) << std::left
+              << viscosity * wall_shear_last_global[line_iterator][p];
 
             f << std::endl;
           }
@@ -1930,9 +1964,13 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
               << "x_" + dealii::Utilities::int_to_string(d + 1);
 
           f << std::setw(precision + 8) << std::left << "p";
+          f << std::setw(precision + 8) << std::left << "p_last";
 
           if(quantity->type == QuantityType::PressureCoefficient)
+          {
             f << std::setw(precision + 8) << std::left << "p-p_ref";
+            f << std::setw(precision + 8) << std::left << "p-p_ref_last";
+          }
 
           f << std::endl;
 
@@ -1946,13 +1984,21 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             f << std::setw(precision + 8) << std::left
               << pressure_time_integral_global[line_iterator][p] / accumulated_time;
 
+            // last computed (instantaneous) pressure
+            f << std::setw(precision + 8) << std::left << pressure_last_global[line_iterator][p];
+
             if(quantity->type == QuantityType::PressureCoefficient)
             {
               // p - p_ref -> C_p = (p - p_ref) / (1/2 rho u²)
-              f << std::left
+              f << std::setw(precision + 8) << std::left
                 << (pressure_time_integral_global[line_iterator][p] -
                     reference_pressure_time_integral_global[line_iterator]) /
                      accumulated_time;
+
+              // last computed (instantaneous) equivalent of p - p_ref
+              f << std::left
+                << pressure_last_global[line_iterator][p] -
+                     reference_pressure_last_global[line_iterator];
             }
             f << std::endl;
           }
@@ -1979,7 +2025,9 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
               << "x_" + dealii::Utilities::int_to_string(d + 1);
 
           f << std::setw(precision + 8) << std::left << "epsilon";
-          f << std::setw(precision + 8) << std::left << "h_e" << std::endl;
+          f << std::setw(precision + 8) << std::left << "epsilon_last";
+          f << std::setw(precision + 8) << std::left << "h_e";
+          f << std::setw(precision + 8) << std::left << "h_e_last" << std::endl;
 
           // loop over all points
           for(unsigned int p = 0; p < line->n_points; ++p)
@@ -1994,9 +2042,15 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
             f << std::setw(precision + 8) << std::left
               << dissipation_time_integral_global[line_iterator][p] / accumulated_time;
 
+            // write last computed (instantaneous) dissipation
+            f << std::setw(precision + 8) << std::left << dissipation_last_global[line_iterator][p];
+
             // write grid size and average over time
             f << std::setw(precision + 8) << std::left
               << grid_size_time_integral_global[line_iterator][p] / accumulated_time;
+
+            // write last computed (instantaneous) grid size
+            f << std::setw(precision + 8) << std::left << grid_size_last_global[line_iterator][p];
 
             f << std::endl;
           }
@@ -2005,7 +2059,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output() const
       }
       ++line_iterator;
     }
-    const_cast<double &>(time_all) += time.wall_time();
+    const_cast<double &>(time_all) += timer.wall_time();
     std::cout << "Accumulated " << number_of_samples
               << " samples on lines in a compute time of t = " << time_all << " s" << std::endl;
   }
