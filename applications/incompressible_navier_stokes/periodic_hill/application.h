@@ -1366,7 +1366,13 @@ private:
     my_pp_data.line_plot_data.time_control_data_statistics.time_control_data
       .trigger_every_time_steps = sample_every_timesteps;
     my_pp_data.line_plot_data.time_control_data_statistics
-      .write_preliminary_results_every_nth_time_step = sample_every_timesteps * 2000;
+      .write_preliminary_results_every_nth_time_step = sample_every_timesteps * 100;
+
+    // Reset the accumulated time-integral (mean) quantities every time line
+    // output is written, so that each set of line-plot files reflects only the
+    // time window since the previous write (rather than the running mean since
+    // sample_start_time).
+    my_pp_data.line_plot_data.reset_integral_on_write = true;
 
     // calculation of flow rate (use volume-based computation)
     my_pp_data.mean_velocity_data.calculate = true;
