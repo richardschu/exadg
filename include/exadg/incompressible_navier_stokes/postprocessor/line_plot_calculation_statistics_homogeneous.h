@@ -51,8 +51,8 @@ namespace IncNS
  * and one spatial, homogeneous direction (averaging_direction = {0,1,2}), e.g.,
  * in the x-direction with a line in the y-z plane.
  *
- * NOTE: This functionality can only be used for hypercube meshes and for geometries/meshes for
- * which the cells are aligned with the coordinate axis.
+ * NOTE: This functionality can only be used for hypercube meshes and for
+ * geometries/meshes for which the cells are aligned with the coordinate axis.
  */
 
 template<int dim, typename Number>
@@ -84,7 +84,7 @@ public:
            double const       dt);
 
   void
-  write_output(double const time) const;
+  write_output(double const time);
 
   TimeControlStatistics time_control_statistics;
 
@@ -122,6 +122,15 @@ private:
   void
   do_write_output(double const time) const;
 
+  /**
+   * Resets the state of the internal data used for the time-integral (mean)
+   * computation, i.e., the sample/time bookkeeping and the accumulated
+   * time-integral quantities for all lines. Called from `write_output()` if
+   * `data.reset_integral_on_write == true`.
+   */
+  void
+  reset_time_integral_data();
+
   mutable bool clear_files;
 
   dealii::DoFHandler<dim> const & dof_handler_velocity;
@@ -140,8 +149,8 @@ private:
                                     std::vector<std::pair<unsigned int, dealii::Point<dim>>>>>>
     cells_and_ref_points;
 
-  // For all lines: for pressure reference point: list of all relevant cells and points in ref
-  // coordinates
+  // For all lines: for pressure reference point: list of all relevant cells and
+  // points in ref coordinates
   std::vector<std::vector<
     std::pair<typename dealii::DoFHandler<dim>::active_cell_iterator, dealii::Point<dim>>>>
     cells_and_ref_points_ref_pressure;

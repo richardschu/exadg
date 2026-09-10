@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+// C/C++
+#include <algorithm>
+
 // deal.II
 #include <deal.II/base/timer.h>
 #include <deal.II/fe/fe_dgq.h>
@@ -759,9 +762,12 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::evaluate(
 
 template<int dim, typename Number>
 void
-LinePlotCalculatorStatisticsHomogeneous<dim, Number>::write_output(double const time) const
+LinePlotCalculatorStatisticsHomogeneous<dim, Number>::write_output(double const time)
 {
   do_write_output(time);
+
+  if(data.reset_integral_on_write)
+    reset_time_integral_data();
 }
 
 
@@ -2066,6 +2072,49 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double con
     const_cast<double &>(time_all) += timer.wall_time();
     std::cout << "Accumulated " << number_of_samples
               << " samples on lines in a compute time of t = " << time_all << " s" << std::endl;
+  }
+}
+
+
+
+template<int dim, typename Number>
+void
+LinePlotCalculatorStatisticsHomogeneous<dim, Number>::reset_time_integral_data()
+{
+  // Reset sample/time bookkeeping. `do_evaluate()` increments these identically
+  // on every rank, so the reset has to happen on every rank as well.
+  number_of_samples = 0;
+  accumulated_time  = 0.0;
+
+  // The accumulated time-integral quantities themselves are only allocated on
+  // rank 0 (see `setup()`), consistent with `do_evaluate()`.
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+  {
+    for(unsigned int line_iterator = 0; line_iterator < data.lines.size(); ++line_iterator)
+    {
+      std::fill(velocity_time_integral_global[line_iterator].begin(),
+                velocity_time_integral_global[line_iterator].end(),
+                dealii::Tensor<1, dim, double>());
+      std::fill(wall_shear_time_integral_global[line_iterator].begin(),
+                wall_shear_time_integral_global[line_iterator].end(),
+                0.0);
+      std::fill(reynolds_time_integral_global[line_iterator].begin(),
+                reynolds_time_integral_global[line_iterator].end(),
+                dealii::SymmetricTensor<2, dim, double>());
+      std::fill(dissipation_time_integral_global[line_iterator].begin(),
+                dissipation_time_integral_global[line_iterator].end(),
+                0.0);
+      std::fill(grid_size_time_integral_global[line_iterator].begin(),
+                grid_size_time_integral_global[line_iterator].end(),
+                0.0);
+      std::fill(pressure_time_integral_global[line_iterator].begin(),
+                pressure_time_integral_global[line_iterator].end(),
+                0.0);
+    }
+
+    std::fill(reference_pressure_time_integral_global.begin(),
+              reference_pressure_time_integral_global.end(),
+              0.0);
   }
 }
 
