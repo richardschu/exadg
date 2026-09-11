@@ -1479,10 +1479,14 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
                 dissipation_local[offset_arrays + p] += dissipation[v];
                 dissipation_sq_local[offset_arrays + p] += dissipation_sq[v];
 
-                VectorizedArrayType local_he =
-                  std::pow(Number(1.0) / std::abs(determinant(inv_jac)), Number(1.0 / 3.0));
+                // Grid size only changes if the mesh moves.
+                if(data.ale_formulation or number_of_samples == 1)
+                {
+                  VectorizedArrayType local_he =
+                    std::pow(Number(1.0) / std::abs(determinant(inv_jac)), Number(1.0 / 3.0));
 
-                grid_size_local[offset_arrays + p] += local_he[v] * det[v];
+                  grid_size_local[offset_arrays + p] += local_he[v] * det[v];
+                }
               }
             }
           }
@@ -1651,7 +1655,8 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
       {
         mpi_sum_at_root(dissipation_local.data() + offset_arrays, n_points_on_line, mpi_comm);
         mpi_sum_at_root(dissipation_sq_local.data() + offset_arrays, n_points_on_line, mpi_comm);
-        mpi_sum_at_root(grid_size_local.data() + offset_arrays, n_points_on_line, mpi_comm);
+        if(data.ale_formulation or number_of_samples == 1)
+          mpi_sum_at_root(grid_size_local.data() + offset_arrays, n_points_on_line, mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
           for(unsigned int p = 0; p < n_points_on_line; ++p)
@@ -1669,9 +1674,18 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
                 mean * mean;
             }
 
-            grid_size_time_integral_global[line][p] +=
-              (grid_size_local[offset_arrays + p] / length_local[offset_arrays + p]) *
-              time_step_size_for_sampling;
+            if(data.ale_formulation)
+            {
+              grid_size_time_integral_global[line][p] +=
+                (grid_size_local[offset_arrays + p] / length_local[offset_arrays + p]) *
+                time_step_size_for_sampling;
+            }
+            else if(number_of_samples == 1)
+            {
+              // Store the value directly for a static mesh.
+              grid_size_time_integral_global[line][p] =
+                grid_size_local[offset_arrays + p] / length_local[offset_arrays + p];
+            }
           }
       }
     }
@@ -2155,9 +2169,11 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double con
             f << std::setw(precision + 8) << std::left
               << dissipation_variance_last_global[line_iterator][p];
 
-            // write grid size and average over time
+            // write grid size: time-averaged if mesh moves, otherwise plain value
             f << std::setw(precision + 8) << std::left
-              << grid_size_time_integral_global[line_iterator][p] / accumulated_time;
+              << (data.ale_formulation ?
+                    grid_size_time_integral_global[line_iterator][p] / accumulated_time :
+                    grid_size_time_integral_global[line_iterator][p]);
 
             f << std::endl;
           }

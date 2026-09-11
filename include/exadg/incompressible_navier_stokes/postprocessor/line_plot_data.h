@@ -255,6 +255,11 @@ struct LinePlotDataStatistics : public LinePlotDataBase<dim>
    */
   bool reset_integral_on_write = false;
 
+  /*
+   * Flag for ALE formulation; mesh is non-static in this case.
+   */
+  bool ale_formulation = true;
+
   void
   print(dealii::ConditionalOStream & pcout)
   {

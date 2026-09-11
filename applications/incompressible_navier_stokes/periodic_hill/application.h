@@ -1406,6 +1406,10 @@ private:
     // sample_start_time).
     my_pp_data.line_plot_data.reset_integral_on_write = true;
 
+    // Grid-size-dependent quantities do not need to be recomputed/time-averaged
+    // every sample when the mesh is static.
+    my_pp_data.line_plot_data.ale_formulation = this->param.ale_formulation;
+
     // calculation of flow rate (use volume-based computation)
     my_pp_data.mean_velocity_data.calculate = true;
     my_pp_data.mean_velocity_data.directory =
