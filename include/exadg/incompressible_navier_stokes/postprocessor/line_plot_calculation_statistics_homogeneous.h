@@ -180,10 +180,11 @@ private:
   //      sum_i w_i*value_i = mean*W by definition of the mean, this yields
   //      Var = <x^2>_z - mean^2, i.e., the weighted second moment minus mean^2.
 
-  // Velocity quantities
+  // Velocity quantities. Note that the spatial variance of the velocity is not stored
+  // separately, since it is identical to the diagonal entries of the Reynolds stresses
+  // (`reynolds_last_global[d][d] - velocity_last_global[d] * velocity_last_global[d]`).
   std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_time_integral_global;
   std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_last_global;
-  std::vector<std::vector<dealii::Tensor<1, dim, double>>> velocity_variance_last_global;
 
   // Skin Friction quantities
   std::vector<std::vector<double>> wall_shear_time_integral_global;

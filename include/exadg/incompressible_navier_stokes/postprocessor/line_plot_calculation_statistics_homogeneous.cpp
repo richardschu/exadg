@@ -198,7 +198,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
 
     velocity_time_integral_global.resize(data.lines.size());
     velocity_last_global.resize(data.lines.size());
-    velocity_variance_last_global.resize(data.lines.size());
 
     wall_shear_time_integral_global.resize(data.lines.size());
     wall_shear_last_global.resize(data.lines.size());
@@ -248,7 +247,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       {
         velocity_time_integral_global[line_iterator].resize(line->n_points);
         velocity_last_global[line_iterator].resize(line->n_points);
-        velocity_variance_last_global[line_iterator].resize(line->n_points);
 
         pressure_time_integral_global[line_iterator].resize(line->n_points);
         pressure_last_global[line_iterator].resize(line->n_points);
@@ -506,7 +504,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
 
     velocity_time_integral_global.resize(data.lines.size());
     velocity_last_global.resize(data.lines.size());
-    velocity_variance_last_global.resize(data.lines.size());
 
     wall_shear_time_integral_global.resize(data.lines.size());
     wall_shear_last_global.resize(data.lines.size());
@@ -556,7 +553,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
       {
         velocity_time_integral_global[line_iterator].resize(line->n_points);
         velocity_last_global[line_iterator].resize(line->n_points);
-        velocity_variance_last_global[line_iterator].resize(line->n_points);
 
         pressure_time_integral_global[line_iterator].resize(line->n_points);
         pressure_last_global[line_iterator].resize(line->n_points);
@@ -1071,13 +1067,13 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
   // not evenly spaced), used to compute the instantaneous (not time-integrated) spatial
   // variance for the current sample as Var = <x^2>_z - mean^2, where `mean` is the
   // (weighted) mean already computed above and <x^2>_z is this second moment normalized
-  // by the same weight sum as the mean (`length_local` for velocity, skin friction, and
-  // dissipation; `pressure_weight_local` for pressure).
-  std::vector<dealii::Tensor<1, dim, double>> velocity_sq_local(total_length);
-  std::vector<double>                         wall_shear_sq_local(total_length);
-  std::vector<double>                         dissipation_sq_local(total_length);
-  std::vector<double>                         pressure_sq_local(total_length);
-  std::vector<double>                         pressure_weight_local(total_length);
+  // by the same weight sum as the mean (`length_local` for skin friction and dissipation;
+  // `pressure_weight_local` for pressure). Velocity has no such vector since its variance
+  // is identical to the diagonal entries of the Reynolds stresses.
+  std::vector<double> wall_shear_sq_local(total_length);
+  std::vector<double> dissipation_sq_local(total_length);
+  std::vector<double> pressure_sq_local(total_length);
+  std::vector<double> pressure_weight_local(total_length);
 
   // use quadrature for averaging in homogeneous direction
   const unsigned int              n_q_points_1d = fe_u.degree + 1;
@@ -1311,7 +1307,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
 
           const VectorizedArrayType                            length = det;
           dealii::Tensor<1, dim, VectorizedArrayType>          vel;
-          dealii::Tensor<1, dim, VectorizedArrayType>          vel_sq;
           dealii::SymmetricTensor<2, dim, VectorizedArrayType> reynolds;
           VectorizedArrayType                                  skin_friction    = 0;
           VectorizedArrayType                                  skin_friction_sq = 0;
@@ -1392,10 +1387,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
                 if(quantity->type == QuantityType::Velocity)
                 {
                   for(unsigned int d = 0; d < dim; ++d)
-                  {
                     vel[d] += velocity_interpolated[d] * JxW;
-                    vel_sq[d] += velocity_interpolated[d] * velocity_interpolated[d] * JxW;
-                  }
                 }
                 else if(quantity->type == QuantityType::ReynoldsStresses)
                 {
@@ -1458,10 +1450,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
               if(quantity->type == QuantityType::Velocity)
               {
                 for(unsigned int d = 0; d < dim; ++d)
-                {
                   velocity_local[offset_arrays + p][d] += vel[d][v];
-                  velocity_sq_local[offset_arrays + p][d] += vel_sq[d][v];
-                }
               }
               else if(quantity->type == QuantityType::ReynoldsStresses)
               {
@@ -1570,7 +1559,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
       if(quantity->type == QuantityType::Velocity)
       {
         mpi_sum_at_root(&velocity_local[offset_arrays][0], n_points_on_line * dim, mpi_comm);
-        mpi_sum_at_root(&velocity_sq_local[offset_arrays][0], n_points_on_line * dim, mpi_comm);
 
         if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
           for(unsigned int p = 0; p < n_points_on_line; ++p)
@@ -1580,17 +1568,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
               time_step_size_for_sampling;
             velocity_last_global[line][p] =
               velocity_local[offset_arrays + p] / length_local[offset_arrays + p];
-
-            // weighted (by the same quadrature/Jacobian weight as the mean) spatial
-            // variance along the homogeneous direction for the current sample:
-            // Var = <x^2>_z - mean^2
-            for(unsigned int d = 0; d < dim; ++d)
-            {
-              double const mean = velocity_last_global[line][p][d];
-              velocity_variance_last_global[line][p][d] =
-                velocity_sq_local[offset_arrays + p][d] / length_local[offset_arrays + p] -
-                mean * mean;
-            }
           }
       }
       else if(quantity->type == QuantityType::ReynoldsStresses)
@@ -1887,9 +1864,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double con
           for(unsigned int d = 0; d < dim; ++d)
             f << std::setw(precision + 8) << std::left
               << "u_" + dealii::Utilities::int_to_string(d + 1) + "_last";
-          for(unsigned int d = 0; d < dim; ++d)
-            f << std::setw(precision + 8) << std::left
-              << "u_" + dealii::Utilities::int_to_string(d + 1) + "_variance";
 
           f << std::endl;
 
@@ -1911,11 +1885,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double con
             for(unsigned int d = 0; d < dim; ++d)
               f << std::setw(precision + 8) << std::left
                 << velocity_last_global[line_iterator][p][d];
-
-            // write discrete variance along the homogeneous direction for the last sample
-            for(unsigned int d = 0; d < dim; ++d)
-              f << std::setw(precision + 8) << std::left
-                << velocity_variance_last_global[line_iterator][p][d];
 
             f << std::endl;
           }
