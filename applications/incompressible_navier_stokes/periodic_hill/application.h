@@ -656,10 +656,10 @@ private:
     this->param.turbulence_model_data.constant = 1.35;
 
     // RESTART
-    this->param.restarted_simulation                        = read_restart;
-    this->param.restart_data.write_restart                  = write_restart;
-    this->param.restart_data.write_vectors_to_vtu           = this->output_parameters.write;
-    this->param.restart_data.interval_time                  = restart_interval_time;
+    this->param.restarted_simulation              = read_restart;
+    this->param.restart_data.write_restart        = write_restart;
+    this->param.restart_data.write_vectors_to_vtu = false; // this->output_parameters.write;
+    this->param.restart_data.interval_time        = restart_interval_time;
     this->param.restart_data.directory_coarse_triangulation = restart_directory;
     this->param.restart_data.directory_read                 = restart_directory;
     this->param.restart_data.directory_write                = this->output_parameters.directory;
@@ -1493,7 +1493,7 @@ private:
   bool        read_restart               = false;
   double      restart_interval_time      = 8.0 * flow_through_time;
   double      restart_interval_wall_time = std::numeric_limits<double>::max();
-  std::string restart_directory          = "./output/";
+  std::string restart_directory          = "./output/periodic_hill_span_0/";
 
   // sampling
   bool         calculate_statistics        = true;
