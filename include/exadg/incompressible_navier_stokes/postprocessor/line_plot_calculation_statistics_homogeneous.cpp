@@ -1382,10 +1382,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
 
                 if(need_skin_friction)
                 {
-                  VectorizedArrayType tau_w_q = 0.0;
-                  for(unsigned int d = 0; d < dim; ++d)
-                    for(unsigned int e = 0; e < dim; ++e)
-                      tau_w_q += tangent[d] * velocity_gradient_interpolated[d][e] * normal[e];
+                  VectorizedArrayType tau_w_q = tangent * (velocity_gradient_interpolated * normal);
 
                   skin_friction += tau_w_q * JxW;
                   skin_friction_sq += tau_w_q * tau_w_q * JxW;
@@ -1439,9 +1436,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
               }
               if(need_skin_friction)
               {
-                for(unsigned int d = 0; d < dim; ++d)
-                  for(unsigned int e = 0; e < dim; ++e)
-                    skin_friction += tangent[d] * grad[d][e] * normal[e];
+                skin_friction += tangent * (grad * normal);
               }
             }
             else
