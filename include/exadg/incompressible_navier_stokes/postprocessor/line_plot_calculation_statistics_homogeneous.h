@@ -201,7 +201,6 @@ private:
 
   // Grid size quantities (he)
   std::vector<std::vector<double>> grid_size_time_integral_global; //= he
-  std::vector<std::vector<double>> grid_size_last_global;          //= he
 
   // Pressure quantities
   std::vector<std::vector<double>> pressure_time_integral_global;

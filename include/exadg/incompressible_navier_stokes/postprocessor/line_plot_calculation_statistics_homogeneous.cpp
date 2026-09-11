@@ -219,7 +219,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     dissipation_variance_last_global.resize(data.lines.size());
 
     grid_size_time_integral_global.resize(data.lines.size());
-    grid_size_last_global.resize(data.lines.size());
 
     // make sure that line type is correct
     std::shared_ptr<LineHomogeneousAveraging<dim>> line_hom =
@@ -267,7 +266,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         dissipation_variance_last_global[line_iterator].resize(line->n_points);
 
         grid_size_time_integral_global[line_iterator].resize(line->n_points);
-        grid_size_last_global[line_iterator].resize(line->n_points);
       }
 
       // initialize global_points: use equidistant points along line
@@ -529,7 +527,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
     dissipation_variance_last_global.resize(data.lines.size());
 
     grid_size_time_integral_global.resize(data.lines.size());
-    grid_size_last_global.resize(data.lines.size());
 
     // make sure that line type is correct
     std::shared_ptr<LineHomogeneousAveraging<dim>> line_hom =
@@ -577,7 +574,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::setup(
         dissipation_variance_last_global[line_iterator].resize(line->n_points);
 
         grid_size_time_integral_global[line_iterator].resize(line->n_points);
-        grid_size_last_global[line_iterator].resize(line->n_points);
       }
 
       // initialize global_points: use equidistant points along line
@@ -1676,8 +1672,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_evaluate(
             grid_size_time_integral_global[line][p] +=
               (grid_size_local[offset_arrays + p] / length_local[offset_arrays + p]) *
               time_step_size_for_sampling;
-            grid_size_last_global[line][p] =
-              grid_size_local[offset_arrays + p] / length_local[offset_arrays + p];
           }
       }
     }
@@ -2139,8 +2133,7 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double con
           f << std::setw(precision + 8) << std::left << "epsilon";
           f << std::setw(precision + 8) << std::left << "epsilon_last";
           f << std::setw(precision + 8) << std::left << "epsilon_variance";
-          f << std::setw(precision + 8) << std::left << "h_e";
-          f << std::setw(precision + 8) << std::left << "h_e_last" << std::endl;
+          f << std::setw(precision + 8) << std::left << "h_e" << std::endl;
 
           // loop over all points
           for(unsigned int p = 0; p < line->n_points; ++p)
@@ -2165,9 +2158,6 @@ LinePlotCalculatorStatisticsHomogeneous<dim, Number>::do_write_output(double con
             // write grid size and average over time
             f << std::setw(precision + 8) << std::left
               << grid_size_time_integral_global[line_iterator][p] / accumulated_time;
-
-            // write last computed (instantaneous) grid size
-            f << std::setw(precision + 8) << std::left << grid_size_last_global[line_iterator][p];
 
             f << std::endl;
           }
