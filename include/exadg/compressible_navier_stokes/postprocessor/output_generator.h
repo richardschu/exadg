@@ -112,6 +112,10 @@ private:
   dealii::ObserverPointer<dealii::DoFHandler<dim> const> dof_handler;
   dealii::ObserverPointer<dealii::Mapping<dim> const>    mapping;
   OutputData                                             output_data;
+
+  // Accumulates (time, filename) pairs written so far, used to keep the `.pvd` record
+  // (ParaView's source of the actual simulation time for a vtu/pvtu file series) up to date.
+  std::vector<std::pair<double, std::string>> times_and_names;
 };
 
 } // namespace CompNS

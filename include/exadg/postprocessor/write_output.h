@@ -27,6 +27,8 @@
 
 // deal.II
 #include <deal.II/base/bounding_box.h>
+#include <deal.II/base/data_out_base.h>
+#include <deal.II/base/mpi.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/grid/grid_generator.h>
@@ -156,6 +158,23 @@ write_points_in_dummy_triangulation(std::vector<dealii::Point<dim>> const & poin
     particle_dummy_tria, particle_dummy_mapping, points, folder, file, counter, mpi_comm);
 }
 
+// Appends `(time, filename)` to `times_and_names` and (re-)writes a `.pvd` record file on rank 0 used by ParaView to associate a vtu file with simulation time.
+inline void
+update_pvd_record(std::vector<std::pair<double, std::string>> & times_and_names,
+                   double const                                  time,
+                   std::string const &                           filename,
+                   std::string const &                           directory,
+                   std::string const &                           file,
+                   MPI_Comm const &                               mpi_comm)
+{
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+  {
+    times_and_names.emplace_back(time, filename);
+    std::ofstream pvd_output(directory + file + ".pvd");
+    dealii::DataOutBase::write_pvd_record(pvd_output, times_and_names);
+  }
+}
+
 template<int dim, typename Number>
 class VectorWriter
 {
@@ -261,7 +280,8 @@ public:
     }
   }
 
-  void
+  // Write pvtu output and return the (directory-less) name of the pvtu record so that callers can accumulate it into a `.pvd` file via `update_pvd_record()`.
+  std::string
   write_pvtu(dealii::Mapping<dim> const * mapping = nullptr)
   {
     // Build patches, vectors to export must stay in scope until after this call.
@@ -277,7 +297,7 @@ public:
     }
 
     unsigned int constexpr n_groups = 4;
-    data_out.write_vtu_with_pvtu_record(
+    return data_out.write_vtu_with_pvtu_record(
       output_data.directory, output_data.filename, output_counter, mpi_comm, n_groups);
   }
 
