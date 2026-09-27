@@ -152,7 +152,7 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
 
   // setup postprocessor
   postprocessor = application->create_postprocessor();
-  postprocessor->setup(*pde_operator);
+  postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
   // setup time integrator before calling setup_solvers (this is necessary since the setup
   // of the solvers depends on quantities such as the time_step_size or gamma0!)

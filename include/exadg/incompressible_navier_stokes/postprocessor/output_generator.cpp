@@ -38,14 +38,15 @@ void
 OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_velocity_in,
                                     dealii::DoFHandler<dim> const & dof_handler_pressure_in,
                                     dealii::Mapping<dim> const &    mapping_in,
-                                    OutputData const &              output_data_in)
+                                    OutputData const &              output_data_in,
+                                    bool const                      restarted_simulation)
 {
   dof_handler_velocity = &dof_handler_velocity_in;
   dof_handler_pressure = &dof_handler_pressure_in;
   mapping              = &mapping_in;
   output_data          = output_data_in;
 
-  time_control.setup(output_data_in.time_control_data);
+  time_control.setup(output_data_in.time_control_data, restarted_simulation);
 
   if(output_data.time_control_data.is_active)
   {

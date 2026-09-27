@@ -145,7 +145,8 @@ LiftAndDragCalculator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_ha
                                           unsigned int const      dof_index_velocity_in,
                                           unsigned int const      dof_index_pressure_in,
                                           unsigned int const      quad_index_in,
-                                          LiftAndDragData const & data_in)
+                                          LiftAndDragData const & data_in,
+                                          bool const              restarted_simulation)
 {
   dof_handler_velocity = &dof_handler_velocity_in;
   matrix_free          = &matrix_free_in;
@@ -154,7 +155,7 @@ LiftAndDragCalculator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_ha
   quad_index           = quad_index_in;
   data                 = data_in;
 
-  time_control.setup(data_in.time_control_data);
+  time_control.setup(data_in.time_control_data, restarted_simulation);
 
   if(data_in.boundary_IDs.size() > 0)
     create_directories(data.directory, mpi_comm);

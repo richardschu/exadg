@@ -59,7 +59,7 @@ public:
   virtual ~PostProcessor();
 
   void
-  setup(Operator<dim, Number> const & pde_operator) override;
+  setup(Operator<dim, Number> const & pde_operator, bool const restarted_simulation) override;
 
   void
   do_postprocessing(VectorType const &     solution,

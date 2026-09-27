@@ -88,7 +88,8 @@ public:
         unsigned int const                      dof_index_velocity_in,
         unsigned int const                      dof_index_pressure_in,
         unsigned int const                      quad_index_in,
-        LiftAndDragData const &                 lift_and_drag_data_in);
+        LiftAndDragData const &                 lift_and_drag_data_in,
+        bool const                              restarted_simulation);
 
   void
   evaluate(VectorType const & velocity, VectorType const & pressure, double const time) const;

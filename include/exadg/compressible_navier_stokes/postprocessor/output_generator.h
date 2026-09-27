@@ -95,7 +95,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const & dof_handler_in,
         dealii::Mapping<dim> const &    mapping_in,
-        OutputData const &              output_data_in);
+        OutputData const &              output_data_in,
+        bool const                      restarted_simulation);
 
   void
   evaluate(

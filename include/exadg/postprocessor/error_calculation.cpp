@@ -122,13 +122,14 @@ template<int dim, typename Number>
 void
 ErrorCalculator<dim, Number>::setup(dealii::DoFHandler<dim> const &   dof_handler_in,
                                     dealii::Mapping<dim> const &      mapping_in,
-                                    ErrorCalculationData<dim> const & error_data_in)
+                                    ErrorCalculationData<dim> const & error_data_in,
+                                    bool const                        restarted_simulation)
 {
   dof_handler = &dof_handler_in;
   mapping     = &mapping_in;
   error_data  = error_data_in;
 
-  time_control.setup(error_data_in.time_control_data);
+  time_control.setup(error_data_in.time_control_data, restarted_simulation);
 
   if(error_data.analytical_solution and error_data.write_errors_to_file)
     create_directories(error_data.directory, mpi_comm);

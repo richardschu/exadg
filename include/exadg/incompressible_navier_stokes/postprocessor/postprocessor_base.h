@@ -51,8 +51,9 @@ public:
   /*
    * Setup function.
    */
+  // `restarted_simulation` indicates a restarted simulation, see `TimeControl::setup()`.
   virtual void
-  setup(Operator const & pde_operator) = 0;
+  setup(Operator const & pde_operator, bool const restarted_simulation) = 0;
 };
 
 } // namespace IncNS

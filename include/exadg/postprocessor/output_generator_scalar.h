@@ -44,7 +44,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const & dof_handler_in,
         dealii::Mapping<dim> const &    mapping_in,
-        OutputDataBase const &          output_data_in);
+        OutputDataBase const &          output_data_in,
+        bool const                      restarted_simulation);
 
   void
   evaluate(VectorType const & solution, double const time, bool const unsteady);

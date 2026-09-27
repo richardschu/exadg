@@ -57,7 +57,7 @@ public:
 
     // initialize postprocessor
     postprocessor = application->create_postprocessor();
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     // initialize time integrator
     time_integrator = std::make_shared<Acoustics::TimeIntAdamsBashforthMoulton<Number>>(

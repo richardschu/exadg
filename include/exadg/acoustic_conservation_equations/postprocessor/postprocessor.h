@@ -61,7 +61,7 @@ public:
   PostProcessor(PostProcessorData<dim> const & postprocessor_data, MPI_Comm const & mpi_comm);
 
   void
-  setup(AcousticsOperator const & pde_operator) final;
+  setup(AcousticsOperator const & pde_operator, bool const restarted_simulation) final;
 
   void
   do_postprocessing(BlockVectorType const & solution,

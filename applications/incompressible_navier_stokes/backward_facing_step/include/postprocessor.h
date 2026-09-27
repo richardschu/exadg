@@ -62,10 +62,10 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     // turbulent channel statistics for precursor simulation
     if(pp_data_bfs.turb_ch_data.time_control_data_statistics.time_control_data.is_active)
@@ -73,7 +73,9 @@ public:
       statistics_turb_ch.reset(new StatisticsManager<dim, Number>(pde_operator.get_dof_handler_u(),
                                                                   *pde_operator.get_mapping()));
 
-      statistics_turb_ch->setup(&Geometry::grid_transform_turb_channel, pp_data_bfs.turb_ch_data);
+      statistics_turb_ch->setup(&Geometry::grid_transform_turb_channel,
+                                pp_data_bfs.turb_ch_data,
+                                restarted_simulation);
     }
 
     // inflow data
@@ -93,7 +95,7 @@ public:
                                                                  *pde_operator.get_mapping(),
                                                                  this->mpi_comm));
 
-      line_plot_calculator_statistics->setup(pp_data_bfs.line_plot_data);
+      line_plot_calculator_statistics->setup(pp_data_bfs.line_plot_data, restarted_simulation);
     }
   }
 

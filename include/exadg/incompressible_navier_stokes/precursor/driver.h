@@ -88,7 +88,7 @@ public:
 
     // setup postprocessor
     postprocessor = domain->create_postprocessor();
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, domain->get_parameters().restarted_simulation);
 
     // Setup time integrator
     time_integrator = create_time_integrator<dim, Number>(

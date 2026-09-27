@@ -131,16 +131,16 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     // perform setup of turbulent channel related things
     statistics_turb_ch.reset(new StatisticsManager<dim, Number>(pde_operator.get_dof_handler_u(),
                                                                 *pde_operator.get_mapping()));
 
-    statistics_turb_ch->setup(&grid_transform_y, turb_ch_data);
+    statistics_turb_ch->setup(&grid_transform_y, turb_ch_data, restarted_simulation);
   }
 
   void

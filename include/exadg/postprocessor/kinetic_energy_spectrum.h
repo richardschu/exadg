@@ -119,7 +119,8 @@ public:
   void
   setup(dealii::MatrixFree<dim, Number> const & matrix_free_data_in,
         dealii::DoFHandler<dim> const &         dof_handler_in,
-        KineticEnergySpectrumData const &       data_in);
+        KineticEnergySpectrumData const &       data_in,
+        bool const                              restarted_simulation);
 
   void
   evaluate(VectorType const & velocity, double const time, bool const unsteady);

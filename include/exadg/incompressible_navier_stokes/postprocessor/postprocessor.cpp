@@ -50,62 +50,72 @@ PostProcessor<dim, Number>::~PostProcessor()
 
 template<int dim, typename Number>
 void
-PostProcessor<dim, Number>::setup(Operator const & pde_operator)
+PostProcessor<dim, Number>::setup(Operator const & pde_operator, bool const restarted_simulation)
 {
   navier_stokes_operator = &pde_operator;
 
-  time_control_mean_velocity.setup(pp_data.output_data.mean_velocity);
+  time_control_mean_velocity.setup(pp_data.output_data.mean_velocity, restarted_simulation);
 
   initialize_derived_fields();
 
   output_generator.setup(pde_operator.get_dof_handler_u(),
                          pde_operator.get_dof_handler_p(),
                          *pde_operator.get_mapping(),
-                         pp_data.output_data);
+                         pp_data.output_data,
+                         restarted_simulation);
 
   pointwise_output_generator.setup(pde_operator.get_dof_handler_u(),
                                    pde_operator.get_dof_handler_p(),
                                    *pde_operator.get_mapping(),
-                                   pp_data.pointwise_output_data);
+                                   pp_data.pointwise_output_data,
+                                   restarted_simulation);
 
   error_calculator_u.setup(pde_operator.get_dof_handler_u(),
                            *pde_operator.get_mapping(),
-                           pp_data.error_data_u);
+                           pp_data.error_data_u,
+                           restarted_simulation);
 
   error_calculator_p.setup(pde_operator.get_dof_handler_p(),
                            *pde_operator.get_mapping(),
-                           pp_data.error_data_p);
+                           pp_data.error_data_p,
+                           restarted_simulation);
 
   lift_and_drag_calculator.setup(pde_operator.get_dof_handler_u(),
                                  pde_operator.get_matrix_free(),
                                  pde_operator.get_dof_index_velocity(),
                                  pde_operator.get_dof_index_pressure(),
                                  pde_operator.get_quad_index_velocity_standard(),
-                                 pp_data.lift_and_drag_data);
+                                 pp_data.lift_and_drag_data,
+                                 restarted_simulation);
 
   pressure_difference_calculator.setup(pde_operator.get_dof_handler_p(),
                                        *pde_operator.get_mapping(),
-                                       pp_data.pressure_difference_data);
+                                       pp_data.pressure_difference_data,
+                                       restarted_simulation);
 
   div_and_mass_error_calculator.setup(pde_operator.get_matrix_free(),
                                       pde_operator.get_dof_index_velocity(),
                                       pde_operator.get_quad_index_velocity_standard(),
-                                      pp_data.mass_data);
+                                      pp_data.mass_data,
+                                      restarted_simulation);
 
   kinetic_energy_calculator.setup(pde_operator,
                                   pde_operator.get_matrix_free(),
                                   pde_operator.get_dof_index_velocity(),
                                   pde_operator.get_quad_index_velocity_standard(),
-                                  pp_data.kinetic_energy_data);
+                                  pp_data.kinetic_energy_data,
+                                  restarted_simulation);
 
   kinetic_energy_spectrum_calculator.setup(pde_operator.get_matrix_free(),
                                            pde_operator.get_dof_handler_u(),
-                                           pp_data.kinetic_energy_spectrum_data);
+                                           pp_data.kinetic_energy_spectrum_data,
+                                           restarted_simulation);
 
   line_plot_calculator.setup(pde_operator.get_dof_handler_u(),
                              pde_operator.get_dof_handler_p(),
                              *pde_operator.get_mapping(),
-                             pp_data.line_plot_data);
+                             pp_data.line_plot_data,
+                             restarted_simulation);
 }
 
 template<int dim, typename Number>

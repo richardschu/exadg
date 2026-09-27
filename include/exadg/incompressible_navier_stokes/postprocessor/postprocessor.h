@@ -75,7 +75,7 @@ public:
   virtual ~PostProcessor();
 
   void
-  setup(Operator const & pde_operator) override;
+  setup(Operator const & pde_operator, bool const restarted_simulation) override;
 
   void
   do_postprocessing(VectorType const &     velocity,

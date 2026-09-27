@@ -62,10 +62,10 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     // calculation of mean velocity
     mean_velocity_calculator.reset(
@@ -82,7 +82,7 @@ public:
                                                                *pde_operator.get_mapping(),
                                                                this->mpi_comm));
 
-    line_plot_calculator_statistics->setup(my_pp_data.line_plot_data);
+    line_plot_calculator_statistics->setup(my_pp_data.line_plot_data, restarted_simulation);
   }
 
   void

@@ -79,10 +79,10 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     if(use_precursor)
     {
@@ -116,7 +116,7 @@ public:
                                                       *pde_operator.get_mapping(),
                                                       this->mpi_comm));
 
-      line_plot_calculator_statistics->setup(pp_data_fda.line_plot_data);
+      line_plot_calculator_statistics->setup(pp_data_fda.line_plot_data, restarted_simulation);
     }
   }
 

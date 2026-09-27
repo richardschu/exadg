@@ -75,7 +75,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const &     dof_handler_pressure_in,
         dealii::Mapping<dim> const &        mapping_in,
-        PressureDifferenceData<dim> const & pressure_difference_data_in);
+        PressureDifferenceData<dim> const & pressure_difference_data_in,
+        bool const                          restarted_simulation);
 
   void
   evaluate(VectorType const & pressure, double const time) const;

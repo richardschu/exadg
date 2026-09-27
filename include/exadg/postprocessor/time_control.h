@@ -65,8 +65,10 @@ class TimeControl
 public:
   TimeControl();
 
+  // Set `restarted_simulation` if the simulation is restarted, so that evaluations already done
+  // up to the restart time in the previous simulation are not repeated.
   void
-  setup(TimeControlData const & time_control_data);
+  setup(TimeControlData const & time_control_data, bool const restarted_simulation);
 
   bool
   needs_evaluation(double const time, types::time_step const time_step_number) const;
@@ -83,6 +85,8 @@ public:
 private:
   // small number which is much smaller than the time step size
   double const         EPSILON;
+  bool                 restarted_simulation;
+  mutable bool         is_first_call;
   mutable bool         reset_counter;
   mutable unsigned int counter;
   mutable bool         end_time_reached;

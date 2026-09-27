@@ -103,9 +103,10 @@ public:
         SoundEnergyCalculatorData const &       data_in,
         unsigned int const                      dof_index_pressure_in,
         unsigned int const                      dof_index_velocity_in,
-        unsigned int const                      quad_index_in)
+        unsigned int const                      quad_index_in,
+        bool const                              restarted_simulation)
   {
-    time_control.setup(data_in.time_control_data);
+    time_control.setup(data_in.time_control_data, restarted_simulation);
 
     matrix_free = &matrix_free_in;
     data        = data_in;

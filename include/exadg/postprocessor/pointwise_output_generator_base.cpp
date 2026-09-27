@@ -96,7 +96,8 @@ void
 PointwiseOutputGeneratorBase<dim, Number>::setup_base(
   dealii::Triangulation<dim> const &   triangulation_in,
   dealii::Mapping<dim> const &         mapping_in,
-  PointwiseOutputDataBase<dim> const & pointwise_output_data_in)
+  PointwiseOutputDataBase<dim> const & pointwise_output_data_in,
+  bool const                           restarted_simulation)
 {
   if(pointwise_output_data_in.time_control_data.is_active and
      pointwise_output_data_in.evaluation_points.size() > 0)
@@ -113,7 +114,7 @@ PointwiseOutputGeneratorBase<dim, Number>::setup_base(
       dealii::ExcMessage(
         "This module can currently only be used with time TimeControlData::UnsteadyEvalType::Interval"));
 
-    time_control.setup(pointwise_output_data.time_control_data);
+    time_control.setup(pointwise_output_data.time_control_data, restarted_simulation);
 
     mapping = &mapping_in;
 

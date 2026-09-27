@@ -53,7 +53,7 @@ public:
   PostProcessor(PostProcessorData<dim> const & pp_data, MPI_Comm const & mpi_comm);
 
   void
-  setup(Operator<dim, Number> const & pde_operator_in) override;
+  setup(Operator<dim, Number> const & pde_operator_in, bool const restarted_simulation) override;
 
   bool
   requires_scalar_postprocessing_field() const;

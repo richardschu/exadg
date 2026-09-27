@@ -104,7 +104,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const &   dof_handler,
         dealii::Mapping<dim> const &      mapping,
-        ErrorCalculationData<dim> const & error_data);
+        ErrorCalculationData<dim> const & error_data,
+        bool const                        restarted_simulation);
 
   void
   evaluate(VectorType const & solution, double const time, bool const unsteady);

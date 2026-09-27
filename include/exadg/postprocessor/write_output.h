@@ -215,15 +215,16 @@ read_pvd_record(std::string const & pvd_filename,
   return times_and_names;
 }
 
-// Appends `(time, filename)` to `times_and_names` and (re-)writes a `.pvd` record file on rank 0 used by ParaView to associate a vtu file with simulation time.
+// Appends `(time, filename)` to `times_and_names` and (re-)writes a `.pvd` record file on rank 0
+// used by ParaView to associate a vtu file with simulation time.
 inline void
 update_pvd_record(std::vector<std::pair<double, std::string>> & times_and_names,
-                   double const                                  time,
-                   std::string const &                           filename,
-                   std::string const &                           directory,
-                   std::string const &                           file,
-                   unsigned int const                            output_counter,
-                   MPI_Comm const &                               mpi_comm)
+                  double const                                  time,
+                  std::string const &                           filename,
+                  std::string const &                           directory,
+                  std::string const &                           file,
+                  unsigned int const                            output_counter,
+                  MPI_Comm const &                              mpi_comm)
 {
   if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
   {
@@ -348,7 +349,8 @@ public:
     }
   }
 
-  // Write pvtu output and return the (directory-less) name of the pvtu record so that callers can accumulate it into a `.pvd` file via `update_pvd_record()`.
+  // Write pvtu output and return the (directory-less) name of the pvtu record so that callers can
+  // accumulate it into a `.pvd` file via `update_pvd_record()`.
   std::string
   write_pvtu(dealii::Mapping<dim> const * mapping = nullptr)
   {

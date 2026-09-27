@@ -87,7 +87,7 @@ Driver<dim, Number>::setup()
   if(not is_throughput_study)
   {
     // set up postprocessor
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     // initialize time integrator/driver
     if(application->get_parameters().problem_type == ProblemType::Unsteady)

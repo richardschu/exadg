@@ -120,7 +120,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const & dof_handler,
         dealii::Mapping<dim> const &    mapping,
-        OutputData const &              output_data);
+        OutputData const &              output_data,
+        bool const                      restarted_simulation);
 
   void
   evaluate(

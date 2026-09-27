@@ -61,7 +61,8 @@ public:
   setup(dealii::DoFHandler<dim> const & dof_handler_pressure,
         dealii::DoFHandler<dim> const & dof_handler_velocity,
         dealii::Mapping<dim> const &    mapping,
-        OutputData const &              output_data);
+        OutputData const &              output_data,
+        bool const                      restarted_simulation);
 
   void
   evaluate(VectorType const & pressure,

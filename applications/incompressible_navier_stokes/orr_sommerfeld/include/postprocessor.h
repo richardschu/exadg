@@ -54,15 +54,16 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     energy_calculator.setup(pde_operator.get_matrix_free(),
                             pde_operator.get_dof_index_velocity(),
                             pde_operator.get_quad_index_velocity_standard(),
-                            energy_data);
+                            energy_data,
+                            restarted_simulation);
   }
 
   void

@@ -53,7 +53,8 @@ PostProcessor<dim, Number>::~PostProcessor()
 
 template<int dim, typename Number>
 void
-PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator)
+PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator,
+                                  bool const                    restarted_simulation)
 {
   navier_stokes_operator = &pde_operator;
 
@@ -61,35 +62,42 @@ PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator)
 
   output_generator.setup(pde_operator.get_dof_handler(),
                          pde_operator.get_mapping(),
-                         pp_data.output_data);
+                         pp_data.output_data,
+                         restarted_simulation);
 
   pointwise_output_generator.setup(pde_operator.get_dof_handler(),
                                    pde_operator.get_mapping(),
-                                   pp_data.pointwise_output_data);
+                                   pp_data.pointwise_output_data,
+                                   restarted_simulation);
 
   error_calculator.setup(pde_operator.get_dof_handler(),
                          pde_operator.get_mapping(),
-                         pp_data.error_data);
+                         pp_data.error_data,
+                         restarted_simulation);
 
   lift_and_drag_calculator.setup(pde_operator.get_dof_handler(),
                                  pde_operator.get_matrix_free(),
                                  pde_operator.get_dof_index_vector(),
                                  pde_operator.get_dof_index_scalar(),
                                  pde_operator.get_quad_index_standard(),
-                                 pp_data.lift_and_drag_data);
+                                 pp_data.lift_and_drag_data,
+                                 restarted_simulation);
 
   pressure_difference_calculator.setup(pde_operator.get_dof_handler_scalar(),
                                        pde_operator.get_mapping(),
-                                       pp_data.pressure_difference_data);
+                                       pp_data.pressure_difference_data,
+                                       restarted_simulation);
 
   kinetic_energy_calculator.setup(pde_operator.get_matrix_free(),
                                   pde_operator.get_dof_index_vector(),
                                   pde_operator.get_quad_index_standard(),
-                                  pp_data.kinetic_energy_data);
+                                  pp_data.kinetic_energy_data,
+                                  restarted_simulation);
 
   kinetic_energy_spectrum_calculator.setup(pde_operator.get_matrix_free(),
                                            pde_operator.get_dof_handler(),
-                                           pp_data.kinetic_energy_spectrum_data);
+                                           pp_data.kinetic_energy_spectrum_data,
+                                           restarted_simulation);
 }
 
 template<int dim, typename Number>

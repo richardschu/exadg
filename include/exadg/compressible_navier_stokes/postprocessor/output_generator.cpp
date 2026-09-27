@@ -37,13 +37,14 @@ template<int dim, typename Number>
 void
 OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_in,
                                     dealii::Mapping<dim> const &    mapping_in,
-                                    OutputData const &              output_data_in)
+                                    OutputData const &              output_data_in,
+                                    bool const                      restarted_simulation)
 {
   dof_handler = &dof_handler_in;
   mapping     = &mapping_in;
   output_data = output_data_in;
 
-  time_control.setup(output_data_in.time_control_data);
+  time_control.setup(output_data_in.time_control_data, restarted_simulation);
 
   if(output_data_in.time_control_data.is_active)
   {

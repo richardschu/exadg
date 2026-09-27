@@ -37,7 +37,8 @@ PostProcessor<dim, Number>::PostProcessor(PostProcessorData<dim> const & pp_data
 
 template<int dim, typename Number>
 void
-PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator_in)
+PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator_in,
+                                  bool const                    restarted_simulation)
 {
   pde_operator = &pde_operator_in;
 
@@ -45,11 +46,13 @@ PostProcessor<dim, Number>::setup(Operator<dim, Number> const & pde_operator_in)
 
   output_generator.setup(pde_operator->get_dof_handler(),
                          pde_operator->get_mapping(),
-                         pp_data.output_data);
+                         pp_data.output_data,
+                         restarted_simulation);
 
   error_calculator.setup(pde_operator->get_dof_handler(),
                          pde_operator->get_mapping(),
-                         pp_data.error_data);
+                         pp_data.error_data,
+                         restarted_simulation);
 }
 
 template<int dim, typename Number>

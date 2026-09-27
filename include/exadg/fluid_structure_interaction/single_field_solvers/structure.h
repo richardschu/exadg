@@ -111,7 +111,7 @@ SolverStructure<dim, Number>::setup(
   pde_operator->setup(matrix_free, matrix_free_data);
 
   // set up postprocessor
-  postprocessor->setup(*pde_operator);
+  postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
   // initialize time integrator
   time_integrator = std::make_shared<Structure::TimeIntGenAlpha<dim, Number>>(

@@ -43,11 +43,13 @@ PostProcessor<dim, n_components, Number>::setup(
 {
   error_calculator.setup(pde_operator.get_dof_handler(),
                          *pde_operator.get_mapping(),
-                         pp_data.error_data);
+                         pp_data.error_data,
+                         false /* restarted_simulation */);
 
   output_generator.setup(pde_operator.get_dof_handler(),
                          *pde_operator.get_mapping(),
-                         pp_data.output_data);
+                         pp_data.output_data,
+                         false /* restarted_simulation */);
 
   if(pp_data.normal_flux_data.evaluate)
   {

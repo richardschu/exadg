@@ -94,7 +94,8 @@ public:
   // triangulation, otherwise the identification of data will fail
   void
   setup(std::function<double(double const &)> const & grid_tranform,
-        TurbulentChannelData const &                  data);
+        TurbulentChannelData const &                  data,
+        bool const                                    restarted_simulation);
 
   void
   evaluate(VectorType const & velocity, bool const unsteady);
