@@ -126,8 +126,13 @@ OutputGenerator<dim, Number>::evaluate(
   vector_writer.write_aspect_ratio(*dof_handler, *mapping);
 
   std::string const pvtu_filename = vector_writer.write_pvtu(&(*mapping));
-  update_pvd_record(
-    times_and_names, time, pvtu_filename, output_data.directory, output_data.filename, mpi_comm);
+  update_pvd_record(times_and_names,
+                    time,
+                    pvtu_filename,
+                    output_data.directory,
+                    output_data.filename,
+                    time_control.get_counter(),
+                    mpi_comm);
 }
 
 
