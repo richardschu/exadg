@@ -536,7 +536,10 @@ GridToGridProjector<dim, n_components>::check()
     error_data.analytical_solution = analytical_solution;
 
     ErrorCalculator<dim, typename VectorType::value_type> error_calculator(mpi_comm);
-    error_calculator.setup(dof_handler_target, *mapping, error_data);
+    error_calculator.setup(dof_handler_target,
+                           *mapping,
+                           error_data,
+                           false /* restarted_simulation */);
     error_calculator.time_control.needs_evaluation(0.0 /* time */, ExaDG::numbers::steady_timestep);
     error_calculator.evaluate(vectors_target[i], 0.0 /* time */, false /* unsteady */);
   }
@@ -553,7 +556,10 @@ GridToGridProjector<dim, n_components>::check()
     error_data.analytical_solution = analytical_solution;
 
     ErrorCalculator<dim, typename VectorType::value_type> error_calculator(mpi_comm);
-    error_calculator.setup(dof_handler_target_continuous, *mapping, error_data);
+    error_calculator.setup(dof_handler_target_continuous,
+                           *mapping,
+                           error_data,
+                           false /* restarted_simulation */);
     error_calculator.time_control.needs_evaluation(0.0 /* time */, ExaDG::numbers::steady_timestep);
     error_calculator.evaluate(vectors_target_continuous[i], 0.0 /* time */, false /* unsteady */);
   }

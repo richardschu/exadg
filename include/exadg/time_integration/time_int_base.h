@@ -154,6 +154,13 @@ public:
   unsigned int
   get_number_of_time_steps() const;
 
+  /*
+   * Get number of computed time steps counted from the start of the original simulation, i.e.,
+   * continuing across restarts.
+   */
+  types::time_step
+  get_total_number_of_time_steps() const;
+
   std::shared_ptr<TimerTree>
   get_timings() const;
 

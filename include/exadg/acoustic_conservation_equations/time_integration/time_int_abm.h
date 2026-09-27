@@ -69,7 +69,7 @@ public:
   {
     return param.solver_info_data.write(this->global_timer.wall_time(),
                                         this->time - this->start_time,
-                                        this->time_step_number);
+                                        this->get_total_time_step_number());
   }
 
 private:

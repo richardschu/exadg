@@ -276,10 +276,12 @@ Driver<dim, Number>::solve()
         time_integrator->advance_one_timestep_solve();
 
         // Adapt the mesh before post_solve(), in order to recalculate the
-        // time step size based on the new mesh.
+        // time step size based on the new mesh. Count the time steps across
+        // restarts to keep the schedule of the original simulation. The
+        // restart data already contains the adapted mesh.
         if(trigger_coarsening_and_refinement_now(
              application->get_parameters().amr_data.trigger_every_n_time_steps,
-             time_integrator->get_number_of_time_steps()))
+             time_integrator->get_total_number_of_time_steps()))
         {
           // AMR is only implemented for implicit timestepping.
           std::shared_ptr<TimeIntBDF<dim, Number>> bdf_time_integrator =

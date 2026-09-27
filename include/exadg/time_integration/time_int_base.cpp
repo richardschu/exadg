@@ -178,6 +178,12 @@ TimeIntBase::get_number_of_time_steps() const
   return this->get_time_step_number() - 1;
 }
 
+types::time_step
+TimeIntBase::get_total_number_of_time_steps() const
+{
+  return this->get_total_time_step_number() - 1;
+}
+
 std::shared_ptr<TimerTree>
 TimeIntBase::get_timings() const
 {
@@ -280,7 +286,7 @@ TimeIntBase::output_solver_info_header() const
   pcout << std::endl
         << print_horizontal_line() << std::endl
         << std::endl
-        << " Time step number = " << std::left << std::setw(8) << time_step_number
+        << " Time step number = " << std::left << std::setw(8) << get_total_time_step_number()
         << "t = " << std::scientific << std::setprecision(5) << time
         << ", dt = " << get_time_step_size() << std::endl
         << print_horizontal_line() << std::endl;
