@@ -118,7 +118,7 @@ private:
 
     postprocessor->do_postprocessing(this->get_solution(),
                                      this->get_time(),
-                                     this->time_step_number);
+                                     this->get_total_time_step_number());
 
     this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
   }

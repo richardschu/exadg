@@ -200,6 +200,14 @@ protected:
   get_time_step_number() const;
 
   /*
+   * Get the current time step number counted from the start of the original simulation, i.e.,
+   * continuing across restarts. In contrast, `get_time_step_number()` starts again at 1 after a
+   * restart, as needed by the time integration itself (e.g., when starting with low order).
+   */
+  types::time_step
+  get_total_time_step_number() const;
+
+  /*
    * Write solution vectors to files so that the simulation can be restart from an intermediate
    * state. Note that the sequence of writing and reading data in `write_restart` and `read_restart`
    * needs to be identical.
@@ -251,6 +259,22 @@ protected:
    * The number of the current time step starting with time_step_number = 1.
    */
   types::time_step time_step_number;
+
+  /*
+   * The number of time steps done before the restart this simulation started from (zero for a
+   * simulation that is not restarted).
+   */
+  types::time_step n_time_steps_before_restart;
+
+  /*
+   * Write/read `n_time_steps_before_restart` to/from the restart header. Reading falls back to
+   * zero for restart files written before this entry was added.
+   */
+  void
+  write_restart_n_time_steps(BoostOutputArchiveType & oa) const;
+
+  void
+  read_restart_n_time_steps(BoostInputArchiveType & ia);
 
   /*
    * Maximum number of time steps.

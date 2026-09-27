@@ -41,7 +41,8 @@ public:
       time_step(1.0),
       time_old(start_time),
       flow_rate(0.0),
-      flow_rate_old(0.0)
+      flow_rate_old(0.0),
+      is_first_call(true)
   {
   }
 
@@ -52,7 +53,7 @@ public:
   }
 
   void
-  update_body_force(double const flow_rate_in, double const time, int const time_step_number)
+  update_body_force(double const flow_rate_in, double const time)
   {
     flow_rate = flow_rate_in;
     time_step = time - time_old;
@@ -64,8 +65,8 @@ public:
     double const k_I = C_I * std::pow(bulk_velocity, 2.0) / std::pow(length_scale, 4.0);
     f += k_I * (target_flow_rate - flow_rate) * time_step;
 
-    // the time step size is 0 when this function is called the first time
-    if(time_step_number > 1)
+    // The time step size is 0 when this function is called the first time, also after a restart.
+    if(not is_first_call)
     {
       // dimensional analysis: [k_D] = 1/(m^2) -> k_D = const / H^2
       double const C_D = 0.1;
@@ -75,6 +76,7 @@ public:
 
     flow_rate_old = flow_rate;
     time_old      = time;
+    is_first_call = false;
   }
 
 private:
@@ -88,6 +90,8 @@ private:
 
   double flow_rate;
   double flow_rate_old;
+
+  bool is_first_call;
 };
 
 } // namespace IncNS

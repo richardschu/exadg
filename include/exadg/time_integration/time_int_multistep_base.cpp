@@ -258,6 +258,9 @@ TimeIntMultistepBase::do_write_restart(std::string const & filename) const
     for(unsigned int i = 0; i < order; i++)
       oa & time_steps[i];
 
+    // 4. number of time steps done so far
+    write_restart_n_time_steps(oa);
+
     write_restart_file(oss, filename);
   }
 
@@ -287,12 +290,17 @@ TimeIntMultistepBase::do_read_restart(std::ifstream & in)
     // 3. time step sizes
     for(unsigned int i = 0; i < order; i++)
       ia & time_steps[i];
+
+    // 4. number of time steps done so far
+    read_restart_n_time_steps(ia);
   }
 
   // Synchronize read data.
   time = dealii::Utilities::MPI::broadcast(mpi_comm, time, 0);
   for(unsigned int i = 0; i < order; i++)
     time_steps[i] = dealii::Utilities::MPI::broadcast(mpi_comm, time_steps[i], 0);
+  n_time_steps_before_restart =
+    dealii::Utilities::MPI::broadcast(mpi_comm, n_time_steps_before_restart, 0);
 
   // Note that start_time has to be set to the new start_time (since param.start_time might still be
   // the original start time).

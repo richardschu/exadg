@@ -309,7 +309,7 @@ TimeIntGenAlpha<dim, Number>::postprocessing() const
   postprocessor->do_postprocessing(displacement_n,
                                    false /* errors_only */,
                                    this->get_time(),
-                                   this->get_time_step_number());
+                                   this->get_total_time_step_number());
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
 }

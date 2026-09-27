@@ -389,7 +389,9 @@ TimeIntExplRK<Number>::postprocessing() const
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(this->solution_n, this->time, this->time_step_number);
+  postprocessor->do_postprocessing(this->solution_n,
+                                   this->time,
+                                   this->get_total_time_step_number());
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
 }

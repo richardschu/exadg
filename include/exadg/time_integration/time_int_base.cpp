@@ -22,6 +22,8 @@
 #include <exadg/time_integration/time_int_base.h>
 #include <iostream>
 
+#include <boost/archive/archive_exception.hpp>
+
 namespace ExaDG
 {
 TimeIntBase::TimeIntBase(double const &      start_time_,
@@ -36,6 +38,7 @@ TimeIntBase::TimeIntBase(double const &      start_time_,
     eps(1.e-10),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_) == 0),
     time_step_number(1),
+    n_time_steps_before_restart(0),
     max_number_of_time_steps(max_number_of_time_steps_),
     restart_data(restart_data_),
     mpi_comm(mpi_comm_),
@@ -195,6 +198,35 @@ unsigned int
 TimeIntBase::get_time_step_number() const
 {
   return time_step_number;
+}
+
+types::time_step
+TimeIntBase::get_total_time_step_number() const
+{
+  return n_time_steps_before_restart + time_step_number;
+}
+
+void
+TimeIntBase::write_restart_n_time_steps(BoostOutputArchiveType & oa) const
+{
+  // The restart is written after `time_step_number` has been incremented, and the restarted
+  // simulation continues with `time_step_number = 1` at the restart time.
+  types::time_step const n_time_steps = n_time_steps_before_restart + time_step_number - 1;
+  oa &                   n_time_steps;
+}
+
+void
+TimeIntBase::read_restart_n_time_steps(BoostInputArchiveType & ia)
+{
+  try
+  {
+    ia & n_time_steps_before_restart;
+  }
+  catch(boost::archive::archive_exception const &)
+  {
+    // Restart file written before this entry was added.
+    n_time_steps_before_restart = 0;
+  }
 }
 
 void

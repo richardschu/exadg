@@ -100,7 +100,7 @@ public:
         mean_velocity_calculator->calculate_flow_rate_volume(velocity, time, length);
 
       // update body force
-      flow_rate_controller.update_body_force(flow_rate, time, time_step_number);
+      flow_rate_controller.update_body_force(flow_rate, time);
     }
 
     // line plot statistics

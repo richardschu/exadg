@@ -598,7 +598,7 @@ TimeIntBDF<dim, Number>::postprocessing() const
     postprocessor->do_postprocessing(get_velocity(0),
                                      get_pressure(0),
                                      this->get_time(),
-                                     this->get_time_step_number());
+                                     this->get_total_time_step_number());
   }
   else // consider velocity and pressure errors instead
   {
@@ -616,7 +616,7 @@ TimeIntBDF<dim, Number>::postprocessing() const
     postprocessor->do_postprocessing(velocity_error, // error!
                                      pressure_error, // error!
                                      this->get_time(),
-                                     this->get_time_step_number());
+                                     this->get_total_time_step_number());
   }
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
