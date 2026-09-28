@@ -274,14 +274,33 @@ protected:
   types::time_step n_time_steps_before_restart;
 
   /*
-   * Write/read `n_time_steps_before_restart` to/from the restart header. Reading falls back to
-   * zero for restart files written before this entry was added.
+   * Entries of the restart header shared by all time integrators, written/read after the ones
+   * specific to the time integrator: `n_time_steps_before_restart` and the postprocessor's restart
+   * state. Reading is done by process 0 only and falls back to zero and an empty state for restart
+   * files written before these entries were added. `broadcast_restart_header_extension()` has to
+   * be called by all processes afterwards.
    */
   void
-  write_restart_n_time_steps(BoostOutputArchiveType & oa) const;
+  write_restart_header_extension(BoostOutputArchiveType & oa) const;
 
   void
-  read_restart_n_time_steps(BoostInputArchiveType & ia);
+  read_restart_header_extension(BoostInputArchiveType & ia);
+
+  void
+  broadcast_restart_header_extension();
+
+  /*
+   * Restart state of the postprocessor, see `IncNS::PostProcessorInterface::get_restart_state()`.
+   * Overwrite in derived classes with a postprocessor supporting restarts.
+   */
+  virtual std::string
+  get_postprocessor_restart_state() const;
+
+  virtual void
+  set_postprocessor_restart_state(std::string const & state);
+
+  // Postprocessor restart state read by process 0 until it is broadcast.
+  std::string postprocessor_restart_state;
 
   /*
    * Maximum number of time steps.

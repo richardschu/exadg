@@ -23,6 +23,7 @@
 #include <iostream>
 
 #include <boost/archive/archive_exception.hpp>
+#include <boost/serialization/string.hpp>
 
 namespace ExaDG
 {
@@ -213,26 +214,55 @@ TimeIntBase::get_total_time_step_number() const
 }
 
 void
-TimeIntBase::write_restart_n_time_steps(BoostOutputArchiveType & oa) const
+TimeIntBase::write_restart_header_extension(BoostOutputArchiveType & oa) const
 {
   // The restart is written after `time_step_number` has been incremented, and the restarted
   // simulation continues with `time_step_number = 1` at the restart time.
   types::time_step const n_time_steps = n_time_steps_before_restart + time_step_number - 1;
   oa &                   n_time_steps;
+
+  std::string const state = get_postprocessor_restart_state();
+  oa &              state;
 }
 
 void
-TimeIntBase::read_restart_n_time_steps(BoostInputArchiveType & ia)
+TimeIntBase::read_restart_header_extension(BoostInputArchiveType & ia)
 {
   try
   {
     ia & n_time_steps_before_restart;
+    ia & postprocessor_restart_state;
   }
   catch(boost::archive::archive_exception const &)
   {
-    // Restart file written before this entry was added.
+    // Restart file written before these entries were added.
     n_time_steps_before_restart = 0;
+    postprocessor_restart_state.clear();
   }
+}
+
+void
+TimeIntBase::broadcast_restart_header_extension()
+{
+  n_time_steps_before_restart =
+    dealii::Utilities::MPI::broadcast(mpi_comm, n_time_steps_before_restart, 0);
+  postprocessor_restart_state =
+    dealii::Utilities::MPI::broadcast(mpi_comm, postprocessor_restart_state, 0);
+
+  set_postprocessor_restart_state(postprocessor_restart_state);
+  postprocessor_restart_state.clear();
+}
+
+std::string
+TimeIntBase::get_postprocessor_restart_state() const
+{
+  return std::string();
+}
+
+void
+TimeIntBase::set_postprocessor_restart_state(std::string const & state)
+{
+  (void)state;
 }
 
 void

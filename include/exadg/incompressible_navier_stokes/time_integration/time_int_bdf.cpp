@@ -333,6 +333,33 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
     vectors_pressure_ptr.push_back(&vectors_pressure_add[i]);
   }
 
+  // Add vectors of the postprocessor, same sequence as in `write_restart_vectors()`.
+  std::vector<VectorType const *> vectors_velocity_postprocessor_ptr;
+  std::vector<VectorType const *> vectors_pressure_postprocessor_ptr;
+  if(postprocessor)
+  {
+    postprocessor->get_vectors_serialization(vectors_velocity_postprocessor_ptr,
+                                             vectors_pressure_postprocessor_ptr);
+  }
+  std::vector<VectorType> vectors_velocity_postprocessor;
+  std::vector<VectorType> vectors_pressure_postprocessor;
+  for(VectorType const * vector : vectors_velocity_postprocessor_ptr)
+  {
+    vectors_velocity_postprocessor.push_back(*vector);
+  }
+  for(VectorType const * vector : vectors_pressure_postprocessor_ptr)
+  {
+    vectors_pressure_postprocessor.push_back(*vector);
+  }
+  for(VectorType & vector : vectors_velocity_postprocessor)
+  {
+    vectors_velocity_ptr.push_back(&vector);
+  }
+  for(VectorType & vector : vectors_pressure_postprocessor)
+  {
+    vectors_pressure_ptr.push_back(&vector);
+  }
+
   operator_base->deserialize_vectors(vectors_velocity_ptr, vectors_pressure_ptr);
 
   // Copy contents from deserialized to used vectors.
@@ -346,6 +373,33 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
   }
 
   this->set_vectors_deserialization(vectors_velocity_add, vectors_pressure_add);
+
+  if(postprocessor)
+  {
+    postprocessor->set_vectors_deserialization(vectors_velocity_postprocessor,
+                                               vectors_pressure_postprocessor);
+  }
+}
+
+template<int dim, typename Number>
+std::string
+TimeIntBDF<dim, Number>::get_postprocessor_restart_state() const
+{
+  if(postprocessor)
+  {
+    return postprocessor->get_restart_state();
+  }
+  return std::string();
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::set_postprocessor_restart_state(std::string const & state)
+{
+  if(postprocessor)
+  {
+    postprocessor->set_restart_state(state);
+  }
 }
 
 template<int dim, typename Number>
@@ -390,6 +444,21 @@ TimeIntBDF<dim, Number>::write_restart_vectors() const
   vectors_pressure.insert(vectors_pressure.end(),
                           vectors_pressure_add.begin(),
                           vectors_pressure_add.end());
+
+  // Add vectors of the postprocessor, after the ones of the derived class.
+  std::vector<VectorType const *> vectors_velocity_postprocessor;
+  std::vector<VectorType const *> vectors_pressure_postprocessor;
+  if(postprocessor)
+  {
+    postprocessor->get_vectors_serialization(vectors_velocity_postprocessor,
+                                             vectors_pressure_postprocessor);
+  }
+  vectors_velocity.insert(vectors_velocity.end(),
+                          vectors_velocity_postprocessor.begin(),
+                          vectors_velocity_postprocessor.end());
+  vectors_pressure.insert(vectors_pressure.end(),
+                          vectors_pressure_postprocessor.begin(),
+                          vectors_pressure_postprocessor.end());
 
   operator_base->serialize_vectors(vectors_velocity, vectors_pressure);
 }

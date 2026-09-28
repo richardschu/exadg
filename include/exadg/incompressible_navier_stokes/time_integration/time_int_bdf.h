@@ -125,6 +125,12 @@ protected:
   set_vectors_deserialization(std::vector<VectorType> const & vectors_velocity,
                               std::vector<VectorType> const & vectors_pressure);
 
+  std::string
+  get_postprocessor_restart_state() const final;
+
+  void
+  set_postprocessor_restart_state(std::string const & state) final;
+
   void
   prepare_vectors_for_next_timestep() override;
 
