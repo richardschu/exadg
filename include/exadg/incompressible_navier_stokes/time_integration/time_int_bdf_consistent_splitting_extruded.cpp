@@ -50,11 +50,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
   bool const                                      is_test_in)
   : Base(operator_in, helpers_ale_in, postprocessor_in, param_in, mpi_comm_in, is_test_in),
     pde_operator(operator_in),
-    velocity(this->order),
+    velocity(this->order + 1),
     velocity_red(4),
-    velocity_matvec(4 * 2),
+    velocity_matvec(velocity_red.size() * 2),
     pressure(5),
-    pressure_matvec(5),
+    pressure_matvec(pressure.size()),
     convective_divergence_rhs(this->param.order_extrapolation_pressure_nbc),
     divergences(this->order),
     pressure_nbc_rhs(this->param.order_extrapolation_pressure_nbc),
@@ -65,7 +65,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
     extra_pressure_nbc(this->param.order_extrapolation_pressure_nbc,
                        this->param.start_with_low_order),
     extra_pressure_rhs(this->param.order_extrapolation_pressure_rhs,
-                       this->param.start_with_low_order)
+                       this->param.start_with_low_order),
+    in_extrapolation_mode(false),
+    previous_time_steps(velocity_red.size()),
+    extra_initial_guess(velocity_red.size(),
+                        /* start_with_low_order */ true)
 {
   op_rt = std::make_shared<RTOperator::RaviartThomasOperator<dim, Number>>();
 
@@ -81,17 +85,23 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::update_time_integrator_const
   Base::update_time_integrator_constants();
 
   // update time integrator constants for extrapolation scheme of pressure Neumann bc
-  extra_pressure_nbc.update(this->get_time_step_number(),
-                            this->adaptive_time_stepping,
-                            this->get_time_step_vector());
+  const std::vector<double> & time_steps = this->get_time_step_vector();
+  extra_pressure_nbc.update(this->get_time_step_number(), this->adaptive_time_stepping, time_steps);
 
-  extra_pressure_rhs.update(this->get_time_step_number(),
-                            this->adaptive_time_stepping,
-                            this->get_time_step_vector());
+  extra_pressure_rhs.update(this->get_time_step_number(), this->adaptive_time_stepping, time_steps);
 
-  // use this function to check the correctness of the time integrator constants
-  //    std::cout << "Coefficients extrapolation scheme pressure NBC:" << std::endl;
-  //    extra_pressure_nbc.print(this->pcout);
+  // record one more time step for the extrapolation formula for the initial
+  // guess
+  for(unsigned int i = previous_time_steps.size() - 1; i >= time_steps.size(); --i)
+    previous_time_steps[i] = previous_time_steps[i - 1];
+  for(unsigned int i = 0; i < time_steps.size(); ++i)
+    previous_time_steps[i] = time_steps[i];
+
+  extra_initial_guess.update(this->param.start_with_low_order ?
+                               this->get_time_step_number() :
+                               this->get_time_step_number() + this->order - 1,
+                             this->adaptive_time_stepping,
+                             previous_time_steps);
 }
 
 template<int dim, typename Number>
@@ -268,7 +278,7 @@ template<int dim, typename Number>
 unsigned int
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::get_size_velocity() const
 {
-  return velocity.size();
+  return this->order;
 }
 
 template<int dim, typename Number>
@@ -305,7 +315,7 @@ void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::initialize_former_multistep_dof_vectors()
 {
   // note that the loop begins with i=1, since i=0 is not necessary.
-  for(unsigned int i = 1; i < velocity.size(); ++i)
+  for(unsigned int i = 1; i < this->order; ++i)
   {
     if(this->param.ale_formulation)
       this->helpers_ale->move_grid(this->get_previous_time(i));
@@ -410,6 +420,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::do_timestep_solve()
   // t_{n+1} is known
   evaluate_convective_term();
 }
+
+
 
 template<int dim, typename Number>
 void
@@ -525,6 +537,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::pressure_step()
   this->timer_tree->insert({"Timeloop", "Pressure step"}, timer.wall_time());
 }
 
+
+
 template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rhs)
@@ -597,6 +611,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::rhs_pressure(VectorType & rh
     dealii::VectorTools::subtract_mean_value(rhs);
 }
 
+
+
 template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
@@ -613,13 +629,16 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
      *  loop for the two extrapolations that are necessary for this step, in
      *  order to increase the data locality
      */
-    std::vector<Number> factors_velocity_rhs(velocity.size());
-    std::vector<Number> factors_convective_term(velocity.size());
-    for(unsigned int i = 0; i < velocity.size(); ++i)
+    std::vector<Number> factors_velocity_rhs(this->order);
+    std::vector<Number> factors_convective_term(this->order);
+    std::vector<Number> factors_initial_guess(velocity.size());
+    for(unsigned int i = 0; i < this->order; ++i)
     {
       factors_velocity_rhs[i]    = this->bdf.get_alpha(i) / this->get_time_step_size();
       factors_convective_term[i] = -this->extra.get_beta(i);
     }
+    for(unsigned int i = 0; i < velocity.size(); ++i)
+      factors_initial_guess[i] = extra_initial_guess.get_beta(i);
 
     std::shared_ptr<dealii::Function<dim>> right_hand_side;
     if(this->param.right_hand_side == true)
@@ -627,20 +646,40 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
       right_hand_side = pde_operator->get_field_functions()->right_hand_side;
       right_hand_side->set_time(this->get_next_time());
     }
-    op_rt->evaluate_momentum_rhs(
-      pressure_np,
-      solution_rt,
-      1.0,
-      rhs_rt,
-      [&](const unsigned int begin, const unsigned int end) {
-        extrapolate_vectors_range<false>(begin, end, factors_velocity_rhs, velocity, solution_rt);
-        std::fill(rhs_rt.begin() + begin, rhs_rt.begin() + end, 0.);
-      },
-      [&](const unsigned int begin, const unsigned int end) {
-        extrapolate_vectors_range<true>(
-          begin, end, factors_convective_term, this->vec_convective_term, rhs_rt);
-      },
-      right_hand_side);
+
+    if(in_extrapolation_mode)
+      op_rt->evaluate_momentum_rhs(
+        pressure_np,
+        velocity.back(),
+        1.0,
+        rhs_rt,
+        [&](const unsigned int begin, const unsigned int end) {
+          extrapolate_two_vectors_range(begin,
+                                        end,
+                                        factors_velocity_rhs,
+                                        factors_initial_guess,
+                                        velocity,
+                                        velocity.back(),
+                                        solution_rt);
+          extrapolate_vectors_range<false>(
+            begin, end, factors_convective_term, this->vec_convective_term, rhs_rt);
+        },
+        [&](const unsigned int, const unsigned int) {},
+        right_hand_side);
+    else
+      op_rt->evaluate_momentum_rhs(
+        pressure_np,
+        velocity.back(),
+        1.0,
+        rhs_rt,
+        [&](const unsigned int begin, const unsigned int end) {
+          extrapolate_vectors_range<false>(
+            begin, end, factors_velocity_rhs, velocity, velocity.back());
+          extrapolate_vectors_range<false>(
+            begin, end, factors_convective_term, this->vec_convective_term, rhs_rt);
+        },
+        [&](const unsigned int, const unsigned int) {},
+        right_hand_side);
 
     const double t_rhs = timer.wall_time();
     stat_momentum_time_rhs.add_sample(t_rhs);
@@ -664,36 +703,50 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     // difference in the product, which is done inside the evaluation of
     // do_compute_inner_products_range with the 'factors_time_step_mass'
     // argument.
-    const unsigned int  n_vectors = velocity_red.size();
-    std::vector<double> projection_vector(n_vectors);
-    AssertDimension(velocity_matvec.size(), 2 * n_vectors);
-    AssertThrow(projection_vector.size() <= 5, dealii::ExcNotImplemented());
-    std::array<const float *, 10> vec_ptrs = {};
-    for(unsigned int j = 0; j < 2 * n_vectors; ++j)
-      vec_ptrs[j] = velocity_matvec[j].begin();
-    dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
-    factors_time_step_mass[0]                                         = factor_mass;
+    bool                can_leave_projection_mode = false;
+    std::vector<double> projection_vector;
+    double              t_proj = 0;
+    if(not in_extrapolation_mode)
+    {
+      const unsigned int n_vectors = velocity_red.size();
+      AssertDimension(velocity_matvec.size(), 2 * n_vectors);
+      AssertThrow(projection_vector.size() <= 5, dealii::ExcNotImplemented());
+      std::array<const float *, 10> vec_ptrs = {};
+      for(unsigned int j = 0; j < 2 * n_vectors; ++j)
+        vec_ptrs[j] = velocity_matvec[j].begin();
+      dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> local_sums = {};
+      factors_time_step_mass[0]                                         = factor_mass;
 
-    // Need to get mass operator to slot '1', the operator from the previous
-    // time step (obtained from right-hand side) is in 'velocity_matvec[0]'
-    // and all other even indices.
-    op_rt_float->set_parameters(1.0, 0);
-    op_rt_float->vmult(
-      velocity_matvec[1],
-      velocity_red[0],
-      [&](const unsigned int begin, const unsigned int end) {
-        std::fill(velocity_matvec[1].begin() + begin, velocity_matvec[1].begin() + end, 0.f);
-      },
-      [&](const unsigned int begin, const unsigned int end) {
-        do_compute_inner_products_range<true>(
-          begin, end, n_vectors, factors_time_step_mass, vec_ptrs, rhs_rt.begin(), local_sums);
-      });
-    extrapolate_accuracy = do_compute_least_squares_fit(solution_rt.get_mpi_communicator(),
-                                                        local_sums,
-                                                        projection_vector);
-    const double t_proj  = timer2.wall_time();
-    stat_momentum_time_projection.add_sample(t_proj);
-    timer2.restart();
+      // Need to get mass operator to slot '1', the operator from the previous
+      // time step (obtained from right-hand side) is in 'velocity_matvec[0]'
+      // and all other even indices.
+      op_rt_float->set_parameters(1.0, 0);
+      op_rt_float->vmult(
+        velocity_matvec[1],
+        velocity_red[0],
+        [&](const unsigned int begin, const unsigned int end) {
+          std::fill(velocity_matvec[1].begin() + begin, velocity_matvec[1].begin() + end, 0.f);
+        },
+        [&](const unsigned int begin, const unsigned int end) {
+          do_compute_inner_products_range<true>(
+            begin, end, n_vectors, factors_time_step_mass, vec_ptrs, rhs_rt.begin(), local_sums);
+        });
+
+      double residual_with_extrapolation = 0;
+      projection_vector.resize(n_vectors);
+      extrapolate_accuracy = do_compute_least_squares_fit(solution_rt.get_mpi_communicator(),
+                                                          local_sums,
+                                                          projection_vector,
+                                                          factors_initial_guess,
+                                                          &residual_with_extrapolation);
+
+      if(residual_with_extrapolation < 1.5 * extrapolate_accuracy.second)
+        can_leave_projection_mode = true;
+
+      t_proj = timer2.wall_time();
+      stat_momentum_time_projection.add_sample(t_proj);
+      timer2.restart();
+    }
 
     if(preconditioner_viscous.get_vector().get_partitioner().get() !=
        diagonal_mass.get_partitioner().get())
@@ -710,20 +763,76 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     // not be needed again, as it is overwritten with the mass matrix mat-vec
     // in the next time step (done in the code above).
     op_rt->set_parameters(-factor_mass, -factor_lapl);
-    op_rt->vmult(
-      rhs_rt,
-      solution_rt,
-      [&](const unsigned int begin, const unsigned int end) {
-        std::copy(rhs_rt.begin() + begin,
-                  rhs_rt.begin() + end,
-                  velocity_matvec[velocity_matvec.size() - 2].begin() + begin);
-        extrapolate_vectors_range<false>(begin, end, projection_vector, velocity_red, solution_rt);
-      },
-      [&](const unsigned int begin, const unsigned int end) {
-        std::copy(rhs_rt.begin() + begin,
-                  rhs_rt.begin() + end,
-                  velocity_matvec.back().begin() + begin);
-      });
+    if(in_extrapolation_mode)
+    {
+      const auto compute_vector_norm_sqr_on_range =
+        [this](const unsigned int begin,
+               const unsigned int end) -> dealii::VectorizedArray<Number> {
+        constexpr unsigned int          n_lanes   = dealii::VectorizedArray<Number>::size();
+        const Number *                  ptr       = rhs_rt.begin() + begin;
+        const unsigned int              n_batches = (end - begin) / (2 * n_lanes);
+        dealii::VectorizedArray<Number> sum_0 = 0, sum_1 = 0;
+        for(unsigned int i = 0; i < n_batches; ++i)
+        {
+          dealii::VectorizedArray<Number> tmp;
+          tmp.load(ptr + n_lanes * 2 * i);
+          sum_0 += tmp * tmp;
+          tmp.load(ptr + n_lanes * (2 * i + 1));
+          sum_1 += tmp * tmp;
+        }
+        unsigned int remainder = end - begin - 2 * n_lanes * n_batches;
+        if(remainder > 0)
+        {
+          ptr += 2 * n_lanes * n_batches;
+          if(remainder >= n_lanes)
+          {
+            dealii::VectorizedArray<Number> tmp;
+            tmp.load(ptr);
+            sum_0 += tmp * tmp;
+            ptr += n_lanes;
+            remainder -= n_lanes;
+          }
+          for(unsigned int i = 0; i < remainder; ++i)
+            sum_1[i] += ptr[i] * ptr[i];
+        }
+        return sum_0 + sum_1;
+      };
+
+      dealii::VectorizedArray<Number> norm_sqr_rhs = 0, norm_sqr_residual = 0;
+      op_rt->vmult(
+        rhs_rt,
+        solution_rt,
+        [&](const unsigned int begin, const unsigned int end) {
+          norm_sqr_rhs += compute_vector_norm_sqr_on_range(begin, end);
+        },
+        [&](const unsigned int begin, const unsigned int end) {
+          std::copy(rhs_rt.begin() + begin,
+                    rhs_rt.begin() + end,
+                    velocity_matvec.back().begin() + begin);
+          norm_sqr_residual += compute_vector_norm_sqr_on_range(begin, end);
+        });
+      std::array<double, 2> sums = {norm_sqr_rhs.sum(), norm_sqr_residual.sum()};
+      dealii::Utilities::MPI::sum(dealii::ArrayView<const Number>(sums.data(), 2),
+                                  solution_rt.get_mpi_communicator(),
+                                  dealii::ArrayView<Number>(sums.data(), 2));
+      extrapolate_accuracy = std::make_pair(std::sqrt(sums[0]), std::sqrt(sums[1]));
+    }
+    else
+      op_rt->vmult(
+        rhs_rt,
+        solution_rt,
+        [&](const unsigned int begin, const unsigned int end) {
+          std::copy(rhs_rt.begin() + begin,
+                    rhs_rt.begin() + end,
+                    velocity_matvec[velocity_matvec.size() - 2].begin() + begin);
+          extrapolate_vectors_range<false>(
+            begin, end, projection_vector, velocity_red, solution_rt);
+        },
+        [&](const unsigned int begin, const unsigned int end) {
+          std::copy(rhs_rt.begin() + begin,
+                    rhs_rt.begin() + end,
+                    velocity_matvec.back().begin() + begin);
+        });
 
     // Do the last tasks before solving: (i) initialize the solution vector to
     // 0 before starting the solver to benefit from the low residual with the
@@ -734,6 +843,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
       preconditioner_viscous.get_vector().local_element(i) =
         1.0f / (float(factor_mass) * diagonal_mass.local_element(i) +
                 float(factor_lapl) * diagonal_laplace.local_element(i));
+
+    if(this->get_time_step_number() > 10 && can_leave_projection_mode)
+      in_extrapolation_mode = true;
 
     const double t_residual = timer2.wall_time();
     stat_momentum_time_dp_residual.add_sample(t_residual);

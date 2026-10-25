@@ -1205,6 +1205,8 @@ public:
     AssertDimension(pressure_shape_info.data[0].n_q_points_1d, shape_info.data[0].n_q_points_1d);
     AssertDimension(pressure_shape_info.data[0].fe_degree, shape_info.data[1].fe_degree);
 
+    // Run the functions on dependencies as determined by the 'mass' operator,
+    // because there are no face integrals in this function.
     const unsigned int n_cell_batches = dof_indices.size();
     for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
         range < cell_loop_pre_list_index[n_cell_batches + 1];

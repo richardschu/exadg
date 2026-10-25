@@ -230,6 +230,11 @@ private:
   // time integrator constants: extrapolation scheme
   ExtrapolationConstants extra_pressure_nbc;
   ExtrapolationConstants extra_pressure_rhs;
+
+  // extrapolation constants derived from initial guess
+  bool                   in_extrapolation_mode;
+  std::vector<double>    previous_time_steps;
+  ExtrapolationConstants extra_initial_guess;
 };
 
 } // namespace IncNS
