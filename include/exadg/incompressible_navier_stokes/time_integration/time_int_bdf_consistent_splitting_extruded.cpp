@@ -719,7 +719,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     {
       const unsigned int n_vectors = velocity_red.size();
       AssertDimension(velocity_matvec.size(), 2 * n_vectors);
-      AssertThrow(projection_vector.size() <= 5, dealii::ExcNotImplemented());
+      AssertThrow(n_vectors <= 5, dealii::ExcNotImplemented());
       std::array<const float *, 10> vec_ptrs = {};
       for(unsigned int j = 0; j < 2 * n_vectors; ++j)
         vec_ptrs[j] = velocity_matvec[j].begin();
