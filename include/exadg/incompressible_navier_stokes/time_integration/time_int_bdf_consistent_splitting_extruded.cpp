@@ -741,7 +741,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
             begin, end, n_vectors, factors_time_step_mass, vec_ptrs, rhs_rt.begin(), local_sums);
         });
 
-      double residual_with_extrapolation = 0;
+      double residual_with_extrapolation = std::numeric_limits<double>::infinity();
       projection_vector.resize(n_vectors);
       extrapolate_accuracy = do_compute_least_squares_fit(solution_rt.get_mpi_communicator(),
                                                           local_sums,
