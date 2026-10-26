@@ -1188,7 +1188,7 @@ public:
       [&rhs](const unsigned int begin, const unsigned int end) {
         std::fill(rhs.begin() + begin, rhs.begin() + end, Number(0.));
       },
-      {},
+      [](const unsigned int, const unsigned int) {},
       source_function);
   }
 
