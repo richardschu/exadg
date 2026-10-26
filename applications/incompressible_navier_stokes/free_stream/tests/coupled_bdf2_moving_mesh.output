@@ -51,6 +51,7 @@ Temporal discretization:
   Temporal refinements:                      0
   Order of time integration scheme:          2
   Start with low order method:               false
+  Initial guess type:                        Extrapolation
   Treatment of convective term:              Explicit
   Solver information:
   Interval physical time:                    1.0000e+01
