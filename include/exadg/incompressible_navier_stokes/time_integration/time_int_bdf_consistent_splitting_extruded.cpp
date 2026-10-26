@@ -826,7 +826,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
                     velocity_matvec.back().begin() + begin);
           norm_sqr_residual += compute_vector_norm_sqr_on_range(begin, end);
         });
-      std::array<double, 2> sums = {norm_sqr_rhs.sum(), norm_sqr_residual.sum()};
+      std::array<double, 2> sums = {{norm_sqr_rhs.sum(), norm_sqr_residual.sum()}};
       dealii::Utilities::MPI::sum(dealii::ArrayView<const Number>(sums.data(), 2),
                                   solution_rt.get_mpi_communicator(),
                                   dealii::ArrayView<Number>(sums.data(), 2));
