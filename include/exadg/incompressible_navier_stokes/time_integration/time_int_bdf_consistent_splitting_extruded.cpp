@@ -1124,7 +1124,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     /*
      * VII. Select the initial guess strategy for the next time step.
      */
+    // Remember the strategy for output below.
+    const bool used_extrapolation = momentum_solver_in_extrapolation_mode;
 
+    // Update the strategy.
     if(this->get_time_step_number() > 10 && may_leave_projection_mode && velocity_red.size() == 4 &&
        this->order == 3)
       momentum_solver_in_extrapolation_mode = true;
@@ -1144,7 +1147,9 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     if(this->print_solver_info() and not(this->is_test))
     {
       this->pcout << std::endl
-                  << "Solve viscous step (projection reduced residual from "
+                  << "Solve viscous step ("
+                  << (used_extrapolation ? "extrapolation" : "projection")
+                  << " reduced residual from "
                   << extrapolate_accuracy.first << " to " << initial_residual << " solve "
                   << (need_cg_solver ? "CG" : "Ch") << " to " << reached_residual << "):";
       print_solver_info_linear(this->pcout, n_iterations, timer.wall_time());
