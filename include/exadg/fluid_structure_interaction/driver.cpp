@@ -286,7 +286,7 @@ Driver<dim, Number>::solve_subproblem_fluid(unsigned int const iteration,
 
   // solve fluid problem
   fluid->time_integrator->advance_one_timestep_partitioned_solve(
-    iteration == 0 /* use_extrapolation */, update_velocity, update_pressure);
+    iteration == 0 /* first_coupling_iteration */, update_velocity, update_pressure);
 }
 
 template<int dim, typename Number>
@@ -297,8 +297,8 @@ Driver<dim, Number>::solve_subproblem_structure(unsigned int const iteration) co
   coupling_fluid_to_structure(true /* end_of_time_step */);
 
   // solve structural problem
-  structure->time_integrator->advance_one_timestep_partitioned_solve(iteration ==
-                                                                     0 /* use_extrapolation */);
+  structure->time_integrator->advance_one_timestep_partitioned_solve(
+    iteration == 0 /* first_coupling_iteration */);
 }
 
 template<int dim, typename Number>

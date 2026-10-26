@@ -50,7 +50,7 @@ TimeIntGenAlpha<dim, Number>::TimeIntGenAlpha(
     param(param_in),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0),
-    use_extrapolation(true),
+    first_coupling_iteration(true),
     store_solution(false),
     iterations({0, {0, 0}})
 {
@@ -103,10 +103,11 @@ TimeIntGenAlpha<dim, Number>::compute_initial_acceleration(bool const do_restart
 
 template<int dim, typename Number>
 void
-TimeIntGenAlpha<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation)
+TimeIntGenAlpha<dim, Number>::advance_one_timestep_partitioned_solve(
+  bool const first_coupling_iteration)
 {
-  this->use_extrapolation = use_extrapolation;
-  this->store_solution    = true;
+  this->first_coupling_iteration = first_coupling_iteration;
+  this->store_solution           = true;
 
   this->advance_one_timestep_solve();
 }
@@ -152,7 +153,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   timer.restart();
 
   // initial guess
-  if(use_extrapolation)
+  if(first_coupling_iteration)
     displacement_np = displacement_n;
   else
     displacement_np = displacement_last_iter;

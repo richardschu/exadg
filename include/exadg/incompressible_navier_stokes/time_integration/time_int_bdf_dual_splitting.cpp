@@ -447,7 +447,7 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   rhs_pressure(rhs);
 
   // compute initial guess for the solver from the previous time steps
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
     this->compute_initial_guess(pressure_np, pressure);
   }
@@ -620,7 +620,7 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
     // extrapolate velocity to time t_n+1 and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty term
     VectorType velocity_extrapolated;
-    if(this->use_extrapolation)
+    if(this->first_coupling_iteration)
     {
       velocity_extrapolated.reinit(velocity[0]);
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -640,7 +640,7 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(this->first_coupling_iteration == false)
       velocity_np = velocity_projection_last_iter;
 
     unsigned int n_iter = pde_operator->solve_projection(velocity_np, rhs, update_preconditioner);
@@ -712,7 +712,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
 
     // Extrapolate old solution, used by the explicitly treated terms below and, by default, as the
     // initial guess for the solver.
-    if(this->use_extrapolation)
+    if(this->first_coupling_iteration)
     {
       velocity_np = 0;
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -751,7 +751,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
 
     // The explicitly treated terms above are set, so velocity_np can be overwritten by the
     // initial guess for the solver if it differs from the extrapolation.
-    if(this->use_extrapolation and
+    if(this->first_coupling_iteration and
        this->param.initial_guess_type != InitialGuessType::Extrapolation)
     {
       this->compute_initial_guess(velocity_np, velocity);
@@ -907,7 +907,7 @@ TimeIntBDFDualSplitting<dim, Number>::penalty_step()
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(this->first_coupling_iteration == false)
       velocity_np = velocity_projection_last_iter;
 
     unsigned int const n_iter =

@@ -164,7 +164,7 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
 
   // extrapolate old solutions to update the viscosity model or the penalty parameters based on
   // this extrapolated solution, and to obtain an initial guess for the solver (by default)
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
     solution_np.equ(this->extra.get_beta(0), solution[0]);
     for(unsigned int i = 1; i < solution.size(); ++i)
@@ -215,7 +215,8 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
 
   // The explicitly treated terms above are set, so solution_np can be overwritten by the initial
   // guess for the solver if it differs from the extrapolation.
-  if(this->use_extrapolation and this->param.initial_guess_type != InitialGuessType::Extrapolation)
+  if(this->first_coupling_iteration and
+     this->param.initial_guess_type != InitialGuessType::Extrapolation)
   {
     this->compute_initial_guess(solution_np, solution);
   }
@@ -403,7 +404,7 @@ TimeIntBDFCoupled<dim, Number>::penalty_step()
   // extrapolate velocity to time t_n+1 and use this velocity field to
   // calculate the penalty parameter for the divergence and continuity penalty term
   VectorType velocity_extrapolated(solution_np.block(0));
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
     velocity_extrapolated = 0.0;
     for(unsigned int i = 0; i < solution.size(); ++i)
@@ -428,7 +429,7 @@ TimeIntBDFCoupled<dim, Number>::penalty_step()
      0);
 
   // solve projection step
-  if(this->use_extrapolation == false)
+  if(this->first_coupling_iteration == false)
     solution_np.block(0) = velocity_penalty_last_iter;
 
   unsigned int n_iter =

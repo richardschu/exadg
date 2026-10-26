@@ -53,7 +53,7 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     cfl(param.cfl / std::pow(2.0, refine_steps_time)),
     operator_base(operator_in),
     vec_convective_term(this->order),
-    use_extrapolation(true),
+    first_coupling_iteration(true),
     store_solution(false),
     update_velocity(true),
     update_pressure(true),
@@ -157,8 +157,8 @@ template<typename VectorTypeLocal>
 void
 compute_initial_guess_from_history(VectorTypeLocal &                    dst,
                                    std::vector<VectorTypeLocal> const & history,
-                                   InitialGuessType const          initial_guess_type,
-                                   ExtrapolationConstants const &  extra)
+                                   InitialGuessType const               initial_guess_type,
+                                   ExtrapolationConstants const &       extra)
 {
   if(initial_guess_type == InitialGuessType::Zero)
   {
@@ -218,12 +218,12 @@ TimeIntBDF<dim, Number>::ale_update()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const first_coupling_iteration,
                                                                 bool const update_velocity,
                                                                 bool const update_pressure)
 {
-  this->use_extrapolation = use_extrapolation;
-  this->store_solution    = true;
+  this->first_coupling_iteration = first_coupling_iteration;
+  this->store_solution           = true;
 
   // Toggle velocity update for semi-implicit FSI
   if(this->param.temporal_discretization == TemporalDiscretization::BDFCoupledSolution)

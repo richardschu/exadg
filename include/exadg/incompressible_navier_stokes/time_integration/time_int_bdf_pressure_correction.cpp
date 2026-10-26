@@ -355,7 +355,7 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
   {
     // Extrapolate old solutions, used by the explicitly treated terms below and, by default, as the
     // initial guess for the solver.
-    if(this->use_extrapolation)
+    if(this->first_coupling_iteration)
     {
       velocity_np = 0.0;
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -396,7 +396,7 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
 
     // The explicitly treated terms above are set, so velocity_np can be overwritten by the
     // initial guess for the solver if it differs from the extrapolation.
-    if(this->use_extrapolation and
+    if(this->first_coupling_iteration and
        this->param.initial_guess_type != InitialGuessType::Extrapolation)
     {
       this->compute_initial_guess(velocity_np, velocity);
@@ -591,7 +591,7 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
   rhs_pressure(rhs);
 
   // calculate initial guess for pressure solve
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
     // compute initial guess for the pressure solution p_{n+1} at time t^{n+1} from the previous
     // time steps
@@ -815,7 +815,7 @@ TimeIntBDFPressureCorrection<dim, Number>::projection_step(VectorType const & pr
     // extrapolate velocity to time t_{n+1} and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty terms
     VectorType velocity_extrapolated;
-    if(this->use_extrapolation)
+    if(this->first_coupling_iteration)
     {
       velocity_extrapolated.reinit(velocity[0]);
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -841,7 +841,7 @@ TimeIntBDFPressureCorrection<dim, Number>::projection_step(VectorType const & pr
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(this->first_coupling_iteration == false)
       velocity_np = velocity_projection_last_iter;
 
     unsigned int const n_iter =

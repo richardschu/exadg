@@ -94,7 +94,7 @@ public:
   ale_update();
 
   void
-  advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+  advance_one_timestep_partitioned_solve(bool const first_coupling_iteration,
                                          bool const update_velocity,
                                          bool const update_pressure);
 
@@ -163,7 +163,7 @@ protected:
   VectorType              convective_term_np;
 
   // required for strongly-coupled partitioned iteration
-  bool use_extrapolation;
+  bool first_coupling_iteration;
   bool store_solution;
   bool update_velocity;
   bool update_pressure;
