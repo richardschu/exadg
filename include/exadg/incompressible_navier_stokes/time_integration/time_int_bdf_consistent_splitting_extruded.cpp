@@ -66,7 +66,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::TimeIntBDFConsistentSplittin
                        this->param.start_with_low_order),
     extra_pressure_rhs(this->param.order_extrapolation_pressure_rhs,
                        this->param.start_with_low_order),
-    in_extrapolation_mode(false),
+    momentum_solver_in_extrapolation_mode(false),
     previous_time_steps(velocity_red.size()),
     extra_initial_guess(velocity_red.size(),
                         /* start_with_low_order */ true)
@@ -428,7 +428,6 @@ void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::evaluate_convective_term()
 {
   dealii::Timer timer;
-  timer.restart();
 
   if(this->param.convective_problem())
   {
@@ -457,26 +456,26 @@ void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::pressure_step()
 {
   dealii::Timer timer;
-  timer.restart();
 
-  // compute right-hand-side vector
+  // Compute right-hand-side vector
   rhs_pressure(pressure_rhs);
 
   const double t_rhs = timer.wall_time();
   stat_pressure_time_rhs.add_sample(t_rhs);
 
-  // projection solution from previous time steps to get a good initial
-  // estimate for the solver, following the algorithm by Loehner, 'Projective
-  // prediction of pressure increments', 2004, https://doi.org/10.1002/cnm.743
+  // Projection to combine solutions from previous time steps to get a good
+  // initial estimate for the linear solver, following the algorithm by
+  // Loehner, 'Projective prediction of pressure increments', 2004,
+  // https://doi.org/10.1002/cnm.743
   dealii::Timer             timer2;
   std::pair<double, double> extrapolate_accuracy(0., 0.);
   if(this->use_extrapolation)
   {
     pressure[0].copy_locally_owned_data_from(pressure_np);
 
-    // in first time step, need to get the right-hand side from the mat-vec,
+    // In first time step, need to get the right-hand side from the mat-vec,
     // as it is not in restart data, later just retrieve it from the old
-    // right-hand side vectors
+    // right-hand side vectors.
     if(this->get_time_step_number() == 1)
       poisson_preconditioner->get_dg_matrix().vmult(pressure_matvec[0], pressure[0]);
     extrapolate_accuracy =
@@ -618,17 +617,18 @@ void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
 {
   dealii::Timer timer;
-  timer.restart();
 
   // in case we need to iteratively solve a linear or nonlinear system of equations
   if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
     /*
-     *  Calculate the right-hand side of the linear system of equations. This
-     *  uses the interface to overlap vector operations before and after the
-     *  loop for the two extrapolations that are necessary for this step, in
-     *  order to increase the data locality
+     * I. right-hand side
      */
+
+    // Calculate the right-hand side of the linear system of equations. This
+    // uses the interface to overlap vector operations before and after the
+    // loop for the two extrapolations that are necessary for this step, in
+    // order to increase the data locality.
     std::vector<Number> factors_velocity_rhs(this->order);
     std::vector<Number> factors_convective_term(this->order);
     std::vector<Number> factors_initial_guess(velocity.size());
@@ -647,7 +647,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
       right_hand_side->set_time(this->get_next_time());
     }
 
-    if(in_extrapolation_mode)
+    // When in extrapolation mode, we can compute the initial guess for
+    // 'solution_rt' using the vectors that are also used to compute the time
+    // derivative terms in the right-hand side term, so amortize the memory
+    // access for that second purpose. The vector 'velocity.back()' holds the
+    // extrapolated time derivative terms used for the rhs computation and
+    // must not be used elsewhere in this solver
+    if(momentum_solver_in_extrapolation_mode)
       op_rt->evaluate_momentum_rhs(
         pressure_np,
         velocity.back(),
@@ -686,7 +692,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
 
     dealii::Timer timer2;
 
-    // solve linear system of equations
+    /*
+     * II. initial guess by least-squares projection (if in that mode)
+     */
+
     std::pair<double, double> extrapolate_accuracy(0., 0.);
     unsigned int              n_iterations = 0;
 
@@ -703,10 +712,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     // difference in the product, which is done inside the evaluation of
     // do_compute_inner_products_range with the 'factors_time_step_mass'
     // argument.
-    bool                can_leave_projection_mode = false;
+    bool                may_leave_projection_mode = false;
     std::vector<double> projection_vector;
     double              t_proj = 0;
-    if(not in_extrapolation_mode)
+    if(not momentum_solver_in_extrapolation_mode)
     {
       const unsigned int n_vectors = velocity_red.size();
       AssertDimension(velocity_matvec.size(), 2 * n_vectors);
@@ -740,13 +749,19 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
                                                           factors_initial_guess,
                                                           &residual_with_extrapolation);
 
+      // Further down, we only allow to leave the least-squares option if the
+      // residual is sufficiently small.
       if(residual_with_extrapolation < 1.5 * extrapolate_accuracy.second)
-        can_leave_projection_mode = true;
+        may_leave_projection_mode = true;
 
       t_proj = timer2.wall_time();
       stat_momentum_time_projection.add_sample(t_proj);
       timer2.restart();
     }
+
+    /*
+     * III. compute high-precision residual, usually in FP64/double
+     */
 
     if(preconditioner_viscous.get_vector().get_partitioner().get() !=
        diagonal_mass.get_partitioner().get())
@@ -763,7 +778,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     // not be needed again, as it is overwritten with the mass matrix mat-vec
     // in the next time step (done in the code above).
     op_rt->set_parameters(-factor_mass, -factor_lapl);
-    if(in_extrapolation_mode)
+    if(momentum_solver_in_extrapolation_mode)
     {
       const auto compute_vector_norm_sqr_on_range =
         [this](const unsigned int begin,
@@ -834,9 +849,18 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
                     velocity_matvec.back().begin() + begin);
         });
 
-    // Do the last tasks before solving: (i) initialize the solution vector to
-    // 0 before starting the solver to benefit from the low residual with the
-    // double residual and (ii) set the right entries of the preconditioner.
+    // For the cases where the two-vector extrapolation is implemented, check
+    // if we can switch the initial guess for the solver to extrapolation
+    // rather than least-squares projection.
+    if(this->get_time_step_number() > 10 && may_leave_projection_mode && velocity_red.size() == 4 &&
+       this->order == 3)
+      momentum_solver_in_extrapolation_mode = true;
+
+
+    /*
+     * IV. Update point-Jacobi preconditioner entries
+     */
+
     const unsigned int owned_size = solution_rt.locally_owned_size();
     DEAL_II_OPENMP_SIMD_PRAGMA
     for(unsigned int i = 0; i < owned_size; ++i)
@@ -844,12 +868,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
         1.0f / (float(factor_mass) * diagonal_mass.local_element(i) +
                 float(factor_lapl) * diagonal_laplace.local_element(i));
 
-    if(this->get_time_step_number() > 10 && can_leave_projection_mode)
-      in_extrapolation_mode = true;
-
     const double t_residual = timer2.wall_time();
     stat_momentum_time_dp_residual.add_sample(t_residual);
     timer2.restart();
+
+    /*
+     * V. Solve the linear system with either CG or Chebyshev
+     */
 
     op_rt_float->set_parameters(factor_mass, factor_lapl);
 
@@ -1070,13 +1095,33 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
       }
     }
 
-    DEAL_II_OPENMP_SIMD_PRAGMA
-    for(unsigned int i = 0; i < owned_size; ++i)
+    /*
+     * VI. Add computed solution update to the high-precision vector to
+     *     finalize solution
+     */
+
+    // With extrapolation, we do not need the 'float' vectors stored in
+    // 'velocity_red' that are going into the least-squares system.
+    if(momentum_solver_in_extrapolation_mode)
     {
-      const Number u_i = solution_rt.local_element(i) + velocity_red.back().local_element(i);
-      solution_rt.local_element(i)         = u_i;
-      velocity_np.local_element(i)         = u_i;
-      velocity_red.back().local_element(i) = u_i;
+      DEAL_II_OPENMP_SIMD_PRAGMA
+      for(unsigned int i = 0; i < owned_size; ++i)
+      {
+        const Number u_i = solution_rt.local_element(i) + velocity_red.back().local_element(i);
+        solution_rt.local_element(i) = u_i;
+        velocity_np.local_element(i) = u_i;
+      }
+    }
+    else
+    {
+      DEAL_II_OPENMP_SIMD_PRAGMA
+      for(unsigned int i = 0; i < owned_size; ++i)
+      {
+        const Number u_i = solution_rt.local_element(i) + velocity_red.back().local_element(i);
+        solution_rt.local_element(i)         = u_i;
+        velocity_np.local_element(i)         = u_i;
+        velocity_red.back().local_element(i) = u_i;
+      }
     }
 
     if(this->print_solver_info() and not(this->is_test))
@@ -1112,6 +1157,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
   this->timer_tree->insert({"Timeloop", "Viscous step"}, timer.wall_time());
 }
 
+
+
 template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::prepare_vectors_for_next_timestep()
@@ -1137,6 +1184,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::prepare_vectors_for_next_tim
   for(unsigned int i = factors_time_step_mass.size() - 1; i > 0; --i)
     std::swap(factors_time_step_mass[i], factors_time_step_mass[i - 1]);
 }
+
+
 
 template<int dim, typename Number>
 double
@@ -1203,6 +1252,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::calculate_time_step_size()
   return time_step;
 }
 
+
+
 template<int dim, typename Number>
 double
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::recalculate_time_step_size() const
@@ -1241,6 +1292,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::recalculate_time_step_size()
   return new_time_step_size;
 }
 
+
+
 template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplittingExtruded<dim, Number>::solve_steady_problem()
@@ -1249,6 +1302,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::solve_steady_problem()
 
   this->pcout << std::endl << "... done!" << std::endl;
 }
+
+
 
 template<int dim, typename Number>
 void
@@ -1292,10 +1347,11 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::print_iterations() const
   stat_momentum_residual_start.print_statistics(this->pcout, "U residual start solve", 25);
   stat_momentum_residual_stop.print_statistics(this->pcout, "U residual end solve", 25);
   stat_momentum_time_rhs.print_statistics(this->pcout, "U time rhs [s]", 25, &this->mpi_comm);
-  stat_momentum_time_projection.print_statistics(this->pcout,
-                                                 "U time projection [s]",
-                                                 25,
-                                                 &this->mpi_comm);
+  stat_momentum_time_projection.print_statistics(
+    this->pcout,
+    "U time project (" + std::to_string(stat_momentum_time_projection.get_n_samples()) + "x) [s]",
+    25,
+    &this->mpi_comm);
   stat_momentum_time_dp_residual.print_statistics(this->pcout,
                                                   "U time residual FP64 [s]",
                                                   25,
@@ -1313,6 +1369,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::print_iterations() const
     &this->mpi_comm);
   this->pcout << std::endl;
 }
+
+
 
 template<int dim, typename Number>
 void
@@ -1337,6 +1395,8 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::write_restart_vectors() cons
 
   this->operator_base->serialize_vectors(vectors_velocity, vectors_pressure);
 }
+
+
 
 template<int dim, typename Number>
 void

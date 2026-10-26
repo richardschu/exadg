@@ -194,12 +194,12 @@ extrapolate_two_vectors_range(
   AssertIndexRange(start_index, result_2.locally_owned_size());
   AssertIndexRange(end_index, result_2.locally_owned_size() + 1);
 
-  Number const * vec_0   = vectors[0].begin();
-  Number const * vec_1   = vectors[1].begin();
-  Number const * vec_2   = vectors[2].begin();
-  Number const * vec_3   = vectors[3].begin();
-  Number2 *      res_1   = result_1.begin();
-  Number2 *      res_2   = result_2.begin();
+  Number const * vec_0   = vectors[0].begin() + start_index;
+  Number const * vec_1   = vectors[1].begin() + start_index;
+  Number const * vec_2   = vectors[2].begin() + start_index;
+  Number const * vec_3   = vectors[3].begin() + start_index;
+  Number2 *      res_1   = result_1.begin() + start_index;
+  Number2 *      res_2   = result_2.begin() + start_index;
   Number2 const  beta_0  = factors_1[0];
   Number2 const  beta_1  = factors_1[1];
   Number2 const  beta_2  = factors_1[2];
@@ -208,12 +208,39 @@ extrapolate_two_vectors_range(
   Number2 const  gamma_2 = factors_2[2];
   Number2 const  gamma_3 = factors_2[3];
 
-  DEAL_II_OPENMP_SIMD_PRAGMA
-  for(unsigned int i = start_index; i < end_index; ++i)
+  // Manually vectorize the loop because the compilers pragma OMP SIMD might
+  // get confused by two adjacent stores (and the fact that some vectors do
+  // indeed alias at our call sites).
+  constexpr std::size_t n_lanes      = dealii::VectorizedArray<Number2>::size();
+  const std::size_t     regular_size = (end_index - start_index) / n_lanes * n_lanes;
+  for(std::size_t i = 0; i < regular_size; i += n_lanes)
   {
-    const double first = beta_0 * vec_0[i] + beta_2 * vec_2[i] + beta_1 * vec_1[i];
-    res_2[i] = gamma_0 * vec_0[i] + gamma_2 * vec_2[i] + gamma_1 * vec_1[i] + gamma_3 * vec_3[i];
+    dealii::VectorizedArray<Number2> v0, v1, v2, v3;
+    v0.load(vec_0 + i);
+    v1.load(vec_1 + i);
+    v2.load(vec_2 + i);
+    v3.load(vec_3 + i);
+
+    // Since BDF derivative or extrapolation constants often have alternating
+    // signs, collect even terms first before the odd terms to reduce the
+    // number of roundoff-error critical subtractions.
+    const dealii::VectorizedArray<Number2> first = beta_0 * v0 + beta_2 * v2 + beta_1 * v1;
+    const dealii::VectorizedArray<Number2> second =
+      gamma_0 * v0 + gamma_2 * v2 + gamma_1 * v1 + gamma_3 * v3;
+    first.store(res_1 + i);
+    second.store(res_2 + i);
+  }
+
+  // Remainder, noting that the res_1 or res_2 vectors might alias with some
+  // of vec_0, ..., vec_3, so we have to compute the result first before
+  // writing.
+  for(std::size_t i = regular_size; i < (end_index - start_index); ++i)
+  {
+    const Number2 first = beta_0 * vec_0[i] + beta_2 * vec_2[i] + beta_1 * vec_1[i];
+    const Number2 second =
+      gamma_0 * vec_0[i] + gamma_2 * vec_2[i] + gamma_1 * vec_1[i] + gamma_3 * vec_3[i];
     res_1[i] = first;
+    res_2[i] = second;
   }
 }
 
