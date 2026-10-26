@@ -1613,7 +1613,7 @@ private:
   compute_vector_access_pattern()
   {
     const unsigned int        n_dofs     = partitioner->locally_owned_size();
-    constexpr unsigned int    chunk_size = 256;
+    constexpr unsigned int    chunk_size = 512;
     std::vector<unsigned int> touched_first_by((n_dofs + chunk_size - 1) / chunk_size,
                                                numbers::invalid_unsigned_int);
     std::vector<unsigned int> touched_mass_first_by((n_dofs + chunk_size - 1) / chunk_size,
