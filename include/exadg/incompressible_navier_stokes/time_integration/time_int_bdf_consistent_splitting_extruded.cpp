@@ -631,13 +631,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     // order to increase the data locality.
     std::vector<Number> factors_velocity_rhs(this->order);
     std::vector<Number> factors_convective_term(this->order);
-    std::vector<Number> factors_initial_guess(velocity.size());
+    std::vector<Number> factors_initial_guess(extra_initial_guess.get_order());
     for(unsigned int i = 0; i < this->order; ++i)
     {
       factors_velocity_rhs[i]    = this->bdf.get_alpha(i) / this->get_time_step_size();
       factors_convective_term[i] = -this->extra.get_beta(i);
     }
-    for(unsigned int i = 0; i < velocity.size(); ++i)
+    for(unsigned int i = 0; i < factors_initial_guess.size(); ++i)
       factors_initial_guess[i] = extra_initial_guess.get_beta(i);
 
     std::shared_ptr<dealii::Function<dim>> right_hand_side;
