@@ -90,8 +90,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::update_time_integrator_const
 
   extra_pressure_rhs.update(this->get_time_step_number(), this->adaptive_time_stepping, time_steps);
 
-  // record one more time step for the extrapolation formula for the initial
-  // guess
+  // Record one more time step for the extrapolation formula for the initial
+  // guess. Note that this shift assumes that this function is called exactly
+  // once per time step. ALE serves as a proxy for multiphysics coupling FSI,
+  // where this function is called multiple times.
+  AssertThrow(not this->param.ale_formulation,
+              dealii::ExcMessage("The time step history for the initial guess assumes one "
+                                 "call per time step, which is not guaranteed."));
   for(unsigned int i = previous_time_steps.size() - 1; i >= time_steps.size(); --i)
     previous_time_steps[i] = previous_time_steps[i - 1];
   for(unsigned int i = 0; i < time_steps.size(); ++i)
