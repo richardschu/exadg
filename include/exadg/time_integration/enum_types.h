@@ -41,6 +41,21 @@ enum class GenAlphaType
   BossakAlpha
 };
 
+/*
+ * Initial guess for the iterative solvers within a time step, computed from the solutions at
+ * previous time steps:
+ *
+ *  - Zero: start from zero, ignoring the previous time steps
+ *  - LastTimeStep: start from the solution at the last time step
+ *  - Extrapolation: extrapolate the solutions at previous time steps to the new time
+ */
+enum class InitialGuessType
+{
+  Zero,
+  LastTimeStep,
+  Extrapolation
+};
+
 } // namespace ExaDG
 
 #endif /* EXADG_TIME_INTEGRATION_ENUM_TYPES_H_ */

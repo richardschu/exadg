@@ -446,14 +446,10 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   VectorType rhs(pressure_np);
   rhs_pressure(rhs);
 
-  // extrapolate old solution to get a good initial estimate for the solver
+  // compute initial guess for the solver from the previous time steps
   if(this->use_extrapolation)
   {
-    pressure_np = 0;
-    for(unsigned int i = 0; i < pressure.size(); ++i)
-    {
-      pressure_np.add(this->extra.get_beta(i), pressure[i]);
-    }
+    this->compute_initial_guess(pressure_np, pressure);
   }
   else
   {
@@ -714,7 +710,8 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     // store the velocity vector that is needed to compute the rhs vector
     VectorType velocity_rhs = velocity_np;
 
-    // Extrapolate old solution to get a good initial estimate for the solver.
+    // Extrapolate old solution, used by the explicitly treated terms below and, by default, as the
+    // initial guess for the solver.
     if(this->use_extrapolation)
     {
       velocity_np = 0;
@@ -742,6 +739,22 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
         this->pcout << std::endl << "Update of variable viscosity:";
         print_wall_time(this->pcout, timer_viscosity_update.wall_time());
       }
+    }
+
+    // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+    VectorType transport_velocity;
+    if(this->param.convective_problem() and
+       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      transport_velocity = velocity_np;
+    }
+
+    // The explicitly treated terms above are set, so velocity_np can be overwritten by the
+    // initial guess for the solver if it differs from the extrapolation.
+    if(this->use_extrapolation and
+       this->param.initial_guess_type != InitialGuessType::Extrapolation)
+    {
+      this->compute_initial_guess(velocity_np, velocity);
     }
 
     bool const update_preconditioner =
@@ -783,14 +796,6 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     }
     else // linear problem
     {
-      // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
-      VectorType transport_velocity;
-      if(this->param.convective_problem() and
-         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-      {
-        transport_velocity = velocity_np;
-      }
-
       /*
        *  Calculate the right-hand side of the linear system of equations.
        */

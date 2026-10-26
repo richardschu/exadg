@@ -73,6 +73,7 @@ Parameters::Parameters()
     n_refine_time(0),
     order_time_integrator(1),
     start_with_low_order(true),
+    initial_guess_type(InitialGuessType::Extrapolation),
 
     // pseudo time-stepping
     convergence_criterion_steady_problem(ConvergenceCriterionSteadyProblem::Undefined),
@@ -877,6 +878,7 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 
   print_parameter(pcout, "Order of time integration scheme", order_time_integrator);
   print_parameter(pcout, "Start with low order method", start_with_low_order);
+  print_parameter(pcout, "Initial guess type", initial_guess_type);
 
   print_parameter(pcout, "Treatment of convective term", treatment_of_convective_term);
 

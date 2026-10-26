@@ -153,6 +153,50 @@ TimeIntBDF<dim, Number>::prepare_vectors_for_next_timestep()
   }
 }
 
+template<typename VectorTypeLocal>
+void
+compute_initial_guess_from_history(VectorTypeLocal &                    dst,
+                                   std::vector<VectorTypeLocal> const & history,
+                                   InitialGuessType const          initial_guess_type,
+                                   ExtrapolationConstants const &  extra)
+{
+  if(initial_guess_type == InitialGuessType::Zero)
+  {
+    dst = 0.0;
+  }
+  else if(initial_guess_type == InitialGuessType::LastTimeStep)
+  {
+    dst = history[0];
+  }
+  else if(initial_guess_type == InitialGuessType::Extrapolation)
+  {
+    // zeroing first also resets the ghost values, see dealii::LinearAlgebra::distributed::Vector
+    dst = 0.0;
+    for(unsigned int i = 0; i < history.size(); ++i)
+      dst.add(extra.get_beta(i), history[i]);
+  }
+  else
+  {
+    AssertThrow(false, dealii::ExcMessage("InitialGuessType not implemented."));
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::compute_initial_guess(VectorType &                    dst,
+                                               std::vector<VectorType> const & history) const
+{
+  compute_initial_guess_from_history(dst, history, param.initial_guess_type, this->extra);
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::compute_initial_guess(BlockVectorType &                    dst,
+                                               std::vector<BlockVectorType> const & history) const
+{
+  compute_initial_guess_from_history(dst, history, param.initial_guess_type, this->extra);
+}
+
 template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::ale_update()

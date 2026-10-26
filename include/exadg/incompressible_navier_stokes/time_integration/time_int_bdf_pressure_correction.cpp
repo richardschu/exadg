@@ -353,7 +353,8 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
   // in case we need to iteratively solve a linear or nonlinear system of equations
   if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
-    // Extrapolate old solutions to get a good initial estimate for the solver.
+    // Extrapolate old solutions, used by the explicitly treated terms below and, by default, as the
+    // initial guess for the solver.
     if(this->use_extrapolation)
     {
       velocity_np = 0.0;
@@ -383,6 +384,22 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
         this->pcout << std::endl << "Update of variable viscosity:";
         print_wall_time(this->pcout, timer_viscosity_update.wall_time());
       }
+    }
+
+    // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+    VectorType transport_velocity;
+    if(this->param.convective_problem() and
+       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      transport_velocity = velocity_np;
+    }
+
+    // The explicitly treated terms above are set, so velocity_np can be overwritten by the
+    // initial guess for the solver if it differs from the extrapolation.
+    if(this->use_extrapolation and
+       this->param.initial_guess_type != InitialGuessType::Extrapolation)
+    {
+      this->compute_initial_guess(velocity_np, velocity);
     }
 
     bool const update_preconditioner =
@@ -424,14 +441,6 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
     }
     else // linear problem
     {
-      // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
-      VectorType transport_velocity;
-      if(this->param.convective_problem() and
-         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-      {
-        transport_velocity = velocity_np;
-      }
-
       /*
        *  Calculate the right-hand side of the linear system of equations.
        */
@@ -584,19 +593,16 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
   // calculate initial guess for pressure solve
   if(this->use_extrapolation)
   {
-    // extrapolate old solution to get a good initial estimate for the
-    // pressure solution p_{n+1} at time t^{n+1}
-    for(unsigned int i = 0; i < pressure.size(); ++i)
-    {
-      pressure_increment.add(this->extra.get_beta(i), pressure[i]);
-    }
+    // compute initial guess for the pressure solution p_{n+1} at time t^{n+1} from the previous
+    // time steps
+    this->compute_initial_guess(pressure_increment, pressure);
 
     // incremental formulation
     if(extra_pressure_gradient.get_order() > 0)
     {
       // Subtract extrapolation of pressure since the PPE is solved for the
       // pressure increment phi = p_{n+1} - sum_i (beta_pressure_extra_i * pressure_i),
-      // where p_{n+1} is approximated by an extrapolation of order J (=order of BDF scheme).
+      // where p_{n+1} is approximated by the initial guess computed above.
       // Note that the divergence correction term in case of the rotational formulation is not
       // considered when calculating a good initial guess for the solution of the PPE,
       // which will slightly increase the number of iterations compared to the standard

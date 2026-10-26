@@ -134,6 +134,17 @@ protected:
   void
   prepare_vectors_for_next_timestep() override;
 
+  /*
+   * Overwrites `dst` by the initial guess of an iterative solver computed from the solutions at
+   * previous time steps, `history`, where history[i] is the solution at t_{n-i}, see
+   * Parameters::initial_guess_type.
+   */
+  void
+  compute_initial_guess(VectorType & dst, std::vector<VectorType> const & history) const;
+
+  void
+  compute_initial_guess(BlockVectorType & dst, std::vector<BlockVectorType> const & history) const;
+
   Parameters const & param;
 
   // number of refinement steps, where the time step size is reduced in

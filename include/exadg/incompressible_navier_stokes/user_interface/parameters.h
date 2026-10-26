@@ -277,6 +277,10 @@ public:
   // start time integrator with low order time integrator, i.e., first order Euler method
   bool start_with_low_order;
 
+  // initial guess for the iterative solvers of each time step, see enum declaration. Explicitly
+  // treated terms (e.g., variable viscosity or transport velocity) always use the extrapolation.
+  InitialGuessType initial_guess_type;
+
   // description: see enum declaration
   ConvergenceCriterionSteadyProblem convergence_criterion_steady_problem;
 

@@ -162,9 +162,8 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   dealii::Timer timer;
   timer.restart();
 
-  // extrapolate old solutions to obtain a good initial guess for the solver, or
-  // to update the viscosity model or the penalty parameters based on this
-  // extrapolated solution
+  // extrapolate old solutions to update the viscosity model or the penalty parameters based on
+  // this extrapolated solution, and to obtain an initial guess for the solver (by default)
   if(this->use_extrapolation)
   {
     solution_np.equ(this->extra.get_beta(0), solution[0]);
@@ -204,6 +203,21 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     {
       pde_operator->update_continuity_penalty_operator(solution_np.block(0));
     }
+  }
+
+  // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+  VectorType transport_velocity;
+  if(this->param.convective_problem() and
+     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+  {
+    transport_velocity = solution_np.block(0);
+  }
+
+  // The explicitly treated terms above are set, so solution_np can be overwritten by the initial
+  // guess for the solver if it differs from the extrapolation.
+  if(this->use_extrapolation and this->param.initial_guess_type != InitialGuessType::Extrapolation)
+  {
+    this->compute_initial_guess(solution_np, solution);
   }
 
   // update scaling factor of continuity equation
@@ -292,14 +306,6 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   }
   else // linear problem
   {
-    // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
-    VectorType transport_velocity;
-    if(this->param.convective_problem() and
-       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-    {
-      transport_velocity = solution_np.block(0);
-    }
-
     BlockVectorType rhs_vector;
     pde_operator->initialize_block_vector_velocity_pressure(rhs_vector);
 
