@@ -849,14 +849,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
                     velocity_matvec.back().begin() + begin);
         });
 
-    // For the cases where the two-vector extrapolation is implemented, check
-    // if we can switch the initial guess for the solver to extrapolation
-    // rather than least-squares projection.
-    if(this->get_time_step_number() > 10 && may_leave_projection_mode && velocity_red.size() == 4 &&
-       this->order == 3)
-      momentum_solver_in_extrapolation_mode = true;
-
-
     /*
      * IV. Update point-Jacobi preconditioner entries
      */
@@ -1123,6 +1115,14 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
         velocity_red.back().local_element(i) = u_i;
       }
     }
+
+    /*
+     * VII. Select the initial guess strategy for the next time step.
+     */
+
+    if(this->get_time_step_number() > 10 && may_leave_projection_mode && velocity_red.size() == 4 &&
+       this->order == 3)
+      momentum_solver_in_extrapolation_mode = true;
 
     if(this->print_solver_info() and not(this->is_test))
     {
