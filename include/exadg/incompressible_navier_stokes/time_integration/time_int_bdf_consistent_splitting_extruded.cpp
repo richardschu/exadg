@@ -1147,11 +1147,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     if(this->print_solver_info() and not(this->is_test))
     {
       this->pcout << std::endl
-                  << "Solve viscous step ("
-                  << (used_extrapolation ? "extrapolation" : "projection")
-                  << " reduced residual from "
-                  << extrapolate_accuracy.first << " to " << initial_residual << " solve "
-                  << (need_cg_solver ? "CG" : "Ch") << " to " << reached_residual << "):";
+                  << "Solve viscous step (" << (used_extrapolation ? "extrapolation" : "projection")
+                  << " reduced residual from " << extrapolate_accuracy.first << " to "
+                  << initial_residual << " solve " << (need_cg_solver ? "CG" : "Ch") << " to "
+                  << reached_residual << "):";
       print_solver_info_linear(this->pcout, n_iterations, timer.wall_time());
     }
   }
