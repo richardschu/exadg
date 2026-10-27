@@ -90,8 +90,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::update_time_integrator_const
 
   extra_pressure_rhs.update(this->get_time_step_number(), this->adaptive_time_stepping, time_steps);
 
-  // record one more time step for the extrapolation formula for the initial
-  // guess
+  // Record one more time step for the extrapolation formula for the initial
+  // guess. Note that this shift assumes that this function is called exactly
+  // once per time step. ALE serves as a proxy for multiphysics coupling FSI,
+  // where this function is called multiple times.
+  AssertThrow(not this->param.ale_formulation,
+              dealii::ExcMessage("The time step history for the initial guess assumes one "
+                                 "call per time step, which is not guaranteed."));
   for(unsigned int i = previous_time_steps.size() - 1; i >= time_steps.size(); --i)
     previous_time_steps[i] = previous_time_steps[i - 1];
   for(unsigned int i = 0; i < time_steps.size(); ++i)
@@ -631,13 +636,13 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     // order to increase the data locality.
     std::vector<Number> factors_velocity_rhs(this->order);
     std::vector<Number> factors_convective_term(this->order);
-    std::vector<Number> factors_initial_guess(velocity.size());
+    std::vector<Number> factors_initial_guess(extra_initial_guess.get_order());
     for(unsigned int i = 0; i < this->order; ++i)
     {
       factors_velocity_rhs[i]    = this->bdf.get_alpha(i) / this->get_time_step_size();
       factors_convective_term[i] = -this->extra.get_beta(i);
     }
-    for(unsigned int i = 0; i < velocity.size(); ++i)
+    for(unsigned int i = 0; i < factors_initial_guess.size(); ++i)
       factors_initial_guess[i] = extra_initial_guess.get_beta(i);
 
     std::shared_ptr<dealii::Function<dim>> right_hand_side;
@@ -719,7 +724,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     {
       const unsigned int n_vectors = velocity_red.size();
       AssertDimension(velocity_matvec.size(), 2 * n_vectors);
-      AssertThrow(projection_vector.size() <= 5, dealii::ExcNotImplemented());
+      AssertThrow(n_vectors <= 5, dealii::ExcNotImplemented());
       std::array<const float *, 10> vec_ptrs = {};
       for(unsigned int j = 0; j < 2 * n_vectors; ++j)
         vec_ptrs[j] = velocity_matvec[j].begin();
@@ -741,7 +746,7 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
             begin, end, n_vectors, factors_time_step_mass, vec_ptrs, rhs_rt.begin(), local_sums);
         });
 
-      double residual_with_extrapolation = 0;
+      double residual_with_extrapolation = std::numeric_limits<double>::infinity();
       projection_vector.resize(n_vectors);
       extrapolate_accuracy = do_compute_least_squares_fit(solution_rt.get_mpi_communicator(),
                                                           local_sums,
@@ -848,14 +853,6 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
                     rhs_rt.begin() + end,
                     velocity_matvec.back().begin() + begin);
         });
-
-    // For the cases where the two-vector extrapolation is implemented, check
-    // if we can switch the initial guess for the solver to extrapolation
-    // rather than least-squares projection.
-    if(this->get_time_step_number() > 10 && may_leave_projection_mode && velocity_red.size() == 4 &&
-       this->order == 3)
-      momentum_solver_in_extrapolation_mode = true;
-
 
     /*
      * IV. Update point-Jacobi preconditioner entries
@@ -1124,6 +1121,17 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
       }
     }
 
+    /*
+     * VII. Select the initial guess strategy for the next time step.
+     */
+    // Remember the strategy for output below.
+    const bool used_extrapolation = momentum_solver_in_extrapolation_mode;
+
+    // Update the strategy.
+    if(this->get_time_step_number() > 10 && may_leave_projection_mode && velocity_red.size() == 4 &&
+       this->order == 3)
+      momentum_solver_in_extrapolation_mode = true;
+
     if(this->print_solver_info() and not(this->is_test))
     {
       this->pcout << std::endl
@@ -1139,9 +1147,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     if(this->print_solver_info() and not(this->is_test))
     {
       this->pcout << std::endl
-                  << "Solve viscous step (projection reduced residual from "
-                  << extrapolate_accuracy.first << " to " << initial_residual << " solve "
-                  << (need_cg_solver ? "CG" : "Ch") << " to " << reached_residual << "):";
+                  << "Solve viscous step (" << (used_extrapolation ? "extrapolation" : "projection")
+                  << " reduced residual from " << extrapolate_accuracy.first << " to "
+                  << initial_residual << " solve " << (need_cg_solver ? "CG" : "Ch") << " to "
+                  << reached_residual << "):";
       print_solver_info_linear(this->pcout, n_iterations, timer.wall_time());
     }
   }
