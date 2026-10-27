@@ -150,6 +150,19 @@ protected:
                         std::vector<BlockVectorType> const & history,
                         InitialGuessType const               initial_guess_type) const;
 
+  /*
+   * Overwrites `dst` by the linear combination of the solutions at previous time steps,
+   * `history`, minimizing the residual of the linear system with operator `vmult` and right-hand
+   * side `rhs`, see `InitialGuessType::Projection`. The products of `vmult` with `history` are
+   * recomputed in each call.
+   */
+  void
+  compute_initial_guess_projection(
+    VectorType &                                                  dst,
+    std::vector<VectorType> const &                               history,
+    VectorType const &                                            rhs,
+    std::function<void(VectorType &, VectorType const &)> const & vmult) const;
+
   Parameters const & param;
 
   // number of refinement steps, where the time step size is reduced in

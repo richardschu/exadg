@@ -449,9 +449,17 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // compute initial guess for the solver from the previous time steps
   if(this->first_coupling_iteration)
   {
-    this->compute_initial_guess(pressure_np,
-                                pressure,
-                                this->param.initial_guess_type_pressure_poisson);
+    if(this->param.initial_guess_type_pressure_poisson == InitialGuessType::Projection)
+      this->compute_initial_guess_projection(pressure_np,
+                                             pressure,
+                                             rhs,
+                                             [&](VectorType & dst, VectorType const & src) {
+                                               pde_operator->apply_laplace_operator(dst, src);
+                                             });
+    else
+      this->compute_initial_guess(pressure_np,
+                                  pressure,
+                                  this->param.initial_guess_type_pressure_poisson);
   }
   else
   {
@@ -751,10 +759,13 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       transport_velocity = velocity_np;
     }
 
-    // The explicitly treated terms above are set, so velocity_np can be overwritten by the
-    // initial guess for the solver if it differs from the extrapolation.
+    // `velocity_np` holds the extrapolation needed by the explicitly treated terms above, which is
+    // also the initial guess for `InitialGuessType::Extrapolation`. `InitialGuessType::Zero` and
+    // `InitialGuessType::LastTimeStep` overwrite it here, `InitialGuessType::Projection` overwrites
+    // it below once the right-hand side is available.
     if(this->first_coupling_iteration and
-       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation)
+       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation and
+       this->param.initial_guess_type_momentum != InitialGuessType::Projection)
     {
       this->compute_initial_guess(velocity_np, velocity, this->param.initial_guess_type_momentum);
     }
@@ -803,6 +814,17 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
        */
       VectorType rhs(velocity_rhs);
       rhs_viscous(rhs, velocity_rhs, transport_velocity);
+
+      // the projection initial guess needs the right-hand side, so it is computed here
+      if(this->first_coupling_iteration and
+         this->param.initial_guess_type_momentum == InitialGuessType::Projection)
+      {
+        this->compute_initial_guess_projection(
+          velocity_np, velocity, rhs, [&](VectorType & dst, VectorType const & src) {
+            pde_operator->apply_linear_momentum_operator(
+              dst, src, transport_velocity, this->get_scaling_factor_time_derivative_term());
+          });
+      }
 
       // solve linear system of equations
       unsigned int const n_iter = pde_operator->solve_linear_momentum_equation(

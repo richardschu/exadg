@@ -92,6 +92,7 @@ Linear solver:
   Relative solver tolerance:                 1.0000e-02
   Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     true
   Update every Newton iterations:            1
@@ -164,10 +165,10 @@ Calculate error for pressure for initial data:
 Solve steady state problem:
 
 Calculate error for velocity for solution data:
-  Absolute error (L2-norm): 7.80921e-13
+  Absolute error (L2-norm): 7.87725e-13
 
 Calculate error for pressure for solution data:
-  Absolute error (L2-norm): 2.10768e-11
+  Absolute error (L2-norm): 2.15767e-11
 
 
 
@@ -262,6 +263,7 @@ Linear solver:
   Relative solver tolerance:                 1.0000e-02
   Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     true
   Update every Newton iterations:            1
@@ -334,10 +336,10 @@ Calculate error for pressure for initial data:
 Solve steady state problem:
 
 Calculate error for velocity for solution data:
-  Absolute error (L2-norm): 4.17721e-13
+  Absolute error (L2-norm): 3.11925e-13
 
 Calculate error for pressure for solution data:
-  Absolute error (L2-norm): 6.95824e-12
+  Absolute error (L2-norm): 8.10342e-12
 
 
 
@@ -432,6 +434,7 @@ Linear solver:
   Relative solver tolerance:                 1.0000e-02
   Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     true
   Update every Newton iterations:            1
@@ -504,10 +507,10 @@ Calculate error for pressure for initial data:
 Solve steady state problem:
 
 Calculate error for velocity for solution data:
-  Absolute error (L2-norm): 2.96422e-14
+  Absolute error (L2-norm): 3.06865e-14
 
 Calculate error for pressure for solution data:
-  Absolute error (L2-norm): 8.08894e-13
+  Absolute error (L2-norm): 8.80228e-13
 
 
 
@@ -602,6 +605,7 @@ Linear solver:
   Relative solver tolerance:                 1.0000e-02
   Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     true
   Update every Newton iterations:            1
@@ -674,7 +678,7 @@ Calculate error for pressure for initial data:
 Solve steady state problem:
 
 Calculate error for velocity for solution data:
-  Absolute error (L2-norm): 9.09819e-12
+  Absolute error (L2-norm): 9.18516e-12
 
 Calculate error for pressure for solution data:
-  Absolute error (L2-norm): 2.27289e-10
+  Absolute error (L2-norm): 2.28710e-10

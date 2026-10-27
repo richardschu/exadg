@@ -394,10 +394,13 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
       transport_velocity = velocity_np;
     }
 
-    // The explicitly treated terms above are set, so velocity_np can be overwritten by the
-    // initial guess for the solver if it differs from the extrapolation.
+    // `velocity_np` holds the extrapolation needed by the explicitly treated terms above, which is
+    // also the initial guess for `InitialGuessType::Extrapolation`. `InitialGuessType::Zero` and
+    // `InitialGuessType::LastTimeStep` overwrite it here, `InitialGuessType::Projection` overwrites
+    // it below once the right-hand side is available.
     if(this->first_coupling_iteration and
-       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation)
+       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation and
+       this->param.initial_guess_type_momentum != InitialGuessType::Projection)
     {
       this->compute_initial_guess(velocity_np, velocity, this->param.initial_guess_type_momentum);
     }
@@ -446,6 +449,17 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
        */
       VectorType rhs(velocity_np);
       rhs_momentum(rhs, transport_velocity);
+
+      // the projection initial guess needs the right-hand side, so it is computed here
+      if(this->first_coupling_iteration and
+         this->param.initial_guess_type_momentum == InitialGuessType::Projection)
+      {
+        this->compute_initial_guess_projection(
+          velocity_np, velocity, rhs, [&](VectorType & dst, VectorType const & src) {
+            pde_operator->apply_linear_momentum_operator(
+              dst, src, transport_velocity, this->get_scaling_factor_time_derivative_term());
+          });
+      }
 
       // solve linear system of equations
       unsigned int n_iter = pde_operator->solve_linear_momentum_equation(
@@ -593,25 +607,40 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
   // calculate initial guess for pressure solve
   if(this->first_coupling_iteration)
   {
-    // compute initial guess for the pressure solution p_{n+1} at time t^{n+1} from the previous
-    // time steps
-    this->compute_initial_guess(pressure_increment,
-                                pressure,
-                                this->param.initial_guess_type_pressure_poisson);
-
-    // incremental formulation
-    if(extra_pressure_gradient.get_order() > 0)
+    if(this->param.initial_guess_type_pressure_poisson == InitialGuessType::Projection)
     {
-      // Subtract extrapolation of pressure since the PPE is solved for the
-      // pressure increment phi = p_{n+1} - sum_i (beta_pressure_extra_i * pressure_i),
-      // where p_{n+1} is approximated by the initial guess computed above.
-      // Note that the divergence correction term in case of the rotational formulation is not
-      // considered when calculating a good initial guess for the solution of the PPE,
-      // which will slightly increase the number of iterations compared to the standard
-      // formulation of the pressure-correction scheme.
-      for(unsigned int i = 0; i < extra_pressure_gradient.get_order(); ++i)
+      // the extrapolation of the pressure subtracted for the other initial guesses is in the span
+      // of the previous pressures, so the projection initial guess is computed for the pressure
+      // increment directly
+      this->compute_initial_guess_projection(pressure_increment,
+                                             pressure,
+                                             rhs,
+                                             [&](VectorType & dst, VectorType const & src) {
+                                               pde_operator->apply_laplace_operator(dst, src);
+                                             });
+    }
+    else
+    {
+      // compute initial guess for the pressure solution p_{n+1} at time t^{n+1} from the
+      // previous time steps
+      this->compute_initial_guess(pressure_increment,
+                                  pressure,
+                                  this->param.initial_guess_type_pressure_poisson);
+
+      // incremental formulation
+      if(extra_pressure_gradient.get_order() > 0)
       {
-        pressure_increment.add(-extra_pressure_gradient.get_beta(i), pressure[i]);
+        // Subtract extrapolation of pressure since the PPE is solved for the
+        // pressure increment phi = p_{n+1} - sum_i (beta_pressure_extra_i * pressure_i),
+        // where p_{n+1} is approximated by the initial guess computed above.
+        // Note that the divergence correction term in case of the rotational formulation is not
+        // considered when calculating a good initial guess for the solution of the PPE,
+        // which will slightly increase the number of iterations compared to the standard
+        // formulation of the pressure-correction scheme.
+        for(unsigned int i = 0; i < extra_pressure_gradient.get_order(); ++i)
+        {
+          pressure_increment.add(-extra_pressure_gradient.get_beta(i), pressure[i]);
+        }
       }
     }
   }

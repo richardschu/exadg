@@ -508,6 +508,26 @@ OperatorProjectionMethods<dim, Number>::solve_linear_momentum_equation(
 }
 
 template<int dim, typename Number>
+void
+OperatorProjectionMethods<dim, Number>::apply_linear_momentum_operator(
+  VectorType &       dst,
+  VectorType const & src,
+  VectorType const & transport_velocity,
+  double const &     scaling_factor_mass)
+{
+  // same operator setup as in `solve_linear_momentum_equation()`
+  this->momentum_operator.set_scaling_factor_mass_operator(scaling_factor_mass);
+
+  if(this->param.convective_problem() and
+     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+  {
+    this->momentum_operator.set_solution_linearization(transport_velocity);
+  }
+
+  this->momentum_operator.vmult(dst, src);
+}
+
+template<int dim, typename Number>
 std::tuple<unsigned int, unsigned int>
 OperatorProjectionMethods<dim, Number>::solve_nonlinear_momentum_equation(
   VectorType &       dst,

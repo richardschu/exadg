@@ -19,6 +19,8 @@
  *  ______________________________________________________________________
  */
 
+#include <deal.II/lac/full_matrix.h>
+
 #include <exadg/incompressible_navier_stokes/postprocessor/postprocessor_interface.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
@@ -170,7 +172,7 @@ compute_initial_guess_from_history(VectorTypeLocal &                    dst,
   }
   else if(initial_guess_type == InitialGuessType::Extrapolation)
   {
-    // zeroing first also resets the ghost values, see dealii::LinearAlgebra::distributed::Vector
+    // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
     dst = 0.0;
     for(unsigned int i = 0; i < history.size(); ++i)
       dst.add(extra.get_beta(i), history[i]);
@@ -197,6 +199,73 @@ TimeIntBDF<dim, Number>::compute_initial_guess(BlockVectorType &                
                                                InitialGuessType const initial_guess_type) const
 {
   compute_initial_guess_from_history(dst, history, initial_guess_type, this->extra);
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::compute_initial_guess_projection(
+  VectorType &                                                  dst,
+  std::vector<VectorType> const &                               history,
+  VectorType const &                                            rhs,
+  std::function<void(VectorType &, VectorType const &)> const & vmult) const
+{
+  // Minimize |A (sum_i gamma_i x_i) - b| with x_i = history[i] via the normal equations
+  // C gamma = d, where C_ij = (A x_i, A x_j) and d_i = (A x_i, b).
+  unsigned int const      m = history.size();
+  std::vector<VectorType> products(m);
+  for(unsigned int i = 0; i < m; ++i)
+  {
+    products[i].reinit(rhs, true /* omit_zeroing_entries */);
+    vmult(products[i], history[i]);
+  }
+
+  dealii::FullMatrix<double> C(m, m);
+  std::vector<double>        gamma(m);
+  for(unsigned int i = 0; i < m; ++i)
+  {
+    for(unsigned int j = 0; j <= i; ++j)
+      C(i, j) = products[i] * products[j];
+    gamma[i] = products[i] * rhs;
+  }
+
+  // Cholesky factorization C = L L^T, with L overwriting the lower triangle of C. It stops at the
+  // first vector that is (numerically) linearly dependent on the newer ones, which drops this and
+  // all older vectors.
+  double const tolerance_dependence = 1e-14 * C(0, 0);
+  unsigned int n                    = 0;
+  for(; n < m; ++n)
+  {
+    for(unsigned int k = 0; k < n; ++k)
+      C(n, n) -= C(n, k) * C(n, k);
+    if(not(C(n, n) > tolerance_dependence))
+      break;
+    C(n, n) = std::sqrt(C(n, n));
+    for(unsigned int i = n + 1; i < m; ++i)
+    {
+      for(unsigned int k = 0; k < n; ++k)
+        C(i, n) -= C(i, k) * C(n, k);
+      C(i, n) /= C(n, n);
+    }
+  }
+
+  // forward and backward substitution for the first n vectors
+  for(unsigned int i = 0; i < n; ++i)
+  {
+    for(unsigned int k = 0; k < i; ++k)
+      gamma[i] -= C(i, k) * gamma[k];
+    gamma[i] /= C(i, i);
+  }
+  for(unsigned int i = n; i-- > 0;)
+  {
+    for(unsigned int k = i + 1; k < n; ++k)
+      gamma[i] -= C(k, i) * gamma[k];
+    gamma[i] /= C(i, i);
+  }
+
+  // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
+  dst = 0.0;
+  for(unsigned int i = 0; i < n; ++i)
+    dst.add(gamma[i], history[i]);
 }
 
 template<int dim, typename Number>

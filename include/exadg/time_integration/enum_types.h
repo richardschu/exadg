@@ -45,15 +45,19 @@ enum class GenAlphaType
  * Initial guess for the iterative solvers within a time step, computed from the solutions at
  * previous time steps:
  *
- *  - Zero: start from zero, ignoring the previous time steps
- *  - LastTimeStep: start from the solution at the last time step
- *  - Extrapolation: extrapolate the solutions at previous time steps to the new time
+ *  - `Zero`: start from zero, ignoring the previous time steps
+ *  - `LastTimeStep`: start from the solution at the last time step
+ *  - `Extrapolation`: extrapolate the solutions at previous time steps to the new time
+ *  - `Projection`: linear combination of the solutions at previous time steps minimizing the
+ *    residual of the linear system (least-squares projection, see Loehner, Projective prediction
+ *    of pressure increments, https://doi.org/10.1002/cnm.743)
  */
 enum class InitialGuessType
 {
   Zero,
   LastTimeStep,
-  Extrapolation
+  Extrapolation,
+  Projection
 };
 
 } // namespace ExaDG

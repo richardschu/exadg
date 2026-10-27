@@ -173,6 +173,16 @@ public:
                                  double const &     scaling_factor_mass);
 
   /*
+   * This function applies the operator of the linear momentum equation solved in
+   * `solve_linear_momentum_equation()`, e.g., to compute an initial guess for that solver.
+   */
+  void
+  apply_linear_momentum_operator(VectorType &       dst,
+                                 VectorType const & src,
+                                 VectorType const & transport_velocity,
+                                 double const &     scaling_factor_mass);
+
+  /*
    * This function evaluates the rhs-contribution of the viscous term and adds the result to the
    * dst-vector.
    */

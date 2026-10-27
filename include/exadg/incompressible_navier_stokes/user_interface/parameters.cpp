@@ -450,6 +450,14 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     }
   }
 
+  // the projection initial guess is implemented for linear momentum equations only
+  if(initial_guess_type_momentum == InitialGuessType::Projection)
+  {
+    AssertThrow(not nonlinear_problem_has_to_be_solved(),
+                dealii::ExcMessage("`InitialGuessType::Projection` is not implemented for a "
+                                   "nonlinear momentum equation."));
+  }
+
   // HIGH-ORDER DUAL SPLITTING SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
   {
@@ -503,6 +511,10 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   {
     if(use_scaling_continuity == true)
       AssertThrow(scaling_factor_continuity > 0.0, dealii::ExcMessage("Invalid parameter"));
+
+    AssertThrow(initial_guess_type_coupled != InitialGuessType::Projection,
+                dealii::ExcMessage(
+                  "`InitialGuessType::Projection` is not implemented for the coupled solver."));
 
     if(preconditioner_velocity_block == MomentumPreconditioner::Multigrid)
     {
