@@ -68,6 +68,7 @@ Solver:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Update preconditioner:                     true
@@ -84,6 +85,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Solver information:
   Interval physical time:                    5.0000e-02

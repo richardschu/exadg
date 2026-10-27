@@ -108,6 +108,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-14
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     false
@@ -127,6 +128,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of velocity block:         false
 
@@ -143,6 +145,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of Laplace operator:       false
 

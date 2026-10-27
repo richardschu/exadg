@@ -110,6 +110,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
@@ -124,6 +125,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -131,6 +133,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-12
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     false
@@ -141,6 +144,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Preconditioner:                            InverseMassMatrix
   Update of preconditioner:                  false

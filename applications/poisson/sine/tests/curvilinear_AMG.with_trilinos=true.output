@@ -41,6 +41,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
@@ -55,6 +56,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
       AMG type:                              ML
       Smoother sweeps:                       1
@@ -132,6 +134,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
@@ -146,6 +149,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
       AMG type:                              ML
       Smoother sweeps:                       1
@@ -223,6 +227,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
@@ -237,6 +242,7 @@ Solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
       AMG type:                              ML
       Smoother sweeps:                       1
