@@ -641,6 +641,13 @@ do_compute_least_squares_fit(
       for(unsigned int k = j + 1; k <= i; ++k)
         matrix[i][k] -= matrix[k][j] * inv_entry;
     }
+
+    // Check if the matrix got near singular. We use the normal equations
+    // here, so the condition number is squared. We can go to about the
+    // condition number the double-precision values allow for (i.e., a bit
+    // above 1.1e-16) and the rounding machine epsilon for a possible use of
+    // single precision for the ingredients (that get squared by the inner
+    // product), i.e. (6e-8)^2).
     if(matrix[i][i] < 1e-14 * matrix[0][0] or matrix[0][0] < 1e-30)
       break;
 

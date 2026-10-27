@@ -1613,6 +1613,11 @@ private:
   compute_vector_access_pattern()
   {
     const unsigned int        n_dofs     = partitioner->locally_owned_size();
+    // This number is a tradeoff of creating sufficiently big chunks of data
+    // (that allows the CPU to do more hardware prefetching and thus amortize
+    // loads) and the increase in cache pressure. We did tests where values
+    // between 128 and 512 did similarly for the latter, whereas 1024 started
+    // to deviate, so we can choose the largest size.
     constexpr unsigned int    chunk_size = 512;
     std::vector<unsigned int> touched_first_by((n_dofs + chunk_size - 1) / chunk_size,
                                                numbers::invalid_unsigned_int);

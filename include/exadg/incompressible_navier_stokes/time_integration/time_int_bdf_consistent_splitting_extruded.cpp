@@ -1135,8 +1135,10 @@ TimeIntBDFConsistentSplittingExtruded<dim, Number>::momentum_step()
     if(this->print_solver_info() and not(this->is_test))
     {
       this->pcout << std::endl
-                  << std::setprecision(4) << "Viscous step prepare: " << t_rhs << "/" << t_proj
-                  << "/" << t_residual << " s, solve " << solve_time + timer2.wall_time() << " s";
+                  << std::setprecision(4) << "Viscous step prepare: " << t_rhs;
+      if (not used_extrapolation)
+        this->pcout << "/" << t_proj;
+      this->pcout << "/" << t_residual << " s, solve " << solve_time + timer2.wall_time() << " s";
     }
 
     stat_momentum_iterations.add_sample(n_iterations);
