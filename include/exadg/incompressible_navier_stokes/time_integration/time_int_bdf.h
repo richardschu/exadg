@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/time_integration/enum_types.h>
 #include <exadg/time_integration/lambda_functions_ale.h>
 #include <exadg/time_integration/time_int_bdf_base.h>
 
@@ -135,15 +136,19 @@ protected:
   prepare_vectors_for_next_timestep() override;
 
   /*
-   * Overwrites `dst` by the initial guess of an iterative solver computed from the solutions at
-   * previous time steps, `history`, where history[i] is the solution at t_{n-i}, see
-   * Parameters::initial_guess_type.
+   * Overwrites `dst` by the initial guess of type `initial_guess_type` for an iterative solver,
+   * computed from the solutions at previous time steps, `history`, where history[i] is the
+   * solution at t_{n-i}.
    */
   void
-  compute_initial_guess(VectorType & dst, std::vector<VectorType> const & history) const;
+  compute_initial_guess(VectorType &                    dst,
+                        std::vector<VectorType> const & history,
+                        InitialGuessType const          initial_guess_type) const;
 
   void
-  compute_initial_guess(BlockVectorType & dst, std::vector<BlockVectorType> const & history) const;
+  compute_initial_guess(BlockVectorType &                    dst,
+                        std::vector<BlockVectorType> const & history,
+                        InitialGuessType const               initial_guess_type) const;
 
   Parameters const & param;
 

@@ -449,7 +449,9 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   // compute initial guess for the solver from the previous time steps
   if(this->first_coupling_iteration)
   {
-    this->compute_initial_guess(pressure_np, pressure);
+    this->compute_initial_guess(pressure_np,
+                                pressure,
+                                this->param.initial_guess_type_pressure_poisson);
   }
   else
   {
@@ -752,9 +754,9 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     // The explicitly treated terms above are set, so velocity_np can be overwritten by the
     // initial guess for the solver if it differs from the extrapolation.
     if(this->first_coupling_iteration and
-       this->param.initial_guess_type != InitialGuessType::Extrapolation)
+       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation)
     {
-      this->compute_initial_guess(velocity_np, velocity);
+      this->compute_initial_guess(velocity_np, velocity, this->param.initial_guess_type_momentum);
     }
 
     bool const update_preconditioner =

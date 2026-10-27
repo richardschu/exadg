@@ -216,9 +216,9 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   // The explicitly treated terms above are set, so solution_np can be overwritten by the initial
   // guess for the solver if it differs from the extrapolation.
   if(this->first_coupling_iteration and
-     this->param.initial_guess_type != InitialGuessType::Extrapolation)
+     this->param.initial_guess_type_coupled != InitialGuessType::Extrapolation)
   {
-    this->compute_initial_guess(solution_np, solution);
+    this->compute_initial_guess(solution_np, solution, this->param.initial_guess_type_coupled);
   }
 
   // update scaling factor of continuity equation

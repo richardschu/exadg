@@ -184,17 +184,19 @@ compute_initial_guess_from_history(VectorTypeLocal &                    dst,
 template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::compute_initial_guess(VectorType &                    dst,
-                                               std::vector<VectorType> const & history) const
+                                               std::vector<VectorType> const & history,
+                                               InitialGuessType const initial_guess_type) const
 {
-  compute_initial_guess_from_history(dst, history, param.initial_guess_type, this->extra);
+  compute_initial_guess_from_history(dst, history, initial_guess_type, this->extra);
 }
 
 template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::compute_initial_guess(BlockVectorType &                    dst,
-                                               std::vector<BlockVectorType> const & history) const
+                                               std::vector<BlockVectorType> const & history,
+                                               InitialGuessType const initial_guess_type) const
 {
-  compute_initial_guess_from_history(dst, history, param.initial_guess_type, this->extra);
+  compute_initial_guess_from_history(dst, history, initial_guess_type, this->extra);
 }
 
 template<int dim, typename Number>

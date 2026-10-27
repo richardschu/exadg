@@ -277,10 +277,6 @@ public:
   // start time integrator with low order time integrator, i.e., first order Euler method
   bool start_with_low_order;
 
-  // initial guess for the iterative solvers of each time step, see enum declaration. Explicitly
-  // treated terms (e.g., variable viscosity or transport velocity) always use the extrapolation.
-  InitialGuessType initial_guess_type;
-
   // description: see enum declaration
   ConvergenceCriterionSteadyProblem convergence_criterion_steady_problem;
 
@@ -517,6 +513,9 @@ public:
   // solver data for pressure Poisson equation
   SolverData solver_data_pressure_poisson;
 
+  // initial guess of the pressure Poisson solver
+  InitialGuessType initial_guess_type_pressure_poisson;
+
   // description: see enum declaration
   PreconditionerPressurePoisson preconditioner_pressure_poisson;
 
@@ -573,6 +572,9 @@ public:
 
   // Solver data for (linearized) momentum equation
   SolverData solver_data_momentum;
+
+  // initial guess of the momentum solver
+  InitialGuessType initial_guess_type_momentum;
 
   // description: see enum declaration
   MomentumPreconditioner preconditioner_momentum;
@@ -653,6 +655,9 @@ public:
 
   // Solver data for coupled solver
   SolverData solver_data_coupled;
+
+  // initial guess of the coupled solver
+  InitialGuessType initial_guess_type_coupled;
 
   // description: see enum declaration
   PreconditionerCoupled preconditioner_coupled;

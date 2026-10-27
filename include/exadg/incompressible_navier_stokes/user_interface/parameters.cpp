@@ -73,7 +73,6 @@ Parameters::Parameters()
     n_refine_time(0),
     order_time_integrator(1),
     start_with_low_order(true),
-    initial_guess_type(InitialGuessType::Extrapolation),
 
     // pseudo time-stepping
     convergence_criterion_steady_problem(ConvergenceCriterionSteadyProblem::Undefined),
@@ -149,6 +148,7 @@ Parameters::Parameters()
     IP_factor_pressure(1.),
     solver_pressure_poisson(SolverPressurePoisson::CG),
     solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    initial_guess_type_pressure_poisson(InitialGuessType::Extrapolation),
     preconditioner_pressure_poisson(PreconditionerPressurePoisson::Multigrid),
     multigrid_data_pressure_poisson(MultigridData()),
     update_preconditioner_pressure_poisson(false),
@@ -168,6 +168,7 @@ Parameters::Parameters()
     newton_solver_data_momentum(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
     solver_momentum(SolverMomentum::GMRES),
     solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    initial_guess_type_momentum(InitialGuessType::Extrapolation),
     preconditioner_momentum(MomentumPreconditioner::InverseMassMatrix),
     update_preconditioner_momentum(false),
     update_preconditioner_momentum_every_newton_iter(1),
@@ -200,6 +201,7 @@ Parameters::Parameters()
     // linear solver
     solver_coupled(SolverCoupled::GMRES),
     solver_data_coupled(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    initial_guess_type_coupled(InitialGuessType::Extrapolation),
 
     // preconditioning linear solver
     preconditioner_coupled(PreconditionerCoupled::BlockTriangular),
@@ -878,7 +880,6 @@ Parameters::print_parameters_temporal_discretization(dealii::ConditionalOStream 
 
   print_parameter(pcout, "Order of time integration scheme", order_time_integrator);
   print_parameter(pcout, "Start with low order method", start_with_low_order);
-  print_parameter(pcout, "Initial guess type", initial_guess_type);
 
   print_parameter(pcout, "Treatment of convective term", treatment_of_convective_term);
 
@@ -1046,6 +1047,7 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
   print_parameter(pcout, "Solver", solver_pressure_poisson);
 
   solver_data_pressure_poisson.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_pressure_poisson);
 
   print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);
 
@@ -1166,6 +1168,7 @@ Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pc
   print_parameter(pcout, "Solver", solver_momentum);
 
   solver_data_momentum.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_momentum);
 
   print_parameter(pcout, "Preconditioner", preconditioner_momentum);
 
@@ -1257,6 +1260,7 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
   print_parameter(pcout, "Solver", solver_coupled);
 
   solver_data_coupled.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_coupled);
 
   print_parameter(pcout, "Preconditioner", preconditioner_coupled);
 

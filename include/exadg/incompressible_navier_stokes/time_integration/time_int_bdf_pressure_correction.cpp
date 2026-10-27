@@ -397,9 +397,9 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
     // The explicitly treated terms above are set, so velocity_np can be overwritten by the
     // initial guess for the solver if it differs from the extrapolation.
     if(this->first_coupling_iteration and
-       this->param.initial_guess_type != InitialGuessType::Extrapolation)
+       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation)
     {
-      this->compute_initial_guess(velocity_np, velocity);
+      this->compute_initial_guess(velocity_np, velocity, this->param.initial_guess_type_momentum);
     }
 
     bool const update_preconditioner =
@@ -595,7 +595,9 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
   {
     // compute initial guess for the pressure solution p_{n+1} at time t^{n+1} from the previous
     // time steps
-    this->compute_initial_guess(pressure_increment, pressure);
+    this->compute_initial_guess(pressure_increment,
+                                pressure,
+                                this->param.initial_guess_type_pressure_poisson);
 
     // incremental formulation
     if(extra_pressure_gradient.get_order() > 0)
