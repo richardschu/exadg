@@ -1931,6 +1931,7 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
       solver_data.max_iter             = param.solver_data_projection.max_iter;
       solver_data.solver_tolerance_abs = param.solver_data_projection.abs_tol;
       solver_data.solver_tolerance_rel = param.solver_data_projection.rel_tol;
+      solver_data.rel_tol_reference    = param.solver_data_projection.rel_tol_reference;
       // default value of use_preconditioner = false
       if(param.preconditioner_projection != PreconditionerProjection::None)
       {
@@ -1949,6 +1950,7 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
       solver_data.max_iter             = param.solver_data_projection.max_iter;
       solver_data.solver_tolerance_abs = param.solver_data_projection.abs_tol;
       solver_data.solver_tolerance_rel = param.solver_data_projection.rel_tol;
+      solver_data.rel_tol_reference    = param.solver_data_projection.rel_tol_reference;
       solver_data.max_n_tmp_vectors    = param.solver_data_projection.max_krylov_size;
 
       // default value of use_preconditioner = false

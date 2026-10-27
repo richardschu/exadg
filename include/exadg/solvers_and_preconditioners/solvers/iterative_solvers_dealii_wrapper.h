@@ -29,6 +29,7 @@
 #include <deal.II/lac/solver_gmres.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 #include <exadg/utilities/timer_tree.h>
 
 namespace ExaDG
@@ -94,16 +95,18 @@ struct SolverDataCG
     : max_iter(1e4),
       solver_tolerance_abs(1.e-20),
       solver_tolerance_rel(1.e-6),
+      rel_tol_reference(RelTolReference::InitialResidual),
       use_preconditioner(false),
       compute_performance_metrics(false)
   {
   }
 
-  unsigned int max_iter;
-  double       solver_tolerance_abs;
-  double       solver_tolerance_rel;
-  bool         use_preconditioner;
-  bool         compute_performance_metrics;
+  unsigned int    max_iter;
+  double          solver_tolerance_abs;
+  double          solver_tolerance_rel;
+  RelTolReference rel_tol_reference;
+  bool            use_preconditioner;
+  bool            compute_performance_metrics;
 };
 
 template<typename Operator, typename Preconditioner, typename VectorType>
@@ -136,9 +139,12 @@ public:
   {
     dealii::Timer timer;
 
-    dealii::ReductionControl solver_control(solver_data.max_iter,
-                                            solver_data.solver_tolerance_abs,
-                                            solver_data.solver_tolerance_rel);
+    dealii::ReductionControl solver_control =
+      create_solver_control(solver_data.max_iter,
+                            solver_data.solver_tolerance_abs,
+                            solver_data.solver_tolerance_rel,
+                            solver_data.rel_tol_reference,
+                            rhs);
 
     dealii::SolverCG<VectorType> solver(solver_control);
 
@@ -202,6 +208,7 @@ struct SolverDataGMRES
     : max_iter(1e4),
       solver_tolerance_abs(1.e-20),
       solver_tolerance_rel(1.e-6),
+      rel_tol_reference(RelTolReference::InitialResidual),
       use_preconditioner(false),
       max_n_tmp_vectors(30),
       compute_eigenvalues(false),
@@ -209,13 +216,14 @@ struct SolverDataGMRES
   {
   }
 
-  unsigned int max_iter;
-  double       solver_tolerance_abs;
-  double       solver_tolerance_rel;
-  bool         use_preconditioner;
-  unsigned int max_n_tmp_vectors;
-  bool         compute_eigenvalues;
-  bool         compute_performance_metrics;
+  unsigned int    max_iter;
+  double          solver_tolerance_abs;
+  double          solver_tolerance_rel;
+  RelTolReference rel_tol_reference;
+  bool            use_preconditioner;
+  unsigned int    max_n_tmp_vectors;
+  bool            compute_eigenvalues;
+  bool            compute_performance_metrics;
 };
 
 template<typename Operator, typename Preconditioner, typename VectorType>
@@ -254,9 +262,12 @@ public:
   {
     dealii::Timer timer;
 
-    dealii::ReductionControl solver_control(solver_data.max_iter,
-                                            solver_data.solver_tolerance_abs,
-                                            solver_data.solver_tolerance_rel);
+    dealii::ReductionControl solver_control =
+      create_solver_control(solver_data.max_iter,
+                            solver_data.solver_tolerance_abs,
+                            solver_data.solver_tolerance_rel,
+                            solver_data.rel_tol_reference,
+                            rhs);
 
     typename dealii::SolverGMRES<VectorType>::AdditionalData additional_data;
     additional_data.max_n_tmp_vectors     = solver_data.max_n_tmp_vectors;
@@ -317,18 +328,20 @@ struct SolverDataFGMRES
     : max_iter(1e4),
       solver_tolerance_abs(1.e-20),
       solver_tolerance_rel(1.e-6),
+      rel_tol_reference(RelTolReference::InitialResidual),
       use_preconditioner(false),
       max_n_tmp_vectors(30),
       compute_performance_metrics(false)
   {
   }
 
-  unsigned int max_iter;
-  double       solver_tolerance_abs;
-  double       solver_tolerance_rel;
-  bool         use_preconditioner;
-  unsigned int max_n_tmp_vectors;
-  bool         compute_performance_metrics;
+  unsigned int    max_iter;
+  double          solver_tolerance_abs;
+  double          solver_tolerance_rel;
+  RelTolReference rel_tol_reference;
+  bool            use_preconditioner;
+  unsigned int    max_n_tmp_vectors;
+  bool            compute_performance_metrics;
 };
 
 template<typename Operator, typename Preconditioner, typename VectorType>
@@ -365,9 +378,12 @@ public:
   {
     dealii::Timer timer;
 
-    dealii::ReductionControl solver_control(solver_data.max_iter,
-                                            solver_data.solver_tolerance_abs,
-                                            solver_data.solver_tolerance_rel);
+    dealii::ReductionControl solver_control =
+      create_solver_control(solver_data.max_iter,
+                            solver_data.solver_tolerance_abs,
+                            solver_data.solver_tolerance_rel,
+                            solver_data.rel_tol_reference,
+                            rhs);
 
     typename dealii::SolverFGMRES<VectorType>::AdditionalData additional_data;
     additional_data.max_basis_size = solver_data.max_n_tmp_vectors;

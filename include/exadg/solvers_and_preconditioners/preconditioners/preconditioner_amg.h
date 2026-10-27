@@ -194,9 +194,11 @@ public:
                                               MultigridCoarseGridSolver const & solver_type,
                                               SolverData const &                solver_data) const
   {
-    dealii::ReductionControl solver_control(solver_data.max_iter,
-                                            solver_data.abs_tol,
-                                            solver_data.rel_tol);
+    dealii::ReductionControl solver_control = create_solver_control(solver_data.max_iter,
+                                                                    solver_data.abs_tol,
+                                                                    solver_data.rel_tol,
+                                                                    solver_data.rel_tol_reference,
+                                                                    src);
 
     if(solver_type == MultigridCoarseGridSolver::CG)
     {
@@ -356,6 +358,11 @@ public:
                                               MultigridCoarseGridSolver const & solver_type,
                                               SolverData const &                solver_data) const
   {
+    // PETSc monitors the preconditioned residual by default, which is not comparable to |b|
+    AssertThrow(solver_data.rel_tol_reference == RelTolReference::InitialResidual,
+                dealii::ExcNotImplemented("Only RelTolReference::InitialResidual is "
+                                          "implemented for PETSc solvers."));
+
     apply_petsc_operation(dst,
                           src,
                           system_matrix.get_mpi_communicator(),

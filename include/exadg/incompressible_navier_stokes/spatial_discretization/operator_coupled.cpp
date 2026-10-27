@@ -94,6 +94,7 @@ OperatorCoupled<dim, Number>::setup_solver_coupled()
     solver_data.max_iter             = this->param.solver_data_coupled.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_coupled.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_coupled.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_coupled.rel_tol_reference;
     solver_data.max_n_tmp_vectors    = this->param.solver_data_coupled.max_krylov_size;
     solver_data.compute_eigenvalues  = false;
 
@@ -112,6 +113,7 @@ OperatorCoupled<dim, Number>::setup_solver_coupled()
     solver_data.max_iter             = this->param.solver_data_coupled.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_coupled.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_coupled.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_coupled.rel_tol_reference;
     solver_data.max_n_tmp_vectors    = this->param.solver_data_coupled.max_krylov_size;
 
     if(this->param.preconditioner_coupled != PreconditionerCoupled::None)
@@ -533,6 +535,7 @@ OperatorCoupled<dim, Number>::setup_iterative_solver_momentum()
   gmres_data.max_iter             = this->param.solver_data_velocity_block.max_iter;
   gmres_data.solver_tolerance_abs = this->param.solver_data_velocity_block.abs_tol;
   gmres_data.solver_tolerance_rel = this->param.solver_data_velocity_block.rel_tol;
+  gmres_data.rel_tol_reference    = this->param.solver_data_velocity_block.rel_tol_reference;
   gmres_data.max_n_tmp_vectors    = this->param.solver_data_velocity_block.max_krylov_size;
 
   solver_velocity_block = std::make_shared<
@@ -675,6 +678,7 @@ OperatorCoupled<dim, Number>::setup_iterative_solver_schur_complement()
   solver_data.max_iter             = this->param.solver_data_pressure_block.max_iter;
   solver_data.solver_tolerance_abs = this->param.solver_data_pressure_block.abs_tol;
   solver_data.solver_tolerance_rel = this->param.solver_data_pressure_block.rel_tol;
+  solver_data.rel_tol_reference    = this->param.solver_data_pressure_block.rel_tol_reference;
   solver_data.use_preconditioner   = true;
 
   Poisson::LaplaceOperatorData<0, dim> laplace_operator_data;

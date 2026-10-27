@@ -214,6 +214,7 @@ OperatorProjectionMethods<dim, Number>::setup_solver_pressure_poisson()
     solver_data.max_iter             = this->param.solver_data_pressure_poisson.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_pressure_poisson.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_pressure_poisson.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_pressure_poisson.rel_tol_reference;
     // use default value of update_preconditioner (=false)
 
     if(this->param.preconditioner_pressure_poisson != PreconditionerPressurePoisson::None)
@@ -235,6 +236,7 @@ OperatorProjectionMethods<dim, Number>::setup_solver_pressure_poisson()
     solver_data.max_iter             = this->param.solver_data_pressure_poisson.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_pressure_poisson.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_pressure_poisson.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_pressure_poisson.rel_tol_reference;
     solver_data.max_n_tmp_vectors    = this->param.solver_data_pressure_poisson.max_krylov_size;
     // use default value of update_preconditioner (=false)
 
@@ -342,6 +344,7 @@ OperatorProjectionMethods<dim, Number>::setup_momentum_solver()
     solver_data.max_iter             = this->param.solver_data_momentum.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_momentum.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_momentum.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_momentum.rel_tol_reference;
     if(this->param.preconditioner_momentum != MomentumPreconditioner::None)
       solver_data.use_preconditioner = true;
 
@@ -357,6 +360,7 @@ OperatorProjectionMethods<dim, Number>::setup_momentum_solver()
     solver_data.max_iter             = this->param.solver_data_momentum.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_momentum.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_momentum.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_momentum.rel_tol_reference;
     solver_data.max_n_tmp_vectors    = this->param.solver_data_momentum.max_krylov_size;
     solver_data.compute_eigenvalues  = false;
     if(this->param.preconditioner_momentum != MomentumPreconditioner::None)
@@ -373,6 +377,7 @@ OperatorProjectionMethods<dim, Number>::setup_momentum_solver()
     solver_data.max_iter             = this->param.solver_data_momentum.max_iter;
     solver_data.solver_tolerance_abs = this->param.solver_data_momentum.abs_tol;
     solver_data.solver_tolerance_rel = this->param.solver_data_momentum.rel_tol;
+    solver_data.rel_tol_reference    = this->param.solver_data_momentum.rel_tol_reference;
     solver_data.max_n_tmp_vectors    = this->param.solver_data_momentum.max_krylov_size;
     if(this->param.preconditioner_momentum != MomentumPreconditioner::None)
       solver_data.use_preconditioner = true;

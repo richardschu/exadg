@@ -185,6 +185,7 @@ public:
         solver_data.max_iter             = additional_data.solver_data.max_iter;
         solver_data.solver_tolerance_abs = additional_data.solver_data.abs_tol;
         solver_data.solver_tolerance_rel = additional_data.solver_data.rel_tol;
+        solver_data.rel_tol_reference    = additional_data.solver_data.rel_tol_reference;
 
         if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::None)
         {
@@ -211,6 +212,7 @@ public:
         solver_data.max_iter             = additional_data.solver_data.max_iter;
         solver_data.solver_tolerance_abs = additional_data.solver_data.abs_tol;
         solver_data.solver_tolerance_rel = additional_data.solver_data.rel_tol;
+        solver_data.rel_tol_reference    = additional_data.solver_data.rel_tol_reference;
         solver_data.max_n_tmp_vectors    = additional_data.solver_data.max_krylov_size;
 
         if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::None)

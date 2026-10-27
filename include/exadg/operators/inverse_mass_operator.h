@@ -221,6 +221,8 @@ public:
           inverse_mass_operator_data.parameters.solver_data.abs_tol;
         solver_data.solver_tolerance_rel =
           inverse_mass_operator_data.parameters.solver_data.rel_tol;
+        solver_data.rel_tol_reference =
+          inverse_mass_operator_data.parameters.solver_data.rel_tol_reference;
 
         solver_data.use_preconditioner =
           inverse_mass_operator_data.parameters.preconditioner != PreconditionerMass::None;

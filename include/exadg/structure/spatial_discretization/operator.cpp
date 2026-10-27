@@ -720,6 +720,7 @@ Operator<dim, Number>::setup_solver()
     {
       solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
       solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
+      solver_data.rel_tol_reference    = param.solver_data.rel_tol_reference;
       solver_data.max_iter             = param.solver_data.max_iter;
     }
 
@@ -736,6 +737,7 @@ Operator<dim, Number>::setup_solver()
     Krylov::SolverDataCG solver_data;
     solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
     solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
+    solver_data.rel_tol_reference    = param.solver_data.rel_tol_reference;
     solver_data.max_iter             = param.solver_data.max_iter;
 
     if(param.preconditioner != Preconditioner::None)
@@ -764,6 +766,7 @@ Operator<dim, Number>::setup_solver()
     Krylov::SolverDataFGMRES solver_data;
     solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
     solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
+    solver_data.rel_tol_reference    = param.solver_data.rel_tol_reference;
     solver_data.max_iter             = param.solver_data.max_iter;
     solver_data.max_n_tmp_vectors    = param.solver_data.max_krylov_size;
 
