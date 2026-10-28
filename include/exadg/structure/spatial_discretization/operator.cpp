@@ -388,7 +388,7 @@ Operator<dim, Number>::setup_operators()
     inverse_mass_operator_data_vector_postprocessing.quad_index = get_quad_index();
     inverse_mass_operator_data_vector_postprocessing.parameters.implementation_type =
       inverse_mass_operator_data_vector_postprocessing.get_optimal_inverse_mass_type(
-        *fe_vector_postprocessing, param.grid.element_type);
+        *fe_vector_postprocessing);
 
     inverse_mass_vector_postprocessing.initialize(
       *matrix_free,
@@ -404,8 +404,7 @@ Operator<dim, Number>::setup_operators()
     inverse_mass_operator_data_scalar.dof_index  = get_dof_index_scalar_postprocessing();
     inverse_mass_operator_data_scalar.quad_index = get_quad_index();
     inverse_mass_operator_data_scalar.parameters.implementation_type =
-      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar_postprocessing,
-                                                                      param.grid.element_type);
+      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar_postprocessing);
 
     inverse_mass_scalar_postprocessing.initialize(
       *matrix_free,

@@ -417,6 +417,9 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   inverse_mass_operator_data_velocity_scalar.dof_index  = get_dof_index_velocity_scalar();
   inverse_mass_operator_data_velocity_scalar.quad_index = get_quad_index_velocity_standard();
   inverse_mass_operator_data_velocity_scalar.parameters = param.inverse_mass_operator;
+  inverse_mass_operator_data_velocity_scalar.parameters.implementation_type =
+    inverse_mass_operator_data_velocity_scalar.get_optimal_inverse_mass_type(
+      matrix_free->get_dof_handler(get_dof_index_velocity_scalar()).get_fe());
   inverse_mass_velocity_scalar.initialize(*matrix_free, inverse_mass_operator_data_velocity_scalar);
 
   // body force operator
@@ -1442,11 +1445,11 @@ SpatialOperatorBase<dim, Number>::compute_shear_rate(VectorType & dst, VectorTyp
 
 template<int dim, typename Number>
 void
-SpatialOperatorBase<dim, Number>::access_viscosity(VectorType & dst, VectorType const & src) const
+SpatialOperatorBase<dim, Number>::access_viscosity(VectorType & dst) const
 {
   if(param.viscosity_is_variable())
   {
-    viscosity_calculator.access_viscosity(dst, src);
+    viscosity_calculator.access_viscosity(dst);
     inverse_mass_velocity_scalar.apply(dst, dst);
   }
   else
