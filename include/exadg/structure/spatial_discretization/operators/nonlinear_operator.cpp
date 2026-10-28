@@ -72,6 +72,8 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType const & src) const
 {
+  src.update_ghost_values();
+
   bool const spatial_integration_residual =
     this->operator_data.spatial_integration and (not this->operator_data.force_material_residual);
   if(spatial_integration_residual or
@@ -102,6 +104,8 @@ NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType 
                             src,
                             true /* zero_dst_vector */);
   }
+
+  src.zero_out_ghost_values();
 }
 
 template<int dim, typename Number>
