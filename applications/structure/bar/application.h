@@ -325,7 +325,7 @@ private:
     this->param.multigrid_data.smoother_data.iterations_eigenvalue_estimation =
       20; // Chebyshev, default: 20
 
-    this->param.multigrid_data.coarse_problem.solver      = MultigridCoarseGridSolver::GMRES;
+    this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::GMRES;
     this->param.multigrid_data.coarse_problem.solver_data =
       SolverData(1e3, 1.e-12, 1.e-3, LinearSolver::Undefined, 30);
 

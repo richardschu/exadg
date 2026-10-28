@@ -587,7 +587,6 @@ protected:
             Range const &                           range) const;
 
 private:
-
   /*
    * This function loops over all interior faces and calculates face integrals.
    */
