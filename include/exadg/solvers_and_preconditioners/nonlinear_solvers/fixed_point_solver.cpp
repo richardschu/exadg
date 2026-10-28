@@ -24,8 +24,8 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
-#include <exadg/fluid_structure_interaction/acceleration_schemes/linear_algebra.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
+#include <exadg/solvers_and_preconditioners/utilities/linear_algebra.h>
 
 namespace ExaDG
 {

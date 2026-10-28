@@ -19,12 +19,11 @@
  *  ______________________________________________________________________
  */
 
-#include <deal.II/lac/full_matrix.h>
-
 #include <exadg/incompressible_navier_stokes/postprocessor/postprocessor_interface.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
+#include <exadg/solvers_and_preconditioners/utilities/linear_algebra.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
 #include <exadg/time_integration/vector_handling.h>
@@ -219,48 +218,19 @@ TimeIntBDF<dim, Number>::compute_initial_guess_projection(
     vmult(products[i], history[i]);
   }
 
-  dealii::FullMatrix<double> C(m, m);
-  std::vector<double>        gamma(m);
+  LinearAlgebra::Matrix<double> C(m);
+  std::vector<double>           gamma(m);
   for(unsigned int i = 0; i < m; ++i)
   {
     for(unsigned int j = 0; j <= i; ++j)
-      C(i, j) = products[i] * products[j];
+      C.set(products[i] * products[j], i, j);
     gamma[i] = products[i] * rhs;
   }
 
-  // Cholesky factorization C = L L^T, with L overwriting the lower triangle of C. It stops at the
-  // first vector that is (numerically) linearly dependent on the newer ones, which drops this and
-  // all older vectors.
-  double const tolerance_dependence = 1e-14 * C(0, 0);
-  unsigned int n                    = 0;
-  for(; n < m; ++n)
-  {
-    for(unsigned int k = 0; k < n; ++k)
-      C(n, n) -= C(n, k) * C(n, k);
-    if(not(C(n, n) > tolerance_dependence))
-      break;
-    C(n, n) = std::sqrt(C(n, n));
-    for(unsigned int i = n + 1; i < m; ++i)
-    {
-      for(unsigned int k = 0; k < n; ++k)
-        C(i, n) -= C(i, k) * C(n, k);
-      C(i, n) /= C(n, n);
-    }
-  }
-
-  // forward and backward substitution for the first n vectors
-  for(unsigned int i = 0; i < n; ++i)
-  {
-    for(unsigned int k = 0; k < i; ++k)
-      gamma[i] -= C(i, k) * gamma[k];
-    gamma[i] /= C(i, i);
-  }
-  for(unsigned int i = n; i-- > 0;)
-  {
-    for(unsigned int k = i + 1; k < n; ++k)
-      gamma[i] -= C(k, i) * gamma[k];
-    gamma[i] /= C(i, i);
-  }
+  // The Cholesky solver stops at the first vector that is (numerically) linearly dependent on the
+  // newer ones based on the tolerance `tol`, which drops this and all older vectors.
+  double constexpr tol = 1e-14;
+  unsigned int const n = LinearAlgebra::solve_cholesky(C, gamma, tol);
 
   // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
   dst = 0.0;

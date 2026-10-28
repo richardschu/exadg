@@ -19,10 +19,11 @@
  *  ______________________________________________________________________
  */
 
-#ifndef EXADG_FLUID_STRUCTURE_INTERACTION_ACCELERATION_SCHEMES_LINEAR_ALGEBRA_H_
-#define EXADG_FLUID_STRUCTURE_INTERACTION_ACCELERATION_SCHEMES_LINEAR_ALGEBRA_H_
+#ifndef EXADG_SOLVERS_AND_PRECONDITIONERS_UTILITIES_LINEAR_ALGEBRA_H_
+#define EXADG_SOLVERS_AND_PRECONDITIONERS_UTILITIES_LINEAR_ALGEBRA_H_
 
 // C/C++
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -34,7 +35,13 @@ namespace ExaDG
 namespace LinearAlgebra
 {
 /*
- * Own implementation of matrix class.
+ * Small dense linear algebra for problems whose size is the number of stored vectors (e.g.,
+ * previous iterates or time steps), not the number of unknowns.
+ */
+
+/*
+ * Own implementation of a dense square matrix of size M x M, stored row-wise and initialized with
+ * zeros. The accessors `get()` and `set()` check the indices.
  */
 template<typename Number>
 class Matrix
@@ -78,6 +85,14 @@ private:
   std::vector<Number> data;
 };
 
+/*
+ * QR decomposition of the matrix whose columns are the vectors `Q` via modified Gram-Schmidt. On
+ * output, `Q` contains the orthonormal columns and `R` the upper triangular factor, such that
+ * `Q_in = Q R`. A column is dropped if its norm after orthogonalization is smaller than `eps` times
+ * its initial norm, i.e., if it is (numerically) linearly dependent on the previous columns: the
+ * column is set to zero and the respective column of `R` to the unit vector, which keeps `R`
+ * invertible.
+ */
 template<typename VectorType, typename Number>
 void
 compute_QR_decomposition(std::vector<VectorType> & Q, Matrix<Number> & R, Number const eps = 1.e-2)
@@ -112,7 +127,9 @@ compute_QR_decomposition(std::vector<VectorType> & Q, Matrix<Number> & R, Number
 }
 
 /*
- *  Matrix has to be upper triangular with d_ii != 0 for all 0 <= i < n
+ * Solves `matrix * dst = rhs` by backward substitution, with the number of unknowns given by the
+ * size of `dst`. Only the upper triangle of `matrix` is accessed, it has to have nonzero diagonal
+ * entries.
  */
 template<typename Number>
 void
@@ -134,6 +151,11 @@ backward_substitution(Matrix<Number> const &      matrix,
   }
 }
 
+/*
+ * Same as `backward_substitution()`, but the entries of `dst` and `rhs` are vectors, i.e., solves
+ * `sum_j matrix(i,j) dst[j] = rhs[i]` for all `i`. Given the QR decomposition `R = Q U`, this
+ * computes the columns of `Z = Q U^{-T}` from `rhs = Q`.
+ */
 template<typename Number, typename VectorType>
 void
 backward_substitution_multiple_rhs(Matrix<Number> const &          matrix,
@@ -154,6 +176,13 @@ backward_substitution_multiple_rhs(Matrix<Number> const &          matrix,
   }
 }
 
+/*
+ * Applies the inverse Jacobian approximation of previous time steps in the IQN-IMVLS method to the
+ * `residual`. Starting with `a = residual`, each stored time step `k`, from the newest to the
+ * oldest, contributes `b += D_k Z_k^T a` and updates `a -= R_k Z_k^T a`, where `D_k` and `R_k`
+ * contain the differences of iterates and residuals, and `Z_k = Q_k U_k^{-T}` stems from the QR
+ * decomposition `R_k = Q_k U_k`.
+ */
 template<typename VectorType>
 void
 inv_jacobian_times_residual(VectorType &                                                  b,
@@ -188,7 +217,67 @@ inv_jacobian_times_residual(VectorType &                                        
   }
 }
 
+/*
+ * Solves the symmetric positive semi-definite system `C x = d` via the Cholesky decomposition
+ * `C = L L^T`. Only the lower triangle of `C` is accessed and overwritten by `L`. The decomposition
+ * stops at the first row whose pivot is not larger than `tol` times the first diagonal entry of
+ * `C`, i.e., at the first unknown that is (numerically) linearly dependent on the previous ones.
+ * This and all following unknowns are dropped and set to zero, such that the system is solved for
+ * the first `n` unknowns only.
+ *
+ * On input, `x` contains the right-hand side `d`, on output the solution. Returns `n`.
+ */
+template<typename Number>
+unsigned int
+solve_cholesky(Matrix<Number> & C, std::vector<Number> & x, Number const tol)
+{
+  unsigned int const m = x.size();
+  if(m == 0)
+    return 0;
+
+  // Cholesky decomposition, stopping at the first (numerically) linearly dependent unknown. The
+  // negated comparison also stops for a NaN pivot.
+  Number const tolerance_dependence = tol * C.get(0, 0);
+  unsigned int n                    = 0;
+  for(; n < m; ++n)
+  {
+    Number pivot = C.get(n, n);
+    for(unsigned int k = 0; k < n; ++k)
+      pivot -= C.get(n, k) * C.get(n, k);
+    if(not(pivot > tolerance_dependence))
+      break;
+    C.set(std::sqrt(pivot), n, n);
+    for(unsigned int i = n + 1; i < m; ++i)
+    {
+      Number value = C.get(i, n);
+      for(unsigned int k = 0; k < n; ++k)
+        value -= C.get(i, k) * C.get(n, k);
+      C.set(value / C.get(n, n), i, n);
+    }
+  }
+
+  // forward substitution L y = d and backward substitution L^T x = y for the first n unknowns
+  for(unsigned int i = 0; i < n; ++i)
+  {
+    for(unsigned int k = 0; k < i; ++k)
+      x[i] -= C.get(i, k) * x[k];
+    x[i] /= C.get(i, i);
+  }
+  for(unsigned int i = n; i-- > 0;)
+  {
+    for(unsigned int k = i + 1; k < n; ++k)
+      x[i] -= C.get(k, i) * x[k];
+    x[i] /= C.get(i, i);
+  }
+
+  // dropped unknowns
+  for(unsigned int i = n; i < m; ++i)
+    x[i] = Number(0.0);
+
+  return n;
+}
+
 } // namespace LinearAlgebra
 } // namespace ExaDG
 
-#endif /* EXADG_FLUID_STRUCTURE_INTERACTION_ACCELERATION_SCHEMES_LINEAR_ALGEBRA_H_ */
+#endif /* EXADG_SOLVERS_AND_PRECONDITIONERS_UTILITIES_LINEAR_ALGEBRA_H_ */
