@@ -40,6 +40,9 @@ struct SourceTermCalculatorData
   // density of the underlying fluid.
   double density;
 
+  // speed of sound of the fluid.
+  double speed_of_sound;
+
   // use material or partial temporal derivative of pressure as source term.
   bool consider_convection;
 
@@ -137,9 +140,10 @@ private:
     CellIntegratorScalar p(matrix_free_in, data.dof_index_pressure, data.quad_index);
     CellIntegratorVector u(matrix_free_in, data.dof_index_velocity, data.quad_index);
 
-    Number rho = static_cast<Number>(data.density);
-
     auto get_scaling_factor = get_scaling_function();
+
+    Number const m_rho_c2 =
+      static_cast<Number>(-data.density / (data.speed_of_sound * data.speed_of_sound));
 
     for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
     {
@@ -155,7 +159,7 @@ private:
 
         for(unsigned int q = 0; q < dpdt.n_q_points; ++q)
         {
-          scalar flux = -rho * dpdt.get_value(q) + u.get_value(q) * p.get_gradient(q);
+          scalar flux = m_rho_c2 * (dpdt.get_value(q) + u.get_value(q) * p.get_gradient(q));
 
           if(data.blend_in)
             flux *= get_scaling_factor(dpdt.quadrature_point(q));
@@ -167,7 +171,7 @@ private:
       {
         for(unsigned int q = 0; q < dpdt.n_q_points; ++q)
         {
-          scalar flux = -rho * dpdt.get_value(q);
+          scalar flux = m_rho_c2 * dpdt.get_value(q);
 
           if(data.blend_in)
             flux *= get_scaling_factor(dpdt.quadrature_point(q));
@@ -188,8 +192,6 @@ private:
   {
     CellIntegratorScalar dpdt(matrix_free_in, data.dof_index_pressure, data.quad_index);
 
-    Number rho = static_cast<Number>(data.density);
-
     auto get_scaling_factor = get_scaling_function();
 
     for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
@@ -198,8 +200,8 @@ private:
 
       for(unsigned int q = 0; q < dpdt.n_q_points; ++q)
       {
-        scalar flux = -rho * FunctionEvaluator<0, dim, Number>::value(analytical_source_term,
-                                                                      dpdt.quadrature_point(q));
+        scalar flux = FunctionEvaluator<0, dim, Number>::value(analytical_source_term,
+                                                               dpdt.quadrature_point(q));
 
         if(data.blend_in)
           flux *= get_scaling_factor(dpdt.quadrature_point(q));

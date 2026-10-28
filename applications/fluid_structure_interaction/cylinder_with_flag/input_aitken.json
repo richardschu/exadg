@@ -24,7 +24,7 @@
     },
     "Output": {
         "OutputDirectory" : "./output/cylinder_with_flag/",
-        "OutputName" : "test", 
+        "OutputName" : "test",
         "WriteOutput" : "false"
   }
 }
