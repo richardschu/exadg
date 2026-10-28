@@ -123,7 +123,6 @@ Pressure-correction scheme:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
@@ -143,12 +142,11 @@ Pressure-correction scheme:
   Maximum size of Krylov space:              30
 
   Projection step:
-  Solver projection step:                    CG
+  Solver:                                    CG
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-12
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     false
 

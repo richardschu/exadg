@@ -42,7 +42,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect
@@ -132,7 +131,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect
@@ -222,7 +220,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect
@@ -312,7 +309,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect
@@ -402,7 +398,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect
@@ -492,7 +487,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect
@@ -582,7 +576,6 @@ Solver:
   Absolute solver tolerance:                 1.0000e-20
   Relative solver tolerance:                 1.0000e-10
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            cphMG
   p-sequence:                                Bisect

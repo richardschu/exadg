@@ -67,7 +67,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -189,7 +188,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -311,7 +309,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -433,7 +430,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -555,7 +551,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -677,7 +672,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -799,7 +793,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -921,7 +914,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -1043,7 +1035,6 @@ Linear solver:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect

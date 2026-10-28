@@ -46,7 +46,7 @@ Temporal discretization:
   Temporal refinements:                      10
   Order of time integration scheme:          2
   Start with low order method:               false
-  Treatment of convective term:              LinearlyImplicit
+  Treatment of convective term:              Implicit
   Solver information:
   Interval physical time:                    1.0000e+00
   Interval wall time:                        1.7977e+308
@@ -108,7 +108,6 @@ Consistent splitting scheme:
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              100
   Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
@@ -129,16 +128,20 @@ Consistent splitting scheme:
   Maximum size of Krylov space:              30
 
   Projection step:
-  Solver projection step:                    CG
+  Solver:                                    CG
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
   Relative tolerance reference:              InitialResidual
-  Maximum size of Krylov space:              30
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     false
 
   Momentum step:
+  Newton solver:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-06
+
   Linear solver:
   Solver:                                    GMRES
   Maximum number of iterations:              10000
@@ -196,7 +199,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 1.0000e+00:
-  Relative error (L2-norm): 5.25804e-07
+  Relative error (L2-norm): 3.38299e-07
 
 Calculate error for pressure at time t = 1.0000e+00:
-  Relative error (L2-norm): 5.19554e-06
+  Relative error (L2-norm): 5.02805e-06

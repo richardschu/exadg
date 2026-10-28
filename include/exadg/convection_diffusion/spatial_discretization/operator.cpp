@@ -491,63 +491,22 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::setup_solver()
 {
-  if(param.solver == Solver::CG)
-  {
-    // initialize solver_data
-    Krylov::SolverDataCG solver_data;
-    solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
-    solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
-    solver_data.rel_tol_reference    = param.solver_data.rel_tol_reference;
-    solver_data.max_iter             = param.solver_data.max_iter;
+  // initialize solver data
+  bool constexpr compute_performance_metrics = false;
+  bool constexpr compute_eigenvalues         = false;
+  bool const use_preconditioner              = param.preconditioner != Preconditioner::None;
 
-    if(param.preconditioner != Preconditioner::None)
-      solver_data.use_preconditioner = true;
+  typedef Krylov::
+    KrylovSolver<CombinedOperator<dim, Number>, PreconditionerBase<Number>, VectorType>
+      SolverType;
 
-    // initialize solver
-    iterative_solver = std::make_shared<
-      Krylov::SolverCG<CombinedOperator<dim, Number>, PreconditionerBase<Number>, VectorType>>(
-      combined_operator, *preconditioner, solver_data);
-  }
-  else if(param.solver == Solver::GMRES)
-  {
-    // initialize solver_data
-    Krylov::SolverDataGMRES solver_data;
-    solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
-    solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
-    solver_data.rel_tol_reference    = param.solver_data.rel_tol_reference;
-    solver_data.max_iter             = param.solver_data.max_iter;
-    solver_data.max_n_tmp_vectors    = param.solver_data.max_krylov_size;
-
-    if(param.preconditioner != Preconditioner::None)
-      solver_data.use_preconditioner = true;
-
-    // initialize solver
-    iterative_solver = std::make_shared<
-      Krylov::SolverGMRES<CombinedOperator<dim, Number>, PreconditionerBase<Number>, VectorType>>(
-      combined_operator, *preconditioner, solver_data, mpi_comm);
-  }
-  else if(param.solver == Solver::FGMRES)
-  {
-    // initialize solver_data
-    Krylov::SolverDataFGMRES solver_data;
-    solver_data.solver_tolerance_abs = param.solver_data.abs_tol;
-    solver_data.solver_tolerance_rel = param.solver_data.rel_tol;
-    solver_data.rel_tol_reference    = param.solver_data.rel_tol_reference;
-    solver_data.max_iter             = param.solver_data.max_iter;
-    solver_data.max_n_tmp_vectors    = param.solver_data.max_krylov_size;
-
-    if(param.preconditioner != Preconditioner::None)
-      solver_data.use_preconditioner = true;
-
-    // initialize solver
-    iterative_solver = std::make_shared<
-      Krylov::SolverFGMRES<CombinedOperator<dim, Number>, PreconditionerBase<Number>, VectorType>>(
-      combined_operator, *preconditioner, solver_data);
-  }
-  else
-  {
-    AssertThrow(false, dealii::ExcMessage("Specified solver is not implemented!"));
-  }
+  // initialize solver
+  iterative_solver = std::make_shared<SolverType>(combined_operator,
+                                                  *preconditioner,
+                                                  param.solver_data,
+                                                  use_preconditioner,
+                                                  compute_performance_metrics,
+                                                  compute_eigenvalues);
 }
 
 template<int dim, typename Number>

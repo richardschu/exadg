@@ -139,15 +139,14 @@ Parameters::Parameters()
     // NUMERICAL PARAMETERS
     implement_block_diagonal_preconditioner_matrix_free(false),
     use_cell_based_face_loops(false),
-    solver_data_block_diagonal(SolverData(1000, 1.e-12, 1.e-2, 1000)),
+    solver_data_block_diagonal(SolverData(1000, 1.e-12, 1.e-2, LinearSolver::Undefined, 1000)),
     quad_rule_linearization(QuadratureRuleLinearization::Overintegration32k),
 
     // PROJECTION METHODS
 
     // pressure Poisson equation
     IP_factor_pressure(1.),
-    solver_pressure_poisson(SolverPressurePoisson::CG),
-    solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::CG, 100)),
     initial_guess_type_pressure_poisson(InitialGuessType::Extrapolation),
     preconditioner_pressure_poisson(PreconditionerPressurePoisson::Multigrid),
     multigrid_data_pressure_poisson(MultigridData()),
@@ -155,19 +154,18 @@ Parameters::Parameters()
     update_preconditioner_pressure_poisson_every_time_steps(1),
 
     // projection step
-    solver_projection(SolverProjection::CG),
-    solver_data_projection(SolverData(1000, 1.e-12, 1.e-6, 100)),
+    solver_data_projection(SolverData(1000, 1.e-12, 1.e-6, LinearSolver::CG, 100)),
     preconditioner_projection(PreconditionerProjection::InverseMassMatrix),
     multigrid_data_projection(MultigridData()),
     update_preconditioner_projection(false),
     update_preconditioner_projection_every_time_steps(1),
     preconditioner_block_diagonal_projection(Elementwise::Preconditioner::InverseMassMatrix),
-    solver_data_block_diagonal_projection(SolverData(1000, 1.e-12, 1.e-2, 1000)),
+    solver_data_block_diagonal_projection(
+      SolverData(1000, 1.e-12, 1.e-2, LinearSolver::Undefined, 1000)),
 
     // momentum step
     newton_solver_data_momentum(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
-    solver_momentum(SolverMomentum::GMRES),
-    solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
     initial_guess_type_momentum(InitialGuessType::Extrapolation),
     preconditioner_momentum(MomentumPreconditioner::InverseMassMatrix),
     update_preconditioner_momentum(false),
@@ -204,8 +202,7 @@ Parameters::Parameters()
     newton_solver_data_coupled(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
 
     // linear solver
-    solver_coupled(SolverCoupled::GMRES),
-    solver_data_coupled(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    solver_data_coupled(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
     initial_guess_type_coupled(InitialGuessType::Extrapolation),
 
     // preconditioning linear solver
@@ -219,13 +216,13 @@ Parameters::Parameters()
     multigrid_operator_type_velocity_block(MultigridOperatorType::Undefined),
     multigrid_data_velocity_block(MultigridData()),
     iterative_solve_of_velocity_block(false),
-    solver_data_velocity_block(SolverData(1e4, 1.e-12, 1.e-6, 100)),
+    solver_data_velocity_block(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::FGMRES, 100)),
 
     // preconditioner pressure/Schur-complement block
     preconditioner_pressure_block(SchurComplementPreconditioner::PressureConvectionDiffusion),
     multigrid_data_pressure_block(MultigridData()),
     iterative_solve_of_pressure_block(false),
-    solver_data_pressure_block(SolverData(1e4, 1.e-12, 1.e-6, 100))
+    solver_data_pressure_block(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::CG, 100))
 {
 }
 
@@ -1087,8 +1084,6 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
 
   print_parameter(pcout, "interior penalty factor", IP_factor_pressure);
 
-  print_parameter(pcout, "Solver", solver_pressure_poisson);
-
   solver_data_pressure_poisson.print(pcout);
   print_parameter(pcout, "Initial guess type", initial_guess_type_pressure_poisson);
 
@@ -1116,8 +1111,6 @@ Parameters::print_parameters_projection_step(dealii::ConditionalOStream const & 
 {
   if(use_divergence_penalty == true)
   {
-    print_parameter(pcout, "Solver projection step", solver_projection);
-
     solver_data_projection.print(pcout);
 
     if(use_divergence_penalty == true and use_continuity_penalty == true)
@@ -1250,8 +1243,6 @@ Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pc
   // Solver linear(ized) problem
   pcout << "  Linear solver:" << std::endl;
 
-  print_parameter(pcout, "Solver", solver_momentum);
-
   solver_data_momentum.print(pcout);
   print_parameter(pcout, "Initial guess type", initial_guess_type_momentum);
 
@@ -1341,8 +1332,6 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
 
   // Solver linearized problem
   pcout << "Linear solver:" << std::endl;
-
-  print_parameter(pcout, "Solver", solver_coupled);
 
   solver_data_coupled.print(pcout);
   print_parameter(pcout, "Initial guess type", initial_guess_type_coupled);

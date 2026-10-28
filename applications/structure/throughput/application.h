@@ -104,7 +104,7 @@ private:
     }
 
     // These should not be needed for the throughput applications.
-    this->param.solver = Solver::FGMRES;
+    this->param.solver_data.linear_solver = LinearSolver::FGMRES;
 
     this->param.use_matrix_based_operator = false;
     this->param.sparse_matrix_type        = SparseMatrixType::Trilinos;

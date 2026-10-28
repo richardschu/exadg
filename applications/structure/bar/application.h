@@ -312,8 +312,7 @@ private:
     this->param.multigrid_data.min_degree_matrix_free = min_degree_matrix_free;
 
     this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);
-    this->param.solver              = Solver::FGMRES;
-    this->param.solver_data         = SolverData(1e3, 1.e-14, 1.e-8, 30);
+    this->param.solver_data         = SolverData(1e3, 1.e-14, 1.e-8, LinearSolver::FGMRES, 30);
     this->param.preconditioner      = preconditioner;
     this->param.multigrid_data.type = MultigridType::phMG;
 
@@ -327,7 +326,8 @@ private:
       20; // Chebyshev, default: 20
 
     this->param.multigrid_data.coarse_problem.solver      = MultigridCoarseGridSolver::GMRES;
-    this->param.multigrid_data.coarse_problem.solver_data = SolverData(1e3, 1.e-12, 1.e-3, 30);
+    this->param.multigrid_data.coarse_problem.solver_data =
+      SolverData(1e3, 1.e-12, 1.e-3, LinearSolver::Undefined, 30);
 
     this->param.multigrid_data.coarse_problem.preconditioner =
       MultigridCoarseGridPreconditioner::AMG;

@@ -73,7 +73,7 @@ public:
      */
     AdditionalData()
       : solver_type(MultigridCoarseGridSolver::CG),
-        solver_data(SolverData(1e4, 1.e-12, 1.e-3, 100)),
+        solver_data(SolverData(1e4, 1.e-12, 1.e-3, LinearSolver::Undefined, 100)),
         operator_is_singular(false),
         preconditioner(MultigridCoarseGridPreconditioner::None),
         amg_data(AMGData())
@@ -177,69 +177,50 @@ public:
     }
     else
     {
-      std::shared_ptr<Krylov::SolverBase<VectorType>> solver;
-
+      // Overwrite `linear_solver` as enum also enables non-Krylov coarse grid solvers.
+      SolverData solver_data = additional_data.solver_data;
       if(additional_data.solver_type == MultigridCoarseGridSolver::CG)
       {
-        Krylov::SolverDataCG solver_data;
-        solver_data.max_iter             = additional_data.solver_data.max_iter;
-        solver_data.solver_tolerance_abs = additional_data.solver_data.abs_tol;
-        solver_data.solver_tolerance_rel = additional_data.solver_data.rel_tol;
-        solver_data.rel_tol_reference    = additional_data.solver_data.rel_tol_reference;
-
-        if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::None)
-        {
-          solver_data.use_preconditioner = false;
-        }
-        else if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::PointJacobi or
-                additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi or
-                additional_data.preconditioner == MultigridCoarseGridPreconditioner::AMG)
-        {
-          solver_data.use_preconditioner = true;
-        }
-        else
-        {
-          AssertThrow(false, dealii::ExcMessage("Not implemented."));
-        }
-
-        solver.reset(new Krylov::SolverCG<Operator, PreconditionerBase<Number>, VectorType>(
-          pde_operator, *preconditioner, solver_data));
+        solver_data.linear_solver = LinearSolver::CG;
       }
       else if(additional_data.solver_type == MultigridCoarseGridSolver::GMRES)
       {
-        Krylov::SolverDataGMRES solver_data;
-
-        solver_data.max_iter             = additional_data.solver_data.max_iter;
-        solver_data.solver_tolerance_abs = additional_data.solver_data.abs_tol;
-        solver_data.solver_tolerance_rel = additional_data.solver_data.rel_tol;
-        solver_data.rel_tol_reference    = additional_data.solver_data.rel_tol_reference;
-        solver_data.max_n_tmp_vectors    = additional_data.solver_data.max_krylov_size;
-
-        if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::None)
-        {
-          solver_data.use_preconditioner = false;
-        }
-        else if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::PointJacobi or
-                additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi or
-                additional_data.preconditioner == MultigridCoarseGridPreconditioner::AMG)
-        {
-          solver_data.use_preconditioner = true;
-        }
-        else
-        {
-          AssertThrow(false, dealii::ExcMessage("Not implemented."));
-        }
-
-        solver.reset(new Krylov::SolverGMRES<Operator, PreconditionerBase<Number>, VectorType>(
-          pde_operator, *preconditioner, solver_data, mpi_comm));
+        solver_data.linear_solver = LinearSolver::GMRES;
       }
       else
       {
         AssertThrow(false, dealii::ExcMessage("Not implemented."));
       }
 
+      bool constexpr compute_performance_metrics = false;
+      bool constexpr compute_eigenvalues         = false;
+      bool use_preconditioner;
+      if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::None)
+      {
+        use_preconditioner = false;
+      }
+      else if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::PointJacobi or
+              additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi or
+              additional_data.preconditioner == MultigridCoarseGridPreconditioner::AMG)
+      {
+        use_preconditioner = true;
+      }
+      else
+      {
+        AssertThrow(false, dealii::ExcMessage("Not implemented."));
+      }
+
+      typedef Krylov::KrylovSolver<Operator, PreconditionerBase<Number>, VectorType> SolverType;
+
+      SolverType solver(pde_operator,
+                        *preconditioner,
+                        solver_data,
+                        use_preconditioner,
+                        compute_performance_metrics,
+                        compute_eigenvalues);
+
       // Note that the preconditioner has already been updated
-      solver->solve(dst, r);
+      solver.solve(dst, r);
     }
   }
 
