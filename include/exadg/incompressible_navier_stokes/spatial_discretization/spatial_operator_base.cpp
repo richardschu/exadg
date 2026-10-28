@@ -1422,7 +1422,7 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_vorticity(VectorType & dst, VectorType const & src) const
 {
-  vorticity_calculator.compute_vorticity(dst, src);
+  vorticity_calculator.compute_projection_rhs(dst, src);
   this->apply_inverse_mass_operator(dst, dst);
 }
 
@@ -1430,8 +1430,7 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_divergence(VectorType & dst, VectorType const & src) const
 {
-  divergence_calculator.compute_divergence(dst, src);
-
+  divergence_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1439,8 +1438,7 @@ template<int dim, typename Number>
 void
 SpatialOperatorBase<dim, Number>::compute_shear_rate(VectorType & dst, VectorType const & src) const
 {
-  shear_rate_calculator.compute_shear_rate(dst, src);
-
+  shear_rate_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1450,7 +1448,7 @@ SpatialOperatorBase<dim, Number>::access_viscosity(VectorType & dst) const
 {
   if(param.viscosity_is_variable())
   {
-    viscosity_calculator.access_viscosity(dst);
+    viscosity_calculator.compute_projection_rhs(dst);
     inverse_mass_velocity_scalar.apply(dst, dst);
   }
   else
@@ -1464,8 +1462,7 @@ void
 SpatialOperatorBase<dim, Number>::compute_velocity_magnitude(VectorType &       dst,
                                                              VectorType const & src) const
 {
-  magnitude_calculator.compute(dst, src);
-
+  magnitude_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1474,8 +1471,7 @@ void
 SpatialOperatorBase<dim, Number>::compute_vorticity_magnitude(VectorType &       dst,
                                                               VectorType const & src) const
 {
-  magnitude_calculator.compute(dst, src);
-
+  magnitude_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1582,8 +1578,7 @@ void
 SpatialOperatorBase<dim, Number>::compute_q_criterion(VectorType &       dst,
                                                       VectorType const & src) const
 {
-  q_criterion_calculator.compute(dst, src);
-
+  q_criterion_calculator.compute_projection_rhs(dst, src);
   inverse_mass_velocity_scalar.apply(dst, dst);
 }
 
@@ -1789,35 +1784,39 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
   {
     // elementwise operator
     elementwise_projection_operator =
-      std::make_shared<ELEMENTWISE_PROJ_OPERATOR>(*projection_operator);
+      std::make_shared<ElementwiseProjOperator>(*projection_operator);
 
     // elementwise preconditioner
     if(param.preconditioner_projection == PreconditionerProjection::None)
     {
-      typedef Elementwise::PreconditionerIdentity<dealii::VectorizedArray<Number>> IDENTITY;
+      typedef Elementwise::PreconditionerIdentity<dealii::VectorizedArray<Number>>
+        ElementwiseIdentityPreconditioner;
 
-      elementwise_preconditioner_projection =
-        std::make_shared<IDENTITY>(elementwise_projection_operator->get_problem_size());
+      elementwise_preconditioner_projection = std::make_shared<ElementwiseIdentityPreconditioner>(
+        elementwise_projection_operator->get_problem_size());
     }
     else if(param.preconditioner_projection == PreconditionerProjection::InverseMassMatrix)
     {
-      typedef Elementwise::InverseMassPreconditioner<dim, dim, Number> INVERSE_MASS;
+      typedef Elementwise::InverseMassPreconditioner<dim, dim, Number>
+        ElementwiseInverseMassPreconditioner;
 
       elementwise_preconditioner_projection =
-        std::make_shared<INVERSE_MASS>(projection_operator->get_matrix_free(),
-                                       projection_operator->get_dof_index(),
-                                       projection_operator->get_quad_index());
+        std::make_shared<ElementwiseInverseMassPreconditioner>(
+          projection_operator->get_matrix_free(),
+          projection_operator->get_dof_index(),
+          projection_operator->get_quad_index());
     }
     else if(param.preconditioner_projection == PreconditionerProjection::PointJacobi)
     {
-      typedef Elementwise::JacobiPreconditioner<dim, dim, Number, ProjOperator> JACOBI;
+      typedef Elementwise::JacobiPreconditioner<dim, dim, Number, ProjOperator>
+        ElementwiseJacobiPreconditioner;
 
       elementwise_preconditioner_projection =
-        std::make_shared<JACOBI>(projection_operator->get_matrix_free(),
-                                 projection_operator->get_dof_index(),
-                                 projection_operator->get_quad_index(),
-                                 *projection_operator,
-                                 false);
+        std::make_shared<ElementwiseJacobiPreconditioner>(projection_operator->get_matrix_free(),
+                                                          projection_operator->get_dof_index(),
+                                                          projection_operator->get_quad_index(),
+                                                          *projection_operator,
+                                                          false);
     }
     else
     {
@@ -1832,15 +1831,14 @@ SpatialOperatorBase<dim, Number>::setup_projection_solver()
       projection_solver_data.solver_data.abs_tol = param.solver_data_projection.abs_tol;
       projection_solver_data.solver_data.rel_tol = param.solver_data_projection.rel_tol;
 
-      typedef Elementwise::PreconditionerBase<dealii::VectorizedArray<Number>> PROJ_PRECONDITIONER;
-
       typedef Elementwise::
-        IterativeSolver<dim, dim, Number, ELEMENTWISE_PROJ_OPERATOR, PROJ_PRECONDITIONER>
-          PROJ_SOLVER;
+        IterativeSolver<dim, dim, Number, ElementwiseProjOperator, ElementwisePreconditionerBase>
+          ElementwiseSolver;
 
-      projection_solver = std::make_shared<PROJ_SOLVER>(
-        *std::dynamic_pointer_cast<ELEMENTWISE_PROJ_OPERATOR>(elementwise_projection_operator),
-        *std::dynamic_pointer_cast<PROJ_PRECONDITIONER>(elementwise_preconditioner_projection),
+      projection_solver = std::make_shared<ElementwiseSolver>(
+        *std::dynamic_pointer_cast<ElementwiseProjOperator>(elementwise_projection_operator),
+        *std::dynamic_pointer_cast<ElementwisePreconditionerBase>(
+          elementwise_preconditioner_projection),
         projection_solver_data);
     }
     else

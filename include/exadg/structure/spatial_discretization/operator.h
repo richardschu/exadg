@@ -677,10 +677,9 @@ private:
   std::shared_ptr<Krylov::SolverBase<VectorType>> linear_solver;
 
   /*
-   * Mass (inverse) operator(s) and solvers
+   * Inverse mass operators for initial acceleration problem and postprocessing.
    */
-  std::shared_ptr<PreconditionerBase<Number>>              mass_preconditioner;
-  std::shared_ptr<Krylov::SolverBase<VectorType>>          mass_solver;
+  InverseMassOperator<dim, dim /* n_components */, Number> inverse_mass;
   InverseMassOperator<dim, 1 /* n_components */, Number>   inverse_mass_scalar_postprocessing;
   InverseMassOperator<dim, dim /* n_components */, Number> inverse_mass_vector_postprocessing;
 
