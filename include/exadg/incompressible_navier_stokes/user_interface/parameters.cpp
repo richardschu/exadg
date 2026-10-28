@@ -182,6 +182,11 @@ Parameters::Parameters()
     order_extrapolation_pressure_nbc((order_time_integrator <= 2) ? order_time_integrator : 2),
     formulation_convective_term_bc(FormulationConvectiveTerm::ConvectiveFormulation),
 
+    // CONSISTENT SPLITTING SCHEME
+    order_extrapolation_pressure_rhs((order_time_integrator <= 2) ? order_time_integrator :
+                                                                    order_time_integrator - 1),
+    apply_leray_projection(true),
+
     // PRESSURE-CORRECTION SCHEME
 
     // formulations
@@ -376,7 +381,7 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
 
     if(continuity_penalty_use_boundary_data == true)
     {
-      if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+      if(temporal_discretization == TemporalDiscretization::BDFDualSplitting)
       {
         AssertThrow(
           apply_penalty_terms_in_postprocessing_step == true,
@@ -451,7 +456,7 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   }
 
   // HIGH-ORDER DUAL SPLITTING SCHEME
-  if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  if(temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
     if(spatial_discretization == SpatialDiscretization::HDIV)
     {
@@ -486,6 +491,35 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
                   formulation_convective_term_bc ==
                     FormulationConvectiveTerm::ConvectiveFormulation,
                 dealii::ExcMessage("Not implemented."));
+  }
+
+  // CONSISTENT SPLITTING SCHEME
+  if(temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+  {
+    AssertThrow(spatial_discretization != SpatialDiscretization::HDIV,
+                dealii::ExcMessage("Not implemented."));
+
+    AssertThrow(order_extrapolation_pressure_rhs <= order_time_integrator,
+                dealii::ExcMessage("Invalid parameter order_extrapolation_pressure_rhs!"));
+
+    AssertThrow(order_extrapolation_pressure_nbc <= order_time_integrator,
+                dealii::ExcMessage("Invalid parameter order_extrapolation_pressure_nbc!"));
+
+    // ALE and consequently FSI (including storing of last iterates therein) are disabled.
+    AssertThrow(!ale_formulation, dealii::ExcMessage("Not implemented."));
+
+    AssertThrow(!viscosity_is_variable(), dealii::ExcMessage("Not implemented."));
+
+    AssertThrow(initial_guess_type_pressure_poisson == InitialGuessType::Extrapolation and
+                  initial_guess_type_momentum == InitialGuessType::Extrapolation,
+                dealii::ExcMessage("Only `InitialGuessType::Extrapolation` is implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
+
+    AssertThrow(divu_integrated_by_parts, dealii::ExcMessage("Needed for optimal convergence."));
+    AssertThrow(divu_formulation == FormulationVelocityDivergenceTerm::Weak,
+                dealii::ExcMessage("Strong formulation not supported."));
+    AssertThrow(divu_use_boundary_data,
+                dealii::ExcMessage("Boundary data needed for the consistent boundary condition."));
   }
 
   // PRESSURE-CORRECTION SCHEME
@@ -654,12 +688,14 @@ Parameters::involves_h_multigrid() const
       }
     }
   }
-  // TODO: we currently treat TemporalDiscretization::InterpolateAnalyticalSolution as a splitting
+  // TODO: we currently treat `TemporalDiscretization::InterpolateAnalyticalSolution` as a splitting
   // scheme, since the implementation creates a spatial operator related to the pressure-correction
-  // scheme in case of InterpolateAnalyticalSolution. This is only a temporary solution and we need
-  // to write a separate class SpatialOperatorInterpolateAnalyticalSolution that does not create
-  // preconditioners (including multigrid)
-  else if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme or
+  // scheme in case of `TemporalDiscretization::InterpolateAnalyticalSolution`. This is only a
+  // temporary solution and we need to write a separate class
+  // `SpatialOperatorInterpolateAnalyticalSolution` that does not create preconditioners (including
+  // multigrid)
+  else if(temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+          temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
           temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
           temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
   {
@@ -749,8 +785,12 @@ Parameters::print(dealii::ConditionalOStream const & pcout, std::string const & 
   print_parameters_numerical_parameters(pcout);
 
   // HIGH-ORDER DUAL SPLITTING SCHEME
-  if(temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+  if(temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     print_parameters_dual_splitting(pcout);
+
+  // CONSISTENT SPLITTING SCHEME
+  if(temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+    print_parameters_consistent_splitting(pcout);
 
   // PRESSURE-CORRECTION  SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
@@ -979,7 +1019,7 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
   print_parameter(pcout, "Use continuity penalty term", use_continuity_penalty);
 
   if(temporal_discretization == TemporalDiscretization::BDFCoupledSolution or
-     temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+     temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
     if(use_divergence_penalty == true or use_continuity_penalty == true)
     {
@@ -1129,6 +1169,48 @@ Parameters::print_parameters_dual_splitting(dealii::ConditionalOStream const & p
   // projection step
   pcout << std::endl << "  Projection step:" << std::endl;
   print_parameters_projection_step(pcout);
+
+  // momentum step
+  if(viscous_problem() or non_explicit_convective_problem())
+  {
+    print_parameters_momentum_step(pcout);
+  }
+}
+
+
+
+void
+Parameters::print_parameters_consistent_splitting(dealii::ConditionalOStream const & pcout) const
+{
+  // nothing to print if we bypass the PDE solver by
+  // TemporalDiscretization::InterpolateAnalyticalSolution
+  if(solver_type == SolverType::Unsteady and
+     temporal_discretization == TemporalDiscretization::InterpolateAnalyticalSolution)
+    return;
+
+  pcout << std::endl << "Consistent splitting scheme:" << std::endl;
+
+  // Leray projection
+  if(apply_leray_projection)
+    pcout << "  Apply Leray projection in the PPE" << std::endl;
+
+  // formulations
+  pcout << "  Order of extrapolation ..." << std::endl;
+  print_parameter(pcout, " ...convective terms in pressure rhs", order_extrapolation_pressure_rhs);
+  print_parameter(pcout, " ... of viscous term in pressure NBC", order_extrapolation_pressure_nbc);
+
+
+  // projection method
+
+  // pressure step
+  print_parameters_pressure_poisson(pcout);
+
+  // projection step
+  if(apply_penalty_terms_in_postprocessing_step)
+  {
+    pcout << std::endl << "  Projection step:" << std::endl;
+    print_parameters_projection_step(pcout);
+  }
 
   // momentum step
   if(viscous_problem() or non_explicit_convective_problem())

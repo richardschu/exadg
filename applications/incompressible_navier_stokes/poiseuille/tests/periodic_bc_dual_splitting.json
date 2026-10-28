@@ -17,7 +17,7 @@
     "Application": {
         "BoundaryConditionType": "Periodic",
         "ApplySymmetryBC": "false",
-        "TemporalDiscretization": "BDFDualSplittingScheme"
+        "TemporalDiscretization": "BDFDualSplitting"
     },
     "Output": {
         "OutputDirectory": "output/poiseuille/",

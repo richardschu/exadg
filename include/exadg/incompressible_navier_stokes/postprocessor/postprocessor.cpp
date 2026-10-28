@@ -58,62 +58,62 @@ PostProcessor<dim, Number>::setup(Operator const & pde_operator, bool const rest
 
   initialize_derived_fields();
 
-  output_generator.setup(pde_operator.get_dof_handler_u(),
-                         pde_operator.get_dof_handler_p(),
-                         *pde_operator.get_mapping(),
+  output_generator.setup(navier_stokes_operator->get_dof_handler_u(),
+                         navier_stokes_operator->get_dof_handler_p(),
+                         *navier_stokes_operator->get_mapping(),
                          pp_data.output_data,
                          restarted_simulation);
 
-  pointwise_output_generator.setup(pde_operator.get_dof_handler_u(),
-                                   pde_operator.get_dof_handler_p(),
-                                   *pde_operator.get_mapping(),
+  pointwise_output_generator.setup(navier_stokes_operator->get_dof_handler_u(),
+                                   navier_stokes_operator->get_dof_handler_p(),
+                                   *navier_stokes_operator->get_mapping(),
                                    pp_data.pointwise_output_data,
                                    restarted_simulation);
 
-  error_calculator_u.setup(pde_operator.get_dof_handler_u(),
-                           *pde_operator.get_mapping(),
+  error_calculator_u.setup(navier_stokes_operator->get_dof_handler_u(),
+                           *navier_stokes_operator->get_mapping(),
                            pp_data.error_data_u,
                            restarted_simulation);
 
-  error_calculator_p.setup(pde_operator.get_dof_handler_p(),
-                           *pde_operator.get_mapping(),
+  error_calculator_p.setup(navier_stokes_operator->get_dof_handler_p(),
+                           *navier_stokes_operator->get_mapping(),
                            pp_data.error_data_p,
                            restarted_simulation);
 
-  lift_and_drag_calculator.setup(pde_operator.get_dof_handler_u(),
-                                 pde_operator.get_matrix_free(),
-                                 pde_operator.get_dof_index_velocity(),
-                                 pde_operator.get_dof_index_pressure(),
-                                 pde_operator.get_quad_index_velocity_standard(),
+  lift_and_drag_calculator.setup(navier_stokes_operator->get_dof_handler_u(),
+                                 navier_stokes_operator->get_matrix_free(),
+                                 navier_stokes_operator->get_dof_index_velocity(),
+                                 navier_stokes_operator->get_dof_index_pressure(),
+                                 navier_stokes_operator->get_quad_index_velocity_standard(),
                                  pp_data.lift_and_drag_data,
                                  restarted_simulation);
 
-  pressure_difference_calculator.setup(pde_operator.get_dof_handler_p(),
-                                       *pde_operator.get_mapping(),
+  pressure_difference_calculator.setup(navier_stokes_operator->get_dof_handler_p(),
+                                       *navier_stokes_operator->get_mapping(),
                                        pp_data.pressure_difference_data,
                                        restarted_simulation);
 
-  div_and_mass_error_calculator.setup(pde_operator.get_matrix_free(),
-                                      pde_operator.get_dof_index_velocity(),
-                                      pde_operator.get_quad_index_velocity_standard(),
+  div_and_mass_error_calculator.setup(navier_stokes_operator->get_matrix_free(),
+                                      navier_stokes_operator->get_dof_index_velocity(),
+                                      navier_stokes_operator->get_quad_index_velocity_standard(),
                                       pp_data.mass_data,
                                       restarted_simulation);
 
-  kinetic_energy_calculator.setup(pde_operator,
-                                  pde_operator.get_matrix_free(),
-                                  pde_operator.get_dof_index_velocity(),
-                                  pde_operator.get_quad_index_velocity_standard(),
+  kinetic_energy_calculator.setup(*navier_stokes_operator,
+                                  navier_stokes_operator->get_matrix_free(),
+                                  navier_stokes_operator->get_dof_index_velocity(),
+                                  navier_stokes_operator->get_quad_index_velocity_standard(),
                                   pp_data.kinetic_energy_data,
                                   restarted_simulation);
 
-  kinetic_energy_spectrum_calculator.setup(pde_operator.get_matrix_free(),
-                                           pde_operator.get_dof_handler_u(),
+  kinetic_energy_spectrum_calculator.setup(navier_stokes_operator->get_matrix_free(),
+                                           navier_stokes_operator->get_dof_handler_u(),
                                            pp_data.kinetic_energy_spectrum_data,
                                            restarted_simulation);
 
-  line_plot_calculator.setup(pde_operator.get_dof_handler_u(),
-                             pde_operator.get_dof_handler_p(),
-                             *pde_operator.get_mapping(),
+  line_plot_calculator.setup(navier_stokes_operator->get_dof_handler_u(),
+                             navier_stokes_operator->get_dof_handler_p(),
+                             *navier_stokes_operator->get_mapping(),
                              pp_data.line_plot_data,
                              restarted_simulation);
 }

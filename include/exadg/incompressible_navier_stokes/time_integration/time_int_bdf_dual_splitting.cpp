@@ -24,9 +24,9 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_dual_splitting.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
-#include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/time_integration/vector_handling.h>
 #include <exadg/utilities/print_solver_results.h>
 
 namespace ExaDG
@@ -1047,14 +1047,16 @@ TimeIntBDFDualSplitting<dim, Number>::penalty_step()
     timer.restart();
 
     // compute right-hand-side vector
-    VectorType rhs(velocity_np);
+    VectorType rhs;
+    rhs.reinit(velocity_np, true /* omit_zeroing_entries */);
     pde_operator->apply_mass_operator(rhs, velocity_np);
 
     // extrapolate velocity to time t_n+1 and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty term
-    VectorType velocity_extrapolated(velocity_np);
-    velocity_extrapolated = 0.0;
-    for(unsigned int i = 0; i < velocity.size(); ++i)
+    VectorType velocity_extrapolated;
+    velocity_extrapolated.reinit(velocity_np, true /* omit_zeroing_entries */);
+    velocity_extrapolated.equ(this->extra.get_beta(0), velocity[0]);
+    for(unsigned int i = 1; i < velocity.size(); ++i)
       velocity_extrapolated.add(this->extra.get_beta(i), velocity[i]);
 
     pde_operator->update_projection_operator(velocity_extrapolated, this->get_time_step_size());
@@ -1100,15 +1102,15 @@ TimeIntBDFDualSplitting<dim, Number>::prepare_vectors_for_next_timestep()
 {
   Base::prepare_vectors_for_next_timestep();
 
-  push_back(velocity);
+  swap_back_one_step(velocity);
   velocity[0].swap(velocity_np);
 
-  push_back(pressure);
+  swap_back_one_step(pressure);
   pressure[0].swap(pressure_np);
 
   // We also have to care about the history of velocity Dirichlet boundary conditions.
   // Note that velocity_dbc_np has already been updated.
-  push_back(velocity_dbc);
+  swap_back_one_step(velocity_dbc);
   velocity_dbc[0].swap(velocity_dbc_np);
 }
 

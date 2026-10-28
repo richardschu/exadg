@@ -22,8 +22,8 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/operator_coupled.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf_coupled_solver.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
-#include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/time_integration/vector_handling.h>
 #include <exadg/utilities/print_solver_results.h>
 
 namespace ExaDG
@@ -534,21 +534,24 @@ TimeIntBDFCoupled<dim, Number>::penalty_step()
   timer.restart();
 
   // right-hand side term: apply mass operator
-  VectorType rhs(solution_np.block(0));
+  VectorType rhs;
+  rhs.reinit(solution_np.block(0), true /* omit_zeroing_entries */);
   pde_operator->apply_mass_operator(rhs, solution_np.block(0));
 
   // extrapolate velocity to time t_n+1 and use this velocity field to
   // calculate the penalty parameter for the divergence and continuity penalty term
-  VectorType velocity_extrapolated(solution_np.block(0));
+  VectorType velocity_extrapolated;
+  velocity_extrapolated.reinit(solution_np.block(0), true /* omit_zeroing_entries */);
   if(this->first_coupling_iteration)
   {
-    velocity_extrapolated = 0.0;
-    for(unsigned int i = 0; i < solution.size(); ++i)
+    velocity_extrapolated.equ(this->extra.get_beta(0), solution[0].block(0));
+    for(unsigned int i = 1; i < solution.size(); ++i)
       velocity_extrapolated.add(this->extra.get_beta(i), solution[i].block(0));
   }
   else
   {
-    velocity_extrapolated = velocity_penalty_last_iter;
+    velocity_extrapolated.copy_locally_owned_data_from(velocity_penalty_last_iter);
+    velocity_extrapolated.update_ghost_values();
   }
 
   // update projection operator
@@ -654,7 +657,7 @@ TimeIntBDFCoupled<dim, Number>::prepare_vectors_for_next_timestep()
 {
   Base::prepare_vectors_for_next_timestep();
 
-  push_back(solution);
+  swap_back_one_step(solution);
   solution[0].swap(solution_np);
 }
 

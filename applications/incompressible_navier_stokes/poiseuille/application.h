@@ -263,7 +263,7 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme)
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
     {
       this->param.solver_momentum         = SolverMomentum::CG;
       this->param.solver_data_momentum    = SolverData(1000, 1.e-20, 1.e-6);
@@ -538,7 +538,7 @@ private:
 
   bool apply_symmetry_bc = false;
 
-  TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFDualSplittingScheme;
+  TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFDualSplitting;
 
   FormulationViscousTerm const formulation_viscous_term =
     FormulationViscousTerm::LaplaceFormulation;

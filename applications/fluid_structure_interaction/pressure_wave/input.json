@@ -13,7 +13,7 @@
         "RefineSpace": "1"
     },
     "Fluid" : {
-        "TemporalDiscretization": "BDFDualSplittingScheme"
+        "TemporalDiscretization": "BDFDualSplitting"
     },
     "Structure" : {
         "WeakDamping": "0.0",
@@ -23,7 +23,7 @@
         "ExteriorPressure": "0.0"
     },
     "Fluid" : {
-        "TemporalDiscretization": "BDFDualSplittingScheme"
+        "TemporalDiscretization": "BDFDualSplitting"
     },
     "FSI" : {
         "AccelerationMethod": "IQN_ILS",

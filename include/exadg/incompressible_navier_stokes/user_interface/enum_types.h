@@ -124,7 +124,8 @@ enum class SolverType
 enum class TemporalDiscretization
 {
   Undefined,
-  BDFDualSplittingScheme,
+  BDFDualSplitting,
+  BDFConsistentSplitting,
   BDFPressureCorrection,
   BDFCoupledSolution,
   InterpolateAnalyticalSolution

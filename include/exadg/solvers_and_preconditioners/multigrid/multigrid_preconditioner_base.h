@@ -309,8 +309,8 @@ private:
    * This function initializes an operator for a specified level. It needs to be implemented by
    * derived classes. The parameter `use_matrix_based_operator_level` describes whether a
    * matrix-based implementation is used on a given level. The parameter `assemble_matrix` describes
-   * whether the matrix should be assembled during `initialize_operator()`. This parameter only has an
-   * effect if `use_matrix_based_operator_level = true`. Note that you have to make sure that the
+   * whether the matrix should be assembled during `initialize_operator()`. This parameter only has
+   * an effect if `use_matrix_based_operator_level = true`. Note that you have to make sure that the
    * parameter `use_matrix_based_operator_level` is passed correctly to the underlying PDE operator
    * when implementing the function `initialize_operator()` in derived classes.
    */

@@ -25,9 +25,9 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
-#include <exadg/time_integration/push_back_vectors.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
+#include <exadg/time_integration/vector_handling.h>
 
 namespace ExaDG
 {
@@ -66,7 +66,7 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
   needs_vector_convective_term =
     this->param.convective_problem() and
     (this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit or
-     this->param.temporal_discretization == TemporalDiscretization::BDFDualSplittingScheme);
+     this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting);
 }
 
 template<int dim, typename Number>
@@ -143,14 +143,14 @@ TimeIntBDF<dim, Number>::prepare_vectors_for_next_timestep()
   {
     if(this->param.ale_formulation == false)
     {
-      push_back(this->vec_convective_term);
+      swap_back_one_step(this->vec_convective_term);
       vec_convective_term[0].swap(convective_term_np);
     }
   }
 
   if(param.ale_formulation)
   {
-    push_back(vec_grid_coordinates);
+    swap_back_one_step(vec_grid_coordinates);
     vec_grid_coordinates[0].swap(grid_coordinates_np);
   }
 }
@@ -303,6 +303,14 @@ TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const first
     AssertThrow(this->update_velocity and this->update_pressure,
                 dealii::ExcMessage("TemporalDiscretization::BDFCoupledSolution cannot "
                                    "recover velocity and pressure independently."));
+  }
+  else if(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+  {
+    AssertThrow(
+      not(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting and
+          this->store_solution),
+      dealii::ExcMessage("Storing the previous solution in a partitioned scheme is not"
+                         "supported for TemporalDiscretization::BDFConsistentSplitting."));
   }
 
   if(update_velocity or update_pressure)
