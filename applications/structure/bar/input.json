@@ -39,7 +39,9 @@
         "DashpotCoefficient": "1e3",
         "ExteriorPressure": "0",
         "InvAnalAccelMethRamp": "Undefined",
-        "InvAnalAccelMethFinal": "Undefined"
+        "InvAnalAccelMethFinal": "Undefined",
+        "AdaptiveRefinement": "true",
+        "UseMatrixBasedImplementation": "false"
     },
     "Output": {
         "OutputDirectory": "output/bar/",

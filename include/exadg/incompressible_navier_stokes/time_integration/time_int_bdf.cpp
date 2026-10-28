@@ -295,17 +295,15 @@ TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const first
 {
   this->first_coupling_iteration = first_coupling_iteration;
   this->store_solution           = true;
+  this->update_velocity          = update_velocity;
+  this->update_pressure          = update_pressure;
 
-  // Toggle velocity update for semi-implicit FSI
   if(this->param.temporal_discretization == TemporalDiscretization::BDFCoupledSolution)
   {
     AssertThrow(this->update_velocity and this->update_pressure,
-                dealii::ExcMessage(
-                  "BDFCoupled solver cannot recover velocity and pressure independently."));
+                dealii::ExcMessage("TemporalDiscretization::BDFCoupledSolution cannot "
+                                   "recover velocity and pressure independently."));
   }
-
-  this->update_velocity = update_velocity;
-  this->update_pressure = update_pressure;
 
   if(update_velocity or update_pressure)
   {

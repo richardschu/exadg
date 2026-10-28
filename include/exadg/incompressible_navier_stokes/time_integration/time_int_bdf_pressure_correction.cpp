@@ -332,13 +332,22 @@ TimeIntBDFPressureCorrection<dim, Number>::do_timestep_solve()
     momentum_step();
   }
 
+  VectorType pressure_increment;
   if(this->update_pressure)
   {
-    VectorType pressure_increment;
-    pressure_increment.reinit(pressure_np, false /* init with zero */);
-
+    pressure_increment.reinit(pressure_np, false /* omit_zeroing_entries */);
     pressure_step(pressure_increment);
+  }
+  else
+  {
+    AssertThrow(this->store_solution and pressure_increment_last_iter.size() > 0,
+                dealii::ExcMessage("Previous pressure step required to "
+                                   "use `pressure_increment_last_iter`."));
+    pressure_increment = pressure_increment_last_iter;
+  }
 
+  if(this->update_velocity)
+  {
     projection_step(pressure_increment);
   }
 
@@ -374,11 +383,8 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
       velocity_np = velocity_momentum_last_iter;
     }
 
-    /*
-     *  update variable viscosity
-     */
-    if(this->param.viscous_problem() and this->param.viscosity_is_variable() and
-       this->param.treatment_of_variable_viscosity == TreatmentOfVariableViscosity::Explicit)
+    // explicit viscosity update or initial guess for viscosity
+    if(this->param.viscous_problem() and this->param.viscosity_is_variable())
     {
       dealii::Timer timer_viscosity_update;
       timer_viscosity_update.restart();

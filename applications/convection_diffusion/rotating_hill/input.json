@@ -15,6 +15,7 @@
         "RefineTimeMax": "0"
     },
     "Application": {
+        "UseExplicitTimeIntegration": "false",
         "EnableAdaptivity": "true",
         "ReadRestart": "false",
         "WriteRestart": "false",

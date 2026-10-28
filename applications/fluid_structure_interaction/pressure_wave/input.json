@@ -22,6 +22,9 @@
         "DashpotCoefficient": "1e8",
         "ExteriorPressure": "0.0"
     },
+    "Fluid" : {
+        "TemporalDiscretization": "BDFDualSplittingScheme"
+    },
     "FSI" : {
         "AccelerationMethod": "IQN_ILS",
         "UpdateMethod": "ImplicitPressureStructure",

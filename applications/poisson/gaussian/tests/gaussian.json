@@ -12,7 +12,10 @@
     },
     "Application": {
        	"Name": "Gaussian",
-        "MeshType": "Cartesian"
+        "MeshType": "Cartesian",
+        "AdaptiveRefinement": "false",
+        "UseMatrixBasedImplementation": "false",
+        "Preconditioner": "Multigrid"
     },
     "Output": {
         "OutputDirectory": "output/poisson/gaussian/",
