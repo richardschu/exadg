@@ -49,7 +49,7 @@ Spatial Discretization:
   Mapping degree:                            4
   Mapping degree coarse grids:               4
   Polynomial degree:                         4
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -63,6 +63,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                DecreaseByOne
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       12

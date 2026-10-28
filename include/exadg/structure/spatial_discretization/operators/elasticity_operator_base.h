@@ -119,10 +119,11 @@ public:
   static MappingFlags
   get_mapping_flags();
 
-  virtual void
+  void
   initialize(dealii::MatrixFree<dim, Number> const &   matrix_free,
              dealii::AffineConstraints<Number> const & affine_constraints,
-             OperatorData<dim> const &                 data);
+             OperatorData<dim> const &                 data,
+             bool const                                assemble_matrix);
 
   OperatorData<dim> const &
   get_data() const;
@@ -187,6 +188,9 @@ public:
 protected:
   void
   reinit_cell_derived(IntegratorCell & integrator, unsigned int const cell) const override;
+
+  virtual void
+  initialize_derived(){};
 
   OperatorData<dim> operator_data;
 

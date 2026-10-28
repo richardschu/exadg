@@ -169,10 +169,12 @@ private:
     this->param.preconditioner              = Preconditioner::Multigrid;
     this->param.multigrid_data.type         = MultigridType::cphMG;
     this->param.multigrid_data.p_sequence   = PSequenceType::Bisect;
+
     // MG smoother
     this->param.multigrid_data.smoother_data.smoother        = MultigridSmoother::Chebyshev;
     this->param.multigrid_data.smoother_data.iterations      = 5;
     this->param.multigrid_data.smoother_data.smoothing_range = 20;
+
     // MG coarse grid solver
     this->param.multigrid_data.coarse_problem.solver         = MultigridCoarseGridSolver::CG;
     this->param.multigrid_data.coarse_problem.preconditioner = multigrid_coarse_grid_preconditioner;

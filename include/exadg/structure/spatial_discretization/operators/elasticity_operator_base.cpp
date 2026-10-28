@@ -76,7 +76,8 @@ void
 ElasticityOperatorBase<dim, Number>::initialize(
   dealii::MatrixFree<dim, Number> const &   matrix_free,
   dealii::AffineConstraints<Number> const & affine_constraints,
-  OperatorData<dim> const &                 data)
+  OperatorData<dim> const &                 data,
+  bool const                                assemble_matrix)
 {
   operator_data = data;
 
@@ -94,6 +95,11 @@ ElasticityOperatorBase<dim, Number>::initialize(
                               data.check_type,
                               data.stable_formulation,
                               data.cache_level);
+
+  initialize_derived();
+
+  if(assemble_matrix)
+    this->assemble_matrix_if_matrix_based();
 }
 
 template<int dim, typename Number>

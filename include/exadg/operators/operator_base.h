@@ -62,7 +62,7 @@ struct OperatorBaseData
     : dof_index(0),
       dof_index_inhomogeneous(dealii::numbers::invalid_unsigned_int),
       quad_index(0),
-      use_matrix_based_vmult(false),
+      use_matrix_based_operator_level(false),
       sparse_matrix_type(SparseMatrixType::Undefined),
       operator_is_singular(false),
       use_cell_based_loops(false),
@@ -82,9 +82,9 @@ struct OperatorBaseData
 
   unsigned int quad_index;
 
-  // this parameter can be used to use sparse matrices for the vmult() operation. The default
-  // case is to use a matrix-free implementation, i.e. use_matrix_based_vmult = false.
-  bool use_matrix_based_vmult;
+  // this parameter can be used to use sparse matrices for the `vmult()` operation. The default
+  // case is to use a matrix-free implementation, i.e. `use_matrix_based_operator_level = false`.
+  bool use_matrix_based_operator_level;
 
   SparseMatrixType sparse_matrix_type;
 
@@ -295,11 +295,11 @@ public:
   apply_add(VectorType & dst, VectorType const & src) const;
 
   void
-  assemble_matrix_if_necessary() const;
+  assemble_matrix_if_matrix_based() const;
 
   /*
-   * Matrix-based version of the apply function. This function is used if use_matrix_based_vmult =
-   * true.
+   * Matrix-based version of the apply function. This function is used if
+   * `use_matrix_based_operator_level = true`.
    */
   void
   apply_matrix_based(VectorType & dst, VectorType const & src) const;

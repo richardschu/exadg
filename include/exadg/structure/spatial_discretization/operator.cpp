@@ -310,8 +310,8 @@ Operator<dim, Number>::setup_operators()
   operator_data.dof_index               = get_dof_index();
   operator_data.quad_index              = get_quad_index();
   operator_data.dof_index_inhomogeneous = get_dof_index_periodicity_and_hanging_node_constraints();
-  operator_data.use_matrix_based_vmult  = param.use_matrix_based_implementation;
-  operator_data.sparse_matrix_type      = param.sparse_matrix_type;
+  operator_data.use_matrix_based_operator_level = param.use_matrix_based_operator;
+  operator_data.sparse_matrix_type              = param.sparse_matrix_type;
 
   if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
@@ -344,7 +344,10 @@ Operator<dim, Number>::setup_operators()
 
   if(param.large_deformation)
   {
-    elasticity_operator_nonlinear.initialize(*matrix_free, affine_constraints, operator_data);
+    elasticity_operator_nonlinear.initialize(*matrix_free,
+                                             affine_constraints,
+                                             operator_data,
+                                             false /* assemble_matrix */);
 
     // Set undeformed mapping to construct map for spatial integration or inverse analysis.
     if(param.spatial_integration or param.problem_type == ProblemType::InverseAnalysis)
@@ -354,7 +357,10 @@ Operator<dim, Number>::setup_operators()
   }
   else
   {
-    elasticity_operator_linear.initialize(*matrix_free, affine_constraints, operator_data);
+    elasticity_operator_linear.initialize(*matrix_free,
+                                          affine_constraints,
+                                          operator_data,
+                                          true /* assemble_matrix */);
   }
 
   // (boundary) mass operator and related solver for inversion
@@ -1416,9 +1422,16 @@ Operator<dim, Number>::get_reference_coordinates(VectorType & grid_coordinates) 
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::assemble_matrix_if_necessary_for_linear_elasticity_operator() const
+Operator<dim, Number>::assemble_matrix_if_matrix_based() const
 {
-  elasticity_operator_linear.assemble_matrix_if_necessary();
+  if(param.large_deformation)
+  {
+    elasticity_operator_nonlinear.assemble_matrix_if_matrix_based();
+  }
+  else
+  {
+    elasticity_operator_linear.assemble_matrix_if_matrix_based();
+  }
 }
 
 template<int dim, typename Number>
@@ -1502,6 +1515,9 @@ Operator<dim, Number>::solve_nonlinear(VectorType &       sol,
   // Matrix-based implementation: note that the re-assembly of the matrix is done in the function
   // `set_solution_linearization()` called by the Newton solver.
 
+  // Matrix-based implementation: note that the re-assembly of the matrix is done in the function
+  // set_solution_linearization() called by the Newton solver.
+
   // set inhomogeneous Dirichlet values, hanging node and periodicity constraints in order to
   // evaluate the nonlinear residual correctly
   elasticity_operator_nonlinear.set_time(time);
@@ -1554,8 +1570,9 @@ Operator<dim, Number>::solve_linear(VectorType &       sol,
 
   update_elasticity_operator(scaling_factor_mass, scaling_factor_velocity, time);
 
-  // In case of a matrix-based implementation, we assemble the matrix once at initialization, since
-  // it remains constant, and avoid calling `assemble_matrix_if_matrix_based()` here.
+  // The scaling factors (time step size, Robin parameters) may have changed since the last solve,
+  // so a matrix-based operator is re-assembled. This does nothing for a matrix-free implementation.
+  elasticity_operator_linear.assemble_matrix_if_matrix_based();
 
   linear_solver->update_preconditioner(update_preconditioner);
 

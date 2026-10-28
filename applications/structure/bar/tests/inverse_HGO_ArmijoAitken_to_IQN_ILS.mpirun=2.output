@@ -42,7 +42,7 @@ Spatial Discretization:
   Mapping degree:                            2
   Mapping degree coarse grids:               2
   Polynomial degree:                         2
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -76,6 +76,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                DecreaseByOne
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       12
@@ -230,8 +231,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 5.02748e-07
-  ||d_k+1 - d_k||/||d_k+1|| = 1.59904e-08
+  ||d_k+1 - d_k||           = 5.02874e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 1.59944e-08
 
 ======================================================================
  Fixed-point iteration: iteration counter = 3       
@@ -239,8 +240,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 2.34111e-10
-  ||d_k+1 - d_k||/||d_k+1|| = 7.44614e-12
+  ||d_k+1 - d_k||           = 1.64252e-10
+  ||d_k+1 - d_k||/||d_k+1|| = 5.22419e-12
 
 Fixed-point iteration took 4 iterations
 until `lambda_check_convergence()` returned `true`.

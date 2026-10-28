@@ -102,6 +102,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
   Iterations smoother:                       5
@@ -118,6 +119,7 @@ Linear solver:
   Pressure/Schur-complement block:
   Preconditioner:                            PressureConvectionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -273,6 +275,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
   Iterations smoother:                       5
@@ -289,6 +292,7 @@ Linear solver:
   Pressure/Schur-complement block:
   Preconditioner:                            PressureConvectionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -444,6 +448,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
   Iterations smoother:                       5
@@ -460,6 +465,7 @@ Linear solver:
   Pressure/Schur-complement block:
   Preconditioner:                            PressureConvectionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
@@ -615,6 +621,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Jacobi
   Preconditioner smoother:                   BlockJacobi
   Iterations smoother:                       5
@@ -631,6 +638,7 @@ Linear solver:
   Pressure/Schur-complement block:
   Preconditioner:                            PressureConvectionDiffusion
   Multigrid type:                            hMG
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5

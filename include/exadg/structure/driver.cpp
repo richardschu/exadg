@@ -252,11 +252,13 @@ Driver<dim, Number>::apply_operator(OperatorType const & operator_type,
   {
     pde_operator->initialize_dof_vector(linearization);
     linearization = 1.0;
+
+    // note that this function assembles the matrix in case of a matrix-based implementation
     pde_operator->set_solution_linearization(linearization);
   }
   else
   {
-    pde_operator->assemble_matrix_if_necessary_for_linear_elasticity_operator();
+    pde_operator->assemble_matrix_if_matrix_based();
   }
 
   double wall_time = std::numeric_limits<double>::max();

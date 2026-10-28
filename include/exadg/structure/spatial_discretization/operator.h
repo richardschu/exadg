@@ -157,6 +157,7 @@ public:
   void
   set_solution_linearization(VectorType const & solution_linearization) const
   {
+    // note that this function will re-assemble the matrix in case of a matrix-based implementation.
     pde_operator->set_solution_linearization(solution_linearization);
   }
 
@@ -328,7 +329,7 @@ public:
   get_reference_coordinates(VectorType & vector) const final;
 
   void
-  assemble_matrix_if_necessary_for_linear_elasticity_operator() const;
+  assemble_matrix_if_matrix_based() const;
 
   void
   evaluate_elasticity_operator(VectorType &       dst,

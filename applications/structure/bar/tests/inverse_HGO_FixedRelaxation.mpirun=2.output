@@ -42,7 +42,7 @@ Spatial Discretization:
   Mapping degree:                            2
   Mapping degree coarse grids:               2
   Polynomial degree:                         2
-  Use matrix-based implementation:           false
+  Use matrix-based operator:                 false
 
 Solver:
 
@@ -76,6 +76,7 @@ Linear solver:
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                DecreaseByOne
+  Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       12
@@ -625,7 +626,7 @@ Inverse analysis errors :
 
 Inverse analysis errors :
   ||d_k+1 - d_k||           = 2.48041e-07
-  ||d_k+1 - d_k||/||d_k+1|| = 7.88920e-09
+  ||d_k+1 - d_k||/||d_k+1|| = 7.88921e-09
 
 ======================================================================
  Fixed-point iteration: iteration counter = 49      
@@ -651,8 +652,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 8.29135e-08
-  ||d_k+1 - d_k||/||d_k+1|| = 2.63715e-09
+  ||d_k+1 - d_k||           = 8.29134e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 2.63714e-09
 
 ======================================================================
  Fixed-point iteration: iteration counter = 52      
@@ -660,7 +661,7 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 5.75429e-08
+  ||d_k+1 - d_k||           = 5.75430e-08
   ||d_k+1 - d_k||/||d_k+1|| = 1.83021e-09
 
 ======================================================================
@@ -669,8 +670,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 3.99356e-08
-  ||d_k+1 - d_k||/||d_k+1|| = 1.27019e-09
+  ||d_k+1 - d_k||           = 3.99357e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 1.27020e-09
 
 ======================================================================
  Fixed-point iteration: iteration counter = 54      
@@ -678,8 +679,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 2.77157e-08
-  ||d_k+1 - d_k||/||d_k+1|| = 8.81525e-10
+  ||d_k+1 - d_k||           = 2.77158e-08
+  ||d_k+1 - d_k||/||d_k+1|| = 8.81530e-10
 
 Fixed-point iteration took 55 iterations
 until `lambda_check_convergence()` returned `true`.

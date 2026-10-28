@@ -36,13 +36,8 @@ namespace Structure
 {
 template<int dim, typename Number>
 void
-NonLinearOperator<dim, Number>::initialize(
-  dealii::MatrixFree<dim, Number> const &   matrix_free,
-  dealii::AffineConstraints<Number> const & affine_constraints,
-  OperatorData<dim> const &                 data)
+NonLinearOperator<dim, Number>::initialize_derived()
 {
-  Base::initialize(matrix_free, affine_constraints, data);
-
   // integrator_lin always refers to evaluation in the reference configuration.
   integrator_lin = std::make_shared<IntegratorCell>(*this->matrix_free,
                                                     this->operator_data.dof_index_inhomogeneous,
@@ -194,7 +189,7 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
 
     if(update_matrix_if_necessary)
     {
-      this->assemble_matrix_if_necessary();
+      this->assemble_matrix_if_matrix_based();
     }
   }
 }
