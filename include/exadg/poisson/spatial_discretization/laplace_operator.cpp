@@ -392,10 +392,9 @@ LaplaceOperator<dim, Number, n_components>::do_boundary_integral_continuous(
   unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
-  (void)operator_type;
   (void)face;
 
-  // if(operator_type == OperatorType::inhomogeneous || operator_type == OperatorType::full)
+  if(operator_type == OperatorType::inhomogeneous or operator_type == OperatorType::full)
   {
     BoundaryType boundary_type = operator_data.bc->get_boundary_type(boundary_id);
 
@@ -406,6 +405,23 @@ LaplaceOperator<dim, Number, n_components>::do_boundary_integral_continuous(
 
       integrator_m.submit_value(-neumann_value, q);
     }
+  }
+  else if(operator_type == OperatorType::homogeneous)
+  {
+    // `OperatorType::homogeneous` does not involve boundary integrals. We still need to submit
+    // zeroes for consistency.
+    value zero;
+    zero = 0.0;
+    for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
+    {
+      integrator_m.submit_value(zero, q);
+    }
+  }
+  else
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("OperatorType not supported in "
+                                   "LaplaceOperator::do_boundary_integral_continuous()"));
   }
 }
 

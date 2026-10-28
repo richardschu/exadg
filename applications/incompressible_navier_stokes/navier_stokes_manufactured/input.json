@@ -15,6 +15,7 @@
         "RefineTimeMax": "0"
     },
     "Application": {
+        "TriangulationType": "Distributed",
         "SpatialDiscretization": "L2",
         "MoveGrid": "false",
         "ReadRestart": "false",

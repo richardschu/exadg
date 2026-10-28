@@ -82,8 +82,8 @@ struct OperatorBaseData
 
   unsigned int quad_index;
 
-  // this parameter can be used to use sparse matrices for the `vmult()` operation. The default
-  // case is to use a matrix-free implementation, i.e. `use_matrix_based_operator_level = false`.
+  // this parameter can be used to use sparse matrices for the vmult() operation. The default
+  // case is to use a matrix-free implementation, i.e. use_matrix_based_operator_level = false.
   bool use_matrix_based_operator_level;
 
   SparseMatrixType sparse_matrix_type;
@@ -299,7 +299,7 @@ public:
 
   /*
    * Matrix-based version of the apply function. This function is used if
-   * `use_matrix_based_operator_level = true`.
+   * use_matrix_based_operator_level = true.
    */
   void
   apply_matrix_based(VectorType & dst, VectorType const & src) const;
@@ -477,32 +477,6 @@ protected:
                                   IntegratorFace & integrator_p) const;
 
   /*
-   * This function loops over all cells and calculates cell integrals.
-   */
-  virtual void
-  cell_loop(dealii::MatrixFree<dim, Number> const & matrix_free,
-            VectorType &                            dst,
-            VectorType const &                      src,
-            Range const &                           range) const;
-
-  /*
-   * Initialize sparse matrix.
-   */
-  template<typename SparseMatrix>
-  void
-  internal_calculate_system_matrix(SparseMatrix & system_matrix) const;
-
-  /*
-   * Calculate sparse matrix.
-   */
-  template<typename SparseMatrix>
-  void
-  cell_loop_calculate_system_matrix(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                    SparseMatrix &                          dst,
-                                    SparseMatrix const &                    src,
-                                    Range const &                           range) const;
-
-  /*
    * Matrix-free object.
    */
   lazy_ptr<dealii::MatrixFree<dim, Number>> matrix_free;
@@ -602,6 +576,18 @@ private:
                           VectorType const &                      src,
                           Range const &                           range) const;
 
+protected:
+  /*
+   * This function loops over all cells and calculates cell integrals.
+   */
+  virtual void
+  cell_loop(dealii::MatrixFree<dim, Number> const & matrix_free,
+            VectorType &                            dst,
+            VectorType const &                      src,
+            Range const &                           range) const;
+
+private:
+
   /*
    * This function loops over all interior faces and calculates face integrals.
    */
@@ -658,25 +644,16 @@ private:
                   Range const &                           range) const;
 
   /*
-   * Calculate diagonal.
+   * Calculate matrix and diagonal using `dealii::MatrixFreeTools`.
    */
   void
-  cell_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                     VectorType &                            dst,
-                     VectorType const &                      src,
-                     Range const &                           range) const;
+  cell_compute_matrix(IntegratorCell & integrator) const;
 
   void
-  face_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                     VectorType &                            dst,
-                     VectorType const &                      src,
-                     Range const &                           range) const;
+  face_compute_matrix(IntegratorFace & integrator_m, IntegratorFace & integrator_p) const;
 
   void
-  boundary_face_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
-                              VectorType &                            dst,
-                              VectorType const &                      src,
-                              Range const &                           range) const;
+  boundary_face_compute_matrix(IntegratorFace & integrator_m) const;
 
   void
   cell_based_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
@@ -734,23 +711,12 @@ private:
                               dealii::DynamicSparsityPattern & dsp,
                               MPI_Comm const &                 mpi_comm) const;
 
-  /*
-   * Calculate sparse matrix.
-   */
+protected:
   template<typename SparseMatrix>
   void
-  face_loop_calculate_system_matrix(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                    SparseMatrix &                          dst,
-                                    SparseMatrix const &                    src,
-                                    Range const &                           range) const;
+  internal_calculate_system_matrix(SparseMatrix & system_matrix) const;
 
-  template<typename SparseMatrix>
-  void
-  boundary_face_loop_calculate_system_matrix(dealii::MatrixFree<dim, Number> const & matrix_free,
-                                             SparseMatrix &                          dst,
-                                             SparseMatrix const &                    src,
-                                             Range const &                           range) const;
-
+private:
   /*
    * This function sets entries of the DoF-vector corresponding to constraint DoFs to one.
    */

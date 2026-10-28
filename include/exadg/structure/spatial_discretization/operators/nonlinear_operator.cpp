@@ -1402,13 +1402,24 @@ NonLinearOperator<dim, Number>::calculate_system_matrix(
   if(this->operator_data.spatial_integration or
      this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    this->matrix_free_spatial.cell_loop(&This::cell_loop_calculate_system_matrix,
-                                        this,
-                                        system_matrix,
-                                        system_matrix);
+    dealii::MatrixFreeTools::
+      compute_matrix<dim, -1, 0, dim /* n_components */, Number, dealii::VectorizedArray<Number>>(
+        this->matrix_free_spatial,
+        *this->constraint,
+        system_matrix,
+        [&](auto & integrator) -> void {
+          // TODO: this is currently done for every column, but would only be
+          // necessary once per cell
+          this->reinit_cell_derived(integrator, integrator.get_current_cell_index());
 
-    // communicate overlapping matrix parts
-    system_matrix.compress(dealii::VectorOperation::add);
+          integrator.evaluate(this->integrator_flags.cell_evaluate);
+
+          this->do_cell_integral(integrator);
+
+          integrator.integrate(this->integrator_flags.cell_integrate);
+        },
+        this->operator_data.dof_index,
+        this->operator_data.quad_index);
   }
   else
   {
@@ -1427,13 +1438,24 @@ NonLinearOperator<dim, Number>::calculate_system_matrix(
   if(this->operator_data.spatial_integration or
      this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    this->matrix_free_spatial.cell_loop(&This::cell_loop_calculate_system_matrix,
-                                        this,
-                                        system_matrix,
-                                        system_matrix);
+    dealii::MatrixFreeTools::
+      compute_matrix<dim, -1, 0, dim /* n_components */, Number, dealii::VectorizedArray<Number>>(
+        this->matrix_free_spatial,
+        *this->constraint,
+        system_matrix,
+        [&](auto & integrator) -> void {
+          // TODO: this is currently done for every column, but would only be
+          // necessary once per cell
+          this->reinit_cell_derived(integrator, integrator.get_current_cell_index());
 
-    // communicate overlapping matrix parts
-    system_matrix.compress(dealii::VectorOperation::add);
+          integrator.evaluate(this->integrator_flags.cell_evaluate);
+
+          this->do_cell_integral(integrator);
+
+          integrator.integrate(this->integrator_flags.cell_integrate);
+        },
+        this->operator_data.dof_index,
+        this->operator_data.quad_index);
   }
   else
   {
