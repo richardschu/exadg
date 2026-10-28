@@ -50,13 +50,17 @@ extrapolate_vectors_range(
   std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
   dealii::LinearAlgebra::distributed::Vector<Number2> &                   result)
 {
+  AssertIndexRange(factors.size(), vectors.size() + 1);
   Assert(result.size() > 0, dealii::ExcMessage("Result vector has not been initialized."));
   for(auto const & vector : vectors)
     Assert(vector.size() > 0,
            dealii::ExcMessage("Vector to extrapolate has not been initialized."));
   AssertIndexRange(start_index, result.locally_owned_size());
   AssertIndexRange(end_index, result.locally_owned_size() + 1);
-  if(factors.size() == 1)
+
+  const unsigned int n_factors = factors.size();
+
+  if(n_factors == 1)
   {
     Number const * vec_0  = vectors[0].begin();
     Number2 *      res    = result.begin();
@@ -66,7 +70,7 @@ extrapolate_vectors_range(
     for(unsigned int i = start_index; i < end_index; ++i)
       res[i] = add_into_result ? (res[i] + beta_0 * vec_0[i]) : (beta_0 * vec_0[i]);
   }
-  else if(factors.size() == 2)
+  else if(n_factors == 2)
   {
     Number const * vec_0  = vectors[0].begin();
     Number const * vec_1  = vectors[1].begin();
@@ -79,7 +83,7 @@ extrapolate_vectors_range(
       res[i] =
         (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) + beta_1 * vec_1[i];
   }
-  else if(factors.size() == 3)
+  else if(n_factors == 3)
   {
     Number const * vec_0  = vectors[0].begin();
     Number const * vec_1  = vectors[1].begin();
@@ -94,7 +98,7 @@ extrapolate_vectors_range(
       res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
                beta_1 * vec_1[i] + beta_2 * vec_2[i];
   }
-  else if(factors.size() == 4)
+  else if(n_factors == 4)
   {
     Number const * vec_0  = vectors[0].begin();
     Number const * vec_1  = vectors[1].begin();
@@ -111,7 +115,7 @@ extrapolate_vectors_range(
       res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
                beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i];
   }
-  else if(factors.size() == 5)
+  else if(n_factors == 5)
   {
     Number const * vec_0  = vectors[0].begin();
     Number const * vec_1  = vectors[1].begin();
@@ -130,17 +134,114 @@ extrapolate_vectors_range(
       res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
                beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] + beta_4 * vec_4[i];
   }
+  else if(n_factors == 6)
+  {
+    Number const * vec_0  = vectors[0].begin();
+    Number const * vec_1  = vectors[1].begin();
+    Number const * vec_2  = vectors[2].begin();
+    Number const * vec_3  = vectors[3].begin();
+    Number const * vec_4  = vectors[4].begin();
+    Number const * vec_5  = vectors[5].begin();
+    Number2 *      res    = result.begin();
+    Number2 const  beta_0 = factors[0];
+    Number2 const  beta_1 = factors[1];
+    Number2 const  beta_2 = factors[2];
+    Number2 const  beta_3 = factors[3];
+    Number2 const  beta_4 = factors[4];
+    Number2 const  beta_5 = factors[5];
+
+    DEAL_II_OPENMP_SIMD_PRAGMA
+    for(unsigned int i = start_index; i < end_index; ++i)
+      res[i] = (add_into_result ? res[i] + beta_0 * vec_0[i] : beta_0 * vec_0[i]) +
+               beta_1 * vec_1[i] + beta_2 * vec_2[i] + beta_3 * vec_3[i] + beta_4 * vec_4[i] +
+               beta_5 * vec_5[i];
+  }
   else
     for(unsigned int i = start_index; i < end_index; ++i)
     {
       Number2 entry = factors[0] * vectors[0].local_element(i);
-      for(unsigned int j = 1; j < factors.size(); ++j)
+      for(unsigned int j = 1; j < n_factors; ++j)
         entry += factors[j] * vectors[j].local_element(i);
       if(add_into_result)
         result.local_element(i) += entry;
       else
         result.local_element(i) = entry;
     }
+}
+
+template<typename Number, typename Number2, typename Number3>
+void
+extrapolate_two_vectors_range(
+  const std::size_t                                                       start_index,
+  const std::size_t                                                       end_index,
+  const std::vector<Number3> &                                            factors_1,
+  const std::vector<Number3> &                                            factors_2,
+  std::vector<dealii::LinearAlgebra::distributed::Vector<Number>> const & vectors,
+  dealii::LinearAlgebra::distributed::Vector<Number2> &                   result_1,
+  dealii::LinearAlgebra::distributed::Vector<Number2> &                   result_2)
+{
+  AssertDimension(3, factors_1.size());
+  AssertDimension(4, factors_2.size());
+  AssertIndexRange(factors_1.size(), vectors.size() + 1);
+  AssertIndexRange(factors_2.size(), vectors.size() + 1);
+  Assert(result_1.size() > 0, dealii::ExcMessage("Result vector has not been initialized."));
+  Assert(result_2.size() > 0, dealii::ExcMessage("Result vector has not been initialized."));
+  for(auto const & vector : vectors)
+    Assert(vector.size() > 0,
+           dealii::ExcMessage("Vector to extrapolate has not been initialized."));
+  AssertIndexRange(start_index, result_1.locally_owned_size());
+  AssertIndexRange(end_index, result_1.locally_owned_size() + 1);
+  AssertIndexRange(start_index, result_2.locally_owned_size());
+  AssertIndexRange(end_index, result_2.locally_owned_size() + 1);
+
+  Number const * vec_0   = vectors[0].begin() + start_index;
+  Number const * vec_1   = vectors[1].begin() + start_index;
+  Number const * vec_2   = vectors[2].begin() + start_index;
+  Number const * vec_3   = vectors[3].begin() + start_index;
+  Number2 *      res_1   = result_1.begin() + start_index;
+  Number2 *      res_2   = result_2.begin() + start_index;
+  Number2 const  beta_0  = factors_1[0];
+  Number2 const  beta_1  = factors_1[1];
+  Number2 const  beta_2  = factors_1[2];
+  Number2 const  gamma_0 = factors_2[0];
+  Number2 const  gamma_1 = factors_2[1];
+  Number2 const  gamma_2 = factors_2[2];
+  Number2 const  gamma_3 = factors_2[3];
+
+  // Manually vectorize the loop because the compilers pragma OMP SIMD might
+  // get confused by two adjacent stores (and the fact that some vectors do
+  // indeed alias at our call sites).
+  constexpr std::size_t n_lanes      = dealii::VectorizedArray<Number2>::size();
+  const std::size_t     regular_size = (end_index - start_index) / n_lanes * n_lanes;
+  for(std::size_t i = 0; i < regular_size; i += n_lanes)
+  {
+    dealii::VectorizedArray<Number2> v0, v1, v2, v3;
+    v0.load(vec_0 + i);
+    v1.load(vec_1 + i);
+    v2.load(vec_2 + i);
+    v3.load(vec_3 + i);
+
+    // Since BDF derivative or extrapolation constants often have alternating
+    // signs, collect even terms first before the odd terms to reduce the
+    // number of roundoff-error critical subtractions.
+    const dealii::VectorizedArray<Number2> first = beta_0 * v0 + beta_2 * v2 + beta_1 * v1;
+    const dealii::VectorizedArray<Number2> second =
+      gamma_0 * v0 + gamma_2 * v2 + gamma_1 * v1 + gamma_3 * v3;
+    first.store(res_1 + i);
+    second.store(res_2 + i);
+  }
+
+  // Remainder, noting that the res_1 or res_2 vectors might alias with some
+  // of vec_0, ..., vec_3, so we have to compute the result first before
+  // writing.
+  for(std::size_t i = regular_size; i < (end_index - start_index); ++i)
+  {
+    const Number2 first = beta_0 * vec_0[i] + beta_2 * vec_2[i] + beta_1 * vec_1[i];
+    const Number2 second =
+      gamma_0 * vec_0[i] + gamma_2 * vec_2[i] + gamma_1 * vec_1[i] + gamma_3 * vec_3[i];
+    res_1[i] = first;
+    res_2[i] = second;
+  }
 }
 
 template<typename Number, typename Number2, typename Number3>
@@ -497,7 +598,9 @@ inline std::pair<double, double>
 do_compute_least_squares_fit(
   const MPI_Comm                                                 communicator,
   const dealii::ndarray<dealii::VectorizedArray<double>, 5, 6> & local_sums,
-  std::vector<double> &                                          small_vector)
+  std::vector<double> &                                          small_vector,
+  const std::vector<double> &                                    vector_to_analyze = {},
+  double *                                                       function_value    = nullptr)
 {
   const unsigned int n_vectors = small_vector.size();
   AssertThrow(n_vectors <= 5,
@@ -538,7 +641,14 @@ do_compute_least_squares_fit(
       for(unsigned int k = j + 1; k <= i; ++k)
         matrix[i][k] -= matrix[k][j] * inv_entry;
     }
-    if(matrix[i][i] < 1e-12 * matrix[0][0] or matrix[0][0] < 1e-30)
+
+    // Check if the matrix got near singular. We use the normal equations
+    // here, so the condition number is squared. We can go to about the
+    // condition number the double-precision values allow for (i.e., a bit
+    // above 1.1e-16) and the rounding machine epsilon for a possible use of
+    // single precision for the ingredients (that get squared by the inner
+    // product), i.e. (6e-8)^2).
+    if(matrix[i][i] < 1e-14 * matrix[0][0] or matrix[0][0] < 1e-30)
       break;
 
     // update for the right hand side (forward substitution)
@@ -566,6 +676,22 @@ do_compute_least_squares_fit(
       residual_norm_sqr += 2. * scalar_sums[c] * small_vector[i] * small_vector[j];
     residual_norm_sqr += scalar_sums[c] * small_vector[i] * small_vector[i];
     residual_norm_sqr -= 2 * scalar_sums[c + 1] * small_vector[i];
+  }
+  // compute residual norm in other solution
+  if(vector_to_analyze.size() == small_vector.size())
+  {
+    double other_residual_norm_sqr = scalar_sums[count];
+    for(unsigned int i = 0, c = 0; i < n_vectors; ++i, c += 2)
+    {
+      for(unsigned int j = 0; j < i; ++j, ++c)
+        other_residual_norm_sqr +=
+          2. * scalar_sums[c] * vector_to_analyze[i] * vector_to_analyze[j];
+      other_residual_norm_sqr += scalar_sums[c] * vector_to_analyze[i] * vector_to_analyze[i];
+      other_residual_norm_sqr -= 2 * scalar_sums[c + 1] * vector_to_analyze[i];
+    }
+    AssertThrow(function_value != nullptr,
+                dealii::ExcInternalError("Can only assign a value to a non-null pointer"));
+    *function_value = std::sqrt(std::abs(other_residual_norm_sqr));
   }
   return std::make_pair(std::sqrt(scalar_sums[count]), std::sqrt(std::abs(residual_norm_sqr)));
 }

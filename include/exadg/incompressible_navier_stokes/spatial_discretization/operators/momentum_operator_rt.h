@@ -1188,7 +1188,7 @@ public:
       [&rhs](const unsigned int begin, const unsigned int end) {
         std::fill(rhs.begin() + begin, rhs.begin() + end, Number(0.));
       },
-      {},
+      [](const unsigned int, const unsigned int) {},
       source_function);
   }
 
@@ -1205,6 +1205,8 @@ public:
     AssertDimension(pressure_shape_info.data[0].n_q_points_1d, shape_info.data[0].n_q_points_1d);
     AssertDimension(pressure_shape_info.data[0].fe_degree, shape_info.data[1].fe_degree);
 
+    // Run the functions on dependencies as determined by the 'mass' operator,
+    // because there are no face integrals in this function.
     const unsigned int n_cell_batches = dof_indices.size();
     for(unsigned int range = cell_loop_pre_list_index[n_cell_batches];
         range < cell_loop_pre_list_index[n_cell_batches + 1];
@@ -1611,7 +1613,12 @@ private:
   compute_vector_access_pattern()
   {
     const unsigned int        n_dofs     = partitioner->locally_owned_size();
-    constexpr unsigned int    chunk_size = 256;
+    // This number is a tradeoff of creating sufficiently big chunks of data
+    // (that allows the CPU to do more hardware prefetching and thus amortize
+    // loads) and the increase in cache pressure. We did tests where values
+    // between 128 and 512 did similarly for the latter, whereas 1024 started
+    // to deviate, so we can choose the largest size.
+    constexpr unsigned int    chunk_size = 512;
     std::vector<unsigned int> touched_first_by((n_dofs + chunk_size - 1) / chunk_size,
                                                numbers::invalid_unsigned_int);
     std::vector<unsigned int> touched_mass_first_by((n_dofs + chunk_size - 1) / chunk_size,

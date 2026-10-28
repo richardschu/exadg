@@ -520,6 +520,14 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
                 dealii::ExcMessage("Boundary data needed for the consistent boundary condition."));
   }
 
+  // CONSISTENT SPLITTING SCHEME (EXTRUDED)
+  if(temporal_discretization == TemporalDiscretization::BDFConsistentSplittingExtruded)
+  {
+    // ALE and consequently FSI are disabled, see also
+    // TimeIntBDFConsistentSplittingExtruded::update_time_integrator_constants().
+    AssertThrow(!ale_formulation, dealii::ExcMessage("Not implemented."));
+  }
+
   // PRESSURE-CORRECTION SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
   {
