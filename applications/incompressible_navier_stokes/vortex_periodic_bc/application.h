@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -255,7 +255,6 @@ private:
                                                  unsigned int const          global_refinements,
                                                  std::vector<unsigned int> const &
                                                    vector_local_refinements) {
-      (void)periodic_face_pairs;
       (void)vector_local_refinements;
 
       AssertThrow(
@@ -285,6 +284,9 @@ private:
                           right,
                           mesh_type == MeshType::Curvilinear,
                           deformation);
+
+      if(global_refinements > 0)
+        tria.refine_global(global_refinements);
     };
 
     GridUtilities::create_triangulation_with_multigrid<dim>(grid,

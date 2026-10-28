@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -134,7 +134,7 @@ get_ML_parameter_list(dealii::TrilinosWrappers::PreconditionAMG::AdditionalData 
   // smaller than `coarse: max size` are constructed.
   parameter_list.set("coarse: max size", 2000);
 
-  // This extends the settings in deal::PreconditionAMG::AdditionalData::set_parameters().
+  // This extends the settings in `dealii::PreconditionAMG::AdditionalData::set_parameters()`.
   parameter_list.set("repartition: enable", 1);
   parameter_list.set("repartition: max min ratio", 1.3);
   parameter_list.set("repartition: min per proc", 300);

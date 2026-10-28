@@ -21,7 +21,7 @@
 #  GNU General Public License for more details.
 #
 #  You should have received a copy of the GNU General Public License
-#  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 #########################################################################
 
@@ -63,6 +63,7 @@ CONFIGURE_FILE(
 
 # Set the source files to be compiled
 SET(TARGET_SRC
+     include/exadg/utilities/evaluate_convergence_study.cpp
      include/exadg/utilities/timer_tree.cpp
      include/exadg/utilities/print_general_infos.cpp
      include/exadg/time_integration/bdf_constants.cpp
