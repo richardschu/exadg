@@ -157,7 +157,8 @@ public:
   virtual void
   vmult(VectorType & dst, const VectorType & src) const
   {
-    this->matrix_free.cell_loop(&Operator::do_cell_integral_range, this, dst, src, true);
+    this->matrix_free.cell_loop(
+      &Operator::do_cell_integral_range, this, dst, src, true /* zero_dst_vector */);
 
     // for (unsigned int i = 0; i < constrained_indices.size(); ++i)
     //  dst.local_element(constrained_indices[i]) =

@@ -500,6 +500,8 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
     postprocessor->set_vectors_deserialization(vectors_velocity_postprocessor,
                                                vectors_pressure_postprocessor);
   }
+
+  this->update_after_deserialization();
 }
 
 template<int dim, typename Number>
@@ -605,6 +607,13 @@ TimeIntBDF<dim, Number>::set_vectors_deserialization(
   // deserialization.
   (void)vectors_velocity;
   (void)vectors_pressure;
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::update_after_deserialization()
+{
+  // Overwrite this method in the derived class to update data structures after deserialization.
 }
 
 template<int dim, typename Number>

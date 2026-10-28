@@ -90,7 +90,7 @@ NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType 
                                    this,
                                    dst,
                                    src,
-                                   true);
+                                   true /* zero_dst_vector */);
   }
   else
   {
@@ -100,7 +100,7 @@ NonLinearOperator<dim, Number>::evaluate_nonlinear(VectorType & dst, VectorType 
                             this,
                             dst,
                             src,
-                            true);
+                            true /* zero_dst_vector */);
   }
 }
 
@@ -111,11 +111,8 @@ NonLinearOperator<dim, Number>::valid_deformation(VectorType const & displacemen
   Number dst = 0.0;
 
   // dst has to remain zero for a valid deformation state
-  this->matrix_free->cell_loop(&This::cell_loop_valid_deformation,
-                               this,
-                               dst,
-                               displacement,
-                               false /* no zeroing of dst vector */);
+  this->matrix_free->cell_loop(
+    &This::cell_loop_valid_deformation, this, dst, displacement, false /* zero_dst_vector */);
 
   // sum over all MPI processes
   Number valid = 0.0;
@@ -440,11 +437,11 @@ NonLinearOperator<dim, Number>::apply(VectorType & dst, VectorType const & src) 
                                this,
                                dst,
                                src,
-                               true);
+                               true /* zero_dst_vector */);
     }
     else
     {
-      matrix_free_spatial.cell_loop(&This::cell_loop, this, dst, src, true);
+      matrix_free_spatial.cell_loop(&This::cell_loop, this, dst, src, true /* zero_dst_vector */);
     }
 
     // Constrained degree of freedom are not removed from the system of

@@ -57,7 +57,7 @@ DivergenceOperator<dim, Number>::apply(VectorType & dst, VectorType const & src)
                     this,
                     dst,
                     src,
-                    true /*zero_dst_vector = true*/);
+                    true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -70,7 +70,7 @@ DivergenceOperator<dim, Number>::apply_add(VectorType & dst, VectorType const & 
                     this,
                     dst,
                     src,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -100,7 +100,7 @@ DivergenceOperator<dim, Number>::rhs_bc_from_dof_vector(VectorType &       dst,
                     this,
                     tmp,
                     src_dummy,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 
   // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);
@@ -123,7 +123,7 @@ DivergenceOperator<dim, Number>::rhs_add(VectorType & dst, Number const evaluati
                     this,
                     tmp,
                     tmp,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 
   // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);
@@ -143,7 +143,7 @@ DivergenceOperator<dim, Number>::evaluate(VectorType &       dst,
                     this,
                     dst,
                     src,
-                    true /*zero_dst_vector = true*/);
+                    true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -160,7 +160,7 @@ DivergenceOperator<dim, Number>::evaluate_add(VectorType &       dst,
                     this,
                     dst,
                     src,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -317,7 +317,6 @@ DivergenceOperator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> const
   for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
   {
     pressure.reinit(cell);
-
     velocity.reinit(cell);
 
     if(data.integration_by_parts == true and

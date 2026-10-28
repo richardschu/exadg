@@ -64,7 +64,7 @@ GradientOperator<dim, Number>::apply(VectorType & dst, VectorType const & src) c
                     this,
                     dst,
                     src,
-                    true /*zero_dst_vector = true*/);
+                    true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -77,7 +77,7 @@ GradientOperator<dim, Number>::apply_add(VectorType & dst, VectorType const & sr
                     this,
                     dst,
                     src,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -107,7 +107,7 @@ GradientOperator<dim, Number>::rhs_bc_from_dof_vector(VectorType &       dst,
                     this,
                     tmp,
                     src_dummy,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 
   // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);
@@ -129,7 +129,7 @@ GradientOperator<dim, Number>::evaluate_bc_from_dof_vector(VectorType &       ds
                     this,
                     dst,
                     src,
-                    true /*zero_dst_vector = false*/);
+                    true /* zero_dst_vector */);
 
   pressure_bc = nullptr;
 }
@@ -149,7 +149,7 @@ GradientOperator<dim, Number>::rhs_add(VectorType & dst, Number const evaluation
                     this,
                     tmp,
                     tmp,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 
   // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);
@@ -169,7 +169,7 @@ GradientOperator<dim, Number>::evaluate(VectorType &       dst,
                     this,
                     dst,
                     src,
-                    true /*zero_dst_vector = true*/);
+                    true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -186,7 +186,7 @@ GradientOperator<dim, Number>::evaluate_add(VectorType &       dst,
                     this,
                     dst,
                     src,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>

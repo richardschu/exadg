@@ -289,7 +289,7 @@ Projector<dim, n_components>::compute(bool const consider_inverse_coefficient)
                         this,
                         vector,
                         vector,
-                        false /* no zeroing of dst vector */);
+                        false /* zero_dst_vector */);
 
   // Setup a `MassOperator` with a variable coefficient.
   MassOperatorData<dim, Number> mass_operator_data;

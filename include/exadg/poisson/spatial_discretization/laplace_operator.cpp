@@ -83,7 +83,7 @@ LaplaceOperator<dim, Number, n_components>::rhs_add_dirichlet_bc_from_dof_vector
                           this,
                           tmp,
                           src,
-                          false /*zero_dst_vector = false*/);
+                          false /* zero_dst_vector */);
 
   // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);

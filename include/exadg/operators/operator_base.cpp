@@ -310,11 +310,11 @@ OperatorBase<dim, Number, n_components>::apply(VectorType & dst, VectorType cons
                         this,
                         dst,
                         src,
-                        true);
+                        true /* zero_dst_vector */);
     }
     else
     {
-      matrix_free->cell_loop(&This::cell_loop, this, dst, src, true);
+      matrix_free->cell_loop(&This::cell_loop, this, dst, src, true /* zero_dst_vector */);
     }
   }
   else
@@ -330,11 +330,11 @@ OperatorBase<dim, Number, n_components>::apply(VectorType & dst, VectorType cons
                         this,
                         dst,
                         src,
-                        true);
+                        true /* zero_dst_vector */);
     }
     else
     {
-      matrix_free->cell_loop(&This::cell_loop, this, dst, src, true);
+      matrix_free->cell_loop(&This::cell_loop, this, dst, src, true /* zero_dst_vector */);
     }
 
     // Constrained degree of freedom are not removed from the system of equations.

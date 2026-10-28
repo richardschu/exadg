@@ -132,6 +132,9 @@ protected:
   void
   set_postprocessor_restart_state(std::string const & state) final;
 
+  virtual void
+  update_after_deserialization();
+
   void
   prepare_vectors_for_next_timestep() override;
 

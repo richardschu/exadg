@@ -78,7 +78,7 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator(VectorType &       
                           this,
                           dst,
                           src,
-                          true /*zero_dst_vector = true*/,
+                          true /* zero_dst_vector */,
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values,
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values);
 }
@@ -97,7 +97,7 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator_add(VectorType &   
                           this,
                           dst,
                           src,
-                          false /*zero_dst_vector = false*/,
+                          false /* zero_dst_vector */,
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values,
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values);
 }

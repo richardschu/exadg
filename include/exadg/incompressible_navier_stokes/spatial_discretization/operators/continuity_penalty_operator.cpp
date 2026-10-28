@@ -61,7 +61,7 @@ ContinuityPenaltyOperator<dim, Number>::apply(VectorType & dst, VectorType const
                     this,
                     dst,
                     src,
-                    true,
+                    true /* zero_dst_vector */,
                     dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values,
                     dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values);
 }
@@ -76,7 +76,7 @@ ContinuityPenaltyOperator<dim, Number>::apply_add(VectorType & dst, VectorType c
                     this,
                     dst,
                     src,
-                    false,
+                    false /* zero_dst_vector */,
                     dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values,
                     dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values);
 }
@@ -105,7 +105,7 @@ ContinuityPenaltyOperator<dim, Number>::rhs_add(VectorType & dst,
                     this,
                     tmp,
                     tmp,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 
   // multiply by -1.0 since the boundary face integrals have to be shifted to the right-hand side
   dst.add(-1.0, tmp);
@@ -125,7 +125,7 @@ ContinuityPenaltyOperator<dim, Number>::evaluate(VectorType &       dst,
                     this,
                     dst,
                     src,
-                    true /*zero_dst_vector = true*/);
+                    true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -142,7 +142,7 @@ ContinuityPenaltyOperator<dim, Number>::evaluate_add(VectorType &       dst,
                     this,
                     dst,
                     src,
-                    false /*zero_dst_vector = false*/);
+                    false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
