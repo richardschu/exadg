@@ -15,8 +15,9 @@
         "RefineTimeMax": "0"
     },
     "Application": {
-        "BoundaryConditionType": "PressureInflow",
-        "ApplySymmetryBC": "false"
+        "BoundaryConditionType": "Periodic",
+        "ApplySymmetryBC": "false",
+        "TemporalDiscretization": "BDFDualSplittingScheme"
     },
     "Output": {
         "OutputDirectory": "output/poiseuille/",

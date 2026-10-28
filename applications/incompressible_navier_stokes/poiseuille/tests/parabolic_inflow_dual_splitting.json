@@ -16,7 +16,8 @@
     },
     "Application": {
         "BoundaryConditionType": "ParabolicInflow",
-        "ApplySymmetryBC": "true"
+        "ApplySymmetryBC": "false",
+        "TemporalDiscretization": "BDFDualSplittingScheme"
     },
     "Output": {
         "OutputDirectory": "output/poiseuille/",
