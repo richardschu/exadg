@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef INCLUDE_OPERATORS_BOUNDARY_MASS_OPERATOR_H_
-#define INCLUDE_OPERATORS_BOUNDARY_MASS_OPERATOR_H_
+#ifndef EXADG_OPERATORS_BOUNDARY_MASS_OPERATOR_H_
+#define EXADG_OPERATORS_BOUNDARY_MASS_OPERATOR_H_
 
 #include <exadg/matrix_free/integrators.h>
 #include <exadg/operators/boundary_mass_kernel.h>
@@ -113,4 +113,4 @@ private:
 
 } // namespace ExaDG
 
-#endif /* INCLUDE_OPERATORS_BOUNDARY_MASS_OPERATOR_H_ */
+#endif /* EXADG_OPERATORS_BOUNDARY_MASS_OPERATOR_H_ */

@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_BAR
-#define STRUCTURE_BAR
+#ifndef APPLICATIONS_STRUCTURE_BAR_APPLICATION_H_
+#define APPLICATIONS_STRUCTURE_BAR_APPLICATION_H_
 
 #include <exadg/grid/deformed_cube_manifold.h>
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
@@ -870,4 +870,4 @@ private:
 
 #include <exadg/structure/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_STRUCTURE_BAR_APPLICATION_H_ */

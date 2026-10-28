@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_BEAM
-#define STRUCTURE_BEAM
+#ifndef APPLICATIONS_STRUCTURE_BEAM_APPLICATION_H_
+#define APPLICATIONS_STRUCTURE_BEAM_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -385,4 +385,4 @@ private:
 
 #include <exadg/structure/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_STRUCTURE_BEAM_APPLICATION_H_ */

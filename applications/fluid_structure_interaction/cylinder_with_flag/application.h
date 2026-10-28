@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_FSI_CYLINDER_WITH_FLAG_H_
-#define APPLICATIONS_FSI_CYLINDER_WITH_FLAG_H_
+#ifndef APPLICATIONS_FLUID_STRUCTURE_INTERACTION_CYLINDER_WITH_FLAG_APPLICATION_H_
+#define APPLICATIONS_FLUID_STRUCTURE_INTERACTION_CYLINDER_WITH_FLAG_APPLICATION_H_
 
 #include <exadg/grid/one_sided_cylindrical_manifold.h>
 
@@ -1182,4 +1182,4 @@ public:
 
 #include <exadg/fluid_structure_interaction/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_FSI_CYLINDER_WITH_FLAG_H_ */
+#endif /* APPLICATIONS_FLUID_STRUCTURE_INTERACTION_CYLINDER_WITH_FLAG_APPLICATION_H_ */

@@ -18,8 +18,8 @@
  *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
-#ifndef APPLICATIONS_POISSON_TEST_CASES_TEMPLATE_H_
-#define APPLICATIONS_POISSON_TEST_CASES_TEMPLATE_H_
+#ifndef APPLICATIONS_POISSON_TEMPLATE_APPLICATION_H_
+#define APPLICATIONS_POISSON_TEMPLATE_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -134,4 +134,4 @@ private:
 
 #include <exadg/poisson/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_POISSON_TEST_CASES_TEMPLATE_H_ */
+#endif /* APPLICATIONS_POISSON_TEMPLATE_APPLICATION_H_ */

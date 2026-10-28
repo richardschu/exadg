@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_THROUGHPUT
-#define STRUCTURE_THROUGHPUT
+#ifndef APPLICATIONS_STRUCTURE_THROUGHPUT_APPLICATION_H_
+#define APPLICATIONS_STRUCTURE_THROUGHPUT_APPLICATION_H_
 
 #include <exadg/grid/deformed_cube_manifold.h>
 
@@ -349,4 +349,4 @@ private:
 
 #include <exadg/structure/user_interface/implement_get_application.h>
 
-#endif /* STRUCTURE_THROUGHPUT */
+#endif /* APPLICATIONS_STRUCTURE_THROUGHPUT_APPLICATION_H_ */

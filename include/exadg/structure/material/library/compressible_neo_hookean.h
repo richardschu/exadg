@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_MATERIAL_LIBRARY_COMPRESSIBLE_NEO_HOOKEAN
-#define STRUCTURE_MATERIAL_LIBRARY_COMPRESSIBLE_NEO_HOOKEAN
+#ifndef EXADG_STRUCTURE_MATERIAL_LIBRARY_COMPRESSIBLE_NEO_HOOKEAN_H_
+#define EXADG_STRUCTURE_MATERIAL_LIBRARY_COMPRESSIBLE_NEO_HOOKEAN_H_
 
 // deal.II
 #include <deal.II/base/function.h>
@@ -238,4 +238,4 @@ private:
 } // namespace Structure
 } // namespace ExaDG
 
-#endif /* STRUCTURE_MATERIAL_LIBRARY_COMPRESSIBLE_NEO_HOOKEAN */
+#endif /* EXADG_STRUCTURE_MATERIAL_LIBRARY_COMPRESSIBLE_NEO_HOOKEAN_H_ */

@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_POISSON_TEST_CASES_SINE_H_
-#define APPLICATIONS_POISSON_TEST_CASES_SINE_H_
+#ifndef APPLICATIONS_POISSON_SINE_APPLICATION_H_
+#define APPLICATIONS_POISSON_SINE_APPLICATION_H_
 
 #include <exadg/grid/boundary_layer_manifold.h>
 #include <exadg/grid/deformed_cube_manifold.h>
@@ -394,4 +394,4 @@ private:
 
 #include <exadg/poisson/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_POISSON_SINE_APPLICATION_H_ */

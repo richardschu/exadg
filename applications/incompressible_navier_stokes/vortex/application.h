@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_VORTEX_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_VORTEX_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_VORTEX_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_VORTEX_APPLICATION_H_
 
 // ExaDG
 #include <exadg/grid/deformed_cube_manifold.h>
@@ -720,4 +720,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_VORTEX_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_VORTEX_APPLICATION_H_ */

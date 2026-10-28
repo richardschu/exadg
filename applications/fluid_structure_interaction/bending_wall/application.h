@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_FSI_BENDING_WALL_H_
-#define APPLICATIONS_FSI_BENDING_WALL_H_
+#ifndef APPLICATIONS_FLUID_STRUCTURE_INTERACTION_BENDING_WALL_APPLICATION_H_
+#define APPLICATIONS_FLUID_STRUCTURE_INTERACTION_BENDING_WALL_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -966,4 +966,4 @@ public:
 
 #include <exadg/fluid_structure_interaction/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_FSI_BENDING_WALL_H_ */
+#endif /* APPLICATIONS_FLUID_STRUCTURE_INTERACTION_BENDING_WALL_APPLICATION_H_ */

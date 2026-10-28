@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_COMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_
-#define APPLICATIONS_COMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_
+#ifndef APPLICATIONS_COMPRESSIBLE_NAVIER_STOKES_TURBULENT_CHANNEL_APPLICATION_H_
+#define APPLICATIONS_COMPRESSIBLE_NAVIER_STOKES_TURBULENT_CHANNEL_APPLICATION_H_
 
 #include <exadg/grid/boundary_layer_manifold.h>
 #include <exadg/postprocessor/statistics_manager.h>
@@ -431,4 +431,4 @@ private:
 
 #include <exadg/compressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_COMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_ */
+#endif /* APPLICATIONS_COMPRESSIBLE_NAVIER_STOKES_TURBULENT_CHANNEL_APPLICATION_H_ */

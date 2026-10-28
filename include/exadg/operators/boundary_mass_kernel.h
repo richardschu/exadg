@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef INCLUDE_OPERATORS_BOUNDARY_MASS_KERNEL_H_
-#define INCLUDE_OPERATORS_BOUNDARY_MASS_KERNEL_H_
+#ifndef EXADG_OPERATORS_BOUNDARY_MASS_KERNEL_H_
+#define EXADG_OPERATORS_BOUNDARY_MASS_KERNEL_H_
 
 #include <deal.II/base/config.h>
 #include <deal.II/matrix_free/fe_evaluation.h>
@@ -91,4 +91,4 @@ public:
 
 } // namespace ExaDG
 
-#endif /* INCLUDE_OPERATORS_BOUNDARY_MASS_KERNEL_H_ */
+#endif /* EXADG_OPERATORS_BOUNDARY_MASS_KERNEL_H_ */
