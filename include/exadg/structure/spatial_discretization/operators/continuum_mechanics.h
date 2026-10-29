@@ -220,6 +220,67 @@ inline DEAL_II_ALWAYS_INLINE //
 }
 #endif
 
+// SSE2 has no floor instruction, use the SSE4.1 one if available.
+#if DEAL_II_VECTORIZATION_WIDTH_IN_BITS >= 128 && defined(__SSE2__)
+inline DEAL_II_ALWAYS_INLINE //
+  dealii::VectorizedArray<double, 2>
+  floor(dealii::VectorizedArray<double, 2> const & in)
+{
+  dealii::VectorizedArray<double, 2> out;
+
+#  ifdef __SSE4_1__
+  out.data = _mm_floor_pd(in.data);
+#  else
+  for(unsigned int i = 0; i < 2; ++i)
+  {
+    out[i] = std::floor(in[i]);
+  }
+#  endif
+
+  return out;
+}
+
+inline DEAL_II_ALWAYS_INLINE //
+  dealii::VectorizedArray<float, 4>
+  floor(dealii::VectorizedArray<float, 4> const & in)
+{
+  dealii::VectorizedArray<float, 4> out;
+
+#  ifdef __SSE4_1__
+  out.data = _mm_floor_ps(in.data);
+#  else
+  for(unsigned int i = 0; i < 4; ++i)
+  {
+    out[i] = std::floor(in[i]);
+  }
+#  endif
+
+  return out;
+}
+#endif
+
+inline DEAL_II_ALWAYS_INLINE //
+  dealii::VectorizedArray<double, 1>
+  floor(dealii::VectorizedArray<double, 1> const & in)
+{
+  dealii::VectorizedArray<double, 1> out;
+
+  out.data = std::floor(in.data);
+
+  return out;
+}
+
+inline DEAL_II_ALWAYS_INLINE //
+  dealii::VectorizedArray<float, 1>
+  floor(dealii::VectorizedArray<float, 1> const & in)
+{
+  dealii::VectorizedArray<float, 1> out;
+
+  out.data = std::floor(in.data);
+
+  return out;
+}
+
 template<typename VectorizedArrayType, typename Number>
 inline DEAL_II_ALWAYS_INLINE //
   VectorizedArrayType
@@ -301,8 +362,6 @@ inline DEAL_II_ALWAYS_INLINE //
   dealii::VectorizedArray<double, 2>
   type_cast(dealii::VectorizedArray<double, 2> const & in)
 {
-  std::cout << "This has not been tested. (5)\n";
-
   dealii::VectorizedArray<double, 2> out;
 
   double double_values[2];
@@ -321,8 +380,6 @@ inline DEAL_II_ALWAYS_INLINE //
   dealii::VectorizedArray<float, 4>
   type_cast(dealii::VectorizedArray<float, 4> const & in)
 {
-  std::cout << "This has not been tested. (6)\n";
-
   dealii::VectorizedArray<float, 4> out;
 
   float float_values[4];
@@ -341,8 +398,6 @@ inline DEAL_II_ALWAYS_INLINE //
 inline DEAL_II_ALWAYS_INLINE dealii::VectorizedArray<double, 1>
                              type_cast(dealii::VectorizedArray<double, 1> const & in)
 {
-  std::cout << "This has not been tested. (7)\n";
-
   dealii::VectorizedArray<double, 1> out;
 
   auto result = static_cast<int64_t>(in.data);
@@ -354,8 +409,6 @@ inline DEAL_II_ALWAYS_INLINE dealii::VectorizedArray<double, 1>
 inline DEAL_II_ALWAYS_INLINE dealii::VectorizedArray<float, 1>
                              type_cast(dealii::VectorizedArray<float, 1> const & in)
 {
-  std::cout << "This has not been tested. (8)\n";
-
   dealii::VectorizedArray<float, 1> out;
 
   auto result = static_cast<int32_t>(in.data);
