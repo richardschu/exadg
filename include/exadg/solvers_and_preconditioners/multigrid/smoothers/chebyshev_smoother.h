@@ -312,9 +312,9 @@ private:
   std::shared_ptr<OperatorWithoutFusedOperations<Operator, VectorType>>
     operator_without_fused_operations;
 
-  std::shared_ptr<ChebyshevPointJacobi>     chebyshev_point_jacobi;
+  std::shared_ptr<ChebyshevPointJacobi> chebyshev_point_jacobi;
   std::shared_ptr<ChebyshevPointJacobiWithoutFusedOperations>
-    chebyshev_point_jacobi_without_fused_operations;
+                                            chebyshev_point_jacobi_without_fused_operations;
   std::shared_ptr<ChebyshevBlockJacobi>     chebyshev_block_jacobi;
   std::shared_ptr<ChebyshevAdditiveSchwarz> chebyshev_additive_schwarz;
 
@@ -322,9 +322,9 @@ private:
   std::shared_ptr<BlockJacobiPreconditioner<Operator>>     preconditioner_block_jacobi;
   std::shared_ptr<AdditiveSchwarzPreconditioner<Operator>> preconditioner_additive_schwarz;
 
-  typename ChebyshevPointJacobi::AdditionalData     additional_data_point;
+  typename ChebyshevPointJacobi::AdditionalData additional_data_point;
   typename ChebyshevPointJacobiWithoutFusedOperations::AdditionalData
-    additional_data_point_without_fused_operations;
+                                                    additional_data_point_without_fused_operations;
   typename ChebyshevBlockJacobi::AdditionalData     additional_data_block;
   typename ChebyshevAdditiveSchwarz::AdditionalData additional_data_additive_schwarz;
 };
