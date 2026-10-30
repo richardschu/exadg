@@ -344,7 +344,7 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
       {
         pde_operator->initialize_block_vector_velocity_pressure(residual_old);
         pde_operator->initialize_block_vector_velocity_pressure(delta_residual);
-        pde_operator->initialize_block_vector_velocity_pressure(solution_np_old);
+        solution_np_old = solution_np;
       }
 
       evaluate_right_hand_side(
@@ -392,14 +392,14 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
         double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
 
         picard_iterations += 1;
-        if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
-           norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+        if(norm_rel < this->param.newton_solver_data_coupled.rel_tol or
+           norm_abs < this->param.newton_solver_data_coupled.abs_tol)
         {
           converged = true;
         }
         else
         {
-          AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
+          AssertThrow(picard_iterations < this->param.newton_solver_data_coupled.max_iter,
                       dealii::ExcMessage(
                         "Picard solver to resolve nonlinear viscous term did not converge."));
 

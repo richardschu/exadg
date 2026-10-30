@@ -882,7 +882,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
         {
           residual_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
           delta_residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
-          velocity_np_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+          velocity_np_old = velocity_np;
         }
 
         residual_rhs_viscous(rhs, velocity_rhs);
