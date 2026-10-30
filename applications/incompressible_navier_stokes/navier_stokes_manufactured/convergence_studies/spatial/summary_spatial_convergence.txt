@@ -1,0 +1,125 @@
+Spatial convergence of navier_stokes_manufactured (generalized Newtonian, Carreau-Yasuda),
+inputs input_spatial_*.json: Navier-Stokes, refinements 0..4, T = 0.1, dt = 1e-5, BDF2.
+Tables printed by `python3 ../summarize.py .` (from convergence_studies/: `python3 summarize.py <folder>`):
+relative L2 errors at T on the first and last level and the rates (log2) of all refinements;
+time = sum of the wall times of all runs of a study (serial runs, 8 studies at a time).
+
+==== degree k = 2 (expected rates: velocity 3, pressure 2)
+scheme / convective term / viscosity                         r=0       r=4   rates
+coupled / explicit / explicit                        u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    129s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+coupled / explicit / implicit                        u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    257s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+coupled / linearly_implicit / explicit               u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    151s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+coupled / linearly_implicit / implicit               u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    309s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+coupled / implicit / explicit                        u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    238s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+coupled / implicit / implicit                        u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    434s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / explicit / explicit                 u  1.03e-02  3.60e-06   2.85  2.85  2.86  2.92     50s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / explicit / implicit                 u  1.03e-02  3.60e-06   2.85  2.85  2.86  2.92     73s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / linearly_implicit / explicit        u  1.03e-02  3.60e-06   2.85  2.85  2.86  2.92     53s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / linearly_implicit / implicit        u  1.03e-02  3.60e-06   2.85  2.85  2.86  2.92     77s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / implicit / explicit                 u  1.03e-02  3.60e-06   2.85  2.85  2.86  2.92     56s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / implicit / implicit                 u  1.03e-02  3.60e-06   2.85  2.85  2.86  2.92     76s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / explicit / explicit            u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92     82s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / explicit / implicit            u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    156s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / linearly_implicit / explicit   u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92     84s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / linearly_implicit / implicit   u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    157s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / implicit / explicit            u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92     86s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / implicit / implicit            u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    135s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+
+==== degree k = 3 (expected rates: velocity 4, pressure 3)
+scheme / convective term / viscosity                         r=0       r=4   rates
+coupled / explicit / explicit                        u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    194s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+coupled / explicit / implicit                        u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    286s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+coupled / linearly_implicit / explicit               u  4.66e-04  7.17e-09   3.98  4.01  4.01  4.00    244s
+                                                     p  2.70e-03  6.66e-07   2.99  3.00  3.00  3.00
+coupled / linearly_implicit / implicit               u  4.66e-04  7.17e-09   3.98  4.01  4.01  4.00    350s
+                                                     p  2.70e-03  6.66e-07   2.99  3.00  3.00  3.00
+coupled / implicit / explicit                        u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    401s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+coupled / implicit / implicit                        u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    515s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+dual_splitting / explicit / explicit                 u  4.65e-04  6.19e-08   3.94  4.01  3.84  1.08     67s
+                                                     p  2.69e-03  6.71e-07   2.98  3.00  3.00  2.99
+dual_splitting / explicit / implicit                 u  4.65e-04  6.19e-08   3.94  4.01  3.84  1.08     80s
+                                                     p  2.69e-03  6.71e-07   2.98  3.00  3.00  2.99
+dual_splitting / linearly_implicit / explicit        u  4.64e-04  6.19e-08   3.93  4.01  3.84  1.08     69s
+                                                     p  2.70e-03  6.71e-07   2.98  3.00  3.00  2.99
+dual_splitting / linearly_implicit / implicit        u  4.64e-04  6.19e-08   3.93  4.01  3.84  1.08     87s
+                                                     p  2.70e-03  6.71e-07   2.98  3.00  3.00  2.99
+dual_splitting / implicit / explicit                 u  4.65e-04  6.19e-08   3.94  4.01  3.84  1.08     75s
+                                                     p  2.69e-03  6.71e-07   2.98  3.00  3.00  2.99
+dual_splitting / implicit / implicit                 u  4.65e-04  6.19e-08   3.94  4.01  3.84  1.08     83s
+                                                     p  2.69e-03  6.71e-07   2.98  3.00  3.00  2.99
+pressure_correction / explicit / explicit            u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    119s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+pressure_correction / explicit / implicit            u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    183s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+pressure_correction / linearly_implicit / explicit   u  4.66e-04  7.17e-09   3.98  4.01  4.01  4.00    120s
+                                                     p  2.70e-03  6.66e-07   2.99  3.00  3.00  3.00
+pressure_correction / linearly_implicit / implicit   u  4.66e-04  7.17e-09   3.98  4.01  4.01  4.00    177s
+                                                     p  2.70e-03  6.66e-07   2.99  3.00  3.00  3.00
+pressure_correction / implicit / explicit            u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    126s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+pressure_correction / implicit / implicit            u  4.68e-04  7.17e-09   3.98  4.01  4.01  4.00    158s
+                                                     p  2.69e-03  6.66e-07   2.98  3.00  3.00  3.00
+
+==== degree k = 4 (expected rates: velocity 5, pressure 4)
+scheme / convective term / viscosity                         r=0       r=4   rates
+coupled / explicit / explicit                        u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    269s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+coupled / explicit / implicit                        u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    332s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+coupled / linearly_implicit / explicit               u  2.88e-05  3.21e-11   4.96  4.92  4.93  4.97    375s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+coupled / linearly_implicit / implicit               u  2.88e-05  3.21e-11   4.96  4.92  4.93  4.97    420s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+coupled / implicit / explicit                        u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    578s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+coupled / implicit / implicit                        u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    626s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+dual_splitting / explicit / explicit                 u  2.89e-05  6.14e-08   4.95  3.77  0.16  0.00     94s
+                                                     p  5.20e-04  6.52e-08   3.97  3.96  3.85  1.18
+dual_splitting / explicit / implicit                 u  2.89e-05  6.14e-08   4.95  3.77  0.16  0.00    108s
+                                                     p  5.20e-04  6.52e-08   3.97  3.96  3.85  1.18
+dual_splitting / linearly_implicit / explicit        u  2.89e-05  6.14e-08   4.95  3.77  0.16  0.00     95s
+                                                     p  5.20e-04  6.51e-08   3.97  3.96  3.85  1.18
+dual_splitting / linearly_implicit / implicit        u  2.89e-05  6.14e-08   4.95  3.77  0.16  0.00    111s
+                                                     p  5.20e-04  6.52e-08   3.97  3.96  3.85  1.18
+dual_splitting / implicit / explicit                 u  2.89e-05  6.14e-08   4.95  3.77  0.16  0.00    101s
+                                                     p  5.20e-04  6.51e-08   3.97  3.96  3.85  1.18
+dual_splitting / implicit / implicit                 u  2.89e-05  6.14e-08   4.95  3.77  0.16  0.00    109s
+                                                     p  5.20e-04  6.51e-08   3.97  3.96  3.85  1.18
+pressure_correction / explicit / explicit            u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    180s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+pressure_correction / explicit / implicit            u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    235s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+pressure_correction / linearly_implicit / explicit   u  2.88e-05  3.21e-11   4.96  4.92  4.93  4.97    179s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+pressure_correction / linearly_implicit / implicit   u  2.88e-05  3.21e-11   4.96  4.92  4.93  4.97    223s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+pressure_correction / implicit / explicit            u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    187s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+pressure_correction / implicit / implicit            u  2.89e-05  3.21e-11   4.96  4.92  4.93  4.97    199s
+                                                     p  5.19e-04  8.31e-09   3.97  3.96  4.00  4.00
+
+Dual splitting levels off at its temporal splitting error (velocity ~6e-8), as in the
+paper's spatial study; coupled and pressure correction converge with the full rates.
