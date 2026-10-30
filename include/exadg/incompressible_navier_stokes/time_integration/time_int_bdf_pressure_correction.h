@@ -118,8 +118,13 @@ private:
   void
   momentum_step();
 
+  // With `residual_evaluation`, the inhomogeneous parts of the linearly implicit
+  // convective term and of the viscous term are omitted, since they are part of
+  // `evaluate_linearized_residual()`.
   void
-  rhs_momentum(VectorType & rhs, VectorType const & transport_velocity);
+  rhs_momentum(VectorType &       rhs,
+               VectorType const & transport_velocity,
+               bool const         residual_evaluation = false);
 
   void
   pressure_step(VectorType & pressure_increment);
