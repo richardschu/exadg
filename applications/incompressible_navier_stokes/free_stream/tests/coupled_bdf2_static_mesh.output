@@ -107,7 +107,9 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-14
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     false
 
@@ -127,6 +129,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of velocity block:         false
 
@@ -144,6 +147,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of Laplace operator:       false
 
@@ -191,7 +195,7 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 8.50500e-03
+ Time step number = 1       t = 0.00000e+00, dt = 8.50500e-03
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 1.0036e+00:

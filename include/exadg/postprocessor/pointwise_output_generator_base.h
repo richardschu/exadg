@@ -82,7 +82,8 @@ protected:
   void
   setup_base(dealii::Triangulation<dim> const &   triangulation_in,
              dealii::Mapping<dim> const &         mapping_in,
-             PointwiseOutputDataBase<dim> const & pointwise_output_data_in);
+             PointwiseOutputDataBase<dim> const & pointwise_output_data_in,
+             bool const                           restarted_simulation);
 
   void
   add_quantity(std::string const & name, unsigned int const n_components);

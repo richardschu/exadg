@@ -97,11 +97,11 @@ public:
 
   /**
    * This function is for coupled multi-physics problems applying partitioned solution algorithms.
-   * Set use_extrapolation = true in the first iteration of the partitioned scheme within each time
-   * step.
+   * Set `first_coupling_iteration = true` in the first iteration of the partitioned scheme within
+   * each time step.
    */
   void
-  advance_one_timestep_partitioned_solve(bool const use_extrapolation);
+  advance_one_timestep_partitioned_solve(bool const first_coupling_iteration);
 
 private:
   void
@@ -142,7 +142,7 @@ private:
   VectorType acceleration_n, acceleration_np;
 
   // required for strongly-coupled partitioned FSI
-  bool       use_extrapolation;
+  bool       first_coupling_iteration;
   bool       store_solution;
   VectorType displacement_last_iter;
 

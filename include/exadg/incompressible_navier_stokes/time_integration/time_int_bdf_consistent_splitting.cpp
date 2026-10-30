@@ -309,7 +309,7 @@ TimeIntBDFConsistentSplitting<dim, Number>::pressure_step()
   rhs_pressure(rhs);
 
   // extrapolate old solution to get a good initial estimate for the solver
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
     pressure_np.equ(this->extra.get_beta(0), pressure[0]);
     for(unsigned int i = 1; i < pressure.size(); ++i)
@@ -642,7 +642,7 @@ TimeIntBDFConsistentSplitting<dim, Number>::penalty_step()
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(not this->first_coupling_iteration)
       velocity_np = 0;
 
     unsigned int const n_iter =

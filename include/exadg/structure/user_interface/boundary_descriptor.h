@@ -40,7 +40,57 @@ enum class BoundaryType
   Dirichlet,
   DirichletCached,
   Neumann,
-  NeumannCached
+  NeumannCached,
+  RobinSpringDashpotPressure
+};
+
+// Parameters for the Robin boundary condition
+struct RobinParameters
+{
+  RobinParameters()
+    : velocity_normal_projection(false),
+      displacement_normal_projection(false),
+      velocity_coefficient_c(0.0),
+      displacement_coefficient_k(0.0),
+      pressure_value(0.0),
+      pressure_ramp_time(0.0)
+  {
+  }
+
+  RobinParameters(bool const   velocity_normal_projection,
+                  bool const   displacement_normal_projection,
+                  double const velocity_coefficient_c,
+                  double const displacement_coefficient_k,
+                  double const pressure_value,
+                  double const pressure_ramp_time)
+    : velocity_normal_projection(velocity_normal_projection),
+      displacement_normal_projection(displacement_normal_projection),
+      velocity_coefficient_c(velocity_coefficient_c),
+      displacement_coefficient_k(displacement_coefficient_k),
+      pressure_value(pressure_value),
+      pressure_ramp_time(pressure_ramp_time)
+  {
+  }
+
+  // Parameters for the Robin boundary condition of the form
+  // Consider the normal projection of the velocity and displacement vector, i.e., consider
+  // + ( v_h, k * d_h + c * d/dt(d_h) + eta(t, pressure_ramp_time) * p * N ),
+  // penalizing all vector components, or
+  // + ( v_h, k * N * (d_h . N) + c * N . (d/dt(d_h) . N) + eta(t, pressure_ramp_time) * p * N )
+  // penalizing only the normal component.
+  bool velocity_normal_projection;
+  bool displacement_normal_projection;
+
+  // Penalty parameter c and k in the equation above.
+  double velocity_coefficient_c;
+  double displacement_coefficient_k;
+
+  // Exterior pressure value p in the equation above.
+  double pressure_value;
+
+  // The exterior pressure scaling function is ramped via eta(t, t_ramp) where `pressure_ramp_time`
+  // is the time from which on the full load is applied.
+  double pressure_ramp_time;
 };
 
 template<int dim>
@@ -70,6 +120,9 @@ struct BoundaryDescriptor
   // Neumann
   std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> neumann_bc;
 
+  // Parameters for the Robin boundary condition.
+  mutable std::map<dealii::types::boundary_id, RobinParameters> robin_bc;
+
   // another type of Neumann boundary condition where the traction force comes
   // from the solution on another domain that is in contact with the actual domain
   // of interest at the given boundary (this type of Neumann boundary condition
@@ -88,6 +141,14 @@ struct BoundaryDescriptor
       return BoundaryType::Neumann;
     else if(this->neumann_cached_bc.find(boundary_id) != this->neumann_cached_bc.end())
       return BoundaryType::NeumannCached;
+    else if(this->robin_bc.find(boundary_id) != this->robin_bc.end() and
+            this->neumann_cached_bc.find(boundary_id) == this->neumann_cached_bc.end())
+    {
+      // In fluid--structure interaction, the interface is a `BoundaryType::NeumannCached`, where we
+      // also evaluate a Robin term, but `BoundaryType::RobinSpringDashpotPressure` refers to
+      // spring/dashpot support, which does not include the interface traction term in the FSI case.
+      return BoundaryType::RobinSpringDashpotPressure;
+    }
 
     AssertThrow(false,
                 dealii::ExcMessage(
@@ -130,6 +191,9 @@ struct BoundaryDescriptor
     if(neumann_bc.find(boundary_id) != neumann_bc.end())
       counter++;
 
+    if(robin_bc.find(boundary_id) != robin_bc.end())
+      counter++;
+
     if(neumann_cached_bc.find(boundary_id) != neumann_cached_bc.end())
       counter++;
 
@@ -170,6 +234,18 @@ struct BoundaryDescriptor
                 dealii::ExcMessage("Pointer to ContainerInterfaceData has not been initialized."));
 
     return neumann_cached_data;
+  }
+
+  std::map<dealii::types::boundary_id, RobinParameters>
+  get_robin_bc() const
+  {
+    return robin_bc;
+  }
+
+  void
+  set_robin_bc(std::map<dealii::types::boundary_id, RobinParameters> const & robin_bc_in) const
+  {
+    this->robin_bc = robin_bc_in;
   }
 
 private:

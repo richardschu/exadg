@@ -32,7 +32,7 @@ namespace ExaDG
 {
 struct OutputParameters
 {
-  OutputParameters() : directory("output/"), filename("solution"), write(false)
+  OutputParameters() : directory("results/"), filename("solution"), write(false)
   {
   }
 

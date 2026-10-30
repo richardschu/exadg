@@ -26,6 +26,25 @@
 
 namespace ExaDG
 {
+/*
+ * Reference norm of the relative solver tolerance:
+ * an iterative solver stops once the residual norm
+ * |b - A x_k| drops below max(abs_tol, rel_tol * reference), where
+ *
+ *  - `InitialResidual`: reference = |b - A x_0|.
+ *    A better initial guess x_0 tightens the target.
+ *
+ *  - `RightHandSide`: reference = |b|.
+ *    A better initial guess saves iterations.
+ *
+ * Both are identical for a zero initial guess.
+ */
+enum class RelTolReference
+{
+  InitialResidual,
+  RightHandSide
+};
+
 namespace Elementwise
 {
 /*

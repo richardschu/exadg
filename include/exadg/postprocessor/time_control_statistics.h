@@ -46,7 +46,8 @@ public:
   TimeControlStatistics();
 
   void
-  setup(TimeControlDataStatistics const & time_control_data_statistics_in);
+  setup(TimeControlDataStatistics const & time_control_data_statistics_in,
+        bool const                        restarted_simulation);
 
   bool
   write_preliminary_results(double const time, types::time_step const time_step_number) const;

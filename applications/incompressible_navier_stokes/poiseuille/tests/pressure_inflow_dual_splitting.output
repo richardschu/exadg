@@ -1,0 +1,301 @@
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       1
+
+Setting up incompressible Navier-Stokes solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              Unsteady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            ConvectiveFormulation
+  Outflow BC for convective term:            false
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       false
+
+Physical quantities:
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e+02
+  Viscosity:                                 1.0000e-01
+  Density:                                   1.0000e+00
+
+Temporal discretization:
+  Temporal discretization method:            BDFDualSplitting
+  Calculation of time step size:             CFL
+  Adaptive time stepping:                    true
+  Adaptive time stepping limiting factor:    1.2000e+00
+  Maximum allowable time step size:          1.7977e+308
+  Type of CFL condition:                     VelocityNorm
+  Maximum number of time steps:              4294967295
+  Temporal refinements:                      0
+  Order of time integration scheme:          2
+  Start with low order method:               true
+  Treatment of convective term:              Explicit
+  Solver information:
+  Interval physical time:                    1.0000e+01
+  Interval wall time:                        1.7977e+308
+  Interval time steps:                       4294967295
+  Restarted simulation:                      false
+  Restart:
+  Write restart:                             false
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              0
+  Create coarse triangulations:              false
+  Mapping degree:                            2
+  Mapping degree coarse grids:               2
+  FE space:                                  L2
+  Polynomial degree velocity:                2
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Weak
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Weak
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyZeroMeanValue
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:true
+  Use boundary data:                         false
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+High-order dual splitting scheme:
+  Order of extrapolation pressure NBC:       2
+  Formulation convective term in BC:         ConvectiveFormulation
+
+  Pressure Poisson equation (PPE):
+  interior penalty factor:                   1.0000e+00
+  Solver:                                    CG
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-20
+  Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            Multigrid
+  Update preconditioner pressure step:       false
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+
+  Projection step:
+  Solver:                                    CG
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-20
+  Relative solver tolerance:                 1.0000e-12
+  Relative tolerance reference:              InitialResidual
+  Preconditioner projection step:            InverseMassMatrix
+  Update preconditioner projection step:     false
+
+  Momentum step:
+  Linear solver:
+  Solver:                                    CG
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-20
+  Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            InverseMassMatrix
+  Update of preconditioner:                  false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                0
+  Number of cells:                           2
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   18
+  number of dofs (total):                    36
+Pressure:
+  degree of 1D polynomials:                  1
+  number of dofs per cell:                   4
+  number of dofs (total):                    8
+Velocity and pressure:
+  number of dofs per cell:                   22
+  number of dofs (total):                    44
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Setup Multistep time integrator ...
+
+Calculation of time step size according to CFL condition:
+
+  CFL:                                       2.0000e-01
+  Time step size (global):                   1.4142e-01
+  Time step size (adaptive):                 1.4142e-01
+
+... done!
+
+Starting time loop ...
+
+Calculate error for velocity at time t = 0.0000e+00:
+  Absolute error (L2-norm): 2.06559e+00
+
+Calculate error for pressure at time t = 0.0000e+00:
+  Absolute error (L2-norm): 1.30639e+00
+
+________________________________________________________________________________
+
+ Time step number = 1       t = 0.00000e+00, dt = 1.41421e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 1.0056e+01:
+  Absolute error (L2-norm): 1.68135e-01
+
+Calculate error for pressure at time t = 1.0056e+01:
+  Absolute error (L2-norm): 1.12673e-09
+
+________________________________________________________________________________
+
+ Time step number = 50      t = 1.00557e+01, dt = 1.53980e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 2.0119e+01:
+  Absolute error (L2-norm): 1.36693e-02
+
+Calculate error for pressure at time t = 2.0119e+01:
+  Absolute error (L2-norm): 1.73050e-11
+
+________________________________________________________________________________
+
+ Time step number = 119     t = 2.01194e+01, dt = 1.42360e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 3.0043e+01:
+  Absolute error (L2-norm): 1.15089e-03
+
+Calculate error for pressure at time t = 3.0043e+01:
+  Absolute error (L2-norm): 3.49392e-13
+
+________________________________________________________________________________
+
+ Time step number = 189     t = 3.00429e+01, dt = 1.41500e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 4.0085e+01:
+  Absolute error (L2-norm): 9.40746e-05
+
+Calculate error for pressure at time t = 4.0085e+01:
+  Absolute error (L2-norm): 8.69132e-14
+
+________________________________________________________________________________
+
+ Time step number = 260     t = 4.00852e+01, dt = 1.41420e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 5.0126e+01:
+  Absolute error (L2-norm): 7.69248e-06
+
+Calculate error for pressure at time t = 5.0126e+01:
+  Absolute error (L2-norm): 4.70131e-15
+
+________________________________________________________________________________
+
+ Time step number = 331     t = 5.01260e+01, dt = 1.41420e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 6.0025e+01:
+  Absolute error (L2-norm): 6.51593e-07
+
+Calculate error for pressure at time t = 6.0025e+01:
+  Absolute error (L2-norm): 9.00798e-16
+
+________________________________________________________________________________
+
+ Time step number = 401     t = 6.00254e+01, dt = 1.41420e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 7.0066e+01:
+  Absolute error (L2-norm): 5.32807e-08
+
+Calculate error for pressure at time t = 7.0066e+01:
+  Absolute error (L2-norm): 3.82877e-15
+
+________________________________________________________________________________
+
+ Time step number = 472     t = 7.00662e+01, dt = 1.41420e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 8.0107e+01:
+  Absolute error (L2-norm): 4.35676e-09
+
+Calculate error for pressure at time t = 8.0107e+01:
+  Absolute error (L2-norm): 4.10898e-15
+
+________________________________________________________________________________
+
+ Time step number = 543     t = 8.01071e+01, dt = 1.41420e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 9.0006e+01:
+  Absolute error (L2-norm): 3.69028e-10
+
+Calculate error for pressure at time t = 9.0006e+01:
+  Absolute error (L2-norm): 9.48560e-16
+
+________________________________________________________________________________
+
+ Time step number = 613     t = 9.00065e+01, dt = 1.41420e-01
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 1.0005e+02:
+  Absolute error (L2-norm): 3.01674e-11
+
+Calculate error for pressure at time t = 1.0005e+02:
+  Absolute error (L2-norm): 4.12898e-15

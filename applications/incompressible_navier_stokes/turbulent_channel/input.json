@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/turbulent_channel/",
+        "OutputDirectory": "results/turbulent_channel/",
         "OutputName": "16_l2_k3",
         "WriteOutput": "false"
     }

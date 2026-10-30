@@ -1,0 +1,50 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "2",
+        "IsTest": "false"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "6",
+        "DegreeMax": "6",
+        "RefineSpaceMin": "3",
+        "RefineSpaceMax": "3"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "0",
+        "RefineTimeMax": "10"
+    },
+    "Application": {
+        "TriangulationType": "Distributed",
+        "SpatialDiscretization": "L2",
+        "MoveGrid": "false",
+        "ReadRestart": "false",
+        "WriteRestart": "false",
+        "IncludeConvectiveTerm": "false",
+        "BoundaryCondition": "PureDirichlet",
+        "StartTime": "0.0",
+        "EndTime": "10.0",
+        "TimeStepSize": "1.0",
+        "OrderTimeIntegrator": "3",
+        "IntervalStart": "0.0",
+        "IntervalEnd": "1.0",
+        "Density": "1000.0",
+        "KinematicViscosity": "1e-6",
+        "UseGeneralizedNewtonianModel": "true",
+        "FormulationViscousTerm" : "DivergenceFormulation",
+        "TemporalDiscretization" : "BDFCoupledSolution",
+        "TreatmentOfConvectiveTerm" : "Explicit",
+        "TreatmentOfVariableViscosity" : "Explicit",
+        "GeneralizedNewtonianViscosityMargin": "49e-6",
+        "GeneralizedNewtonianKappa": "1.0",
+        "GeneralizedNewtonianLambda": "1.0",
+        "GeneralizedNewtonianA": "2.0",
+        "GeneralizedNewtonianN": "0.5",
+        "ComputeConvergenceTable": "true"
+    },
+    "Output": {
+        "OutputDirectory": "output_temporal_stokes_coupled_visc_explicit_bdf3/",
+        "OutputName": "test",
+        "WriteOutput": "false"
+    }
+}

@@ -63,6 +63,7 @@ SpatialOperatorBase<dim, Number>::SpatialOperatorBase(
     dof_handler_p(*grid_in->triangulation),
     dof_handler_u_scalar(*grid_in->triangulation),
     pressure_level_is_undefined(false),
+    robin_parameter_traction_output(0.0),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0),
     velocity_ptr(nullptr),
@@ -303,7 +304,7 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
 
   if(param.convective_problem())
     matrix_free_data.append_mapping_flags(
-      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
+      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags(true, true));
 
   if(param.viscous_problem())
     matrix_free_data.append_mapping_flags(
@@ -1221,6 +1222,14 @@ SpatialOperatorBase<dim, Number>::interpolate_stress_bc(VectorType &       stres
 }
 
 template<int dim, typename Number>
+void
+SpatialOperatorBase<dim, Number>::set_robin_parameter_traction_output(
+  double const robin_parameter_in) const
+{
+  this->robin_parameter_traction_output = robin_parameter_in;
+}
+
+template<int dim, typename Number>
 std::shared_ptr<dealii::FiniteElement<dim>>
 SpatialOperatorBase<dim, Number>::setup_fe_u(SpatialDiscretization const spatial_discretization,
                                              ElementType const           element_type,
@@ -2044,7 +2053,9 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
     if(boundary_type == BoundaryTypeU::DirichletCached)
     {
       integrator_u.reinit(face);
-      integrator_u.gather_evaluate(*velocity_ptr, dealii::EvaluationFlags::gradients);
+      integrator_u.gather_evaluate(*velocity_ptr,
+                                   dealii::EvaluationFlags::gradients |
+                                     dealii::EvaluationFlags::values);
 
       integrator_p.reinit(face);
       integrator_p.gather_evaluate(*pressure_ptr, dealii::EvaluationFlags::values);
@@ -2056,19 +2067,19 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         unsigned int const index = matrix_free.get_shape_info(dof_index_u, quad_index)
                                      .face_to_cell_index_nodal[local_face_number][q];
 
-        // compute traction acting on structure with normal vector in opposite direction
-        // as compared to the fluid domain
-        vector normal = integrator_u.normal_vector(q);
-        tensor grad_u = integrator_u.get_gradient(q);
-        scalar p      = integrator_p.get_value(q);
+        // Compute traction vector based on unit *outward* normal.
+        vector const normal = integrator_u.normal_vector(q);
+        vector const u      = integrator_u.get_value(q);
+        tensor const grad_u = integrator_u.get_gradient(q);
+        scalar const p      = integrator_p.get_value(q);
 
-        scalar viscosity = get_viscosity_boundary_face(face, q);
+        scalar const viscosity = get_viscosity_boundary_face(face, q);
 
-        // incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
-        // pressure
-        // -> multiply by density to get true traction in N/m^2.
-        vector traction =
-          param.density * (viscosity * (grad_u + transpose(grad_u)) * normal - p * normal);
+        // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
+        // pressure, hence multiply by density to get true traction in N/m^2.
+        vector const traction =
+          this->robin_parameter_traction_output * u +
+          param.density * (viscosity * ((grad_u + transpose(grad_u)) * normal) - p * normal);
 
         integrator_u.submit_dof_value(traction, index);
       }

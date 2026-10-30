@@ -486,14 +486,20 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   VectorType rhs(pressure_np);
   rhs_pressure(rhs);
 
-  // extrapolate old solution to get a good initial estimate for the solver
-  if(this->use_extrapolation)
+  // compute initial guess for the solver from the previous time steps
+  if(this->first_coupling_iteration)
   {
-    pressure_np.equ(this->extra.get_beta(0), pressure[0]);
-    for(unsigned int i = 1; i < pressure.size(); ++i)
-    {
-      pressure_np.add(this->extra.get_beta(i), pressure[i]);
-    }
+    if(this->param.initial_guess_type_pressure_poisson == InitialGuessType::Projection)
+      this->compute_initial_guess_projection(pressure_np,
+                                             pressure,
+                                             rhs,
+                                             [&](VectorType & dst, VectorType const & src) {
+                                               pde_operator->apply_laplace_operator(dst, src);
+                                             });
+    else
+      this->compute_initial_guess(pressure_np,
+                                  pressure,
+                                  this->param.initial_guess_type_pressure_poisson);
   }
   else
   {
@@ -680,7 +686,7 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
     // extrapolate velocity to time t_n+1 and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty term
     VectorType velocity_extrapolated;
-    if(this->use_extrapolation)
+    if(this->first_coupling_iteration)
     {
       velocity_extrapolated.reinit(velocity[0]);
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -700,7 +706,7 @@ TimeIntBDFDualSplitting<dim, Number>::projection_step()
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(this->first_coupling_iteration == false)
       velocity_np = velocity_projection_last_iter;
 
     unsigned int n_iter = pde_operator->solve_projection(velocity_np, rhs, update_preconditioner);
@@ -770,8 +776,9 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     // store the velocity vector that is needed to compute the rhs vector
     VectorType velocity_rhs = velocity_np;
 
-    // Extrapolate old solution to get a good initial estimate for the solver.
-    if(this->use_extrapolation)
+    // Extrapolate old solution, used by the explicitly treated terms below and, by default, as the
+    // initial guess for the solver.
+    if(this->first_coupling_iteration)
     {
       velocity_np.equ(this->extra.get_beta(0), velocity[0]);
       for(unsigned int i = 1; i < velocity.size(); ++i)
@@ -795,6 +802,25 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
         this->pcout << std::endl << "Update of variable viscosity:";
         print_wall_time(this->pcout, timer_viscosity_update.wall_time());
       }
+    }
+
+    // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+    VectorType transport_velocity;
+    if(this->param.convective_problem() and
+       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      transport_velocity = velocity_np;
+    }
+
+    // `velocity_np` holds the extrapolation needed by the explicitly treated terms above, which is
+    // also the initial guess for `InitialGuessType::Extrapolation`. `InitialGuessType::Zero` and
+    // `InitialGuessType::LastTimeStep` overwrite it here, `InitialGuessType::Projection` overwrites
+    // it below once the right-hand side is available.
+    if(this->first_coupling_iteration and
+       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation and
+       this->param.initial_guess_type_momentum != InitialGuessType::Projection)
+    {
+      this->compute_initial_guess(velocity_np, velocity, this->param.initial_guess_type_momentum);
     }
 
     bool const update_preconditioner =
@@ -836,13 +862,6 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
     }
     else // convective term is linear, viscous term might not be.
     {
-      // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
-      VectorType transport_velocity;
-      if(this->param.convective_problem() and
-         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-      {
-        transport_velocity = velocity_np;
-      }
       // Picard iteration to converge the nonlinear viscous term.
       bool constexpr apply_aitken_relaxation = true;
       unsigned int picard_iterations         = 0;
@@ -863,7 +882,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
         {
           residual_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
           delta_residual.reinit(velocity_rhs, false /* omit_zeroing_entries */);
-          velocity_np_old.reinit(velocity_rhs, false /* omit_zeroing_entries */);
+          velocity_np_old = velocity_np;
         }
 
         residual_rhs_viscous(rhs, velocity_rhs);
@@ -884,6 +903,17 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
       {
         // Calculate the right-hand side of the linear system of equations.
         rhs_viscous(rhs, velocity_rhs, transport_velocity);
+
+        // the projection initial guess needs the right-hand side, so it is computed here
+        if(this->first_coupling_iteration and
+           this->param.initial_guess_type_momentum == InitialGuessType::Projection)
+        {
+          this->compute_initial_guess_projection(
+            velocity_np, velocity, rhs, [&](VectorType & dst, VectorType const & src) {
+              pde_operator->apply_linear_momentum_operator(
+                dst, src, transport_velocity, this->get_scaling_factor_time_derivative_term());
+            });
+        }
 
         // Solve the linearized problem.
         linear_iterations += pde_operator->solve_linear_momentum_equation(
@@ -1078,7 +1108,7 @@ TimeIntBDFDualSplitting<dim, Number>::penalty_step()
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(this->first_coupling_iteration == false)
       velocity_np = velocity_projection_last_iter;
 
     unsigned int const n_iter =

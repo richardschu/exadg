@@ -57,7 +57,8 @@ public:
     std::shared_ptr<MaterialDescriptor const>             material_descriptor,
     Parameters const &                                    param,
     std::string const &                                   field,
-    bool const                                            setup_scalar_field,
+    bool const                                            setup_scalar_postprocessing_field,
+    bool const                                            setup_vector_postprocessing_field,
     MPI_Comm const &                                      mpi_comm)
     : DeformedMappingBase<dim, Number>(mapping_undeformed, param.degree, *grid->triangulation),
       param(param),
@@ -73,7 +74,8 @@ public:
                                                            material_descriptor,
                                                            param,
                                                            field,
-                                                           setup_scalar_field,
+                                                           setup_scalar_postprocessing_field,
+                                                           setup_vector_postprocessing_field,
                                                            mpi_comm);
 
     // setup PDE operator and solver
@@ -155,7 +157,7 @@ public:
       }
     }
 
-    this->initialize_mapping_from_dof_vector(this->mapping_undeformed,
+    this->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
                                              displacement,
                                              pde_operator->get_dof_handler());
   }

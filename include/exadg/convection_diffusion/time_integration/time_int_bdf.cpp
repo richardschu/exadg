@@ -423,7 +423,7 @@ TimeIntBDF<dim, Number>::print_solver_info() const
 {
   return param.solver_info_data.write(this->global_timer.wall_time(),
                                       this->time,
-                                      this->time_step_number);
+                                      this->get_total_time_step_number());
 }
 
 template<int dim, typename Number>
@@ -638,7 +638,9 @@ TimeIntBDF<dim, Number>::postprocessing() const
     helpers_ale->update_pde_operator_after_grid_motion();
   }
 
-  postprocessor->do_postprocessing(solution[0], this->get_time(), this->get_time_step_number());
+  postprocessor->do_postprocessing(solution[0],
+                                   this->get_time(),
+                                   this->get_total_time_step_number());
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
 }

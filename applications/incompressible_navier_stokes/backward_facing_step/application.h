@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_BFS_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_BFS_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_BACKWARD_FACING_STEP_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_BACKWARD_FACING_STEP_APPLICATION_H_
 
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/linear_interpolation.h>
@@ -788,4 +788,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/precursor/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_BFS_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_BACKWARD_FACING_STEP_APPLICATION_H_ */

@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/kovasznay/",
+        "OutputDirectory": "results/kovasznay/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

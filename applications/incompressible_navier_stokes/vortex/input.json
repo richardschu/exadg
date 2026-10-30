@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/vortex/",
+        "OutputDirectory": "results/vortex/",
         "OutputName": "vortex",
         "WriteOutput": "false"
     }

@@ -121,7 +121,8 @@ public:
   setup(dealii::DoFHandler<dim> const & dof_handler_velocity_in,
         dealii::DoFHandler<dim> const & dof_handler_pressure_in,
         dealii::Mapping<dim> const &    mapping_in,
-        OutputData const &              output_data_in);
+        OutputData const &              output_data_in,
+        bool const                      restarted_simulation);
 
   void
   evaluate(
@@ -141,6 +142,10 @@ private:
   dealii::ObserverPointer<dealii::DoFHandler<dim> const> dof_handler_velocity;
   dealii::ObserverPointer<dealii::DoFHandler<dim> const> dof_handler_pressure;
   dealii::ObserverPointer<dealii::Mapping<dim> const>    mapping;
+
+  // Accumulates (time, filename) pairs written so far, used to keep the `.pvd` record
+  // (ParaView's source of the actual simulation time for a vtu/pvtu file series) up to date.
+  mutable std::vector<std::pair<double, std::string>> times_and_names;
 };
 
 } // namespace IncNS

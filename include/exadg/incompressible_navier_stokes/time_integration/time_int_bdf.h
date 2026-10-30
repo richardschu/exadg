@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/time_integration/enum_types.h>
 #include <exadg/time_integration/lambda_functions_ale.h>
 #include <exadg/time_integration/time_int_bdf_base.h>
 
@@ -94,7 +95,7 @@ public:
   ale_update();
 
   void
-  advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+  advance_one_timestep_partitioned_solve(bool const first_coupling_iteration,
                                          bool const update_velocity,
                                          bool const update_pressure);
 
@@ -125,11 +126,45 @@ protected:
   set_vectors_deserialization(std::vector<VectorType> const & vectors_velocity,
                               std::vector<VectorType> const & vectors_pressure);
 
+  std::string
+  get_postprocessor_restart_state() const final;
+
+  void
+  set_postprocessor_restart_state(std::string const & state) final;
+
   virtual void
   update_after_deserialization();
 
   void
   prepare_vectors_for_next_timestep() override;
+
+  /*
+   * Overwrites `dst` by the initial guess of type `initial_guess_type` for an iterative solver,
+   * computed from the solutions at previous time steps, `history`, where history[i] is the
+   * solution at t_{n-i}.
+   */
+  void
+  compute_initial_guess(VectorType &                    dst,
+                        std::vector<VectorType> const & history,
+                        InitialGuessType const          initial_guess_type) const;
+
+  void
+  compute_initial_guess(BlockVectorType &                    dst,
+                        std::vector<BlockVectorType> const & history,
+                        InitialGuessType const               initial_guess_type) const;
+
+  /*
+   * Overwrites `dst` by the linear combination of the solutions at previous time steps,
+   * `history`, minimizing the residual of the linear system with operator `vmult` and right-hand
+   * side `rhs`, see `InitialGuessType::Projection`. The products of `vmult` with `history` are
+   * recomputed in each call.
+   */
+  void
+  compute_initial_guess_projection(
+    VectorType &                                                  dst,
+    std::vector<VectorType> const &                               history,
+    VectorType const &                                            rhs,
+    std::function<void(VectorType &, VectorType const &)> const & vmult) const;
 
   Parameters const & param;
 
@@ -149,7 +184,7 @@ protected:
   VectorType              convective_term_np;
 
   // required for strongly-coupled partitioned iteration
-  bool use_extrapolation;
+  bool first_coupling_iteration;
   bool store_solution;
   bool update_velocity;
   bool update_pressure;

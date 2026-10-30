@@ -176,10 +176,9 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   dealii::Timer timer;
   timer.restart();
 
-  // extrapolate old solutions to obtain a good initial guess for the solver, or
-  // to update the viscosity model or the penalty parameters based on this
-  // extrapolated solution
-  if(this->use_extrapolation)
+  // extrapolate old solutions to update the viscosity model or the penalty parameters based on
+  // this extrapolated solution, and to obtain an initial guess for the solver (by default)
+  if(this->first_coupling_iteration)
   {
     solution_np.equ(this->extra.get_beta(0), solution[0]);
     for(unsigned int i = 1; i < solution.size(); ++i)
@@ -217,6 +216,22 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
     {
       pde_operator->update_continuity_penalty_operator(solution_np.block(0));
     }
+  }
+
+  // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+  VectorType transport_velocity;
+  if(this->param.convective_problem() and
+     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+  {
+    transport_velocity = solution_np.block(0);
+  }
+
+  // The explicitly treated terms above are set, so solution_np can be overwritten by the initial
+  // guess for the solver if it differs from the extrapolation.
+  if(this->first_coupling_iteration and
+     this->param.initial_guess_type_coupled != InitialGuessType::Extrapolation)
+  {
+    this->compute_initial_guess(solution_np, solution, this->param.initial_guess_type_coupled);
   }
 
   // update scaling factor of continuity equation
@@ -309,14 +324,6 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
   }
   else // convective term is linear, viscous term might not be.
   {
-    // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
-    VectorType transport_velocity;
-    if(this->param.convective_problem() and
-       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
-    {
-      transport_velocity = solution_np.block(0);
-    }
-
     // Picard iteration to converge the nonlinear viscous term.
     bool constexpr apply_aitken_relaxation = true;
     unsigned int picard_iterations         = 0;
@@ -337,7 +344,7 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
       {
         pde_operator->initialize_block_vector_velocity_pressure(residual_old);
         pde_operator->initialize_block_vector_velocity_pressure(delta_residual);
-        pde_operator->initialize_block_vector_velocity_pressure(solution_np_old);
+        solution_np_old = solution_np;
       }
 
       evaluate_right_hand_side(
@@ -385,14 +392,14 @@ TimeIntBDFCoupled<dim, Number>::do_timestep_solve()
         double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
 
         picard_iterations += 1;
-        if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
-           norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+        if(norm_rel < this->param.newton_solver_data_coupled.rel_tol or
+           norm_abs < this->param.newton_solver_data_coupled.abs_tol)
         {
           converged = true;
         }
         else
         {
-          AssertThrow(picard_iterations < this->param.newton_solver_data_momentum.max_iter,
+          AssertThrow(picard_iterations < this->param.newton_solver_data_coupled.max_iter,
                       dealii::ExcMessage(
                         "Picard solver to resolve nonlinear viscous term did not converge."));
 
@@ -543,7 +550,7 @@ TimeIntBDFCoupled<dim, Number>::penalty_step()
   // calculate the penalty parameter for the divergence and continuity penalty term
   VectorType velocity_extrapolated;
   velocity_extrapolated.reinit(solution_np.block(0), true /* omit_zeroing_entries */);
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
     velocity_extrapolated.equ(this->extra.get_beta(0), solution[0].block(0));
     for(unsigned int i = 1; i < solution.size(); ++i)
@@ -569,7 +576,7 @@ TimeIntBDFCoupled<dim, Number>::penalty_step()
      0);
 
   // solve projection step
-  if(this->use_extrapolation == false)
+  if(this->first_coupling_iteration == false)
     solution_np.block(0) = velocity_penalty_last_iter;
 
   unsigned int n_iter =

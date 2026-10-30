@@ -19,7 +19,7 @@
         "TreatmentOfConvectiveTerm": "LinearlyImplicit"
     },
     "Output": {
-        "OutputDirectory": "output/vortex/",
+        "OutputDirectory": "results/vortex/",
         "OutputName": "sol",
         "WriteOutput": "false"
     }

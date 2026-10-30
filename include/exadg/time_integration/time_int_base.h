@@ -154,6 +154,13 @@ public:
   unsigned int
   get_number_of_time_steps() const;
 
+  /*
+   * Get number of computed time steps counted from the start of the original simulation, i.e.,
+   * continuing across restarts.
+   */
+  types::time_step
+  get_total_number_of_time_steps() const;
+
   std::shared_ptr<TimerTree>
   get_timings() const;
 
@@ -198,6 +205,14 @@ protected:
    */
   types::time_step
   get_time_step_number() const;
+
+  /*
+   * Get the current time step number counted from the start of the original simulation, i.e.,
+   * continuing across restarts. In contrast, `get_time_step_number()` starts again at 1 after a
+   * restart, as needed by the time integration itself (e.g., when starting with low order).
+   */
+  types::time_step
+  get_total_time_step_number() const;
 
   /*
    * Write solution vectors to files so that the simulation can be restart from an intermediate
@@ -251,6 +266,41 @@ protected:
    * The number of the current time step starting with time_step_number = 1.
    */
   types::time_step time_step_number;
+
+  /*
+   * The number of time steps done before the restart this simulation started from (zero for a
+   * simulation that is not restarted).
+   */
+  types::time_step n_time_steps_before_restart;
+
+  /*
+   * Entries of the restart header shared by all time integrators, written/read after the ones
+   * specific to the time integrator: `n_time_steps_before_restart` and the postprocessor's restart
+   * state. Reading is done by process 0 only and falls back to zero and an empty state for restart
+   * files written before these entries were added. `broadcast_restart_header_extension()` has to
+   * be called by all processes afterwards.
+   */
+  void
+  write_restart_header_extension(BoostOutputArchiveType & oa) const;
+
+  void
+  read_restart_header_extension(BoostInputArchiveType & ia);
+
+  void
+  broadcast_restart_header_extension();
+
+  /*
+   * Restart state of the postprocessor, see `IncNS::PostProcessorInterface::get_restart_state()`.
+   * Overwrite in derived classes with a postprocessor supporting restarts.
+   */
+  virtual std::string
+  get_postprocessor_restart_state() const;
+
+  virtual void
+  set_postprocessor_restart_state(std::string const & state);
+
+  // Postprocessor restart state read by process 0 until it is broadcast.
+  std::string postprocessor_restart_state;
 
   /*
    * Maximum number of time steps.

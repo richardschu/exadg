@@ -247,12 +247,14 @@ Driver<dim, Number>::setup()
 
   // setup postprocessor
   fluid_postprocessor = application->fluid->create_postprocessor();
-  fluid_postprocessor->setup(*fluid_operator);
+  fluid_postprocessor->setup(*fluid_operator,
+                             application->fluid->get_parameters().restarted_simulation);
 
   for(unsigned int i = 0; i < n_scalars; ++i)
   {
     scalar_postprocessor[i] = application->scalars[i]->create_postprocessor();
-    scalar_postprocessor[i]->setup(*scalar_operator[i]);
+    scalar_postprocessor[i]->setup(*scalar_operator[i],
+                                   application->scalars[i]->get_parameters().restarted_simulation);
   }
 
   if(application->fluid->get_parameters().solver_type == IncNS::SolverType::Unsteady)

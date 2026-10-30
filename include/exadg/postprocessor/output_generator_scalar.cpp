@@ -35,13 +35,14 @@ template<int dim, typename Number>
 void
 OutputGenerator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_in,
                                     dealii::Mapping<dim> const &    mapping_in,
-                                    OutputDataBase const &          output_data_in)
+                                    OutputDataBase const &          output_data_in,
+                                    bool const                      restarted_simulation)
 {
   dof_handler = &dof_handler_in;
   mapping     = &mapping_in;
   output_data = output_data_in;
 
-  time_control.setup(output_data_in.time_control_data);
+  time_control.setup(output_data_in.time_control_data, restarted_simulation);
 
   if(output_data_in.time_control_data.is_active)
   {
@@ -96,7 +97,14 @@ OutputGenerator<dim, Number>::evaluate(VectorType const & solution,
 
   vector_writer.write_aspect_ratio(*dof_handler, *mapping);
 
-  vector_writer.write_pvtu(&(*mapping));
+  std::string const pvtu_filename = vector_writer.write_pvtu(&(*mapping));
+  update_pvd_record(times_and_names,
+                    time,
+                    pvtu_filename,
+                    output_data.directory,
+                    output_data.filename,
+                    time_control.get_counter(),
+                    mpi_comm);
 }
 
 template class OutputGenerator<2, float>;

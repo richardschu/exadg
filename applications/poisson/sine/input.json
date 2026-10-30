@@ -17,7 +17,7 @@
         "FileName": "applications/poisson/sine/external_grids/hypercube.e"
     },
     "Output": {
-        "OutputDirectory": "output/poisson/sine/",
+        "OutputDirectory": "results/poisson/sine/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

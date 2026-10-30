@@ -33,11 +33,12 @@
 namespace ExaDG
 {
 /*
- * Calculator for the Jacobian of the vector field u(x) defined as
+ * Calculator for the Jacobian of the displacement field u(X) in material coordinates X defined as
  *
- * J := det(F) with F := I + grad(u),
+ * J = det(F) with F = I + Grad(u),
  *
- * where F is the deformation gradient tensor and grad(u) is the gradient of the vector field.
+ * where F is the deformation gradient tensor and Grad(u) is the gradient with respect to the
+ * material coordinates X of the displacement field.
  *
  */
 template<int dim, typename Number>
@@ -63,7 +64,7 @@ public:
              unsigned int const                      quad_index_in);
 
   /*
-   * Compute the right-hand side of an L2 projection of the Jacobian of the vector field.
+   * Compute the right-hand side of an L2 projection of the Jacobian of the displacement field.
    */
   void
   compute_projection_rhs(VectorType & dst, VectorType const & src) const;
@@ -140,6 +141,160 @@ private:
 
   // Pointer to the underlying elasticity operator to compute stresses dependent on the material
   // model.
+  dealii::ObserverPointer<Structure::ElasticityOperatorBase<dim, Number> const>
+    elasticity_operator_base;
+};
+
+/*
+ * These are the traction components selected for output, the cut plain is always normal to the
+ * spatial counterpart of `E3`, namely `e3`.
+ */
+enum class LocalStressDirection
+{
+  Undefined,
+  Full,
+  Normal,
+  InPlane,
+  E1_orientation_only,
+  E2_orientation_only
+};
+
+/*
+ * Calculator for the local stress component of the Cauchy stress tensor sigma,
+ *
+ * sigma = (1/det(F)) * F * S * F^T
+ *
+ * where F is the deformation gradient tensor and S is the second Piola-Kirchhoff stress tensor.
+ * Define the spatial directions
+ *
+ * ei = F * Ei/||F * Ei||, i = 1, 2
+ *
+ * and e3 = e1 x e2 / ||e1 x e2||
+ *
+ * The Cauchy traction vector taking the cutting plane normal to e3 is then
+ *
+ * t = sigma * e3
+ *
+ * which corresponds to `LocalStressDirection::Full` with components `Ei_spatial` in direction ei
+ *
+ * t_ei = (t . ei) ei, i = 1, 2, 3
+ *
+ * with t_e3 corresponding to `LocalStressDirection::Normal`
+ * and the summed in-plain (e1--e2) component `LocalStressDirection::InPlane`
+ *
+ * t_e12 = t_e1 + t_e2 = t - t_e3
+ *
+ */
+template<int dim, typename Number>
+class LocalStressCalculator
+{
+public:
+  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+
+  typedef LocalStressCalculator<dim, Number> This;
+
+  typedef CellIntegrator<dim, dim, Number> CellIntegratorVector;
+
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
+
+  LocalStressCalculator();
+
+  void
+  initialize(dealii::MatrixFree<dim, Number> const & matrix_free_in,
+             unsigned int const                      dof_index_vector_in,
+             unsigned int const                      dof_index_vector_postprocessing_in,
+             unsigned int const                      quad_index_in,
+             LocalStressDirection const &            local_stress_direction_in,
+             Structure::ElasticityOperatorBase<dim, Number> const & elasticity_operator_base_in);
+
+  /*
+   * Compute the right-hand side of an L2 projection of the local stress component.
+   */
+  void
+  compute_projection_rhs(VectorType &       dst_vector_postprocessing_valued,
+                         VectorType const & src_vector_valued) const;
+
+private:
+  void
+  cell_loop(dealii::MatrixFree<dim, Number> const &       matrix_free,
+            VectorType &                                  dst_vector_postprocessing_valued,
+            VectorType const &                            src_vector_valued,
+            std::pair<unsigned int, unsigned int> const & cell_range) const;
+
+  dealii::MatrixFree<dim, Number> const * matrix_free;
+
+  unsigned int dof_index_vector;
+  unsigned int dof_index_vector_postprocessing;
+  unsigned int quad_index;
+
+  LocalStressDirection local_stress_direction;
+
+  // Pointer to the underlying elasticity operator to compute stresses and recover traction
+  // components dependent on the material model.
+  dealii::ObserverPointer<Structure::ElasticityOperatorBase<dim, Number> const>
+    elasticity_operator_base;
+};
+
+/*
+ * Calculator for the maximum fiber stretch in fiber-reinforced materials defined
+ * per fiber direction i as
+ *
+ * Ii* := sqrt( (Mi (x) Mi) : C )
+ *
+ * with mean fiber direction Mi, the Cauchy-Green strain tensor C := F^T * F, which is based on the
+ * deformation gradient tensor F. Note that this is independent of the fiber contribution to the
+ * strain energy density and in general a non-smooth function as we take the maximum. For Ii* < 1.0,
+ * the mean fiber is under compression, otherwise under tension.
+ *
+ */
+template<int dim, typename Number>
+class MaxFiberStretchCalculator
+{
+public:
+  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+
+  typedef MaxFiberStretchCalculator<dim, Number> This;
+
+  typedef CellIntegrator<dim, dim, Number> CellIntegratorVector;
+  typedef CellIntegrator<dim, 1, Number>   CellIntegratorScalar;
+
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
+
+  MaxFiberStretchCalculator();
+
+  void
+  initialize(dealii::MatrixFree<dim, Number> const &                matrix_free_in,
+             unsigned int const                                     dof_index_vector_in,
+             unsigned int const                                     dof_index_scalar_in,
+             unsigned int const                                     quad_index_in,
+             Structure::ElasticityOperatorBase<dim, Number> const & elasticity_operator_base_in);
+
+  /*
+   * Compute the right-hand side of an L2 projection of the maximum fiber stretch.
+   */
+  void
+  compute_projection_rhs(VectorType & dst, VectorType const & src) const;
+
+private:
+  void
+  cell_loop(dealii::MatrixFree<dim, Number> const &       matrix_free,
+            VectorType &                                  dst_scalar_valued,
+            VectorType const &                            src_vector_valued,
+            std::pair<unsigned int, unsigned int> const & cell_range) const;
+
+  dealii::MatrixFree<dim, Number> const * matrix_free;
+
+  unsigned int dof_index_vector;
+  unsigned int dof_index_scalar;
+  unsigned int quad_index;
+
+  // Pointer to the underlying elasticity operator.
   dealii::ObserverPointer<Structure::ElasticityOperatorBase<dim, Number> const>
     elasticity_operator_base;
 };

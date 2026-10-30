@@ -28,12 +28,14 @@
 // ExaDG
 #include <exadg/grid/grid.h>
 #include <exadg/matrix_free/matrix_free_data.h>
+#include <exadg/operators/boundary_mass_operator.h>
 #include <exadg/operators/inverse_mass_operator.h>
 #include <exadg/operators/mass_operator.h>
 #include <exadg/operators/navier_stokes_calculators.h>
 #include <exadg/operators/structure_calculators.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/preconditioner_base.h>
+#include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/spatial_discretization/interface.h>
 #include <exadg/structure/spatial_discretization/operators/body_force_operator.h>
 #include <exadg/structure/spatial_discretization/operators/linear_operator.h>
@@ -72,7 +74,11 @@ private:
 
 public:
   ResidualOperator()
-    : pde_operator(nullptr), const_vector(nullptr), scaling_factor_mass(0.0), time(0.0)
+    : pde_operator(nullptr),
+      const_vector(nullptr),
+      scaling_factor_mass(0.0),
+      scaling_factor_mass_boundary(0.0),
+      time(0.0)
   {
   }
 
@@ -83,21 +89,26 @@ public:
   }
 
   void
-  update(VectorType const & const_vector, double const scaling_factor_mass, double const time)
+  update(VectorType const & const_vector,
+         double const       scaling_factor_mass,
+         double const       scaling_factor_mass_boundary,
+         double const       time)
   {
-    this->const_vector        = &const_vector;
-    this->scaling_factor_mass = scaling_factor_mass;
-    this->time                = time;
+    this->const_vector                 = &const_vector;
+    this->scaling_factor_mass          = scaling_factor_mass;
+    this->scaling_factor_mass_boundary = scaling_factor_mass_boundary;
+    this->time                         = time;
   }
 
   /*
    * The implementation of the Newton solver requires a function called
-   * 'evaluate_residual()'.
+   * `evaluate_residual()`.
    */
   void
   evaluate_residual(VectorType & dst, VectorType const & src) const
   {
-    pde_operator->evaluate_nonlinear_residual(dst, src, *const_vector, scaling_factor_mass, time);
+    pde_operator->evaluate_nonlinear_residual(
+      dst, src, *const_vector, scaling_factor_mass, scaling_factor_mass_boundary, time);
   }
 
 private:
@@ -106,6 +117,7 @@ private:
   VectorType const * const_vector;
 
   double scaling_factor_mass;
+  double scaling_factor_mass_boundary;
   double time;
 };
 
@@ -124,7 +136,11 @@ private:
 
 public:
   LinearizedOperator()
-    : dealii::EnableObserverPointer(), pde_operator(nullptr), scaling_factor_mass(0.0), time(0.0)
+    : dealii::EnableObserverPointer(),
+      pde_operator(nullptr),
+      scaling_factor_mass(0.0),
+      scaling_factor_mass_boundary(0.0),
+      time(0.0)
   {
   }
 
@@ -136,7 +152,7 @@ public:
 
   /*
    * The implementation of the Newton solver requires a function called
-   * 'set_solution_linearization'.
+   * `set_solution_linearization()`.
    */
   void
   set_solution_linearization(VectorType const & solution_linearization) const
@@ -146,18 +162,24 @@ public:
   }
 
   void
-  update(double const scaling_factor_mass, double const time)
+  update(double const scaling_factor_mass,
+         double const scaling_factor_mass_boundary,
+         double const time)
   {
-    this->scaling_factor_mass = scaling_factor_mass;
-    this->time                = time;
+    this->scaling_factor_mass          = scaling_factor_mass;
+    this->scaling_factor_mass_boundary = scaling_factor_mass_boundary;
+    this->time                         = time;
 
-    pde_operator->update_elasticity_operator(scaling_factor_mass, time);
+    pde_operator->update_elasticity_operator(scaling_factor_mass,
+                                             scaling_factor_mass_boundary,
+                                             time);
   }
 
 private:
   PDEOperator const * pde_operator;
 
   double scaling_factor_mass;
+  double scaling_factor_mass_boundary;
   double time;
 };
 
@@ -181,8 +203,9 @@ public:
            std::shared_ptr<MaterialDescriptor const>             material_descriptor_in,
            Parameters const &                                    param_in,
            std::string const &                                   field_in,
-           bool const                                            setup_scalar_field_in,
-           MPI_Comm const &                                      mpi_comm_in);
+           bool const       setup_scalar_postprocessing_field_in,
+           bool const       setup_vector_postprocessing_field_in,
+           MPI_Comm const & mpi_comm_in);
 
   void
   fill_matrix_free_data(MatrixFreeData<dim, Number> & matrix_free_data) const;
@@ -209,10 +232,16 @@ public:
   initialize_dof_vector(VectorType & src) const final;
 
   /*
-   * Initialization of DoF vector for scalar field.
+   * Initialization of DoF vector for scalar postpocessing field.
    */
   void
-  initialize_dof_vector_scalar(VectorType & src) const;
+  initialize_dof_vector_scalar_postprocessing(VectorType & src) const;
+
+  /*
+   * Initialization of DoF vector for vector postprocessing field.
+   */
+  void
+  initialize_dof_vector_vector_postprocessing(VectorType & src) const;
 
   /*
    * Prescribe initial conditions using a specified initial solution function.
@@ -239,6 +268,20 @@ public:
   void
   apply_add_damping_operator(VectorType & dst, VectorType const & src) const final;
 
+  void
+  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const final;
+
+  void
+  update_boundary_mass_operator(Number const factor) const;
+
+  /*
+   * Set the Robin parameter for fluid--structure interaction, which only affects the velocity
+   * parameter (without normal projection), while all other parameters are zero.
+   */
+  void
+  set_fsi_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
+                           double const & robin_parameter) const final;
+
   /*
    * This function evaluates the nonlinear residual which is required by the Newton solver. In order
    * to evaluate inhomogeneous Dirichlet boundary conditions correctly, inhomogeneous Dirichlet
@@ -249,10 +292,31 @@ public:
                               VectorType const & src,
                               VectorType const & const_vector,
                               double const       factor,
+                              double const       factor_boundary,
                               double const       time) const;
 
   void
   set_solution_linearization(VectorType const & vector) const;
+
+  /*
+   * Set the current reference configuration to be the initial reference configuration shifted by
+   * the vector in the argument.
+   */
+  void
+  shift_reference_configuration(VectorType const & vector) final;
+
+  /*
+   * Export the configuration the operator is evaluated in. For the spatial integration approach,
+   * this is the spatial configuration, and for the inverse analysis it is the current (iteratively
+   * updated) reference configuration. For the standard Lagrangian approach, this duplicates
+   * standard postprocessing functionality and is hence not supported. The non-empty vector provided
+   * is exported as well (in the same configuration).
+   */
+  void
+  export_configuration(OutputData const & output_data, VectorType const & vector) const final;
+
+  void
+  get_reference_coordinates(VectorType & vector) const final;
 
   void
   assemble_matrix_if_matrix_based() const;
@@ -261,10 +325,13 @@ public:
   evaluate_elasticity_operator(VectorType &       dst,
                                VectorType const & src,
                                double const       factor,
+                               double const       factor_boundary,
                                double const       time) const;
 
   void
-  update_elasticity_operator(double const factor, double const time) const;
+  update_elasticity_operator(double const factor,
+                             double const factor_boundary,
+                             double const time) const;
 
   void
   apply_elasticity_operator(VectorType & dst, VectorType const & src) const;
@@ -315,7 +382,10 @@ public:
   get_dof_handler() const;
 
   dealii::DoFHandler<dim> const &
-  get_dof_handler_scalar() const;
+  get_dof_handler_scalar_postprocessing() const;
+
+  dealii::DoFHandler<dim> const &
+  get_dof_handler_vector_postprocessing() const;
 
   dealii::types::global_dof_index
   get_number_of_dofs() const;
@@ -350,6 +420,36 @@ public:
   compute_max_principal_stress(VectorType &       dst_scalar_valued,
                                VectorType const & src_vector_valued) const;
 
+  // compute maximum fiber stretch
+  void
+  compute_max_fiber_stretch(VectorType &       dst_scalar_valued,
+                            VectorType const & src_vector_valued) const;
+
+  // compute the local material orientation E1
+  void
+  compute_E1_orientation(VectorType &       dst_vector_postprocessing_valued,
+                         VectorType const & src_vector_valued) const;
+
+  // compute the local material orientation E2
+  void
+  compute_E2_orientation(VectorType &       dst_vector_postprocessing_valued,
+                         VectorType const & src_vector_valued) const;
+
+  // compute local traction component: full
+  void
+  compute_traction_local_full(VectorType &       dst_vector_postprocessing_valued,
+                              VectorType const & src_vector_valued) const;
+
+  // compute local traction component: normal
+  void
+  compute_traction_local_normal(VectorType &       dst_vector_postprocessing_valued,
+                                VectorType const & src_vector_valued) const;
+
+  // compute local traction component: in-plane
+  void
+  compute_traction_local_inplane(VectorType &       dst_vector_postprocessing_valued,
+                                 VectorType const & src_vector_valued) const;
+
 private:
   /*
    * Initializes dealii::DoFHandler.
@@ -364,7 +464,10 @@ private:
   get_dof_name_periodicity_and_hanging_node_constraints() const;
 
   std::string
-  get_dof_name_scalar() const;
+  get_dof_name_scalar_postprocessing() const;
+
+  std::string
+  get_dof_name_vector_postprocessing() const;
 
   std::string
   get_quad_name() const;
@@ -376,7 +479,10 @@ private:
   get_dof_index_periodicity_and_hanging_node_constraints() const;
 
   unsigned int
-  get_dof_index_scalar() const;
+  get_dof_index_scalar_postprocessing() const;
+
+  unsigned int
+  get_dof_index_vector_postprocessing() const;
 
   unsigned int
   get_quad_index() const;
@@ -454,9 +560,14 @@ private:
   std::shared_ptr<dealii::FiniteElement<dim>> fe;
   dealii::DoFHandler<dim>                     dof_handler;
 
-  bool                                        setup_scalar_field;
-  std::shared_ptr<dealii::FiniteElement<dim>> fe_scalar;
-  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_scalar;
+  bool                                        setup_scalar_field_postprocessing;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_scalar_postprocessing;
+  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_scalar_postprocessing;
+
+  bool                                        setup_vector_field_postprocessing;
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_vector_postprocessing;
+  std::shared_ptr<dealii::DoFHandler<dim>>    dof_handler_vector_postprocessing;
+
 
   // AffineConstraints object as needed by iterative solvers and preconditioners for linear systems
   // of equations. This constraint object contains additional constraints from Dirichlet boundary
@@ -479,14 +590,20 @@ private:
   // set beforehand in separate routines.
   dealii::AffineConstraints<Number> affine_constraints_periodicity_and_hanging_nodes;
 
-  // Constraints object for the scalar field containing only periodicity and hanging node
-  // constraints as we do not enforce further Dirichlet boundary conditions on the scalar field.
-  dealii::AffineConstraints<Number> affine_constraints_periodicity_and_hanging_nodes_scalar;
+  // Constraints object for the postprocessing fields containing only periodicity and hanging node
+  // constraints as we do not enforce further Dirichlet boundary conditions on the these fields.
+  // Note that these constraints will remain empty for the default discontinuous space.
+  dealii::AffineConstraints<Number>
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing;
+  dealii::AffineConstraints<Number>
+    affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing;
 
   std::string const dof_index = "dof";
   std::string const dof_index_periodicity_and_hanging_node_constraints =
     "dof_periodicity_hanging_nodes";
-  std::string const dof_index_scalar = "dof_scalar";
+
+  std::string const dof_index_scalar_postprocessing = "dof_scalar_postprocessing";
+  std::string const dof_index_vector_postprocessing = "dof_vector_postprocessing";
 
   std::string const quad_index               = "quad";
   std::string const quad_index_gauss_lobatto = "quad_gauss_lobatto";
@@ -520,6 +637,12 @@ private:
   // problems and in the residual for nonlinear problems.
   Structure::MassOperator<dim, Number> mass_operator;
 
+  // The boundary mass operator to evaluate the mass operator term stemming from a Robin boundary
+  // condition, which is applied to a constant vector (when a time derivative term is present in the
+  // BC) appearing on the right-hand side for linear problems and in the residual for nonlinear
+  // problems.
+  BoundaryMassOperator<dim, Number, dim> boundary_mass_operator;
+
   /*
    * Solution of nonlinear systems of equations
    */
@@ -547,7 +670,8 @@ private:
    * Inverse mass operators for initial acceleration problem and postprocessing.
    */
   InverseMassOperator<dim, dim /* n_components */, Number> inverse_mass;
-  InverseMassOperator<dim, 1 /* n_components */, Number>   inverse_mass_scalar;
+  InverseMassOperator<dim, 1 /* n_components */, Number>   inverse_mass_scalar_postprocessing;
+  InverseMassOperator<dim, dim /* n_components */, Number> inverse_mass_vector_postprocessing;
 
   /*
    * Calculators to obtain derived quantities.
@@ -556,7 +680,15 @@ private:
 
   DisplacementJacobianCalculator<dim, Number> displacement_jacobian_calculator;
 
+  MaxFiberStretchCalculator<dim, Number>    max_fiber_stretch_calculator;
   MaxPrincipalStressCalculator<dim, Number> max_principal_stress_calculator;
+
+  LocalStressCalculator<dim, Number> E1_orientation_calculator;
+  LocalStressCalculator<dim, Number> E2_orientation_calculator;
+
+  LocalStressCalculator<dim, Number> traction_local_full_calculator;
+  LocalStressCalculator<dim, Number> traction_local_normal_calculator;
+  LocalStressCalculator<dim, Number> traction_local_inplane_calculator;
 
   /*
    * MPI communicator

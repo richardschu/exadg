@@ -5,34 +5,44 @@
         "IsTest": "false"
     },
     "SpatialResolutionFluid": {
-        "Degree": "2",
-        "RefineSpace": "0"
+        "Degree": "3",
+        "RefineSpace": "1"
     },
     "SpatialResolutionStructure": {
-        "Degree": "1",
-        "RefineSpace": "0"
+        "Degree": "3",
+        "RefineSpace": "1"
+    },
+    "Fluid" : {
+        "TemporalDiscretization": "BDFDualSplitting"
+    },
+    "Structure" : {
+        "WeakDamping": "0.0",
+        "UseExteriorSupport" : "false",
+        "SpringCoefficient": "0",
+        "DashpotCoefficient": "1e8",
+        "ExteriorPressure": "0.0"
     },
     "Fluid" : {
         "TemporalDiscretization": "BDFDualSplitting"
     },
     "FSI" : {
         "AccelerationMethod": "IQN_ILS",
+        "UpdateMethod": "ImplicitPressureStructure",
+        "CouplingMethod": "DirichletRobinAdaptiveParameter",
+        "RobinParameterScale": "1e-6",
         "AbsTol": "1.e-9",
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
-        "InitialGuessCouplingScheme": "SolutionExtrapolatedToEndOfTimeStep",
-        "PartitionedIterMax": "100",
+        "InitialGuessCouplingScheme": "ConvergedSolutionOfPreviousTimeStep",
+        "PartitionedMaxIter": "100",
         "ReusedTimeSteps": "10",
-        "GeometricTolerance": "1.e-8",
-        "UpdateALE": "true",
-        "UpdateFluidVelocity": "true",
-        "UpdateFluidPressure": "true"
+        "GeometricTolerance": "1.e-8"
     },
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/pressure_wave/",
+        "OutputDirectory": "./results/pressure_wave/",
         "OutputName": "fsi_test",
-        "WriteOutput": "false"
+        "WriteOutput": "true"
     }
 }

@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_FSI_PRESSURE_WAVE_H_
-#define APPLICATIONS_FSI_PRESSURE_WAVE_H_
+#ifndef APPLICATIONS_FLUID_STRUCTURE_INTERACTION_PRESSURE_WAVE_APPLICATION_H_
+#define APPLICATIONS_FLUID_STRUCTURE_INTERACTION_PRESSURE_WAVE_APPLICATION_H_
 
 #include <exadg/grid/one_sided_cylindrical_manifold.h>
 
@@ -56,7 +56,7 @@ double const TIME_PRESSURE  = 3.0e-3;
 double const TIME_STEP_SIZE = 0.0001;
 double const END_TIME       = 0.02;
 
-double const       OUTPUT_INTERVAL_TIME                = END_TIME / 20;
+double const       OUTPUT_INTERVAL_TIME                = END_TIME / 20.0;
 unsigned int const OUTPUT_SOLVER_INFO_EVERY_TIME_STEPS = 1e0;
 
 double const REL_TOL = 1.e-3;
@@ -164,7 +164,7 @@ private:
     param.restart_data.interval_time       = 0.25;
     param.restart_data.interval_wall_time  = 1.e6;
     param.restart_data.interval_time_steps = 1e8;
-    param.restart_data.filename            = "output/vortex/vortex";
+    param.restart_data.filename            = "results/vortex/vortex";
 
 
     // SPATIAL DISCRETIZATION
@@ -556,7 +556,6 @@ private:
     param.pull_back_body_force = false;
     param.large_deformation    = false;
     param.pull_back_traction   = false;
-    param.material_type        = MaterialType::StVenantKirchhoff;
 
     param.degree = this->param.mapping_degree;
 
@@ -615,9 +614,6 @@ private:
 
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
-    AssertThrow(this->ale_elasticity_param.material_type == MaterialType::StVenantKirchhoff,
-                dealii::ExcMessage("Material parameters for ALE elasticity problem not defined."));
-
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
@@ -654,6 +650,26 @@ public:
   {
   }
 
+  void
+  add_parameters(dealii::ParameterHandler & prm) final
+  {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
+    // clang format off
+    prm.enter_subsection("Structure");
+    prm.add_parameter("WeakDamping",
+                      weak_damping_coefficient,
+                      "Weak damping coefficient for unsteady problems.");
+    prm.add_parameter("UseExteriorSupport",
+                      use_exterior_support,
+                      "Use exterior support or zero Neumann condition.");
+    prm.add_parameter("SpringCoefficient", spring_coefficient, "Exterior spring stiffness.");
+    prm.add_parameter("DashpotCoefficient", dashpot_coefficient, "Exterior daspot coefficient.");
+    prm.add_parameter("ExteriorPressure", exterior_pressure, "Exterior pressure.");
+    prm.leave_subsection();
+    // clang format on
+  }
+
 private:
   void
   set_parameters() final
@@ -667,9 +683,11 @@ private:
     param.pull_back_body_force = false;
     param.large_deformation    = true;
     param.pull_back_traction   = true;
-    param.material_type        = MaterialType::StVenantKirchhoff;
 
     param.density = DENSITY_STRUCTURE;
+
+    param.weak_damping_coefficient = weak_damping_coefficient;
+    param.weak_damping_active      = weak_damping_coefficient > 0.0;
 
     param.start_time                           = 0.0;
     param.end_time                             = END_TIME;
@@ -820,9 +838,23 @@ private:
     boundary_descriptor->dirichlet_bc_component_mask.insert(
       pair_mask(BOUNDARY_ID_OUTFLOW, dealii::ComponentMask()));
 
-    // zero traction at wall boundaries
-    boundary_descriptor->neumann_bc.insert(
-      pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+    // zero traction at wall boundaries or exterior support
+    if(use_exterior_support)
+    {
+      Structure::RobinParameters robin_parameters(true /* velocity_normal_projection */,
+                                                  true /* displacement_normal_projection */,
+                                                  dashpot_coefficient,
+                                                  spring_coefficient,
+                                                  exterior_pressure,
+                                                  0.0 /* pressure_ramp_time */);
+
+      boundary_descriptor->robin_bc.insert(std::make_pair(BOUNDARY_ID_WALLS, robin_parameters));
+    }
+    else
+    {
+      boundary_descriptor->neumann_bc.insert(
+        pair(BOUNDARY_ID_WALLS, new dealii::Functions::ZeroFunction<dim>(dim)));
+    }
 
     // fluid-structure interface
     boundary_descriptor->neumann_cached_bc.insert(BOUNDARY_ID_FSI);
@@ -836,9 +868,6 @@ private:
     using namespace Structure;
 
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
-
-    AssertThrow(this->param.material_type == MaterialType::StVenantKirchhoff,
-                dealii::ExcMessage("Material parameters for elasticity problem not defined."));
 
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
@@ -880,6 +909,12 @@ private:
 
     return post;
   }
+
+  double weak_damping_coefficient = 0.0;
+  double spring_coefficient       = 0.0;
+  double dashpot_coefficient      = 0.0;
+  double exterior_pressure        = 0.0;
+  bool   use_exterior_support     = false;
 };
 
 } // namespace StructureFSI
@@ -902,4 +937,4 @@ public:
 
 #include <exadg/fluid_structure_interaction/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_FSI_PRESSURE_WAVE_H_ */
+#endif /* APPLICATIONS_FLUID_STRUCTURE_INTERACTION_PRESSURE_WAVE_APPLICATION_H_ */

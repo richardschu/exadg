@@ -38,7 +38,7 @@ struct KineticEnergyData
   KineticEnergyData()
     : evaluate_individual_terms(false),
       viscosity(1.0),
-      directory("output/"),
+      directory("results/"),
       filename("kinetic_energy"),
       clear_file(true)
   {
@@ -92,7 +92,8 @@ public:
   setup(dealii::MatrixFree<dim, Number> const & matrix_free_in,
         unsigned int const                      dof_index_in,
         unsigned int const                      quad_index_in,
-        KineticEnergyData const &               kinetic_energy_data_in);
+        KineticEnergyData const &               kinetic_energy_data_in,
+        bool const                              restarted_simulation);
 
   void
   evaluate(VectorType const & velocity, double const time, bool const unsteady);

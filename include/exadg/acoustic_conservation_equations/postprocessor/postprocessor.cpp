@@ -19,6 +19,10 @@
  *  ______________________________________________________________________
  */
 
+// C++
+#include <limits>
+
+// ExaDG
 #include <exadg/acoustic_conservation_equations/postprocessor/postprocessor.h>
 #include <exadg/utilities/evaluate_convergence_study.h>
 
@@ -55,31 +59,37 @@ PostProcessor<dim, Number>::~PostProcessor()
 
 template<int dim, typename Number>
 void
-PostProcessor<dim, Number>::setup(AcousticsOperator const & pde_operator)
+PostProcessor<dim, Number>::setup(AcousticsOperator const & pde_operator,
+                                  bool const                restarted_simulation)
 {
   output_generator.setup(pde_operator.get_dof_handler_p(),
                          pde_operator.get_dof_handler_u(),
                          *pde_operator.get_mapping(),
-                         pp_data.output_data);
+                         pp_data.output_data,
+                         restarted_simulation);
 
   pointwise_output_generator.setup(pde_operator.get_dof_handler_p(),
                                    pde_operator.get_dof_handler_u(),
                                    *pde_operator.get_mapping(),
-                                   pp_data.pointwise_output_data);
+                                   pp_data.pointwise_output_data,
+                                   restarted_simulation);
 
   error_calculator_p.setup(pde_operator.get_dof_handler_p(),
                            *pde_operator.get_mapping(),
-                           pp_data.error_data_p);
+                           pp_data.error_data_p,
+                           restarted_simulation);
 
   error_calculator_u.setup(pde_operator.get_dof_handler_u(),
                            *pde_operator.get_mapping(),
-                           pp_data.error_data_u);
+                           pp_data.error_data_u,
+                           restarted_simulation);
 
   sound_energy_calculator.setup(pde_operator.get_matrix_free(),
                                 pp_data.sound_energy_data,
                                 pde_operator.get_dof_index_pressure(),
                                 pde_operator.get_dof_index_velocity(),
-                                pde_operator.get_quad_index_pressure());
+                                pde_operator.get_quad_index_pressure(),
+                                restarted_simulation);
 }
 
 template<int dim, typename Number>

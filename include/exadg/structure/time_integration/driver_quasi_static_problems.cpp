@@ -72,11 +72,11 @@ DriverQuasiStatic<dim, Number>::solve()
   dealii::Timer timer;
   timer.restart();
 
-  postprocessing();
+  postprocessing(true /* errors_only */);
 
   do_solve();
 
-  postprocessing();
+  postprocessing(false /* errors_only */);
 
   timer_tree->insert({"DriverQuasiStatic"}, timer.wall_time());
 }
@@ -163,13 +163,21 @@ DriverQuasiStatic<dim, Number>::do_solve()
       try
       {
         // extrapolate solution
-        solution.add(load_increment / last_load_increment, displacement_increment);
+        if(this->param.use_extrapolation_continuation)
+        {
+          solution.add(load_increment / last_load_increment, displacement_increment);
+        }
 
         iter    = solve_step(load_factor + load_increment, update_preconditioner);
         success = true;
       }
-      catch(...)
+      catch(std::exception & exc)
       {
+        pcout << "  Exception thrown when solving the current load step:" << std::endl
+              << std::endl
+              << "  " << exc.what() << std::endl
+              << std::flush;
+
         // undo changes in solution vector
         solution = old_solution;
         ++re_try_counter;
@@ -180,6 +188,11 @@ DriverQuasiStatic<dim, Number>::do_solve()
               << "  Could not solve non-linear problem. Reduce load increment to " << load_increment
               << "." << std::endl
               << std::flush;
+      }
+      catch(...)
+      {
+        AssertThrow(false,
+                    dealii::ExcMessage("Unknown exception thrown within current load step solve."));
       }
     }
 
@@ -223,8 +236,6 @@ void
 DriverQuasiStatic<dim, Number>::initialize_vectors()
 {
   pde_operator->initialize_dof_vector(solution);
-
-  pde_operator->initialize_dof_vector(rhs_vector);
 
   pde_operator->initialize_dof_vector(displacement_increment);
 }
@@ -278,12 +289,12 @@ DriverQuasiStatic<dim, Number>::solve_step(double const load_factor,
 
 template<int dim, typename Number>
 void
-DriverQuasiStatic<dim, Number>::postprocessing() const
+DriverQuasiStatic<dim, Number>::postprocessing(bool const errors_only) const
 {
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(solution);
+  postprocessor->do_postprocessing(solution, errors_only);
 
   timer_tree->insert({"DriverQuasiStatic", "Postprocessing"}, timer.wall_time());
 }

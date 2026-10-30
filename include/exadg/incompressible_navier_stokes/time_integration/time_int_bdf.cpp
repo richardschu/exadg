@@ -23,6 +23,7 @@
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
 #include <exadg/incompressible_navier_stokes/time_integration/time_int_bdf.h>
 #include <exadg/incompressible_navier_stokes/user_interface/parameters.h>
+#include <exadg/solvers_and_preconditioners/utilities/linear_algebra.h>
 #include <exadg/time_integration/restart.h>
 #include <exadg/time_integration/time_step_calculation.h>
 #include <exadg/time_integration/vector_handling.h>
@@ -53,7 +54,7 @@ TimeIntBDF<dim, Number>::TimeIntBDF(
     cfl(param.cfl / std::pow(2.0, refine_steps_time)),
     operator_base(operator_in),
     vec_convective_term(this->order),
-    use_extrapolation(true),
+    first_coupling_iteration(true),
     store_solution(false),
     update_velocity(true),
     update_pressure(true),
@@ -153,6 +154,90 @@ TimeIntBDF<dim, Number>::prepare_vectors_for_next_timestep()
   }
 }
 
+template<typename VectorTypeLocal>
+void
+compute_initial_guess_from_history(VectorTypeLocal &                    dst,
+                                   std::vector<VectorTypeLocal> const & history,
+                                   InitialGuessType const               initial_guess_type,
+                                   ExtrapolationConstants const &       extra)
+{
+  if(initial_guess_type == InitialGuessType::Zero)
+  {
+    dst = 0.0;
+  }
+  else if(initial_guess_type == InitialGuessType::LastTimeStep)
+  {
+    dst = history[0];
+  }
+  else if(initial_guess_type == InitialGuessType::Extrapolation)
+  {
+    // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
+    dst = 0.0;
+    for(unsigned int i = 0; i < history.size(); ++i)
+      dst.add(extra.get_beta(i), history[i]);
+  }
+  else
+  {
+    AssertThrow(false, dealii::ExcMessage("InitialGuessType not implemented."));
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::compute_initial_guess(VectorType &                    dst,
+                                               std::vector<VectorType> const & history,
+                                               InitialGuessType const initial_guess_type) const
+{
+  compute_initial_guess_from_history(dst, history, initial_guess_type, this->extra);
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::compute_initial_guess(BlockVectorType &                    dst,
+                                               std::vector<BlockVectorType> const & history,
+                                               InitialGuessType const initial_guess_type) const
+{
+  compute_initial_guess_from_history(dst, history, initial_guess_type, this->extra);
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::compute_initial_guess_projection(
+  VectorType &                                                  dst,
+  std::vector<VectorType> const &                               history,
+  VectorType const &                                            rhs,
+  std::function<void(VectorType &, VectorType const &)> const & vmult) const
+{
+  // Minimize |A (sum_i gamma_i x_i) - b| with x_i = history[i] via the normal equations
+  // C gamma = d, where C_ij = (A x_i, A x_j) and d_i = (A x_i, b).
+  unsigned int const      m = history.size();
+  std::vector<VectorType> products(m);
+  for(unsigned int i = 0; i < m; ++i)
+  {
+    products[i].reinit(rhs, true /* omit_zeroing_entries */);
+    vmult(products[i], history[i]);
+  }
+
+  LinearAlgebra::Matrix<double> C(m);
+  std::vector<double>           gamma(m);
+  for(unsigned int i = 0; i < m; ++i)
+  {
+    for(unsigned int j = 0; j <= i; ++j)
+      C.set(products[i] * products[j], i, j);
+    gamma[i] = products[i] * rhs;
+  }
+
+  // The Cholesky solver stops at the first vector that is (numerically) linearly dependent on the
+  // newer ones based on the tolerance `tol`, which drops this and all older vectors.
+  double constexpr tol = 1e-14;
+  unsigned int const n = LinearAlgebra::solve_cholesky(C, gamma, tol);
+
+  // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
+  dst = 0.0;
+  for(unsigned int i = 0; i < n; ++i)
+    dst.add(gamma[i], history[i]);
+}
+
 template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::ale_update()
@@ -174,14 +259,14 @@ TimeIntBDF<dim, Number>::ale_update()
 
 template<int dim, typename Number>
 void
-TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const first_coupling_iteration,
                                                                 bool const update_velocity,
                                                                 bool const update_pressure)
 {
-  this->use_extrapolation = use_extrapolation;
-  this->store_solution    = true;
-  this->update_velocity   = update_velocity;
-  this->update_pressure   = update_pressure;
+  this->first_coupling_iteration = first_coupling_iteration;
+  this->store_solution           = true;
+  this->update_velocity          = update_velocity;
+  this->update_pressure          = update_pressure;
 
   if(this->param.temporal_discretization == TemporalDiscretization::BDFCoupledSolution)
   {
@@ -198,10 +283,10 @@ TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_e
                          "supported for TemporalDiscretization::BDFConsistentSplitting."));
   }
 
-  AssertThrow(this->update_velocity or this->update_pressure,
-              dealii::ExcMessage("No update from fluid time stepper requested."));
-
-  Base::advance_one_timestep_solve();
+  if(update_velocity or update_pressure)
+  {
+    Base::advance_one_timestep_solve();
+  }
 }
 
 template<int dim, typename Number>
@@ -339,6 +424,33 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
     vectors_pressure_ptr.push_back(&vectors_pressure_add[i]);
   }
 
+  // Add vectors of the postprocessor, same sequence as in `write_restart_vectors()`.
+  std::vector<VectorType const *> vectors_velocity_postprocessor_ptr;
+  std::vector<VectorType const *> vectors_pressure_postprocessor_ptr;
+  if(postprocessor)
+  {
+    postprocessor->get_vectors_serialization(vectors_velocity_postprocessor_ptr,
+                                             vectors_pressure_postprocessor_ptr);
+  }
+  std::vector<VectorType> vectors_velocity_postprocessor;
+  std::vector<VectorType> vectors_pressure_postprocessor;
+  for(VectorType const * vector : vectors_velocity_postprocessor_ptr)
+  {
+    vectors_velocity_postprocessor.push_back(*vector);
+  }
+  for(VectorType const * vector : vectors_pressure_postprocessor_ptr)
+  {
+    vectors_pressure_postprocessor.push_back(*vector);
+  }
+  for(VectorType & vector : vectors_velocity_postprocessor)
+  {
+    vectors_velocity_ptr.push_back(&vector);
+  }
+  for(VectorType & vector : vectors_pressure_postprocessor)
+  {
+    vectors_pressure_ptr.push_back(&vector);
+  }
+
   operator_base->deserialize_vectors(vectors_velocity_ptr, vectors_pressure_ptr);
 
   // Copy contents from deserialized to used vectors.
@@ -353,7 +465,34 @@ TimeIntBDF<dim, Number>::read_restart_vectors()
 
   this->set_vectors_deserialization(vectors_velocity_add, vectors_pressure_add);
 
+  if(postprocessor)
+  {
+    postprocessor->set_vectors_deserialization(vectors_velocity_postprocessor,
+                                               vectors_pressure_postprocessor);
+  }
+
   this->update_after_deserialization();
+}
+
+template<int dim, typename Number>
+std::string
+TimeIntBDF<dim, Number>::get_postprocessor_restart_state() const
+{
+  if(postprocessor)
+  {
+    return postprocessor->get_restart_state();
+  }
+  return std::string();
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDF<dim, Number>::set_postprocessor_restart_state(std::string const & state)
+{
+  if(postprocessor)
+  {
+    postprocessor->set_restart_state(state);
+  }
 }
 
 template<int dim, typename Number>
@@ -398,6 +537,21 @@ TimeIntBDF<dim, Number>::write_restart_vectors() const
   vectors_pressure.insert(vectors_pressure.end(),
                           vectors_pressure_add.begin(),
                           vectors_pressure_add.end());
+
+  // Add vectors of the postprocessor, after the ones of the derived class.
+  std::vector<VectorType const *> vectors_velocity_postprocessor;
+  std::vector<VectorType const *> vectors_pressure_postprocessor;
+  if(postprocessor)
+  {
+    postprocessor->get_vectors_serialization(vectors_velocity_postprocessor,
+                                             vectors_pressure_postprocessor);
+  }
+  vectors_velocity.insert(vectors_velocity.end(),
+                          vectors_velocity_postprocessor.begin(),
+                          vectors_velocity_postprocessor.end());
+  vectors_pressure.insert(vectors_pressure.end(),
+                          vectors_pressure_postprocessor.begin(),
+                          vectors_pressure_postprocessor.end());
 
   operator_base->serialize_vectors(vectors_velocity, vectors_pressure);
 }
@@ -541,7 +695,7 @@ TimeIntBDF<dim, Number>::print_solver_info() const
 {
   return param.solver_info_data.write(this->global_timer.wall_time(),
                                       this->time - this->start_time,
-                                      this->time_step_number);
+                                      this->get_total_time_step_number());
 }
 
 template<int dim, typename Number>
@@ -613,7 +767,7 @@ TimeIntBDF<dim, Number>::postprocessing() const
     postprocessor->do_postprocessing(get_velocity(0),
                                      get_pressure(0),
                                      this->get_time(),
-                                     this->get_time_step_number());
+                                     this->get_total_time_step_number());
   }
   else // consider velocity and pressure errors instead
   {
@@ -631,7 +785,7 @@ TimeIntBDF<dim, Number>::postprocessing() const
     postprocessor->do_postprocessing(velocity_error, // error!
                                      pressure_error, // error!
                                      this->get_time(),
-                                     this->get_time_step_number());
+                                     this->get_total_time_step_number());
   }
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());

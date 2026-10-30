@@ -1,0 +1,49 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "3",
+        "IsTest": "true"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "2",
+        "DegreeMax": "2",
+        "RefineSpaceMin": "2",
+        "RefineSpaceMax": "2"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "0",
+        "RefineTimeMax": "0"
+    },
+    "Application": {
+        "Length": "100.0",
+        "Height": "10.0",
+        "Width": "10.0",
+        "ProblemType": "InverseAnalysis",
+        "MaterialType": "IncompressibleFibrousTissue",
+        "LargeDeformation": "true",
+        "Preconditioner": "Multigrid",
+        "WeakDamping": "0.0",
+        "LoadIncrement": "0.1",
+        "UseVolumeForce": "false",
+        "VolumeForce": "1.0",
+        "SpatialIntegration": "false",
+        "ForceMaterialResidual": "false",
+        "StableFormulation": "false",
+        "CacheLevel": "2",
+        "CheckType": "0",
+        "MappingStrength": "0.20",
+        "BoundaryType": "Neumann",
+        "Displacement": "20.0",
+        "Traction": "100.0",
+        "SpringCoefficient": "1e5",
+        "DashpotCoefficient": "1e3",
+        "ExteriorPressure": "0",
+        "InvAnalAccelMethRamp": "ArmijoAitken",
+        "InvAnalAccelMethFinal": "IQN_ILS"
+    },
+    "Output": {
+        "OutputDirectory": "output_test_inverse_HGO/",
+        "OutputName": "test",
+        "WriteOutput": "true"
+    }
+}

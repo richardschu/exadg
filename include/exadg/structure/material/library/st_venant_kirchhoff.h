@@ -39,24 +39,19 @@ namespace Structure
 template<int dim>
 struct StVenantKirchhoffData : public MaterialData
 {
-  StVenantKirchhoffData(
-    MaterialType const &                         type,
-    double const &                               youngs_modulus,
-    double const &                               poissons_ratio,
-    Type2D const &                               type_two_dim,
-    std::shared_ptr<dealii::Function<dim>> const youngs_modulus_function = nullptr)
-    : MaterialData(type),
-      youngs_modulus(youngs_modulus),
-      youngs_modulus_function(youngs_modulus_function),
-      poissons_ratio(poissons_ratio),
-      type_two_dim(type_two_dim)
+  StVenantKirchhoffData(MaterialType const &                         type,
+                        double const &                               E,
+                        double const &                               nu,
+                        Type2D const &                               type_two_dim,
+                        std::shared_ptr<dealii::Function<dim>> const E_function = nullptr)
+    : MaterialData(type), E(E), E_function(E_function), nu(nu), type_two_dim(type_two_dim)
   {
   }
 
-  double                                 youngs_modulus;
-  std::shared_ptr<dealii::Function<dim>> youngs_modulus_function;
+  double                                 E;
+  std::shared_ptr<dealii::Function<dim>> E_function;
 
-  double poissons_ratio;
+  double nu;
   Type2D type_two_dim;
 };
 
@@ -64,13 +59,13 @@ template<int dim, typename Number>
 class StVenantKirchhoff : public Material<dim, Number>
 {
 public:
-  typedef typename Material<dim, Number>::VectorType     VectorType;
-  typedef typename Material<dim, Number>::Range          Range;
-  typedef typename Material<dim, Number>::IntegratorCell IntegratorCell;
+  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+  typedef std::pair<unsigned int, unsigned int>              Range;
+  typedef CellIntegrator<dim, dim, Number>                   IntegratorCell;
 
-  typedef typename Material<dim, Number>::scalar           scalar;
-  typedef typename Material<dim, Number>::tensor           tensor;
-  typedef typename Material<dim, Number>::symmetric_tensor symmetric_tensor;
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
 
   StVenantKirchhoff(dealii::MatrixFree<dim, Number> const & matrix_free,
                     unsigned int const                      dof_index,
@@ -84,8 +79,16 @@ public:
                                 unsigned int const q) const final;
 
   symmetric_tensor
+  second_piola_kirchhoff_stress_eval(tensor const &     gradient_displacement,
+                                     unsigned int const cell,
+                                     unsigned int const q) const final;
+
+  symmetric_tensor
+  second_piola_kirchhoff_stress(unsigned int const cell, unsigned int const q) const final;
+
+  symmetric_tensor
   second_piola_kirchhoff_stress_displacement_derivative(tensor const &     gradient_increment,
-                                                        tensor const &     deformation_gradient,
+                                                        tensor const &     gradient_displacement,
                                                         unsigned int const cell,
                                                         unsigned int const q) const final;
 
@@ -95,13 +98,13 @@ private:
    * (potentially variable) Young's modulus.
    */
   Number
-  get_f0_factor(Number const & poissons_ratio, Type2D const type_two_dim) const;
+  get_f0_factor() const;
 
   Number
-  get_f1_factor(Number const & poissons_ratio, Type2D const type_two_dim) const;
+  get_f1_factor() const;
 
   Number
-  get_f2_factor(Number const & poissons_ratio, Type2D const type_two_dim) const;
+  get_f2_factor() const;
 
   /*
    * The second Piola-Kirchhoff stress tensor S is given as S = lambda * I * tr(E) + 2 mu E, with E
@@ -131,16 +134,12 @@ private:
 
   bool large_deformation;
 
-  Number const f0_factor;
-  Number const f1_factor;
-  Number const f2_factor;
-
   mutable dealii::VectorizedArray<Number> f0;
   mutable dealii::VectorizedArray<Number> f1;
   mutable dealii::VectorizedArray<Number> f2;
 
   // cache coefficients for spatially varying material parameters
-  bool                                                          youngs_modulus_is_variable;
+  bool                                                          E_is_variable;
   mutable VariableCoefficients<dealii::VectorizedArray<Number>> f0_coefficients;
   mutable VariableCoefficients<dealii::VectorizedArray<Number>> f1_coefficients;
   mutable VariableCoefficients<dealii::VectorizedArray<Number>> f2_coefficients;

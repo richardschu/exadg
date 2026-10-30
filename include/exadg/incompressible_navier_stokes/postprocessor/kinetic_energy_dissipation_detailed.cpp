@@ -42,9 +42,11 @@ KineticEnergyCalculatorDetailed<dim, Number>::setup(
   dealii::MatrixFree<dim, Number> const & matrix_free_in,
   unsigned int const                      dof_index_in,
   unsigned int const                      quad_index_in,
-  KineticEnergyData const &               kinetic_energy_data_in)
+  KineticEnergyData const &               kinetic_energy_data_in,
+  bool const                              restarted_simulation)
 {
-  Base::setup(matrix_free_in, dof_index_in, quad_index_in, kinetic_energy_data_in);
+  Base::setup(
+    matrix_free_in, dof_index_in, quad_index_in, kinetic_energy_data_in, restarted_simulation);
 
   navier_stokes_operator = &navier_stokes_operator_in;
 }

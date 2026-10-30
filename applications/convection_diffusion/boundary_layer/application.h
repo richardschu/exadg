@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_BOUNDARY_LAYER_H_
-#define APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_BOUNDARY_LAYER_H_
+#ifndef APPLICATIONS_CONVECTION_DIFFUSION_BOUNDARY_LAYER_APPLICATION_H_
+#define APPLICATIONS_CONVECTION_DIFFUSION_BOUNDARY_LAYER_APPLICATION_H_
 
 // prescribe value of solution at left and right boundary
 // Neumann boundaries at upper and lower boundary
@@ -236,4 +236,4 @@ private:
 
 #include <exadg/convection_diffusion/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_BOUNDARY_LAYER_H_ */
+#endif /* APPLICATIONS_CONVECTION_DIFFUSION_BOUNDARY_LAYER_APPLICATION_H_ */

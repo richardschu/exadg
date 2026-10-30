@@ -10,7 +10,7 @@
             "RefineSpace": "2"
         },
         "Output": {
-            "OutputDirectory": "output/",
+            "OutputDirectory": "results/",
             "OutputName": "fluid",
             "WriteOutput": "false"
         }
@@ -20,7 +20,7 @@
             "Degree": "1"
         },
         "Output": {
-            "OutputDirectory": "output/",
+            "OutputDirectory": "results/",
             "OutputName": "scalar0",
             "WriteOutput": "false"
         }

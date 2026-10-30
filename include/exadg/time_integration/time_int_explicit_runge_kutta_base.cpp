@@ -147,6 +147,9 @@ TimeIntExplRKBase<Number>::do_write_restart(std::string const & filename) const
     // 2. time step size
     oa & time_step;
 
+    // 3. entries shared by all time integrators
+    write_restart_header_extension(oa);
+
     write_restart_file(oss, filename);
   }
 
@@ -171,11 +174,15 @@ TimeIntExplRKBase<Number>::do_read_restart(std::ifstream & in)
 
     // 2. time step size
     ia & time_step;
+
+    // 3. entries shared by all time integrators
+    read_restart_header_extension(ia);
   }
 
   // Broadcast data.
   time      = dealii::Utilities::MPI::broadcast(mpi_comm, time, 0);
   time_step = dealii::Utilities::MPI::broadcast(mpi_comm, time_step, 0);
+  broadcast_restart_header_extension();
 
   // Note that `start_time` has to be set to the new start_time, since param.start_time might still
   // be the original start time.

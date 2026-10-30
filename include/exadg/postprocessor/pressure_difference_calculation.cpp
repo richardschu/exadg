@@ -58,13 +58,14 @@ void
 PressureDifferenceCalculator<dim, Number>::setup(
   dealii::DoFHandler<dim> const &     dof_handler_pressure_in,
   dealii::Mapping<dim> const &        mapping_in,
-  PressureDifferenceData<dim> const & data_in)
+  PressureDifferenceData<dim> const & data_in,
+  bool const                          restarted_simulation)
 {
   dof_handler_pressure = &dof_handler_pressure_in;
   mapping              = &mapping_in;
   data                 = data_in;
 
-  time_control.setup(data.time_control_data);
+  time_control.setup(data.time_control_data, restarted_simulation);
 
   if(data.time_control_data.is_active)
     create_directories(data.directory, mpi_comm);

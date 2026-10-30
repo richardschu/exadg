@@ -78,6 +78,13 @@ enum class AMGType
   BoomerAMG
 };
 
+enum class AMGOperatorType
+{
+  ScalarLaplace,
+  VectorLaplace,
+  Elasticity
+};
+
 enum class MultigridCoarseGridSolver
 {
   Chebyshev,
@@ -101,6 +108,7 @@ struct AMGData
     amg_type = AMGType::ML;
 
 #ifdef DEAL_II_WITH_TRILINOS
+    amg_operator_type       = AMGOperatorType::ScalarLaplace;
     ml_data.smoother_sweeps = 1;
     ml_data.n_cycles        = 1;
     ml_data.smoother_type   = "ILU";
@@ -150,6 +158,7 @@ struct AMGData
   AMGType amg_type;
 
 #ifdef DEAL_II_WITH_TRILINOS
+  AMGOperatorType                                           amg_operator_type;
   dealii::TrilinosWrappers::PreconditionAMG::AdditionalData ml_data;
 #endif
 
@@ -298,11 +307,11 @@ struct MultigridData
   // Sequence of polynomial degrees during p-multigrid
   PSequenceType p_sequence;
 
-  // Use matrix-free implementation for degrees >= min_degree_matrix_free, e.g. if
-  // min_degree_matrix_free = 2, multigrid will use a matrix-based implementation for degree = 1
-  // only. The default case is min_degree_matrix_free = 1, i.e. a matrix-free implementation is used
-  // on all multigrid levels. When AMG is used as coarse-grid solver/preconditioner, a matrix-based
-  // implementation is used for AMG independently of this parameter.
+  // Use matrix-free implementation for `degrees >= min_degree_matrix_free`, e.g. if
+  // `min_degree_matrix_free = 2`, multigrid will use a matrix-based implementation for `degree = 1`
+  // only. The default case is `min_degree_matrix_free = 1`, i.e. a matrix-free implementation is
+  // used on all multigrid levels. When AMG is used as coarse-grid solver/preconditioner, a
+  // matrix-based implementation is used for AMG independently of this parameter.
   unsigned int min_degree_matrix_free;
 
   // Smoother data

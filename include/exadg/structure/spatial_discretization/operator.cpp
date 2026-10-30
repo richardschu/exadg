@@ -47,7 +47,8 @@ Operator<dim, Number>::Operator(
   std::shared_ptr<MaterialDescriptor const>             material_descriptor_in,
   Parameters const &                                    param_in,
   std::string const &                                   field_in,
-  bool const                                            setup_scalar_field_in,
+  bool const                                            setup_scalar_field_postprocessing_in,
+  bool const                                            setup_vector_field_postprocessing_in,
   MPI_Comm const &                                      mpi_comm_in)
   : dealii::EnableObserverPointer(),
     grid(grid_in),
@@ -59,7 +60,8 @@ Operator<dim, Number>::Operator(
     param(param_in),
     field(field_in),
     dof_handler(*grid_in->triangulation),
-    setup_scalar_field(setup_scalar_field_in),
+    setup_scalar_field_postprocessing(setup_scalar_field_postprocessing_in),
+    setup_vector_field_postprocessing(setup_vector_field_postprocessing_in),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_in) == 0)
 {
@@ -125,34 +127,70 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
   print_parameter(pcout, "number of dofs per cell", fe->n_dofs_per_cell());
   print_parameter(pcout, "number of dofs (total)", dof_handler.n_dofs());
 
-  // Set up finite element, DoF handler and constraints of scalar field.
-  if(setup_scalar_field)
+  // Set up finite element, DoF handler and constraints of scalar postprocessing field.
+  if(setup_scalar_field_postprocessing)
   {
     bool constexpr scalar_field_is_dg = true;
-    fe_scalar                         = create_finite_element<dim>(param.grid.element_type,
-                                           scalar_field_is_dg /* is_dg */,
-                                           1 /* n_components */,
-                                           param.degree);
+    fe_scalar_postprocessing          = create_finite_element<dim>(param.grid.element_type,
+                                                          scalar_field_is_dg /* is_dg */,
+                                                          1 /* n_components */,
+                                                          param.degree);
 
-    dof_handler_scalar = std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
-    dof_handler_scalar->distribute_dofs(*fe_scalar);
+    dof_handler_scalar_postprocessing =
+      std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
+    dof_handler_scalar_postprocessing->distribute_dofs(*fe_scalar_postprocessing);
 
     // Set up hanging node and periodicity constraints for scalar field.
-    affine_constraints_periodicity_and_hanging_nodes_scalar.clear();
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing.clear();
     if(not scalar_field_is_dg)
     {
       add_hanging_node_and_periodicity_constraints(
-        affine_constraints_periodicity_and_hanging_nodes_scalar, *this->grid, *dof_handler_scalar);
+        affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing,
+        *this->grid,
+        *dof_handler_scalar_postprocessing);
     }
-    affine_constraints_periodicity_and_hanging_nodes_scalar.close();
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing.close();
 
     pcout << std::endl
           << "Discontinuous Galerkin finite element discretization of scalar field:" << std::endl
           << std::endl;
 
     print_parameter(pcout, "degree of 1D polynomials", param.degree);
-    print_parameter(pcout, "number of dofs per cell", fe_scalar->n_dofs_per_cell());
-    print_parameter(pcout, "number of dofs (total)", dof_handler_scalar->n_dofs());
+    print_parameter(pcout, "number of dofs per cell", fe_scalar_postprocessing->n_dofs_per_cell());
+    print_parameter(pcout, "number of dofs (total)", dof_handler_scalar_postprocessing->n_dofs());
+  }
+
+  // Set up finite element, DoF handler and constraints of vector postprocessing field.
+  if(setup_vector_field_postprocessing)
+  {
+    bool constexpr vector_field_is_dg = true;
+    fe_vector_postprocessing          = create_finite_element<dim>(param.grid.element_type,
+                                                          vector_field_is_dg /* is_dg */,
+                                                          dim /* n_components */,
+                                                          param.degree);
+
+    dof_handler_vector_postprocessing =
+      std::make_shared<dealii::DoFHandler<dim>>(*grid->triangulation);
+    dof_handler_vector_postprocessing->distribute_dofs(*fe_vector_postprocessing);
+
+    // Set up hanging node and periodicity constraints for vector field.
+    affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing.clear();
+    if(not vector_field_is_dg)
+    {
+      add_hanging_node_and_periodicity_constraints(
+        affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing,
+        *this->grid,
+        *dof_handler_vector_postprocessing);
+    }
+    affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing.close();
+
+    pcout << std::endl
+          << "Discontinuous Galerkin finite element discretization of vector field:" << std::endl
+          << std::endl;
+
+    print_parameter(pcout, "degree of 1D polynomials", param.degree);
+    print_parameter(pcout, "number of dofs per cell", fe_vector_postprocessing->n_dofs_per_cell());
+    print_parameter(pcout, "number of dofs (total)", dof_handler_vector_postprocessing->n_dofs());
   }
 }
 
@@ -168,6 +206,14 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   if(param.body_force)
     matrix_free_data.append_mapping_flags(BodyForceOperator<dim, Number>::get_mapping_flags());
 
+  if(param.problem_type == ProblemType::Unsteady)
+  {
+    // The boundary mass operator is only required, if we have damping terms from the Robin
+    // condition, i.e., in the unsteady case.
+    matrix_free_data.append_mapping_flags(
+      BoundaryMassOperator<dim, Number, dim /* n_components */>::get_mapping_flags());
+  }
+
   // Insert `dealii::DoFHandler` and `dealii::AffineConstraints`, where the constraints include
   // periodicity and hanging node constraints *as well as* inhomogeneous Dirichlet boundary
   // conditions.
@@ -182,12 +228,23 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   matrix_free_data.insert_constraint(&affine_constraints_periodicity_and_hanging_nodes,
                                      get_dof_name_periodicity_and_hanging_node_constraints());
 
-  // Insert `dealii::DoFHandler` and `dealii::AffineConstraints` for scalar field.
-  if(setup_scalar_field)
+  // Insert `dealii::DoFHandler` and `dealii::AffineConstraints` for postprocessing fields.
+  if(setup_scalar_field_postprocessing)
   {
-    matrix_free_data.insert_dof_handler(dof_handler_scalar.get(), get_dof_name_scalar());
-    matrix_free_data.insert_constraint(&affine_constraints_periodicity_and_hanging_nodes_scalar,
-                                       get_dof_name_scalar());
+    matrix_free_data.insert_dof_handler(dof_handler_scalar_postprocessing.get(),
+                                        get_dof_name_scalar_postprocessing());
+    matrix_free_data.insert_constraint(
+      &affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing,
+      get_dof_name_scalar_postprocessing());
+  }
+
+  if(setup_vector_field_postprocessing)
+  {
+    matrix_free_data.insert_dof_handler(dof_handler_vector_postprocessing.get(),
+                                        get_dof_name_vector_postprocessing());
+    matrix_free_data.insert_constraint(
+      &affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing,
+      get_dof_name_vector_postprocessing());
   }
 
   // Set up and insert `dealii::Quadrature` objects.
@@ -268,13 +325,21 @@ Operator<dim, Number>::setup_operators()
   operator_data.unsteady            = (param.problem_type == ProblemType::Unsteady);
   operator_data.density             = param.density;
   operator_data.large_deformation   = param.large_deformation;
+  operator_data.mapping_degree      = param.mapping_degree;
+  operator_data.stable_formulation  = param.stable_formulation;
+  operator_data.problem_type        = param.problem_type;
   if(param.large_deformation)
   {
-    operator_data.pull_back_traction = param.pull_back_traction;
+    operator_data.pull_back_traction      = param.pull_back_traction;
+    operator_data.spatial_integration     = param.spatial_integration;
+    operator_data.force_material_residual = param.force_material_residual;
+    operator_data.cache_level             = param.cache_level;
+    operator_data.check_type              = param.check_type;
   }
   else
   {
-    operator_data.pull_back_traction = false;
+    operator_data.pull_back_traction  = false;
+    operator_data.spatial_integration = false;
   }
 
   if(param.large_deformation)
@@ -283,6 +348,12 @@ Operator<dim, Number>::setup_operators()
                                              affine_constraints,
                                              operator_data,
                                              false /* assemble_matrix */);
+
+    // Set undeformed mapping to construct map for spatial integration or inverse analysis.
+    if(param.spatial_integration or param.problem_type == ProblemType::InverseAnalysis)
+    {
+      elasticity_operator_nonlinear.set_mapping_undeformed(mapping);
+    }
   }
   else
   {
@@ -292,10 +363,9 @@ Operator<dim, Number>::setup_operators()
                                           true /* assemble_matrix */);
   }
 
-  // Mass operator and inverse mass operator for vector-valued space
+  // (boundary) mass operator and related solver for inversion
   if(param.problem_type == ProblemType::Unsteady)
   {
-    // vector-valued mass operator
     Structure::MassOperatorData<dim, Number> mass_data;
     mass_data.dof_index               = get_dof_index();
     mass_data.dof_index_inhomogeneous = get_dof_index_periodicity_and_hanging_node_constraints();
@@ -305,6 +375,13 @@ Operator<dim, Number>::setup_operators()
     mass_operator.initialize(*matrix_free, affine_constraints, mass_data);
 
     mass_operator.set_scaling_factor(param.density);
+
+    // setup boundary mass operator
+    BoundaryMassOperatorData<dim, Number> boundary_mass_data;
+    boundary_mass_data.dof_index  = get_dof_index();
+    boundary_mass_data.quad_index = get_quad_index();
+
+    boundary_mass_operator.initialize(*matrix_free, affine_constraints, boundary_mass_data);
 
     // vector-valued inverse mass operator for initial acceleration
     InverseMassOperatorData<Number> inverse_mass_operator_data;
@@ -319,9 +396,10 @@ Operator<dim, Number>::setup_operators()
     }
     else
     {
-      solver_data.abs_tol  = param.solver_data.abs_tol;
-      solver_data.rel_tol  = param.solver_data.rel_tol;
-      solver_data.max_iter = param.solver_data.max_iter;
+      solver_data.abs_tol           = param.solver_data.abs_tol;
+      solver_data.rel_tol           = param.solver_data.rel_tol;
+      solver_data.rel_tol_reference = param.solver_data.rel_tol_reference;
+      solver_data.max_iter          = param.solver_data.max_iter;
     }
     inverse_mass_operator_data.dof_index  = get_dof_index();
     inverse_mass_operator_data.quad_index = get_quad_index();
@@ -342,13 +420,38 @@ Operator<dim, Number>::setup_operators()
     inverse_mass.initialize(*matrix_free, inverse_mass_operator_data, &affine_constraints);
   }
 
+  // vector inverse mass operator
+  if(setup_vector_field_postprocessing)
+  {
+    InverseMassOperatorData<Number> inverse_mass_operator_data_vector_postprocessing;
+    inverse_mass_operator_data_vector_postprocessing.parameters.solver_data = param.solver_data;
+    inverse_mass_operator_data_vector_postprocessing.dof_index =
+      get_dof_index_vector_postprocessing();
+    inverse_mass_operator_data_vector_postprocessing.quad_index = get_quad_index();
+    const bool cartesian_or_affine_mapping =
+      std::all_of(matrix_free->get_mapping_info().cell_type.begin(),
+                  matrix_free->get_mapping_info().cell_type.end(),
+                  [](auto g) {
+                    return g <= dealii::internal::MatrixFreeFunctions::GeometryType::affine;
+                  });
+
+    inverse_mass_operator_data_vector_postprocessing.parameters.implementation_type =
+      inverse_mass_operator_data_vector_postprocessing.get_optimal_inverse_mass_type(
+        *fe_vector_postprocessing, cartesian_or_affine_mapping);
+
+    inverse_mass_vector_postprocessing.initialize(
+      *matrix_free,
+      inverse_mass_operator_data_vector_postprocessing,
+      &affine_constraints_periodicity_and_hanging_nodes_vector_postprocessing);
+  }
+
   // scalar inverse mass operator
-  if(setup_scalar_field)
+  if(setup_scalar_field_postprocessing)
   {
     InverseMassOperatorData<Number> inverse_mass_operator_data_scalar;
     inverse_mass_operator_data_scalar.parameters.solver_data = param.solver_data;
-    inverse_mass_operator_data_scalar.dof_index              = get_dof_index_scalar();
-    inverse_mass_operator_data_scalar.quad_index             = get_quad_index();
+    inverse_mass_operator_data_scalar.dof_index  = get_dof_index_scalar_postprocessing();
+    inverse_mass_operator_data_scalar.quad_index = get_quad_index();
     const bool cartesian_or_affine_mapping =
       std::all_of(matrix_free->get_mapping_info().cell_type.begin(),
                   matrix_free->get_mapping_info().cell_type.end(),
@@ -357,12 +460,13 @@ Operator<dim, Number>::setup_operators()
                   });
 
     inverse_mass_operator_data_scalar.parameters.implementation_type =
-      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar,
+      inverse_mass_operator_data_scalar.get_optimal_inverse_mass_type(*fe_scalar_postprocessing,
                                                                       cartesian_or_affine_mapping);
 
-    inverse_mass_scalar.initialize(*matrix_free,
-                                   inverse_mass_operator_data_scalar,
-                                   &affine_constraints_periodicity_and_hanging_nodes_scalar);
+    inverse_mass_scalar_postprocessing.initialize(
+      *matrix_free,
+      inverse_mass_operator_data_scalar,
+      &affine_constraints_periodicity_and_hanging_nodes_scalar_postprocessing);
   }
 
   // setup rhs operator
@@ -381,28 +485,72 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::setup_calculators_for_derived_quantities()
 {
-  if(setup_scalar_field)
+  ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
+    param.large_deformation ?
+      static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
+      static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
+
+  if(setup_scalar_field_postprocessing)
   {
     vector_magnitude_calculator.initialize(*matrix_free,
                                            get_dof_index(),
-                                           get_dof_index_scalar(),
+                                           get_dof_index_scalar_postprocessing(),
                                            get_quad_index());
 
     displacement_jacobian_calculator.initialize(*matrix_free,
                                                 get_dof_index(),
-                                                get_dof_index_scalar(),
+                                                get_dof_index_scalar_postprocessing(),
                                                 get_quad_index());
-
-    ElasticityOperatorBase<dim, Number> const & elasticity_operator_base =
-      param.large_deformation ?
-        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_nonlinear) :
-        static_cast<ElasticityOperatorBase<dim, Number> const &>(elasticity_operator_linear);
 
     max_principal_stress_calculator.initialize(*matrix_free,
                                                get_dof_index(),
-                                               get_dof_index_scalar(),
+                                               get_dof_index_scalar_postprocessing(),
                                                get_quad_index(),
                                                elasticity_operator_base);
+
+    max_fiber_stretch_calculator.initialize(*matrix_free,
+                                            get_dof_index(),
+                                            get_dof_index_scalar_postprocessing(),
+                                            get_quad_index(),
+                                            elasticity_operator_base);
+  }
+
+  if(setup_vector_field_postprocessing)
+  {
+    E1_orientation_calculator.initialize(*matrix_free,
+                                         get_dof_index(),
+                                         get_dof_index_vector_postprocessing(),
+                                         get_quad_index(),
+                                         LocalStressDirection::E1_orientation_only,
+                                         elasticity_operator_base);
+
+    E2_orientation_calculator.initialize(*matrix_free,
+                                         get_dof_index(),
+                                         get_dof_index_vector_postprocessing(),
+                                         get_quad_index(),
+                                         LocalStressDirection::E2_orientation_only,
+                                         elasticity_operator_base);
+
+    traction_local_full_calculator.initialize(*matrix_free,
+                                              get_dof_index(),
+                                              get_dof_index_vector_postprocessing(),
+                                              get_quad_index(),
+                                              LocalStressDirection::Full,
+                                              elasticity_operator_base);
+
+    traction_local_normal_calculator.initialize(*matrix_free,
+                                                get_dof_index(),
+                                                get_dof_index_vector_postprocessing(),
+                                                get_quad_index(),
+                                                LocalStressDirection::Normal,
+                                                elasticity_operator_base);
+
+    traction_local_inplane_calculator.initialize(*matrix_free,
+                                                 get_dof_index(),
+                                                 get_dof_index_vector_postprocessing(),
+                                                 get_quad_index(),
+                                                 LocalStressDirection::InPlane,
+                                                 elasticity_operator_base);
   }
 }
 
@@ -664,11 +812,22 @@ Operator<dim, Number>::get_dof_name_periodicity_and_hanging_node_constraints() c
 
 template<int dim, typename Number>
 std::string
-Operator<dim, Number>::get_dof_name_scalar() const
+Operator<dim, Number>::get_dof_name_scalar_postprocessing() const
 {
-  AssertThrow(setup_scalar_field, dealii::ExcMessage("Scalar field should not be set up."));
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing field was not set up."));
 
-  return field + "_" + dof_index_scalar;
+  return field + "_" + dof_index_scalar_postprocessing;
+}
+
+template<int dim, typename Number>
+std::string
+Operator<dim, Number>::get_dof_name_vector_postprocessing() const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing field was not set up."));
+
+  return field + "_" + dof_index_vector_postprocessing;
 }
 
 template<int dim, typename Number>
@@ -697,13 +856,13 @@ void
 Operator<dim, Number>::compute_displacement_magnitude(VectorType &       dst_scalar_valued,
                                                       VectorType const & src_vector_valued) const
 {
-  AssertThrow(setup_scalar_field,
+  AssertThrow(setup_scalar_field_postprocessing,
               dealii::ExcMessage("Scalar field not set up. "
                                  "Cannot compute displacement magnitude."));
 
   vector_magnitude_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
 }
 
 template<int dim, typename Number>
@@ -711,13 +870,13 @@ void
 Operator<dim, Number>::compute_displacement_jacobian(VectorType &       dst_scalar_valued,
                                                      VectorType const & src_vector_valued) const
 {
-  AssertThrow(setup_scalar_field,
+  AssertThrow(setup_scalar_field_postprocessing,
               dealii::ExcMessage("Scalar field not set up. "
                                  "Cannot compute Jacobian of the displacement field."));
 
   displacement_jacobian_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
 }
 
 template<int dim, typename Number>
@@ -725,13 +884,107 @@ void
 Operator<dim, Number>::compute_max_principal_stress(VectorType &       dst_scalar_valued,
                                                     VectorType const & src_vector_valued) const
 {
-  AssertThrow(setup_scalar_field,
+  AssertThrow(setup_scalar_field_postprocessing,
               dealii::ExcMessage("Scalar field not set up. "
                                  "Cannot compute maximum principal stress."));
 
   max_principal_stress_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
 
-  inverse_mass_scalar.apply(dst_scalar_valued, dst_scalar_valued);
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_max_fiber_stretch(VectorType &       dst_scalar_valued,
+                                                 VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar field not set up. "
+                                 "Cannot compute maximum fiber stretch."));
+
+  max_fiber_stretch_calculator.compute_projection_rhs(dst_scalar_valued, src_vector_valued);
+
+  inverse_mass_scalar_postprocessing.apply(dst_scalar_valued, dst_scalar_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_E1_orientation(VectorType &       dst_vector_postprocessing_valued,
+                                              VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute E1 orientation."));
+
+  E1_orientation_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                   src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_E2_orientation(VectorType &       dst_vector_postprocessing_valued,
+                                              VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute E2 orientation."));
+
+  E2_orientation_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                   src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_full(VectorType & dst_vector_postprocessing_valued,
+                                                   VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute traction vector: full."));
+
+  traction_local_full_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                        src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_normal(VectorType & dst_vector_postprocessing_valued,
+                                                     VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute traction vector: normal."));
+
+  traction_local_normal_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                          src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::compute_traction_local_inplane(VectorType & dst_vector_postprocessing_valued,
+                                                      VectorType const & src_vector_valued) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector field not set up. "
+                                 "Cannot compute traction vector: in-plane."));
+
+  traction_local_inplane_calculator.compute_projection_rhs(dst_vector_postprocessing_valued,
+                                                           src_vector_valued);
+
+  inverse_mass_vector_postprocessing.apply(dst_vector_postprocessing_valued,
+                                           dst_vector_postprocessing_valued);
 }
 
 template<int dim, typename Number>
@@ -743,11 +996,22 @@ Operator<dim, Number>::get_dof_index_periodicity_and_hanging_node_constraints() 
 
 template<int dim, typename Number>
 unsigned int
-Operator<dim, Number>::get_dof_index_scalar() const
+Operator<dim, Number>::get_dof_index_scalar_postprocessing() const
 {
-  AssertThrow(setup_scalar_field, dealii::ExcMessage("Scalar field should not be set up."));
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing field was not set up."));
 
-  return matrix_free_data->get_dof_index(get_dof_name_scalar());
+  return matrix_free_data->get_dof_index(get_dof_name_scalar_postprocessing());
+}
+
+template<int dim, typename Number>
+unsigned int
+Operator<dim, Number>::get_dof_index_vector_postprocessing() const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing field was not set up."));
+
+  return matrix_free_data->get_dof_index(get_dof_name_vector_postprocessing());
 }
 
 template<int dim, typename Number>
@@ -800,13 +1064,24 @@ Operator<dim, Number>::initialize_dof_vector(VectorType & src) const
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::initialize_dof_vector_scalar(VectorType & src) const
+Operator<dim, Number>::initialize_dof_vector_scalar_postprocessing(VectorType & src) const
 {
-  AssertThrow(setup_scalar_field,
-              dealii::ExcMessage("Scalar field not set up. "
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing field not set up. "
                                  "Cannot initialize scalar dof vector."));
 
-  matrix_free->initialize_dof_vector(src, get_dof_index_scalar());
+  matrix_free->initialize_dof_vector(src, get_dof_index_scalar_postprocessing());
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::initialize_dof_vector_vector_postprocessing(VectorType & src) const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing field not set up. "
+                                 "Cannot initialize vector dof vector."));
+
+  matrix_free->initialize_dof_vector(src, get_dof_index_vector_postprocessing());
 }
 
 template<int dim, typename Number>
@@ -846,25 +1121,30 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
     {
       // elasticity operator
 
-      // deactivate the mass operator term
+      // NB: we have to deactivate the mass and boundary mass operator terms
       double const scaling_factor_mass =
         elasticity_operator_nonlinear.get_scaling_factor_mass_operator();
       elasticity_operator_nonlinear.set_scaling_factor_mass_operator(0.0);
 
-      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary
-      // conditions: Note that we do not have to set inhomogeneous Dirichlet degrees of freedom
-      // explicitly since the function prescribe_initial_displacement() sets the initial
-      // displacement for all dofs (including Dirichlet dofs) and since the initial condition for
-      // the displacements needs to be consistent with the Dirichlet boundary data g(t=t0) at
-      // initial time, i.e. the vector initial_displacement already contains the correct Dirichlet
-      // data.
+      double const scaling_factor_mass_boundary =
+        elasticity_operator_nonlinear.get_scaling_factor_mass_boundary_operator();
+      elasticity_operator_nonlinear.set_scaling_factor_mass_boundary_operator(0.0);
+
+      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary conditions:
+      // Note that we do not have to set inhomogeneous Dirichlet degrees of freedom explicitly since
+      // the function prescribe_initial_displacement() sets the initial displacement for all dofs
+      // (including Dirichlet dofs) and since the initial condition for the displacements needs to
+      // be consistent with the Dirichlet boundary data g(t=t0) at initial time, i.e. the vector
+      // initial_displacement already contains the correct Dirichlet data.
       elasticity_operator_nonlinear.set_time(time);
       elasticity_operator_nonlinear.evaluate_nonlinear(rhs, initial_displacement);
       // shift to right-hand side
       rhs *= -1.0;
 
-      // revert scaling factor to initialized value
+      // revert scaling factors to initialized value
       elasticity_operator_nonlinear.set_scaling_factor_mass_operator(scaling_factor_mass);
+      elasticity_operator_nonlinear.set_scaling_factor_mass_boundary_operator(
+        scaling_factor_mass_boundary);
 
       // body forces
       if(param.body_force)
@@ -875,43 +1155,47 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
     else // linear case
     {
       // elasticity operator
-
-      // deactivate the mass operator
+      // NB: we have to deactivate the mass and boundary mass operator terms
       double const scaling_factor_mass =
         elasticity_operator_linear.get_scaling_factor_mass_operator();
       elasticity_operator_linear.set_scaling_factor_mass_operator(0.0);
 
-      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary
-      // conditions: Note that we do not have to set inhomogeneous Dirichlet degrees of freedom
-      // explicitly since the function prescribe_initial_displacement() sets the initial
-      // displacement for all dofs (including Dirichlet dofs) and since the initial condition for
-      // the displacements needs to be consistent with the Dirichlet boundary data g(t=t0) at
-      // initial time, i.e. the vector initial_displacement already contains the correct Dirichlet
-      // data.
+      double const scaling_factor_mass_boundary =
+        elasticity_operator_linear.get_scaling_factor_mass_boundary_operator();
+      elasticity_operator_linear.set_scaling_factor_mass_boundary_operator(0.0);
+
+      // evaluate elasticity operator including inhomogeneous Dirichlet/Neumann boundary conditions:
+      // Note that we do not have to set inhomogeneous Dirichlet degrees of freedom explicitly since
+      // the function prescribe_initial_displacement() sets the initial displacement for all dofs
+      // (including Dirichlet dofs) and since the initial condition for the displacements needs to
+      // be consistent with the Dirichlet boundary data g(t=t0) at initial time, i.e. the vector
+      // initial_displacement already contains the correct Dirichlet data.
       elasticity_operator_linear.set_time(time);
       elasticity_operator_linear.evaluate(rhs, initial_displacement);
       // shift to right-hand side
       rhs *= -1.0;
 
-      // revert scaling factor to initialized value
+      // revert scaling factors to initialized value
       elasticity_operator_linear.set_scaling_factor_mass_operator(scaling_factor_mass);
+      elasticity_operator_linear.set_scaling_factor_mass_boundary_operator(
+        scaling_factor_mass_boundary);
 
       // body force
       if(param.body_force)
       {
-        // The displacement is irrelevant for linear problem, since
+        // displacement is irrelevant for linear problem, since
         // pull_back_body_force = false in this case.
         body_force_operator.evaluate_add(rhs, initial_displacement, time);
       }
     }
 
     // Shift inhomogeneous part of mass matrix operator (i.e. mass matrix applied to a dof vector
-    // with the initial acceleration in Dirichlet degrees of freedom) to the right-hand side.
+    // with the initial acceleration in Dirichlet degrees of freedom) to the right-hand side
     mass_operator.rhs_add(rhs);
 
-    // Apply inverse mass operator to compute the initial acceleration. Note that the mass
-    // operator is scaled with `density`, hence scale the right-hand side, as the
-    // `InverseMassOperator` has its own `MassOperator`.
+    // Apply inverse mass operator to compute the initial acceleration. Note that the mass operator
+    // is scaled with `density`, hence scale the right-hand side, as the `InverseMassOperator` has
+    // its own `MassOperator`.
     rhs /= param.density;
     inverse_mass.apply(initial_acceleration, rhs);
 
@@ -937,8 +1221,86 @@ Operator<dim, Number>::apply_add_damping_operator(VectorType & dst, VectorType c
     VectorType tmp;
     tmp.reinit(src);
     tmp.equ(param.weak_damping_coefficient, src);
+
+    // mass_operator includes density as scaling_factor
     mass_operator.apply_add(dst, tmp);
   }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       dst,
+                                                           VectorType const & src) const
+{
+  // boundary mass operator is used to add velocity-dependent Robin boundary integral on the rhs for
+  // the instationary case
+  if(boundary_mass_operator.non_empty() and param.problem_type == ProblemType::Unsteady)
+  {
+    boundary_mass_operator.evaluate_add(dst, src);
+  }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::update_boundary_mass_operator(Number const factor) const
+{
+  boundary_mass_operator.set_scaling_factor(factor);
+
+  std::map<dealii::types::boundary_id, std::pair<bool, Number>> robin_c_param;
+
+  // update operator data from boundary_descriptor's velocity part from Robin boundaries
+  if(param.problem_type == ProblemType::Unsteady)
+  {
+    for(auto const & entry : this->boundary_descriptor->robin_bc)
+    {
+      dealii::types::boundary_id boundary_id      = entry.first;
+      RobinParameters const &    robin_parameters = entry.second;
+
+      if(std::abs(robin_parameters.velocity_coefficient_c) > 1e-20)
+      {
+        robin_c_param.insert(
+          std::make_pair(boundary_id,
+                         std::make_pair(robin_parameters.velocity_normal_projection,
+                                        robin_parameters.velocity_coefficient_c)));
+      }
+    }
+  }
+
+  boundary_mass_operator.set_ids_normal_coefficients(robin_c_param);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::set_fsi_robin_parameters(
+  std::set<dealii::types::boundary_id> const & boundary_IDs,
+  double const &                               robin_parameter) const
+{
+  // We assume that this function is called with only the fluid--structure interface boundary ID
+  // given in `boundary_IDs`. All but the velocity scaling parameter are zero. Normal projection of
+  // the velocity is not considered, corresponding to standard Robin fluid--structure coupling.
+  std::map<dealii::types::boundary_id, RobinParameters> robin_bc =
+    this->boundary_descriptor->get_robin_bc();
+
+  for(auto it = boundary_IDs.begin(); it != boundary_IDs.end(); ++it)
+  {
+    RobinParameters & robin_parameters = robin_bc[*it];
+
+    // Assert Robin parameters are not expected/updated.
+    AssertThrow(robin_parameters.velocity_normal_projection == false,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.displacement_normal_projection == false,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.displacement_coefficient_k == 0.0,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.pressure_value == 0.0,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+    AssertThrow(robin_parameters.pressure_ramp_time == 0.0,
+                dealii::ExcMessage("Parameter not supported in dynamic Robin coupling."));
+
+    robin_parameters.velocity_coefficient_c = robin_parameter;
+  }
+
+  this->boundary_descriptor->set_robin_bc(robin_bc);
 }
 
 template<int dim, typename Number>
@@ -947,11 +1309,19 @@ Operator<dim, Number>::evaluate_nonlinear_residual(VectorType &       dst,
                                                    VectorType const & src,
                                                    VectorType const & const_vector,
                                                    double const       factor,
+                                                   double const       factor_boundary,
                                                    double const       time) const
 {
   // elasticity operator: make sure that constrained degrees of freedom have been set correctly
   // before evaluating the elasticity operator.
-  update_elasticity_operator(factor, time);
+  update_elasticity_operator(factor, factor_boundary, time);
+
+  // update linearization vector for interpolation and update mapping
+  // if we integrate in the spatial configuration
+  elasticity_operator_nonlinear.set_solution_linearization(src,
+                                                           false /* update_cell_data */,
+                                                           true /* update_mapping */,
+                                                           false /* update_matrix_if_necessary */);
 
   elasticity_operator_nonlinear.evaluate_nonlinear(dst, src);
 
@@ -981,7 +1351,58 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::set_solution_linearization(VectorType const & vector) const
 {
-  elasticity_operator_nonlinear.set_solution_linearization(vector);
+  elasticity_operator_nonlinear.set_solution_linearization(vector,
+                                                           true /* update_cell_data */,
+                                                           true /* update_mapping */,
+                                                           true /* update_matrix_if_necessary */);
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::export_configuration(OutputData const & output_data,
+                                            VectorType const & vector) const
+{
+  if(param.large_deformation)
+  {
+    elasticity_operator_nonlinear.export_configuration(output_data, vector);
+  }
+  else
+  {
+    AssertThrow(param.large_deformation == true,
+                dealii::ExcMessage("Exporting the configuration in the "
+                                   "small train case is not implemented. "
+                                   "Use standard output instead."));
+  }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::shift_reference_configuration(VectorType const & vector)
+{
+  // Update the mapping of the matrix-free object in the fine level operator.
+  elasticity_operator_nonlinear.shift_reference_configuration(vector);
+
+  // Update the matrix-free objects' mappings on coarse multigrid levels.
+  if(param.preconditioner == Preconditioner::Multigrid)
+  {
+    std::shared_ptr<MultigridPreconditioner<dim, Number>> mg_preconditioner =
+      std::dynamic_pointer_cast<MultigridPreconditioner<dim, Number>>(preconditioner);
+    mg_preconditioner->shift_reference_configuration(vector);
+  }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::get_reference_coordinates(VectorType & grid_coordinates) const
+{
+  if(param.large_deformation)
+  {
+    elasticity_operator_nonlinear.get_reference_coordinates(grid_coordinates);
+  }
+  else
+  {
+    elasticity_operator_linear.get_reference_coordinates(grid_coordinates);
+  }
 }
 
 template<int dim, typename Number>
@@ -1003,12 +1424,21 @@ void
 Operator<dim, Number>::evaluate_elasticity_operator(VectorType &       dst,
                                                     VectorType const & src,
                                                     double const       factor,
+                                                    double const       factor_boundary,
                                                     double const       time) const
 {
-  update_elasticity_operator(factor, time);
+  update_elasticity_operator(factor, factor_boundary, time);
 
   if(param.large_deformation)
   {
+    // update linearization vector for interpolation and update mapping
+    // if we integrate in the spatial configuration
+    elasticity_operator_nonlinear.set_solution_linearization(
+      src,
+      false /* update_cell_data */,
+      true /* update_mapping */,
+      false /* update_matrix_if_necessary */);
+
     elasticity_operator_nonlinear.evaluate_nonlinear(dst, src);
   }
   else
@@ -1019,16 +1449,20 @@ Operator<dim, Number>::evaluate_elasticity_operator(VectorType &       dst,
 
 template<int dim, typename Number>
 void
-Operator<dim, Number>::update_elasticity_operator(double const factor, double const time) const
+Operator<dim, Number>::update_elasticity_operator(double const factor,
+                                                  double const factor_boundary,
+                                                  double const time) const
 {
   if(param.large_deformation)
   {
     elasticity_operator_nonlinear.set_scaling_factor_mass_operator(factor);
+    elasticity_operator_nonlinear.set_scaling_factor_mass_boundary_operator(factor_boundary);
     elasticity_operator_nonlinear.set_time(time);
   }
   else
   {
     elasticity_operator_linear.set_scaling_factor_mass_operator(factor);
+    elasticity_operator_linear.set_scaling_factor_mass_boundary_operator(factor_boundary);
     elasticity_operator_linear.set_time(time);
   }
 }
@@ -1059,9 +1493,12 @@ Operator<dim, Number>::solve_nonlinear(VectorType &       sol,
   // update operators
   double const scaling_factor_mass =
     compute_scaling_factor_mass(scaling_factor_acceleration, scaling_factor_velocity);
-  residual_operator.update(const_vector, scaling_factor_mass, time);
+  residual_operator.update(const_vector, scaling_factor_mass, scaling_factor_velocity, time);
 
-  linearized_operator.update(scaling_factor_mass, time);
+  linearized_operator.update(scaling_factor_mass, scaling_factor_velocity, time);
+
+  // Matrix-based implementation: note that the re-assembly of the matrix is done in the function
+  // `set_solution_linearization()` called by the Newton solver.
 
   // Matrix-based implementation: note that the re-assembly of the matrix is done in the function
   // set_solution_linearization() called by the Newton solver.
@@ -1116,10 +1553,11 @@ Operator<dim, Number>::solve_linear(VectorType &       sol,
   double const scaling_factor_mass =
     compute_scaling_factor_mass(scaling_factor_acceleration, scaling_factor_velocity);
 
-  update_elasticity_operator(scaling_factor_mass, time);
+  update_elasticity_operator(scaling_factor_mass, scaling_factor_velocity, time);
 
-  // In case of a matrix-based implementation, we assemble the matrix once at initialization,
-  // since it remains constant, and avoid calling `assemble_matrix_if_matrix_based()` here.
+  // The scaling factors (time step size, Robin parameters) may have changed since the last solve,
+  // so a matrix-based operator is re-assembled. This does nothing for a matrix-free implementation.
+  elasticity_operator_linear.assemble_matrix_if_matrix_based();
 
   linear_solver->update_preconditioner(update_preconditioner);
 
@@ -1156,11 +1594,22 @@ Operator<dim, Number>::get_dof_handler() const
 
 template<int dim, typename Number>
 dealii::DoFHandler<dim> const &
-Operator<dim, Number>::get_dof_handler_scalar() const
+Operator<dim, Number>::get_dof_handler_scalar_postprocessing() const
 {
-  AssertThrow(setup_scalar_field, dealii::ExcMessage("Scalar dof handler has not been set up."));
+  AssertThrow(setup_scalar_field_postprocessing,
+              dealii::ExcMessage("Scalar postprocessing dof handler has not been set up."));
 
-  return *dof_handler_scalar;
+  return *dof_handler_scalar_postprocessing;
+}
+
+template<int dim, typename Number>
+dealii::DoFHandler<dim> const &
+Operator<dim, Number>::get_dof_handler_vector_postprocessing() const
+{
+  AssertThrow(setup_vector_field_postprocessing,
+              dealii::ExcMessage("Vector postprocessing dof handler has not been set up."));
+
+  return *dof_handler_vector_postprocessing;
 }
 
 template<int dim, typename Number>

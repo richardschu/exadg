@@ -31,7 +31,7 @@
 #include <exadg/incompressible_navier_stokes/user_interface/viscosity_model_data.h>
 #include <exadg/operators/inverse_mass_parameters.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/enum_types.h>
 #include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 #include <exadg/time_integration/enum_types.h>
@@ -513,6 +513,9 @@ public:
   // solver data for pressure Poisson equation
   SolverData solver_data_pressure_poisson;
 
+  // initial guess of the pressure Poisson solver
+  InitialGuessType initial_guess_type_pressure_poisson;
+
   // description: see enum declaration
   PreconditionerPressurePoisson preconditioner_pressure_poisson;
 
@@ -566,6 +569,9 @@ public:
 
   // Solver data for (linearized) momentum equation
   SolverData solver_data_momentum;
+
+  // initial guess of the momentum solver
+  InitialGuessType initial_guess_type_momentum;
 
   // description: see enum declaration
   MomentumPreconditioner preconditioner_momentum;
@@ -657,6 +663,9 @@ public:
 
   // Solver data for coupled solver
   SolverData solver_data_coupled;
+
+  // initial guess of the coupled solver
+  InitialGuessType initial_guess_type_coupled;
 
   // description: see enum declaration
   PreconditionerCoupled preconditioner_coupled;

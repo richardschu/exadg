@@ -24,9 +24,12 @@
 
 // C/C++
 #include <fstream>
+#include <string>
 
 // deal.II
 #include <deal.II/base/bounding_box.h>
+#include <deal.II/base/data_out_base.h>
+#include <deal.II/base/mpi.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/grid/grid_generator.h>
@@ -156,6 +159,91 @@ write_points_in_dummy_triangulation(std::vector<dealii::Point<dim>> const & poin
     particle_dummy_tria, particle_dummy_mapping, points, folder, file, counter, mpi_comm);
 }
 
+// Reads the `(time, filename)` entries of an existing `.pvd` record written by
+// `update_pvd_record()` whose pvtu files `<file>_<counter>.pvtu` have a counter
+// smaller than `output_counter`. Returns no entries if there is no such file.
+inline std::vector<std::pair<double, std::string>>
+read_pvd_record(std::string const & pvd_filename,
+                std::string const & file,
+                unsigned int const  output_counter)
+{
+  std::vector<std::pair<double, std::string>> times_and_names;
+
+  std::ifstream input(pvd_filename);
+  std::string   line;
+  while(std::getline(input, line))
+  {
+    std::string const time_key = "timestep=\"";
+    std::string const file_key = "file=\"";
+
+    std::size_t const time_begin = line.find(time_key);
+    std::size_t const file_begin = line.find(file_key);
+    if(time_begin == std::string::npos or file_begin == std::string::npos)
+    {
+      continue;
+    }
+
+    std::size_t const time_value = time_begin + time_key.size();
+    std::size_t const file_value = file_begin + file_key.size();
+    std::string const time_string =
+      line.substr(time_value, line.find('"', time_value) - time_value);
+    std::string const pvtu_filename =
+      line.substr(file_value, line.find('"', file_value) - file_value);
+
+    // Extract the counter from `<file>_<counter>.pvtu`.
+    std::string const prefix = file + "_";
+    std::string const suffix = ".pvtu";
+    if(pvtu_filename.size() <= prefix.size() + suffix.size() or
+       pvtu_filename.compare(0, prefix.size(), prefix) != 0 or
+       pvtu_filename.compare(pvtu_filename.size() - suffix.size(), suffix.size(), suffix) != 0)
+    {
+      continue;
+    }
+    std::string const counter_string =
+      pvtu_filename.substr(prefix.size(), pvtu_filename.size() - prefix.size() - suffix.size());
+    if(counter_string.find_first_not_of("0123456789") != std::string::npos)
+    {
+      continue;
+    }
+
+    if(std::stoul(counter_string) < output_counter)
+    {
+      times_and_names.emplace_back(std::stod(time_string), pvtu_filename);
+    }
+  }
+
+  return times_and_names;
+}
+
+// Appends `(time, filename)` to `times_and_names` and (re-)writes a `.pvd` record file on rank 0
+// used by ParaView to associate a vtu file with simulation time.
+inline void
+update_pvd_record(std::vector<std::pair<double, std::string>> & times_and_names,
+                  double const                                  time,
+                  std::string const &                           filename,
+                  std::string const &                           directory,
+                  std::string const &                           file,
+                  unsigned int const                            output_counter,
+                  MPI_Comm const &                              mpi_comm)
+{
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+  {
+    // The first output of a fresh simulation has counter 0. After a restart,
+    // the time control continues counting from the restart time, so the
+    // entries for the files already written before are kept. Files from the
+    // current counter on are (re-)written, so their entries are dropped.
+    std::string const pvd_filename = directory + file + ".pvd";
+    if(times_and_names.empty() and output_counter > 0)
+    {
+      times_and_names = read_pvd_record(pvd_filename, file, output_counter);
+    }
+
+    times_and_names.emplace_back(time, filename);
+    std::ofstream pvd_output(pvd_filename);
+    dealii::DataOutBase::write_pvd_record(pvd_output, times_and_names);
+  }
+}
+
 template<int dim, typename Number>
 class VectorWriter
 {
@@ -261,7 +349,9 @@ public:
     }
   }
 
-  void
+  // Write pvtu output and return the (directory-less) name of the pvtu record so that callers can
+  // accumulate it into a `.pvd` file via `update_pvd_record()`.
+  std::string
   write_pvtu(dealii::Mapping<dim> const * mapping = nullptr)
   {
     // Build patches, vectors to export must stay in scope until after this call.
@@ -277,7 +367,7 @@ public:
     }
 
     unsigned int constexpr n_groups = 4;
-    data_out.write_vtu_with_pvtu_record(
+    return data_out.write_vtu_with_pvtu_record(
       output_data.directory, output_data.filename, output_counter, mpi_comm, n_groups);
   }
 

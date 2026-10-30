@@ -147,6 +147,7 @@ Parameters::Parameters()
     // pressure Poisson equation
     IP_factor_pressure(1.),
     solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::CG, 100)),
+    initial_guess_type_pressure_poisson(InitialGuessType::Extrapolation),
     preconditioner_pressure_poisson(PreconditionerPressurePoisson::Multigrid),
     multigrid_data_pressure_poisson(MultigridData()),
     update_preconditioner_pressure_poisson(false),
@@ -165,6 +166,7 @@ Parameters::Parameters()
     // momentum step
     newton_solver_data_momentum(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
     solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
+    initial_guess_type_momentum(InitialGuessType::Extrapolation),
     preconditioner_momentum(MomentumPreconditioner::InverseMassMatrix),
     update_preconditioner_momentum(false),
     update_preconditioner_momentum_every_newton_iter(1),
@@ -201,6 +203,7 @@ Parameters::Parameters()
 
     // linear solver
     solver_data_coupled(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
+    initial_guess_type_coupled(InitialGuessType::Extrapolation),
 
     // preconditioning linear solver
     preconditioner_coupled(PreconditionerCoupled::BlockTriangular),
@@ -453,6 +456,14 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     }
   }
 
+  // the projection initial guess is implemented for linear momentum equations only
+  if(initial_guess_type_momentum == InitialGuessType::Projection)
+  {
+    AssertThrow(not nonlinear_problem_has_to_be_solved(),
+                dealii::ExcMessage("`InitialGuessType::Projection` is not implemented for a "
+                                   "nonlinear momentum equation."));
+  }
+
   // HIGH-ORDER DUAL SPLITTING SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
@@ -507,6 +518,11 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
 
     AssertThrow(!viscosity_is_variable(), dealii::ExcMessage("Not implemented."));
 
+    AssertThrow(initial_guess_type_pressure_poisson == InitialGuessType::Extrapolation and
+                  initial_guess_type_momentum == InitialGuessType::Extrapolation,
+                dealii::ExcMessage("Only `InitialGuessType::Extrapolation` is implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
+
     AssertThrow(divu_integrated_by_parts, dealii::ExcMessage("Needed for optimal convergence."));
     AssertThrow(divu_formulation == FormulationVelocityDivergenceTerm::Weak,
                 dealii::ExcMessage("Strong formulation not supported."));
@@ -529,6 +545,10 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   {
     if(use_scaling_continuity == true)
       AssertThrow(scaling_factor_continuity > 0.0, dealii::ExcMessage("Invalid parameter"));
+
+    AssertThrow(initial_guess_type_coupled != InitialGuessType::Projection,
+                dealii::ExcMessage(
+                  "`InitialGuessType::Projection` is not implemented for the coupled solver."));
 
     if(preconditioner_velocity_block == MomentumPreconditioner::Multigrid)
     {
@@ -676,11 +696,12 @@ Parameters::involves_h_multigrid() const
       }
     }
   }
-  // TODO: we currently treat TemporalDiscretization::InterpolateAnalyticalSolution as a splitting
+  // TODO: we currently treat `TemporalDiscretization::InterpolateAnalyticalSolution` as a splitting
   // scheme, since the implementation creates a spatial operator related to the pressure-correction
-  // scheme in case of InterpolateAnalyticalSolution. This is only a temporary solution and we need
-  // to write a separate class SpatialOperatorInterpolateAnalyticalSolution that does not create
-  // preconditioners (including multigrid)
+  // scheme in case of `TemporalDiscretization::InterpolateAnalyticalSolution`. This is only a
+  // temporary solution and we need to write a separate class
+  // `SpatialOperatorInterpolateAnalyticalSolution` that does not create preconditioners (including
+  // multigrid)
   else if(temporal_discretization == TemporalDiscretization::BDFDualSplitting or
           temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
           temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
@@ -1064,6 +1085,7 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
   print_parameter(pcout, "interior penalty factor", IP_factor_pressure);
 
   solver_data_pressure_poisson.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_pressure_poisson);
 
   print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);
 
@@ -1222,6 +1244,7 @@ Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pc
   pcout << "  Linear solver:" << std::endl;
 
   solver_data_momentum.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_momentum);
 
   print_parameter(pcout, "Preconditioner", preconditioner_momentum);
 
@@ -1311,6 +1334,7 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
   pcout << "Linear solver:" << std::endl;
 
   solver_data_coupled.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_coupled);
 
   print_parameter(pcout, "Preconditioner", preconditioner_coupled);
 

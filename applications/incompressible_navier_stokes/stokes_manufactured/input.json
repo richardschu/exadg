@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/stokes_shahbazi/",
+        "OutputDirectory": "results/stokes_shahbazi/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

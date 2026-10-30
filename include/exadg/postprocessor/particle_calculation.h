@@ -35,7 +35,7 @@ namespace ExaDG
 {
 struct ParticleData
 {
-  ParticleData() : directory("output/"), filename("particle")
+  ParticleData() : directory("results/"), filename("particle")
   {
   }
 
@@ -80,7 +80,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const & dof_handler_in,
         dealii::Mapping<dim> const &    mapping_in,
-        ParticleData const &            particle_data_in);
+        ParticleData const &            particle_data_in,
+        bool const                      restarted_simulation);
 
   void
   evaluate(VectorType const & velocity, double const time, bool const print_output);

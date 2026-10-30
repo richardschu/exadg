@@ -97,7 +97,8 @@ public:
 
     analytical_source_term.set_time(time);
 
-    matrix_free->cell_loop(&This::compute_source_term, this, dst, analytical_source_term, true);
+    matrix_free->cell_loop(
+      &This::compute_source_term, this, dst, analytical_source_term, true /* zero_dst_vector */);
   }
 
 
@@ -121,8 +122,11 @@ public:
       pressure_cfd->update_ghost_values();
     }
 
-    matrix_free->cell_loop(
-      &This::compute_source_term, this, dst, pressure_cfd_time_derivative_in, true);
+    matrix_free->cell_loop(&This::compute_source_term,
+                           this,
+                           dst,
+                           pressure_cfd_time_derivative_in,
+                           true /* zero_dst_vector */);
   }
 
 private:

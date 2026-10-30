@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_FSI_BENDING_WALL_H_
-#define APPLICATIONS_FSI_BENDING_WALL_H_
+#ifndef APPLICATIONS_FLUID_STRUCTURE_INTERACTION_BENDING_WALL_APPLICATION_H_
+#define APPLICATIONS_FLUID_STRUCTURE_INTERACTION_BENDING_WALL_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -174,7 +174,7 @@ private:
     param.restart_data.interval_time       = 0.25;
     param.restart_data.interval_wall_time  = 1.e6;
     param.restart_data.interval_time_steps = 1e8;
-    param.restart_data.filename            = "output/vortex/vortex";
+    param.restart_data.filename            = "results/vortex/vortex";
 
 
     // SPATIAL DISCRETIZATION
@@ -656,7 +656,6 @@ private:
     param.pull_back_body_force = false;
     param.large_deformation    = false;
     param.pull_back_traction   = false;
-    param.material_type        = MaterialType::StVenantKirchhoff;
 
     param.degree = this->param.mapping_degree;
 
@@ -723,9 +722,6 @@ private:
 
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
-    AssertThrow(this->ale_elasticity_param.material_type == MaterialType::StVenantKirchhoff,
-                dealii::ExcMessage("Material parameters for ALE elasticity problem not defined."));
-
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
@@ -776,7 +772,6 @@ private:
     param.pull_back_body_force = false;
     param.large_deformation    = true;
     param.pull_back_traction   = true;
-    param.material_type        = MaterialType::StVenantKirchhoff;
 
     param.density = DENSITY_STRUCTURE;
 
@@ -910,9 +905,6 @@ private:
 
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
-    AssertThrow(this->param.material_type == MaterialType::StVenantKirchhoff,
-                dealii::ExcMessage("Material parameters for elasticity problem not defined."));
-
     MaterialType const type         = MaterialType::StVenantKirchhoff;
     Type2D const       two_dim_type = Type2D::PlaneStress;
 
@@ -974,4 +966,4 @@ public:
 
 #include <exadg/fluid_structure_interaction/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_FSI_BENDING_WALL_H_ */
+#endif /* APPLICATIONS_FLUID_STRUCTURE_INTERACTION_BENDING_WALL_APPLICATION_H_ */

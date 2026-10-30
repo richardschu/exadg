@@ -74,7 +74,7 @@ Driver<dim, Number>::setup()
   {
     // setup postprocessor
     postprocessor = application->create_postprocessor();
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     // create and setup time integrator
     time_integrator = std::make_shared<TimeIntAdamsBashforthMoulton<Number>>(

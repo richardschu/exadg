@@ -10,7 +10,7 @@
             "RefineSpace": "0"
         },
         "Output": {
-            "OutputDirectory": "output/template_precursor/",
+            "OutputDirectory": "results/template_precursor/",
             "OutputName": "main",
             "WriteOutput": "false"
         }
@@ -21,7 +21,7 @@
             "RefineSpace": "0"
         },
         "Output": {
-            "OutputDirectory": "output/template_precursor/",
+            "OutputDirectory": "results/template_precursor/",
             "OutputName": "precursor",
             "WriteOutput": "false"
         }

@@ -25,7 +25,7 @@
         "Traction":	"-1.0e11" 
     },
     "Output": {
-        "OutputDirectory": "output/can/",
+        "OutputDirectory": "results/can/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

@@ -21,7 +21,7 @@
         "MeshType": "Cartesian"
     },
     "Output": {
-        "OutputDirectory": "output/vortex_periodic/",
+        "OutputDirectory": "results/vortex_periodic/",
         "OutputName": "vortex_periodic",
         "WriteOutput": "false"
     }

@@ -13,7 +13,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/poisson/template/",
+        "OutputDirectory": "results/poisson/template/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

@@ -80,7 +80,7 @@ OperatorConsistentSplitting<dim, Number>::apply_convective_divergence_term(
                                this,
                                dst,
                                src,
-                               true);
+                               true /* zero_dst_vector */);
 }
 
 

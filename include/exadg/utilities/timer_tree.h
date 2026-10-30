@@ -60,7 +60,7 @@ public:
    * This function inserts a whole sub_tree into an existing tree, where
    * the parameter names specifies the place at which to insert the sub_tree.
    * This function allows to combine different timer trees in a modular way.
-   * If a non empty string new_name is provided, the id of  sub_tree is
+   * If a non empty string new_name is provided, the id of sub_tree is
    * replaced by new_name when inserted into the tree.
    */
   void

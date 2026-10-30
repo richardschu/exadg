@@ -388,7 +388,7 @@ TimeIntExplRK<Number>::print_solver_info() const
 {
   return param.solver_info_data.write(this->global_timer.wall_time(),
                                       this->time,
-                                      this->time_step_number);
+                                      this->get_total_time_step_number());
 }
 
 template<typename Number>
@@ -427,7 +427,9 @@ TimeIntExplRK<Number>::postprocessing() const
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(this->solution_n, this->time, this->time_step_number);
+  postprocessor->do_postprocessing(this->solution_n,
+                                   this->time,
+                                   this->get_total_time_step_number());
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
 }

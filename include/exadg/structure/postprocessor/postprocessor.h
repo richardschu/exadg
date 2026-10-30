@@ -56,15 +56,22 @@ public:
   virtual ~PostProcessor();
 
   void
-  setup(Operator<dim, Number> const & pde_operator_in) override;
+  setup(Operator<dim, Number> const & pde_operator_in, bool const restarted_simulation) override;
 
   bool
-  requires_scalar_field() const;
+  requires_scalar_postprocessing_field() const;
+
+  bool
+  requires_vector_postprocessing_field() const;
 
   void
   do_postprocessing(VectorType const &     solution,
+                    bool const             errors_only      = false,
                     double const           time             = 0.0,
                     types::time_step const time_step_number = numbers::steady_timestep) override;
+
+  PostProcessorData<dim> const &
+  get_data() const;
 
 private:
   void
@@ -83,6 +90,12 @@ private:
   SolutionField<dim, Number> displacement_magnitude;
   SolutionField<dim, Number> displacement_jacobian;
   SolutionField<dim, Number> max_principal_stress;
+  SolutionField<dim, Number> max_fiber_stretch;
+  SolutionField<dim, Number> E1_orientation;
+  SolutionField<dim, Number> E2_orientation;
+  SolutionField<dim, Number> traction_local_full;
+  SolutionField<dim, Number> traction_local_normal;
+  SolutionField<dim, Number> traction_local_inplane;
 
   // write output for visualization of results (e.g., using paraview)
   OutputGenerator<dim, Number> output_generator;

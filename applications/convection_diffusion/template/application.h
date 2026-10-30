@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_TEMPLATE_APPLICATION_H_
-#define APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_TEMPLATE_APPLICATION_H_
+#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEMPLATE_APPLICATION_H_
+#define APPLICATIONS_CONVECTION_DIFFUSION_TEMPLATE_APPLICATION_H_
 
 // template that shows how to setup a new application
 
@@ -132,4 +132,4 @@ private:
 
 #include <exadg/convection_diffusion/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_TEMPLATE_APPLICATION_H_ */
+#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEMPLATE_APPLICATION_H_ */

@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_TEMPLATE
-#define STRUCTURE_TEMPLATE
+#ifndef APPLICATIONS_STRUCTURE_TEMPLATE_APPLICATION_H_
+#define APPLICATIONS_STRUCTURE_TEMPLATE_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -120,4 +120,4 @@ private:
 
 #include <exadg/structure/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_STRUCTURE_TEMPLATE_APPLICATION_H_ */

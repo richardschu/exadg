@@ -188,7 +188,7 @@ Driver<dim, Number>::setup()
   {
     // setup postprocessor
     postprocessor = application->create_postprocessor();
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     if(application->get_parameters().solver_type == SolverType::Unsteady)
     {

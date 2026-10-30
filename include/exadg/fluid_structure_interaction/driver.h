@@ -76,7 +76,7 @@ private:
   coupling_fluid_to_structure(bool const end_of_time_step) const;
 
   void
-  solve_subproblem_ale(VectorType const & displacement_structure) const;
+  solve_subproblem_mesh(VectorType const & displacement_structure) const;
 
   void
   solve_subproblem_fluid(unsigned int const iteration,
@@ -86,10 +86,16 @@ private:
   void
   solve_subproblem_structure(unsigned int const iteration) const;
 
+  double
+  compute_robin_parameter() const;
+
   void
-  apply_dirichlet_neumann_scheme(VectorType &       displacement_structure_updated,
-                                 VectorType const & displacement_structure,
-                                 unsigned int       iteration) const;
+  update_robin_parameters(double const & robin_parameter_in) const;
+
+  void
+  apply_dirichlet_robin_scheme(VectorType &       displacement_structure_tilde,
+                               VectorType const & displacement_structure,
+                               unsigned int const iteration) const;
 
   // MPI communicator
   MPI_Comm const mpi_comm;
@@ -108,9 +114,9 @@ private:
   std::shared_ptr<SolverFluid<dim, Number>> fluid;
 
   // interface coupling
-  std::shared_ptr<InterfaceCoupling<1, dim, Number>> structure_to_fluid;
-  std::shared_ptr<InterfaceCoupling<1, dim, Number>> structure_to_ale;
-  std::shared_ptr<InterfaceCoupling<1, dim, Number>> fluid_to_structure;
+  std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> structure_to_fluid;
+  std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> structure_to_ale;
+  std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> fluid_to_structure;
 
   // Parameters for partitioned FSI schemes
   Parameters parameters;

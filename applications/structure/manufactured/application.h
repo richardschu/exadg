@@ -365,7 +365,6 @@ private:
     this->param.large_deformation    = true;
     this->param.pull_back_body_force = false;
     this->param.pull_back_traction   = false;
-    this->param.material_type        = MaterialType::StVenantKirchhoff;
 
     this->param.density = density;
 

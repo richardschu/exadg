@@ -24,7 +24,7 @@
         "MeshType": "Cartesian"    
     },
     "Output": {
-        "OutputDirectory": "output/no_output_is_written/",
+        "OutputDirectory": "results/no_output_is_written/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

@@ -576,13 +576,14 @@ void
 KineticEnergySpectrumCalculator<dim, Number>::setup(
   dealii::MatrixFree<dim, Number> const & matrix_free_data_in,
   dealii::DoFHandler<dim> const &         dof_handler_in,
-  KineticEnergySpectrumData const &       data_in)
+  KineticEnergySpectrumData const &       data_in,
+  bool const                              restarted_simulation)
 {
   if(data_in.time_control_data.is_active)
   {
     data        = data_in;
     clear_files = data.clear_file;
-    time_control.setup(data.time_control_data);
+    time_control.setup(data.time_control_data, restarted_simulation);
 
     dof_handler = &dof_handler_in;
     AssertThrow(

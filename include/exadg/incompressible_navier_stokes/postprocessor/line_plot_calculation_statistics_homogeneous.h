@@ -64,7 +64,7 @@ public:
                                           MPI_Comm const &                mpi_comm_in);
 
   void
-  setup(LinePlotDataStatistics<dim> const & data_in);
+  setup(LinePlotDataStatistics<dim> const & data_in, bool const restarted_simulation);
 
   void
   evaluate(VectorType const & velocity, VectorType const & pressure);

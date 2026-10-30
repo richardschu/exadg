@@ -62,7 +62,7 @@ BodyForceOperator<dim, Number>::evaluate_add(VectorType &       dst,
 {
   this->time = time;
 
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src, false /*zero_dst_vector*/);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, src, false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -91,7 +91,7 @@ BodyForceOperator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> const 
 
       if(data.pull_back_body_force)
       {
-        auto F = get_F<dim, Number>(integrator.get_gradient(q));
+        auto F = compute_F<dim, Number>(integrator.get_gradient(q));
         // b_0 = dv/dV * b = det(F) * b
         b *= determinant(F);
       }

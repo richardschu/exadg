@@ -31,7 +31,7 @@ namespace ExaDG
 struct OutputDataBase
 {
   OutputDataBase()
-    : directory("output/"),
+    : directory("results/"),
       filename("name"),
       write_surface_mesh(false),
       write_boundary_IDs(false),

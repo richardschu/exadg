@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_POISEUILLE_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_POISEUILLE_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_POISEUILLE_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_POISEUILLE_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -182,6 +182,9 @@ public:
                         apply_symmetry_bc,
                         "Apply symmetry boundary condition.",
                         dealii::Patterns::Bool());
+      prm.add_parameter("TemporalDiscretization",
+                        temporal_discretization,
+                        "Temporal discretization.");
     }
     prm.leave_subsection();
   }
@@ -208,7 +211,7 @@ private:
 
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                     = SolverType::Unsteady;
-    this->param.temporal_discretization         = TemporalDiscretization::BDFDualSplitting;
+    this->param.temporal_discretization         = temporal_discretization;
     this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
     this->param.calculation_of_time_step_size   = TimeStepCalculation::CFL;
     this->param.adaptive_time_stepping          = true;
@@ -531,6 +534,8 @@ private:
 
   bool apply_symmetry_bc = false;
 
+  TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFDualSplitting;
+
   FormulationViscousTerm const formulation_viscous_term =
     FormulationViscousTerm::LaplaceFormulation;
 
@@ -550,4 +555,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_POISEUILLE_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_POISEUILLE_APPLICATION_H_ */

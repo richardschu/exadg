@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/boundary_layer_problem/",
+        "OutputDirectory": "results/boundary_layer_problem/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

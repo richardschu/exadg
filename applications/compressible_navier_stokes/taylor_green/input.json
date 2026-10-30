@@ -18,7 +18,7 @@
         "MeshType": "Cartesian"
     },
     "Output": {
-        "OutputDirectory": "output/taylor_green_vortex/",
+        "OutputDirectory": "results/taylor_green_vortex/",
         "OutputName": "32_l3_k3",
         "WriteOutput": "false"
     }

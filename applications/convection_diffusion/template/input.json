@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/template/",
+        "OutputDirectory": "results/template/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

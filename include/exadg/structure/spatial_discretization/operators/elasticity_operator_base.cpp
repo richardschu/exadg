@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/evaluate_functions.h>
+#include <exadg/grid/mapping_dof_vector.h>
 #include <exadg/structure/spatial_discretization/operators/elasticity_operator_base.h>
 
 namespace ExaDG
@@ -31,7 +32,8 @@ namespace ExaDG
 namespace Structure
 {
 template<int dim, typename Number>
-ElasticityOperatorBase<dim, Number>::ElasticityOperatorBase() : scaling_factor_mass(1.0)
+ElasticityOperatorBase<dim, Number>::ElasticityOperatorBase()
+  : scaling_factor_mass(1.0), scaling_factor_mass_boundary(1.0)
 {
 }
 
@@ -47,8 +49,8 @@ ElasticityOperatorBase<dim, Number>::get_integrator_flags(bool const unsteady) c
   flags.cell_evaluate  = unsteady_flag | dealii::EvaluationFlags::gradients;
   flags.cell_integrate = unsteady_flag | dealii::EvaluationFlags::gradients;
 
-  // evaluation of Neumann BCs
-  flags.face_evaluate  = dealii::EvaluationFlags::nothing;
+  // evaluation of Neumann and Robin BCs
+  flags.face_evaluate  = dealii::EvaluationFlags::values;
   flags.face_integrate = dealii::EvaluationFlags::values;
 
   return flags;
@@ -83,8 +85,16 @@ ElasticityOperatorBase<dim, Number>::initialize(
 
   this->integrator_flags = this->get_integrator_flags(data.unsteady);
 
-  material_handler.initialize(
-    matrix_free, data.dof_index, data.quad_index, data.material_descriptor, data.large_deformation);
+  material_handler.initialize(matrix_free,
+                              data.dof_index,
+                              data.quad_index,
+                              data.material_descriptor,
+                              data.large_deformation,
+                              data.spatial_integration,
+                              data.force_material_residual,
+                              data.check_type,
+                              data.stable_formulation,
+                              data.cache_level);
 
   initialize_derived();
 
@@ -158,6 +168,21 @@ double
 ElasticityOperatorBase<dim, Number>::get_scaling_factor_mass_operator() const
 {
   return scaling_factor_mass;
+}
+
+template<int dim, typename Number>
+void
+ElasticityOperatorBase<dim, Number>::set_scaling_factor_mass_boundary_operator(
+  double const scaling_factor) const
+{
+  scaling_factor_mass_boundary = scaling_factor;
+}
+
+template<int dim, typename Number>
+double
+ElasticityOperatorBase<dim, Number>::get_scaling_factor_mass_boundary_operator() const
+{
+  return scaling_factor_mass_boundary;
 }
 
 template<int dim, typename Number>
@@ -249,7 +274,8 @@ ElasticityOperatorBase<dim, Number>::set_inhomogeneous_constrained_values(Vector
       {
         AssertThrow(boundary_type == BoundaryType::Dirichlet or
                       boundary_type == BoundaryType::Neumann or
-                      boundary_type == BoundaryType::NeumannCached,
+                      boundary_type == BoundaryType::NeumannCached or
+                      boundary_type == BoundaryType::RobinSpringDashpotPressure,
                     dealii::ExcMessage("BoundaryType not implemented."));
       }
     }
@@ -261,11 +287,31 @@ ElasticityOperatorBase<dim, Number>::set_inhomogeneous_constrained_values(Vector
 
 template<int dim, typename Number>
 void
+ElasticityOperatorBase<dim, Number>::get_reference_coordinates(VectorType & grid_coordinates) const
+{
+  // Construct `MappingDoFVector` and return grid coordinate vector.
+  dealii::DoFHandler<dim> const & dof_handler =
+    this->matrix_free->get_dof_handler(operator_data.dof_index);
+  dealii::FiniteElement<dim> const & fe = dof_handler.get_fe();
+
+  MappingDoFVector<dim, Number> mapping_dof_vector(fe.degree);
+
+  dealii::Mapping<dim> const & mapping_undeformed = *this->matrix_free->get_mapping_info().mapping;
+  // Empty input argument signals that no displacements shall be added to the grid coordinates
+  // defined by `mapping_undeformed`. Initializes `dealii::MappingQCache` internally.
+  VectorType dummy;
+  mapping_dof_vector.initialize_mapping_from_dof_vector(&mapping_undeformed, dummy, dof_handler);
+
+  mapping_dof_vector.fill_grid_coordinates_vector(grid_coordinates, dof_handler);
+}
+
+
+template<int dim, typename Number>
+void
 ElasticityOperatorBase<dim, Number>::reinit_cell_derived(IntegratorCell &   integrator,
                                                          unsigned int const cell) const
 {
   (void)integrator;
-
   this->material_handler.reinit(*this->matrix_free, cell);
 }
 

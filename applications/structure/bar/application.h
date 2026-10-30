@@ -19,8 +19,11 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_BAR
-#define STRUCTURE_BAR
+#ifndef APPLICATIONS_STRUCTURE_BAR_APPLICATION_H_
+#define APPLICATIONS_STRUCTURE_BAR_APPLICATION_H_
+
+#include <exadg/grid/deformed_cube_manifold.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 
 namespace ExaDG
 {
@@ -31,78 +34,42 @@ class DisplacementDBC : public dealii::Function<dim>
 {
 public:
   DisplacementDBC(double const displacement,
-                  bool const   quasistatic_solver,
+                  bool const   load_ramping,
                   bool const   unsteady,
+                  bool const   is_displacement_else_acceleration,
                   double const end_time)
     : dealii::Function<dim>(dim),
       displacement(displacement),
-      quasistatic_solver(quasistatic_solver),
+      load_ramping(load_ramping),
       unsteady(unsteady),
+      is_displacement_else_acceleration(is_displacement_else_acceleration),
       end_time(end_time)
   {
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  value(dealii::Point<dim> const & point, unsigned int const component) const final
   {
-    (void)p;
+    (void)point;
 
-    double factor = 1.0;
-    if(quasistatic_solver)
-      factor *= this->get_time();
-
-    if(unsteady)
-      factor = dealii::Utilities::fixed_power<2>(
-        std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time));
-
-    if(c == 0)
-      return displacement * factor;
-    else
-      return 0.0;
-  }
-
-private:
-  double const displacement;
-  bool const   quasistatic_solver;
-  bool const   unsteady;
-  double const end_time;
-};
-
-// TODO: only the time factor is different compared to the above function -> refactor and unify the
-// code
-template<int dim>
-class AccelerationDBC : public dealii::Function<dim>
-{
-public:
-  AccelerationDBC(double const displacement,
-                  bool const   quasistatic_solver,
-                  bool const   unsteady,
-                  double const end_time)
-    : dealii::Function<dim>(dim),
-      displacement(displacement),
-      quasistatic_solver(quasistatic_solver),
-      unsteady(unsteady),
-      end_time(end_time)
-  {
-  }
-
-  double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
-  {
-    (void)p;
-
-    double factor = 1.0;
-    if(quasistatic_solver)
-      factor *= this->get_time();
+    double factor = load_ramping ? this->get_time() : 1.0;
 
     if(unsteady)
     {
-      factor = 2.0 * dealii::Utilities::fixed_power<2>(2.0 * dealii::numbers::PI / end_time) *
-               (1.0 - 2.0 * dealii::Utilities::fixed_power<2>(
-                              std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time)));
+      if(is_displacement_else_acceleration)
+      {
+        factor = std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0);
+      }
+      else
+      {
+        factor =
+          2 * std::pow(2.0 * dealii::numbers::PI / end_time, 2.0) *
+          (1.0 -
+           2.0 * std::pow(std::sin(this->get_time() * 2.0 * dealii::numbers::PI / end_time), 2.0));
+      }
     }
 
-    if(c == 0)
+    if(component == 0)
       return displacement * factor;
     else
       return 0.0;
@@ -110,8 +77,9 @@ public:
 
 private:
   double const displacement;
-  bool const   quasistatic_solver;
+  bool const   load_ramping;
   bool const   unsteady;
+  bool const   is_displacement_else_acceleration;
   double const end_time;
 };
 
@@ -119,21 +87,19 @@ template<int dim>
 class VolumeForce : public dealii::Function<dim>
 {
 public:
-  VolumeForce(double volume_force, bool quasistatic_solver)
-    : dealii::Function<dim>(dim), volume_force(volume_force), quasistatic_solver(quasistatic_solver)
+  VolumeForce(double volume_force, bool load_ramping)
+    : dealii::Function<dim>(dim), volume_force(volume_force), load_ramping(load_ramping)
   {
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  value(dealii::Point<dim> const & point, unsigned int const component) const final
   {
-    (void)p;
+    (void)point;
 
-    double factor = 1.0;
-    if(quasistatic_solver)
-      factor *= this->get_time();
+    double factor = load_ramping ? this->get_time() : 1.0;
 
-    if(c == 0)
+    if(component == 0)
       return volume_force * factor; // volume force in x-direction
     else
       return 0.0;
@@ -141,36 +107,34 @@ public:
 
 private:
   double const volume_force;
-  bool const   quasistatic_solver;
+  bool const   load_ramping;
 };
 
 template<int dim>
 class AreaForce : public dealii::Function<dim>
 {
 public:
-  AreaForce(double area_force, bool const quasistatic_solver)
-    : dealii::Function<dim>(dim), area_force(area_force), quasistatic_solver(quasistatic_solver)
+  AreaForce(double areaforce, bool const load_ramping)
+    : dealii::Function<dim>(dim), areaforce(areaforce), load_ramping(load_ramping)
   {
   }
 
   double
-  value(dealii::Point<dim> const & p, unsigned int const c) const final
+  value(dealii::Point<dim> const & point, unsigned int const component) const final
   {
-    (void)p;
+    (void)point;
 
-    double factor = 1.0;
-    if(quasistatic_solver)
-      factor *= this->get_time();
+    double factor = load_ramping ? this->get_time() : 1.0;
 
-    if(c == 0)
-      return area_force * factor; // area force  in x-direction
+    if(component == 0)
+      return areaforce * factor; // area force  in x-direction
     else
       return 0.0;
   }
 
 private:
-  double const area_force;
-  bool const   quasistatic_solver;
+  double const areaforce;
+  bool const   load_ramping;
 };
 
 // analytical solution (if a Neumann BC is used at the right boundary)
@@ -178,10 +142,10 @@ template<int dim>
 class SolutionNBC : public dealii::Function<dim>
 {
 public:
-  SolutionNBC(double length, double area_force, double volume_force, double youngs_modulus)
+  SolutionNBC(double length, double area_force, double volume_force, double E_modul)
     : dealii::Function<dim>(dim),
-      A(-volume_force / (2.0 * youngs_modulus)),
-      B(area_force / youngs_modulus - length * 2.0 * A)
+      A(-volume_force / 2 / E_modul),
+      B(+area_force / E_modul - length * 2 * this->A)
   {
   }
 
@@ -204,10 +168,10 @@ template<int dim>
 class SolutionDBC : public dealii::Function<dim>
 {
 public:
-  SolutionDBC(double length, double displacement, double volume_force, double youngs_modulus)
+  SolutionDBC(double length, double displacement, double volume_force, double E_modul)
     : dealii::Function<dim>(dim),
-      A(-volume_force / (2.0 * youngs_modulus)),
-      B(displacement / length - A * length)
+      A(-volume_force / 2 / E_modul),
+      B(+displacement / length - this->A * length)
   {
   }
 
@@ -239,58 +203,57 @@ public:
   {
     ApplicationBase<dim, Number>::add_parameters(prm);
 
+    // clang-format off
     prm.enter_subsection("Application");
-    {
-      prm.add_parameter("Length", length, "Length of domain.");
-      prm.add_parameter("Height", height, "Height of domain.");
-      prm.add_parameter("Width", width, "Width of domain.");
-      prm.add_parameter("UseVolumeForce", use_volume_force, "Use volume force.");
-      prm.add_parameter("VolumeForce", volume_force, "Volume force.");
-      prm.add_parameter("BoundaryType",
-                        boundary_type,
-                        "Type of boundary condition, Dirichlet vs Neumann.");
-      prm.add_parameter("ProblemType",
-                        problem_type,
-                        "Problem type considered, QuasiStatic vs Unsteady vs. Steady");
-      prm.add_parameter("LargeDeformation",
-                        large_deformation,
-                        "Consider finite strains or linear elasticity.");
-      prm.add_parameter("Preconditioner", preconditioner, "Preconditioner for the linear system.");
-      prm.add_parameter("MaterialType",
-                        material_type,
-                        "StVenantKirchhoff vs. IncompressibleNeoHookean");
-      prm.add_parameter("WeakDamping",
-                        weak_damping_coefficient,
-                        "Weak damping coefficient for unsteady problems.");
-      prm.add_parameter("Displacement",
-                        displacement,
-                        "Displacement of right boundary in case of Dirichlet BC.");
-      prm.add_parameter("Traction",
-                        area_force,
-                        "Traction acting on right boundary in case of Neumann BC.");
-      prm.add_parameter("AdaptiveRefinement",
-                        adaptive_refinement,
-                        "Static adaptive refinement of the mesh.");
-      prm.add_parameter("UseMatrixBasedOperator",
-                        use_matrix_based_operator,
-                        "Use matrix-based operators in global Krylov solver and Multigrid.");
-      prm.add_parameter("MinDegreeMatrixFree",
-                        min_degree_matrix_free,
-                        "Minimum polynomial degree for matrix-free operators in multigrid.");
+    {            
+      prm.add_parameter("Length",                length,                                     "Length of domain.");
+      prm.add_parameter("Height",                height,                                     "Height of domain.");
+      prm.add_parameter("Width",                 width,                                      "Width of domain.");
+      prm.add_parameter("UseVolumeForce",        use_volume_force,                           "Use volume force.");
+      prm.add_parameter("SpatialIntegration",    spatial_integration,                        "Use spatial integration.");
+      prm.add_parameter("ForceMaterialResidual", force_material_residual,                    "Use undeformed configuration to evaluate the residual.");
+      prm.add_parameter("StableFormulation",     stable_formulation,                         "Use a stable formulation.");
+      prm.add_parameter("LoadIncrement",         load_increment,                             "Load increment used in QuasiStatic solver.");
+      prm.add_parameter("CacheLevel",            cache_level,                                "Cache level: 0 none, 1 scalars, 2 tensors.");
+      prm.add_parameter("CheckType",             check_type,                                 "Check type for deformation gradient.");
+      prm.add_parameter("MappingStrength",       mapping_strength,                           "Strength of the mapping applied.");
+      prm.add_parameter("VolumeForce",           volume_force,                               "Volume force.");
+      prm.add_parameter("BoundaryType",          boundary_type,                              "Type of boundary condition, Dirichlet vs Neumann.");
+      prm.add_parameter("ProblemType",           problem_type,                               "Problem type considered, QuasiStatic vs Unsteady vs. Steady");
+      prm.add_parameter("MaterialType",          material_type,                              "StVenantKirchhoff vs. IncompressibleNeoHookean");
+      prm.add_parameter("WeakDamping",           weak_damping_coefficient,                   "Weak damping coefficient for unsteady problems.");
+      prm.add_parameter("Displacement",          displacement,                               "Displacement of right boundary in case of Dirichlet BC.");
+      prm.add_parameter("Traction",              area_force,                                 "Traction acting on right boundary in case of Neumann BC.");
+      prm.add_parameter("LargeDeformation",      large_deformation,                          "Consider finite strains or linear elasticity.");
+      prm.add_parameter("Preconditioner",        preconditioner,                             "None, PointJacobi, AMG, AdditiveSchwarz or Multigrid");
+      prm.add_parameter("SpringCoefficient",     spring_coefficient,                         "Exterior spring stiffness.");
+      prm.add_parameter("DashpotCoefficient",    dashpot_coefficient,                        "Exterior daspot coefficient.");
+      prm.add_parameter("ExteriorPressure",      exterior_pressure,                          "Exterior pressure.");
+      prm.add_parameter("InvAnalAccelMethRamp",  inverse_analysis_acceleration_method_ramp,  "Acceleration method for inverse analysis (ramp phase).");
+      prm.add_parameter("InvAnalAccelMethFinal", inverse_analysis_acceleration_method_final, "Acceleration method for inverse analysis (final phase).");
+      prm.add_parameter("AdaptiveRefinement",    adaptive_refinement,                        "Static adaptive refinement of the mesh.");
+      prm.add_parameter("UseMatrixBasedOperator", use_matrix_based_operator,                   "Use matrix-based operators in global Krylov solver and Multigrid.");
+      prm.add_parameter("MinDegreeMatrixFree",   min_degree_matrix_free,                     "Minimum polynomial degree for matrix-free operators in multigrid.");
     }
     prm.leave_subsection();
+    // clang-format on
   }
 
 private:
   void
   set_parameters() final
   {
-    this->param.problem_type         = problem_type;
-    this->param.body_force           = use_volume_force;
-    this->param.large_deformation    = large_deformation;
-    this->param.pull_back_body_force = false;
-    this->param.pull_back_traction   = false;
-    this->param.material_type        = material_type;
+    this->param.problem_type      = problem_type;
+    this->param.body_force        = use_volume_force;
+    this->param.large_deformation = large_deformation;
+    // The inverse problem needs the pull-back of the loading in case it immediately converges.
+    this->param.pull_back_body_force    = problem_type == ProblemType::InverseAnalysis;
+    this->param.pull_back_traction      = problem_type == ProblemType::InverseAnalysis;
+    this->param.spatial_integration     = spatial_integration;
+    this->param.cache_level             = cache_level;
+    this->param.check_type              = check_type;
+    this->param.force_material_residual = force_material_residual;
+    this->param.stable_formulation      = stable_formulation;
 
     this->param.density = density;
     if(this->param.problem_type == ProblemType::Unsteady and weak_damping_coefficient > 0.0)
@@ -307,8 +270,8 @@ private:
     this->param.solver_info_data.interval_time_steps =
       problem_type == ProblemType::Unsteady ? 200 : 2;
 
-    this->param.mapping_degree              = 1;
-    this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
+    this->param.mapping_degree              = this->param.degree;
+    this->param.mapping_degree_coarse_grids = this->param.degree;
 
     this->param.grid.element_type = ElementType::Hypercube; // Simplex;
     if(this->param.grid.element_type == ElementType::Simplex)
@@ -323,53 +286,65 @@ private:
         adaptive_refinement ? true : false; // required for adaptive refinement
     }
 
-    this->param.load_increment = 0.1;
+    this->param.load_increment = load_increment;
+    this->param.use_extrapolation_continuation =
+      problem_type == ProblemType::InverseAnalysis ? false : true;
 
-    this->param.use_matrix_based_operator = use_matrix_based_operator;
-    this->param.sparse_matrix_type        = SparseMatrixType::Trilinos;
+    this->param.inverse_analysis_use_separate_ramp_solver = true;
+    this->param.inverse_analysis_acceleration_method_ramp =
+      inverse_analysis_acceleration_method_ramp;
+    this->param.inverse_analysis_acceleration_method_final =
+      inverse_analysis_acceleration_method_final;
 
-    this->param.newton_solver_data = Newton::SolverData(1e2, 1.e-9, 1.e-9);
+    this->param.inverse_analysis_solver_parameters.abs_tol           = 1.0e-16;
+    this->param.inverse_analysis_solver_parameters.rel_tol           = 1.0e-9;
+    this->param.inverse_analysis_solver_parameters.omega_init        = 0.3;
+    this->param.inverse_analysis_solver_parameters.reused_time_steps = 0;
+    this->param.inverse_analysis_solver_parameters.max_iter          = 200;
+    this->param.inverse_analysis_solver_parameters.delay_acceleration =
+      this->param.inverse_analysis_use_separate_ramp_solver ?
+        0 :
+        static_cast<unsigned int>(1.0 / load_increment);
+    this->param.inverse_analysis_solver_parameters.drop_tol_QR = 1.0e-2;
 
-    bool const         use_iterative_solver_on_coarse_grid = false;
-    LinearSolver const linear_solver =
-      use_iterative_solver_on_coarse_grid ? LinearSolver::FGMRES : LinearSolver::CG;
-    this->param.solver_data         = SolverData(1e3, 1.e-12, 1.e-8, linear_solver, 100);
+    this->param.use_matrix_based_operator             = use_matrix_based_operator;
+    this->param.sparse_matrix_type                    = SparseMatrixType::Trilinos;
+    this->param.multigrid_data.min_degree_matrix_free = min_degree_matrix_free;
+
+    this->param.newton_solver_data  = Newton::SolverData(1e2, 1.e-9, 1.e-4);
+    this->param.solver_data         = SolverData(1e3, 1.e-14, 1.e-8, LinearSolver::FGMRES, 30);
     this->param.preconditioner      = preconditioner;
     this->param.multigrid_data.type = MultigridType::phMG;
-
-    this->param.multigrid_data.smoother_data.smoother       = MultigridSmoother::Chebyshev;
-    this->param.multigrid_data.smoother_data.preconditioner = PreconditionerSmoother::PointJacobi;
 
     this->param.multigrid_data.p_sequence             = PSequenceType::DecreaseByOne; // Bisect;
     this->param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
     this->param.multigrid_data.smoother_data.preconditioner = PreconditionerSmoother::PointJacobi;
-    this->param.multigrid_data.smoother_data.iterations     = 5;
+    this->param.multigrid_data.smoother_data.iterations     = 12;
     this->param.multigrid_data.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
     this->param.multigrid_data.smoother_data.smoothing_range   = 60;  // Chebyshev, default: 20
     this->param.multigrid_data.smoother_data.iterations_eigenvalue_estimation =
-      60; // Chebyshev, default: 20
+      20; // Chebyshev, default: 20
 
-    this->param.multigrid_data.coarse_problem.solver = use_iterative_solver_on_coarse_grid ?
-                                                         MultigridCoarseGridSolver::GMRES :
-                                                         MultigridCoarseGridSolver::AMG;
+    this->param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::GMRES;
     this->param.multigrid_data.coarse_problem.solver_data =
-      SolverData(1e3, 1.e-12, 1.e-3, LinearSolver::Undefined, 100);
-    this->param.multigrid_data.coarse_problem.preconditioner =
-      use_iterative_solver_on_coarse_grid ? MultigridCoarseGridPreconditioner::AMG :
-                                            MultigridCoarseGridPreconditioner::None;
-    this->param.multigrid_data.min_degree_matrix_free = min_degree_matrix_free;
+      SolverData(1e3, 1.e-12, 1.e-3, LinearSolver::Undefined, 30);
 
+    this->param.multigrid_data.coarse_problem.preconditioner =
+      MultigridCoarseGridPreconditioner::AMG;
 
 #ifdef DEAL_II_WITH_TRILINOS
+    this->param.multigrid_data.coarse_problem.amg_data.amg_operator_type =
+      AMGOperatorType::Elasticity;
+
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.elliptic = true;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.higher_order_elements =
       this->param.degree > 1;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.n_cycles              = 1;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.w_cycle               = false;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.aggregation_threshold = 1e-4;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_sweeps       = 8;
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_sweeps       = 12;
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_overlap      = 2;
-    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_type         = "ILU";
+    this->param.multigrid_data.coarse_problem.amg_data.ml_data.smoother_type         = "Chebyshev";
     this->param.multigrid_data.coarse_problem.amg_data.ml_data.coarse_type           = "Amesos-KLU";
 #endif
 
@@ -480,6 +455,12 @@ private:
 
         if(global_refinements > 0)
           tria.refine_global(global_refinements);
+
+        // Apply manifold map on a uniform cube
+        unsigned int const frequency = 1;
+        if(std::abs(this->length - this->height) < 1e-12)
+          if(dim == 2 or std::abs(this->length - this->width) < 1e-12)
+            apply_deformed_cube_manifold(tria, 0.0, this->length, mapping_strength, frequency);
       };
 
     GridUtilities::create_triangulation_with_multigrid<dim>(grid,
@@ -559,8 +540,15 @@ private:
                                                                                   pair;
     typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
 
-    this->boundary_descriptor->neumann_bc.insert(
-      pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    // exterior support
+    Structure::RobinParameters const robin_parameters(true /* velocity_normal_projection */,
+                                                      true /* displacement_normal_projection */,
+                                                      dashpot_coefficient,
+                                                      spring_coefficient,
+                                                      exterior_pressure,
+                                                      0.0 /* pressure_ramp_time */);
+
+    this->boundary_descriptor->robin_bc.insert(std::make_pair(0, robin_parameters));
 
     // left face
     std::vector<bool> mask_left = {true, clamp_at_left_boundary};
@@ -577,10 +565,8 @@ private:
     this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(1, mask_left));
 
     // right face: Dirichlet or Neumann BC
-
-    bool quasistatic_solver = false;
-    if(this->param.problem_type == ProblemType::QuasiStatic)
-      quasistatic_solver = true;
+    bool const load_ramping = this->param.problem_type == ProblemType::QuasiStatic or
+                              this->param.problem_type == ProblemType::InverseAnalysis;
 
     if(boundary_type == BoundaryType::Dirichlet)
     {
@@ -593,16 +579,26 @@ private:
 
       bool const unsteady = (this->param.problem_type == ProblemType::Unsteady);
       this->boundary_descriptor->dirichlet_bc.insert(
-        pair(2, new DisplacementDBC<dim>(displacement, quasistatic_solver, unsteady, end_time)));
+        pair(2,
+             new DisplacementDBC<dim>(displacement,
+                                      load_ramping,
+                                      unsteady,
+                                      true /* is_displacement_else_acceleration */,
+                                      end_time)));
       this->boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
-        pair(2, new AccelerationDBC<dim>(displacement, quasistatic_solver, unsteady, end_time)));
+        pair(2,
+             new DisplacementDBC<dim>(displacement,
+                                      load_ramping,
+                                      unsteady,
+                                      false /* is_displacement_else_acceleration */,
+                                      end_time)));
 
       this->boundary_descriptor->dirichlet_bc_component_mask.insert(pair_mask(2, mask_right));
     }
     else if(boundary_type == BoundaryType::Neumann)
     {
       this->boundary_descriptor->neumann_bc.insert(
-        pair(2, new AreaForce<dim>(area_force, quasistatic_solver)));
+        pair(2, new AreaForce<dim>(area_force, load_ramping)));
     }
     else
     {
@@ -659,39 +655,93 @@ private:
   {
     typedef std::pair<dealii::types::material_id, std::shared_ptr<MaterialData>> Pair;
 
-    if(this->param.material_type == MaterialType::StVenantKirchhoff)
+    if(material_type == MaterialType::StVenantKirchhoff)
     {
-      Type2D const two_dim_type   = Type2D::PlaneStress;
-      double const poissons_ratio = 0.3;
+      Type2D const two_dim_type = Type2D::PlaneStress;
+      double const nu           = 0.3;
       this->material_descriptor->insert(
-        Pair(0,
-             new StVenantKirchhoffData<dim>(
-               this->param.material_type, youngs_modulus, poissons_ratio, two_dim_type)));
+        Pair(0, new StVenantKirchhoffData<dim>(material_type, E_modul, nu, two_dim_type)));
     }
-    else if(this->param.material_type == MaterialType::IncompressibleNeoHookean)
+    else if(material_type == MaterialType::IncompressibleNeoHookean)
     {
       Type2D const two_dim_type  = Type2D::Undefined;
       double const shear_modulus = 1.0e2;
       double const nu            = 0.49;
       double const bulk_modulus  = shear_modulus * 2.0 * (1.0 + nu) / (3.0 * (1.0 - 2.0 * nu));
 
+      this->material_descriptor->insert(Pair(0,
+                                             new IncompressibleNeoHookeanData<dim>(material_type,
+                                                                                   shear_modulus,
+                                                                                   bulk_modulus,
+                                                                                   two_dim_type)));
+    }
+    else if(material_type == MaterialType::CompressibleNeoHookean)
+    {
+      Type2D const two_dim_type  = Type2D::Undefined;
+      double const shear_modulus = 1.0e2;
+      double const nu            = 0.3;
+      double const lambda        = shear_modulus * 2.0 * nu / (1.0 - 2.0 * nu);
+
+      this->material_descriptor->insert(Pair(
+        0,
+        new CompressibleNeoHookeanData<dim>(material_type, shear_modulus, lambda, two_dim_type)));
+    }
+    else if(material_type == MaterialType::IncompressibleFibrousTissue)
+    {
+      Type2D const two_dim_type  = Type2D::Undefined;
+      double const shear_modulus = 1.0e2;
+      double const nu            = 0.49;
+      double const bulk_modulus  = shear_modulus * 2.0 * (1.0 + nu) / (3.0 * (1.0 - 2.0 * nu));
+
+      // Parameters corresponding to aortic tissue might be found in
+      // [Weisbecker et al., J Mech Behav Biomed Mater 12, 2012] or
+      // [Rolf-Pissarczyk et al., Comput Methods Appl Mech Eng 373, 2021].
+      // a = 3.62, b = 34.3 for medial tissue lead to the H_ii below,
+      // while the k_1 coefficient is scaled relative to the shear modulus
+      // (for medial tissue, e.g., 62.1 kPa) used in the other cases here.
+      double const fiber_angle_phi_in_degree = 27.47;                          // [deg]
+      double const fiber_H_11                = 0.9168;                         // [-]
+      double const fiber_H_22                = 0.0759;                         // [-]
+      double const fiber_H_33                = 0.0073;                         // [-]
+      double const fiber_k_1                 = 1.4e3 / 62.1e3 * shear_modulus; // [Pa]
+      double const fiber_k_2                 = 22.1;                           // [-]
+      double const fiber_switch_limit        = 1.0;                            // [-]
+
       this->material_descriptor->insert(
         Pair(0,
-             new IncompressibleNeoHookeanData<dim>(
-               this->param.material_type, shear_modulus, bulk_modulus, two_dim_type)));
+             new IncompressibleFibrousTissueData<dim>(material_type,
+                                                      shear_modulus,
+                                                      bulk_modulus,
+                                                      fiber_angle_phi_in_degree,
+                                                      fiber_H_11,
+                                                      fiber_H_22,
+                                                      fiber_H_33,
+                                                      fiber_k_1,
+                                                      fiber_k_2,
+                                                      fiber_switch_limit,
+                                                      nullptr /* e1_orientations */,
+                                                      nullptr /* e2_orientations */,
+                                                      nullptr /* stiffness_scaling */,
+                                                      nullptr /* robin_k_scaling */,
+                                                      {},
+                                                      0.0 /* point_tolerance */,
+                                                      two_dim_type)));
+    }
+    else
+    {
+      AssertThrow(false, dealii::ExcMessage("Material type is not expected in application."));
     }
   }
 
   void
   set_field_functions() final
   {
-    bool quasistatic_solver = false;
-    if(this->param.problem_type == ProblemType::QuasiStatic)
-      quasistatic_solver = true;
+    bool load_ramping = this->param.problem_type == ProblemType::QuasiStatic or
+                        this->param.problem_type == ProblemType::InverseAnalysis;
 
     if(use_volume_force)
       this->field_functions->right_hand_side.reset(
-        new VolumeForce<dim>(this->volume_force, quasistatic_solver));
+        new VolumeForce<dim>(this->volume_force, load_ramping));
     else
       this->field_functions->right_hand_side.reset(new dealii::Functions::ZeroFunction<dim>(dim));
 
@@ -712,24 +762,35 @@ private:
     pp_data.output_data.write_displacement_magnitude = true;
     pp_data.output_data.write_displacement_jacobian  = true;
     pp_data.output_data.write_max_principal_stress   = true;
-    pp_data.output_data.write_higher_order           = true;
-    pp_data.output_data.degree                       = this->param.degree;
+    pp_data.output_data.write_max_fiber_stretch      = true;
 
+    bool const orientation_available = material_type == MaterialType::IncompressibleFibrousTissue;
+    pp_data.output_data.write_E1_orientation         = orientation_available;
+    pp_data.output_data.write_E2_orientation         = orientation_available;
+    pp_data.output_data.write_traction_local_full    = orientation_available;
+    pp_data.output_data.write_traction_local_normal  = orientation_available;
+    pp_data.output_data.write_traction_local_inplane = orientation_available;
+
+    pp_data.output_data.write_higher_order = true;
+    pp_data.output_data.degree             = this->param.degree;
+
+    pp_data.output_data.write_inverse_analysis_vtu    = true;
+    pp_data.output_data.write_inverse_analysis_binary = true;
+
+    pp_data.error_data.time_control_data.is_active        = true;
     pp_data.error_data.time_control_data.start_time       = start_time;
-    pp_data.error_data.time_control_data.trigger_interval = (end_time - start_time);
-
-    pp_data.error_data.time_control_data.is_active = true;
-    pp_data.error_data.calculate_relative_errors   = true;
-    double const vol_force                         = use_volume_force ? this->volume_force : 0.0;
+    pp_data.error_data.time_control_data.trigger_interval = (end_time - start_time) * 0.25;
+    pp_data.error_data.calculate_relative_errors          = true;
+    double const vol_force = use_volume_force ? this->volume_force : 0.0;
     if(boundary_type == BoundaryType::Dirichlet)
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->youngs_modulus));
+        new SolutionDBC<dim>(this->length, this->displacement, vol_force, this->E_modul));
     }
     else if(boundary_type == BoundaryType::Neumann)
     {
       pp_data.error_data.analytical_solution.reset(
-        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->youngs_modulus));
+        new SolutionNBC<dim>(this->length, this->area_force, vol_force, this->E_modul));
     }
     else
     {
@@ -746,6 +807,13 @@ private:
 
   bool use_volume_force  = true;
   bool large_deformation = true;
+
+  bool spatial_integration     = false;
+  bool force_material_residual = false;
+  bool stable_formulation      = true;
+
+  unsigned int check_type  = 0;
+  unsigned int cache_level = 0;
 
   bool const clamp_at_right_boundary = false;
   bool const clamp_at_left_boundary  = false;
@@ -768,19 +836,32 @@ private:
   double displacement = 1.0; // "Dirichlet"
   double area_force   = 1.0; // "Neumann"
 
+  double load_increment = 0.1;
+
+  double spring_coefficient  = 0.0;
+  double dashpot_coefficient = 0.0;
+  double exterior_pressure   = 0.0;
+
   bool use_matrix_based_operator = false;
 
   // mesh parameters
   bool               adaptive_refinement = false;
-  unsigned int const repetitions0 = 4, repetitions1 = 1, repetitions2 = 1;
+  unsigned int const repetitions0 = 1, repetitions1 = 1, repetitions2 = 1;
 
-  MaterialType material_type  = MaterialType::Undefined;
-  double const youngs_modulus = 200.0;
+  MaterialType material_type = MaterialType::StVenantKirchhoff;
+  double const E_modul       = 200.0;
 
   double const start_time = 0.0;
   double const end_time   = 100.0;
 
   double const density = 0.001;
+
+  double mapping_strength = 0.0;
+
+  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_ramp =
+    FixedPointSolver::AccelerationMethod::FixedRelaxation;
+  FixedPointSolver::AccelerationMethod inverse_analysis_acceleration_method_final =
+    FixedPointSolver::AccelerationMethod::IQN_ILS;
 };
 
 } // namespace Structure
@@ -789,4 +870,4 @@ private:
 
 #include <exadg/structure/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_STRUCTURE_BAR_APPLICATION_H_ */

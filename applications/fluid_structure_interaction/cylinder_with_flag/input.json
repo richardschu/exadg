@@ -18,12 +18,12 @@
         "RelTol": "1.e-3",
         "OmegaInit": "0.3",
         "ReusedTimeSteps": "8",
-        "PartitionedIterMax": "100"
+        "PartitionedMaxIter": "100"
     },
     "Application" : {
     },
     "Output": {
-        "OutputDirectory": "output/cylinder_with_flag/",
+        "OutputDirectory": "./results/cylinder_with_flag/",
         "OutputName": "test",
         "WriteOutput": "false"
   }

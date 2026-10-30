@@ -15,7 +15,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
 
@@ -144,7 +144,7 @@ evaluate_convergence_study(MPI_Comm const &                 mpi_comm,
 
           for(unsigned int i = 0; i < unique_labels.size(); ++i)
           {
-            convergence_table.set_scientific(labels[i] + "  ", true);
+            convergence_table.set_scientific(unique_labels[i] + "  ", true);
           }
           convergence_table.evaluate_all_convergence_rates(
             dealii::ConvergenceTable::reduction_rate_log2);

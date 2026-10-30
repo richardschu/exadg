@@ -125,7 +125,8 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
       application->get_material_descriptor_ale_elasticity(),
       application->get_parameters_ale_elasticity(),
       "ale_elasticity",
-      false /* setup_scalar_field */,
+      false /* setup_scalar_postprocessing_field */,
+      false /* setup_vector_postprocessing_field */,
       mpi_comm);
   }
   else
@@ -151,7 +152,7 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
 
   // setup postprocessor
   postprocessor = application->create_postprocessor();
-  postprocessor->setup(*pde_operator);
+  postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
   // setup time integrator before calling setup_solvers (this is necessary since the setup
   // of the solvers depends on quantities such as the time_step_size or gamma0!)

@@ -25,7 +25,6 @@ Mathematical model:
   Problem type:                              Unsteady
   Body force:                                false
   Large deformation:                         false
-  Material type:                             StVenantKirchhoff
 
 Physical quantities:
   Density:                                   1.0000e-03
@@ -47,42 +46,45 @@ Spatial Discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            1
-  Mapping degree coarse grids:               1
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   Polynomial degree:                         4
   Use matrix-based operator:                 false
 
 Solver:
 
 Linear solver:
-  Solver:                                    CG
+  Solver:                                    FGMRES
   Maximum number of iterations:              1000
-  Absolute solver tolerance:                 1.0000e-12
+  Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                DecreaseByOne
   Min degree matrix-free:                    1
   Smoother:                                  Chebyshev
   Preconditioner smoother:                   PointJacobi
-  Iterations smoother:                       5
+  Iterations smoother:                       12
   Smoothing range:                           6.0000e+01
-  Iterations eigenvalue estimation:          60
-  Coarse grid solver:                        AMG
-  Coarse grid preconditioner:                None
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                AMG
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
-  Maximum size of Krylov space:              100
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
       AMG type:                              ML
-      Smoother sweeps:                       8
+      Smoother sweeps:                       12
       Number of cycles:                      1
-      Smoother type:                         ILU
+      Smoother type:                         Chebyshev
 
 Generating grid for 3-dimensional problem:
 
   Max. number of refinements:                1
-  Number of cells:                           32
+  Number of cells:                           8
 
 Construct elasticity operator ...
 
@@ -90,13 +92,13 @@ Continuous Galerkin finite element discretization:
 
   degree of 1D polynomials:                  4
   number of dofs per cell:                   375
-  number of dofs (total):                    8019
+  number of dofs (total):                    2187
 
 Discontinuous Galerkin finite element discretization of scalar field:
 
   degree of 1D polynomials:                  4
   number of dofs per cell:                   125
-  number of dofs (total):                    4000
+  number of dofs (total):                    1000
 
 ... done!
 
@@ -115,12 +117,21 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 5.00000e-01
+ Time step number = 1       t = 0.00000e+00, dt = 5.00000e-01
 ________________________________________________________________________________
+
+Calculate error for all fields at time t = 2.5000e+01:
+  Relative error (L2-norm): 4.24265e-02
+
+Calculate error for all fields at time t = 5.0000e+01:
+  Relative error (L2-norm): 1.00003e+00
+
+Calculate error for all fields at time t = 7.5000e+01:
+  Relative error (L2-norm): 4.24265e-02
 
 ________________________________________________________________________________
 
- Time step number = 200     t = 9.95000e+01 -> t + dt = 1.00000e+02
+ Time step number = 200     t = 9.95000e+01, dt = 5.00000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+02:

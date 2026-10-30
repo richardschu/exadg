@@ -17,12 +17,12 @@
         "AbsTol": "1.e-12",
         "RelTol": "1.e-3",
         "OmegaInit": "0.1",
-        "PartitionedIterMax": "100"
+        "PartitionedMaxIter": "100"
     },
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/bending_wall/",
+        "OutputDirectory": "./results/bending_wall/",
         "OutputName": "fsi_test",
         "WriteOutput": "false"
     }

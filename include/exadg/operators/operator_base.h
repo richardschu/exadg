@@ -175,6 +175,25 @@ public:
   void
   vmult(VectorType & dst, VectorType const & src) const;
 
+  /*
+   * Matrix-vector product with operations `before(begin, end)` and
+   * `after(begin, end)` on index ranges of the vectors, used by solvers fusing
+   * their vector updates with the operator evaluation (e.g. `dealii::SolverCG`
+   * or `dealii::PreconditionChebyshev` with a `dealii::DiagonalMatrix`
+   * preconditioner). These operations are passed by the solver; `before` has
+   * to be executed before `src` is read and `after` once `dst` is final in the
+   * range. For DG, they are fused into the matrix-free loop. For continuous
+   * elements and matrix-based operators, `before` and `after` are executed on
+   * all indices around `apply()` (or `apply_matrix_based()`), which gives the
+   * same result as the standard `vmult()` and is a safe fallback for derived
+   * classes overriding `apply()` only.
+   */
+  void
+  vmult(VectorType &                                                        dst,
+        VectorType const &                                                  src,
+        std::function<void(const unsigned int, const unsigned int)> const & before,
+        std::function<void(const unsigned int, const unsigned int)> const & after) const;
+
   void
   vmult_add(VectorType & dst, VectorType const & src) const;
 
@@ -241,7 +260,7 @@ public:
   init_system_matrix(dealii::TrilinosWrappers::SparseMatrix & system_matrix,
                      MPI_Comm const &                         mpi_comm) const;
 
-  void
+  virtual void
   calculate_system_matrix(dealii::TrilinosWrappers::SparseMatrix & system_matrix) const;
 #endif
 
@@ -253,7 +272,7 @@ public:
   init_system_matrix(dealii::PETScWrappers::MPI::SparseMatrix & system_matrix,
                      MPI_Comm const &                           mpi_comm) const;
 
-  void
+  virtual void
   calculate_system_matrix(dealii::PETScWrappers::MPI::SparseMatrix & system_matrix) const;
 #endif
 
@@ -272,13 +291,24 @@ public:
    * iterative solvers (as well as multigrid preconditioners and smoothers). Operations of this type
    * are called apply_...() and vmult_...() as required by deal.II interfaces.
    */
-  void
+  virtual void
   apply(VectorType & dst, VectorType const & src) const;
+
+  /*
+   * Version of apply() with fused operations `before` and `after`, see
+   * vmult(). Only for DG.
+   */
+  void
+  apply_before_after(
+    VectorType &                                                        dst,
+    VectorType const &                                                  src,
+    std::function<void(const unsigned int, const unsigned int)> const & before,
+    std::function<void(const unsigned int, const unsigned int)> const & after) const;
 
   /*
    * See function apply() for a description.
    */
-  void
+  virtual void
   apply_add(VectorType & dst, VectorType const & src) const;
 
   void
@@ -349,7 +379,7 @@ public:
   void
   calculate_diagonal(VectorType & diagonal) const;
 
-  void
+  virtual void
   add_diagonal(VectorType & diagonal) const;
 
   /*
@@ -441,6 +471,7 @@ protected:
   virtual void
   do_boundary_integral_continuous(IntegratorFace &                   integrator,
                                   OperatorType const &               operator_type,
+                                  unsigned int const                 face,
                                   dealii::types::boundary_id const & boundary_id) const;
 
   // The computation of the diagonal and block-diagonal requires face integrals of type
@@ -562,15 +593,17 @@ private:
                           VectorType const &                      src,
                           Range const &                           range) const;
 
+protected:
   /*
    * This function loops over all cells and calculates cell integrals.
    */
-  void
+  virtual void
   cell_loop(dealii::MatrixFree<dim, Number> const & matrix_free,
             VectorType &                            dst,
             VectorType const &                      src,
             Range const &                           range) const;
 
+private:
   /*
    * This function loops over all interior faces and calculates face integrals.
    */
@@ -586,6 +619,7 @@ private:
    * homogeneous, inhomogeneous, and full.
    */
 
+protected:
   // homogeneous operator
   void
   boundary_face_loop_hom_operator(dealii::MatrixFree<dim, Number> const & matrix_free,
@@ -593,6 +627,7 @@ private:
                                   VectorType const &                      src,
                                   Range const &                           range) const;
 
+private:
   // inhomogeneous operator
   void
   boundary_face_loop_inhom_operator(dealii::MatrixFree<dim, Number> const & matrix_free,
@@ -692,16 +727,19 @@ private:
                               dealii::DynamicSparsityPattern & dsp,
                               MPI_Comm const &                 mpi_comm) const;
 
+protected:
   template<typename SparseMatrix>
   void
   internal_calculate_system_matrix(SparseMatrix & system_matrix) const;
 
+private:
   /*
    * This function sets entries of the DoF-vector corresponding to constraint DoFs to one.
    */
   void
   set_constrained_dofs_to_one(VectorType & vector) const;
 
+protected:
   /*
    * Do we have to evaluate (boundary) face integrals for this operator? For example, operators
    * such as the mass operator only involve cell integrals.
@@ -709,6 +747,7 @@ private:
   bool
   evaluate_face_integrals() const;
 
+private:
   /*
    * Compute factorized additive Schwarz matrices.
    */

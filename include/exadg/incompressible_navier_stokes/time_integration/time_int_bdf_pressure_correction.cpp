@@ -376,8 +376,9 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
   // in case we need to iteratively solve a linear or nonlinear system of equations
   if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
-    // Extrapolate old solutions to get a good initial estimate for the solver.
-    if(this->use_extrapolation)
+    // Extrapolate old solutions, used by the explicitly treated terms below and, by default, as the
+    // initial guess for the solver.
+    if(this->first_coupling_iteration)
     {
       velocity_np = 0.0;
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -405,12 +406,31 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
       }
     }
 
+    // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
+    VectorType transport_velocity;
+    if(this->param.convective_problem() and
+       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      transport_velocity = velocity_np;
+    }
+
+    // `velocity_np` holds the extrapolation needed by the explicitly treated terms above, which is
+    // also the initial guess for `InitialGuessType::Extrapolation`. `InitialGuessType::Zero` and
+    // `InitialGuessType::LastTimeStep` overwrite it here, `InitialGuessType::Projection` overwrites
+    // it below once the right-hand side is available.
+    if(this->first_coupling_iteration and
+       this->param.initial_guess_type_momentum != InitialGuessType::Extrapolation and
+       this->param.initial_guess_type_momentum != InitialGuessType::Projection)
+    {
+      this->compute_initial_guess(velocity_np, velocity, this->param.initial_guess_type_momentum);
+    }
+
     bool const update_preconditioner =
       this->param.update_preconditioner_momentum and
       ((this->time_step_number - 1) % this->param.update_preconditioner_momentum_every_time_steps ==
        0);
 
-    if(this->param.nonlinear_problem_has_to_be_solved())
+    if(this->param.implicit_nonlinear_convective_problem())
     {
       /*
        *  Calculate the vector that is constant when solving the nonlinear momentum equation
@@ -442,37 +462,139 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
                                     timer.wall_time());
       }
     }
-    else // linear problem
+    else // convective term is linear, viscous term might not be.
     {
-      // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
-      VectorType transport_velocity;
-      if(this->param.convective_problem() and
-         this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+      // Picard iteration to converge the nonlinear viscous term, as in the dual
+      // splitting scheme.
+      bool constexpr apply_aitken_relaxation = true;
+      unsigned int picard_iterations         = 0;
+      unsigned int linear_iterations         = 0;
+      bool         converged                 = false;
+      double       norm_0                    = 1.0;
+      double       relaxation                = 1.0;
+      double       relaxation_old            = 1.0;
+
+      VectorType rhs(velocity_np), residual, residual_old, delta_residual, velocity_np_old;
+
+      // Compute the initial residual and update the viscosity.
+      if(this->param.nonlinear_viscous_problem())
       {
-        transport_velocity = velocity_np;
+        residual.reinit(velocity_np, false /* omit_zeroing_entries */);
+        if constexpr(apply_aitken_relaxation)
+        {
+          residual_old.reinit(velocity_np, false /* omit_zeroing_entries */);
+          delta_residual.reinit(velocity_np, false /* omit_zeroing_entries */);
+          velocity_np_old = velocity_np;
+        }
+
+        rhs_momentum(rhs, transport_velocity, true /* residual_evaluation */);
+        pde_operator->evaluate_linearized_residual(residual,
+                                                   velocity_np,
+                                                   transport_velocity,
+                                                   &rhs,
+                                                   this->get_next_time(),
+                                                   this->get_scaling_factor_time_derivative_term());
+
+        norm_0 = residual.l2_norm();
+
+        residual_old = residual;
       }
 
-      /*
-       *  Calculate the right-hand side of the linear system of equations.
-       */
-      VectorType rhs(velocity_np);
-      rhs_momentum(rhs, transport_velocity);
+      while(not converged)
+      {
+        // Calculate the right-hand side of the linear system of equations.
+        rhs_momentum(rhs, transport_velocity);
 
-      // solve linear system of equations
-      unsigned int n_iter = pde_operator->solve_linear_momentum_equation(
-        velocity_np,
-        rhs,
-        transport_velocity,
-        update_preconditioner,
-        this->get_scaling_factor_time_derivative_term());
+        // the projection initial guess needs the right-hand side, so it is computed here
+        if(this->first_coupling_iteration and
+           this->param.initial_guess_type_momentum == InitialGuessType::Projection)
+        {
+          this->compute_initial_guess_projection(
+            velocity_np, velocity, rhs, [&](VectorType & dst, VectorType const & src) {
+              pde_operator->apply_linear_momentum_operator(
+                dst, src, transport_velocity, this->get_scaling_factor_time_derivative_term());
+            });
+        }
+
+        // solve linear system of equations
+        linear_iterations += pde_operator->solve_linear_momentum_equation(
+          velocity_np,
+          rhs,
+          transport_velocity,
+          update_preconditioner,
+          this->get_scaling_factor_time_derivative_term());
+
+        if(this->param.nonlinear_viscous_problem())
+        {
+          // Update the viscosity and compute the residual.
+          rhs_momentum(rhs, transport_velocity, true /* residual_evaluation */);
+          pde_operator->evaluate_linearized_residual(
+            residual,
+            velocity_np,
+            transport_velocity,
+            &rhs,
+            this->get_next_time(),
+            this->get_scaling_factor_time_derivative_term());
+
+          // Compute convergence criteria.
+          double norm_abs = residual.l2_norm();
+          double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+
+          picard_iterations += 1;
+          if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+             norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+          {
+            converged = true;
+          }
+          else
+          {
+            AssertThrow(picard_iterations <= this->param.newton_solver_data_momentum.max_iter,
+                        dealii::ExcMessage(
+                          "Picard solver to resolve nonlinear viscous term did not converge."));
+
+            // Apply relaxation
+            if constexpr(apply_aitken_relaxation)
+            {
+              delta_residual = residual;
+              delta_residual -= residual_old;
+              relaxation =
+                -relaxation_old * (residual_old * delta_residual) / delta_residual.norm_sqr();
+
+              velocity_np.sadd(relaxation, 1.0 - relaxation, velocity_np_old);
+
+              // Update old values for next iteration.
+              velocity_np_old = velocity_np;
+              residual_old    = residual;
+              relaxation_old  = relaxation;
+            }
+          }
+        }
+        else
+        {
+          converged = true;
+        }
+      }
 
       iterations_momentum.first += 1;
-      std::get<1>(iterations_momentum.second) += n_iter;
+      std::get<0>(iterations_momentum.second) +=
+        this->param.nonlinear_viscous_problem() ? picard_iterations : 0;
+      std::get<1>(iterations_momentum.second) += linear_iterations;
 
       if(this->print_solver_info() and not(this->is_test))
       {
-        this->pcout << std::endl << "Solve momentum step:";
-        print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
+        if(this->param.nonlinear_viscous_problem())
+        {
+          this->pcout << std::endl << "Solve momentum step (Picard):";
+          print_solver_info_nonlinear(this->pcout,
+                                      picard_iterations,
+                                      linear_iterations,
+                                      timer.wall_time());
+        }
+        else
+        {
+          this->pcout << std::endl << "Solve momentum step:";
+          print_solver_info_linear(this->pcout, linear_iterations, timer.wall_time());
+        }
       }
     }
 
@@ -505,7 +627,8 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
 template<int dim, typename Number>
 void
 TimeIntBDFPressureCorrection<dim, Number>::rhs_momentum(VectorType &       rhs,
-                                                        VectorType const & transport_velocity)
+                                                        VectorType const & transport_velocity,
+                                                        bool const         residual_evaluation)
 {
   rhs = 0.0;
 
@@ -558,7 +681,8 @@ TimeIntBDFPressureCorrection<dim, Number>::rhs_momentum(VectorType &       rhs,
         rhs.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
     }
 
-    if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit and
+       not(residual_evaluation))
     {
       pde_operator->rhs_add_convective_term(rhs, transport_velocity, this->get_next_time());
     }
@@ -584,7 +708,8 @@ TimeIntBDFPressureCorrection<dim, Number>::rhs_momentum(VectorType &       rhs,
    *  inhomogeneous parts of boundary face integrals of the viscous operator
    *  have to be shifted to the right-hand side of the equation.
    */
-  if(this->param.viscous_problem() and not(this->param.nonlinear_problem_has_to_be_solved()))
+  if(this->param.viscous_problem() and not(this->param.implicit_nonlinear_convective_problem()) and
+     not(residual_evaluation))
   {
     pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
   }
@@ -602,28 +727,42 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
   rhs_pressure(rhs);
 
   // calculate initial guess for pressure solve
-  if(this->use_extrapolation)
+  if(this->first_coupling_iteration)
   {
-    // extrapolate old solution to get a good initial estimate for the
-    // pressure solution p_{n+1} at time t^{n+1}
-    for(unsigned int i = 0; i < pressure.size(); ++i)
+    if(this->param.initial_guess_type_pressure_poisson == InitialGuessType::Projection)
     {
-      pressure_increment.add(this->extra.get_beta(i), pressure[i]);
+      // the extrapolation of the pressure subtracted for the other initial guesses is in the span
+      // of the previous pressures, so the projection initial guess is computed for the pressure
+      // increment directly
+      this->compute_initial_guess_projection(pressure_increment,
+                                             pressure,
+                                             rhs,
+                                             [&](VectorType & dst, VectorType const & src) {
+                                               pde_operator->apply_laplace_operator(dst, src);
+                                             });
     }
-
-    // incremental formulation
-    if(extra_pressure_gradient.get_order() > 0)
+    else
     {
-      // Subtract extrapolation of pressure since the PPE is solved for the
-      // pressure increment phi = p_{n+1} - sum_i (beta_pressure_extra_i * pressure_i),
-      // where p_{n+1} is approximated by an extrapolation of order J (=order of BDF scheme).
-      // Note that the divergence correction term in case of the rotational formulation is not
-      // considered when calculating a good initial guess for the solution of the PPE,
-      // which will slightly increase the number of iterations compared to the standard
-      // formulation of the pressure-correction scheme.
-      for(unsigned int i = 0; i < extra_pressure_gradient.get_order(); ++i)
+      // compute initial guess for the pressure solution p_{n+1} at time t^{n+1} from the
+      // previous time steps
+      this->compute_initial_guess(pressure_increment,
+                                  pressure,
+                                  this->param.initial_guess_type_pressure_poisson);
+
+      // incremental formulation
+      if(extra_pressure_gradient.get_order() > 0)
       {
-        pressure_increment.add(-extra_pressure_gradient.get_beta(i), pressure[i]);
+        // Subtract extrapolation of pressure since the PPE is solved for the
+        // pressure increment phi = p_{n+1} - sum_i (beta_pressure_extra_i * pressure_i),
+        // where p_{n+1} is approximated by the initial guess computed above.
+        // Note that the divergence correction term in case of the rotational formulation is not
+        // considered when calculating a good initial guess for the solution of the PPE,
+        // which will slightly increase the number of iterations compared to the standard
+        // formulation of the pressure-correction scheme.
+        for(unsigned int i = 0; i < extra_pressure_gradient.get_order(); ++i)
+        {
+          pressure_increment.add(-extra_pressure_gradient.get_beta(i), pressure[i]);
+        }
       }
     }
   }
@@ -829,7 +968,7 @@ TimeIntBDFPressureCorrection<dim, Number>::projection_step(VectorType const & pr
     // extrapolate velocity to time t_{n+1} and use this velocity field to
     // calculate the penalty parameter for the divergence and continuity penalty terms
     VectorType velocity_extrapolated;
-    if(this->use_extrapolation)
+    if(this->first_coupling_iteration)
     {
       velocity_extrapolated.reinit(velocity[0]);
       for(unsigned int i = 0; i < velocity.size(); ++i)
@@ -855,7 +994,7 @@ TimeIntBDFPressureCorrection<dim, Number>::projection_step(VectorType const & pr
          this->param.update_preconditioner_projection_every_time_steps ==
        0);
 
-    if(this->use_extrapolation == false)
+    if(this->first_coupling_iteration == false)
       velocity_np = velocity_projection_last_iter;
 
     unsigned int const n_iter =

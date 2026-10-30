@@ -128,6 +128,8 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -142,6 +144,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -149,6 +152,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -156,11 +160,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -169,12 +176,13 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 2-dimensional problem:
@@ -219,27 +227,27 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-04
+ Time step number = 1       t = 0.00000e+00, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 10      t = 2.81250e-03 -> t + dt = 3.12500e-03
+ Time step number = 10      t = 2.81250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 18      t = 5.31250e-03 -> t + dt = 5.62500e-03
+ Time step number = 18      t = 5.31250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 7.50000e-03 -> t + dt = 7.81250e-03
+ Time step number = 25      t = 7.50000e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 1.00000e-02 -> t + dt = 1.03125e-02
+ Time step number = 33      t = 1.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
@@ -260,27 +268,27 @@ ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 41      t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 49      t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 57      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 65      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 73      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
@@ -410,6 +418,8 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -424,6 +434,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -431,6 +442,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -438,11 +450,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -451,12 +466,13 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 2-dimensional problem:
@@ -506,35 +522,29 @@ ________________________________________________________________________________
 
 Starting time loop ...
 
-Calculate error for velocity at time t = 1.2500e-02:
-  Relative error (L2-norm): 7.53923e-07
-
-Calculate error for pressure at time t = 1.2500e-02:
-  Relative error (L2-norm): 1.75819e-05
-
 ________________________________________________________________________________
 
- Time step number = 1       t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 9       t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 17      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
@@ -668,9 +678,11 @@ Coupled Navier-Stokes solver:
 Linear solver:
   Solver:                                    FGMRES
   Maximum number of iterations:              10000
-  Absolute solver tolerance:                 1.0000e-12
+  Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     true
   Update every time steps:                   1
@@ -691,6 +703,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of velocity block:         false
 
@@ -709,6 +722,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of Laplace operator:       false
 
@@ -717,6 +731,7 @@ Postprocessing of velocity (penalty terms):
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -763,27 +778,27 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-04
+ Time step number = 1       t = 0.00000e+00, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 10      t = 2.81250e-03 -> t + dt = 3.12500e-03
+ Time step number = 10      t = 2.81250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 18      t = 5.31250e-03 -> t + dt = 5.62500e-03
+ Time step number = 18      t = 5.31250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 7.50000e-03 -> t + dt = 7.81250e-03
+ Time step number = 25      t = 7.50000e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 1.00000e-02 -> t + dt = 1.03125e-02
+ Time step number = 33      t = 1.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
@@ -802,34 +817,34 @@ ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 41      t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 49      t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 57      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 65      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 73      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 1.33327e-06
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.56892e-05
+  Relative error (L2-norm): 1.56928e-05
 
 
 
@@ -948,9 +963,11 @@ Coupled Navier-Stokes solver:
 Linear solver:
   Solver:                                    FGMRES
   Maximum number of iterations:              10000
-  Absolute solver tolerance:                 1.0000e-12
+  Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            BlockTriangular
   Update preconditioner:                     true
   Update every time steps:                   1
@@ -971,6 +988,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of velocity block:         false
 
@@ -989,6 +1007,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
   Exact inversion of Laplace operator:       false
 
@@ -997,6 +1016,7 @@ Postprocessing of velocity (penalty terms):
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -1046,42 +1066,36 @@ ________________________________________________________________________________
 
 Starting time loop ...
 
-Calculate error for velocity at time t = 1.2500e-02:
-  Relative error (L2-norm): 7.53969e-07
-
-Calculate error for pressure at time t = 1.2500e-02:
-  Relative error (L2-norm): 1.75738e-05
-
 ________________________________________________________________________________
 
- Time step number = 1       t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 9       t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 17      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 1.33828e-06
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.57427e-05
+  Relative error (L2-norm): 1.57437e-05
 
 
 
@@ -1213,7 +1227,9 @@ Pressure-correction scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update of preconditioner:                  true
   Update every time steps:                   1
@@ -1225,12 +1241,13 @@ Pressure-correction scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Pressure Poisson equation (PPE):
@@ -1239,6 +1256,8 @@ Pressure-correction scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -1253,6 +1272,7 @@ Pressure-correction scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -1260,6 +1280,7 @@ Pressure-correction scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -1306,27 +1327,27 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-04
+ Time step number = 1       t = 0.00000e+00, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 10      t = 2.81250e-03 -> t + dt = 3.12500e-03
+ Time step number = 10      t = 2.81250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 18      t = 5.31250e-03 -> t + dt = 5.62500e-03
+ Time step number = 18      t = 5.31250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 7.50000e-03 -> t + dt = 7.81250e-03
+ Time step number = 25      t = 7.50000e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 1.00000e-02 -> t + dt = 1.03125e-02
+ Time step number = 33      t = 1.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
@@ -1346,34 +1367,34 @@ ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 41      t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 49      t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 57      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 65      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 73      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 1.33327e-06
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.56893e-05
+  Relative error (L2-norm): 1.56894e-05
 
 
 
@@ -1497,7 +1518,9 @@ Pressure-correction scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update of preconditioner:                  true
   Update every time steps:                   1
@@ -1509,12 +1532,13 @@ Pressure-correction scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Pressure Poisson equation (PPE):
@@ -1523,6 +1547,8 @@ Pressure-correction scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -1537,6 +1563,7 @@ Pressure-correction scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -1544,6 +1571,7 @@ Pressure-correction scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -1594,42 +1622,36 @@ ________________________________________________________________________________
 
 Starting time loop ...
 
-Calculate error for velocity at time t = 1.2500e-02:
-  Relative error (L2-norm): 7.53975e-07
-
-Calculate error for pressure at time t = 1.2500e-02:
-  Relative error (L2-norm): 1.75711e-05
-
 ________________________________________________________________________________
 
- Time step number = 1       t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 9       t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 17      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 1.33828e-06
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.57576e-05
+  Relative error (L2-norm): 1.57573e-05
 
 
 
@@ -1756,6 +1778,8 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -1770,6 +1794,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -1777,11 +1802,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            PointJacobi
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
 
 Generating grid for 2-dimensional problem:
 
@@ -1826,27 +1854,27 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-04
+ Time step number = 1       t = 0.00000e+00, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 10      t = 2.81250e-03 -> t + dt = 3.12500e-03
+ Time step number = 10      t = 2.81250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 18      t = 5.31250e-03 -> t + dt = 5.62500e-03
+ Time step number = 18      t = 5.31250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 7.50000e-03 -> t + dt = 7.81250e-03
+ Time step number = 25      t = 7.50000e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 1.00000e-02 -> t + dt = 1.03125e-02
+ Time step number = 33      t = 1.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
@@ -1866,27 +1894,27 @@ ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 41      t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 49      t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 57      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 65      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 73      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
@@ -2014,6 +2042,8 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -2028,6 +2058,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -2035,6 +2066,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -2042,11 +2074,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -2055,12 +2090,13 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 2-dimensional problem:
@@ -2109,35 +2145,29 @@ ________________________________________________________________________________
 
 Starting time loop ...
 
-Calculate error for velocity at time t = 1.2500e-02:
-  Relative error (L2-norm): 1.88737e-07
-
-Calculate error for pressure at time t = 1.2500e-02:
-  Relative error (L2-norm): 1.49915e-07
-
 ________________________________________________________________________________
 
- Time step number = 1       t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 9       t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 17      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
@@ -2273,6 +2303,8 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -2287,6 +2319,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -2294,6 +2327,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     true
   Update preconditioner every time steps:    1
@@ -2301,11 +2335,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -2314,12 +2351,13 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 2-dimensional problem:
@@ -2364,27 +2402,27 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-04
+ Time step number = 1       t = 0.00000e+00, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 10      t = 2.81250e-03 -> t + dt = 3.12500e-03
+ Time step number = 10      t = 2.81250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 18      t = 5.31250e-03 -> t + dt = 5.62500e-03
+ Time step number = 18      t = 5.31250e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 7.50000e-03 -> t + dt = 7.81250e-03
+ Time step number = 25      t = 7.50000e-03, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 1.00000e-02 -> t + dt = 1.03125e-02
+ Time step number = 33      t = 1.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
@@ -2404,34 +2442,34 @@ ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 41      t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 49      t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 57      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 65      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 73      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 2.93130e-09
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 9.72172e-08
+  Relative error (L2-norm): 9.72173e-08
 
 
 
@@ -2550,6 +2588,8 @@ High-order dual splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -2564,6 +2604,7 @@ High-order dual splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -2571,11 +2612,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            PointJacobi
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
 
 Generating grid for 2-dimensional problem:
 
@@ -2624,35 +2668,29 @@ ________________________________________________________________________________
 
 Starting time loop ...
 
-Calculate error for velocity at time t = 1.2500e-02:
-  Relative error (L2-norm): 3.02428e-06
-
-Calculate error for pressure at time t = 1.2500e-02:
-  Relative error (L2-norm): 4.19465e-06
-
 ________________________________________________________________________________
 
- Time step number = 1       t = 1.25000e-02 -> t + dt = 1.28125e-02
+ Time step number = 41      t = 1.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 9       t = 1.50000e-02 -> t + dt = 1.53125e-02
+ Time step number = 49      t = 1.50000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 17      t = 1.75000e-02 -> t + dt = 1.78125e-02
+ Time step number = 57      t = 1.75000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 25      t = 2.00000e-02 -> t + dt = 2.03125e-02
+ Time step number = 65      t = 2.00000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 ________________________________________________________________________________
 
- Time step number = 33      t = 2.25000e-02 -> t + dt = 2.28125e-02
+ Time step number = 73      t = 2.25000e-02, dt = 3.12500e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
