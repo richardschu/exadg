@@ -1,0 +1,113 @@
+
+Matrix:
+  after construction                                       =     0.0000    0.0000    0.0000
+                                                                 0.0000    0.0000    0.0000
+                                                                 0.0000    0.0000    0.0000
+  get(1,2) after set(2.5,1,2)                              =     2.5000
+  get(3,0): exception caught
+
+compute_QR_decomposition (double):
+  linearly independent vectors:
+  R                                                        =     2.6458    0.7559    0.7559
+                                                                 0.0000    3.3806    0.1268
+                                                                 0.0000    0.0000    2.5323
+  |Q^T Q - I|_F                                            = 4.40e-16
+  |Q R - V|_F / |V|_F                                      = 6.05e-17
+  max |R(i,j)|, i > j                                      = 0.00e+00
+  linearly dependent vectors, v_2 = v_0 + 2 v_1:
+  R                                                        =     2.6458    0.7559    0.0000
+                                                                 0.0000    3.3806    0.0000
+                                                                 0.0000    0.0000    1.0000
+  |Q_2|                                                    = 0.00e+00
+  |Q^T Q - I|_F, first 2 columns                           = 4.13e-16
+  |Q R - V|_F / |V|_F, first 2 columns                     = 6.51e-17
+  v_2 = v_0 + 2 v_1 + delta w, delta / |v_0 + 2 v_1| = 1e-03:
+  R(:,2)                                                   =     0.0000    0.0000    1.0000
+  |Q_2|                                                    = 0.00e+00
+  v_2 = v_0 + 2 v_1 + delta w, delta / |v_0 + 2 v_1| = 1e-01:
+  R(:,2)                                                   =     4.1576    6.7612    0.7937
+  |Q_2|                                                    = 1.00e+00
+
+compute_QR_decomposition (float):
+  linearly independent vectors:
+  R                                                        =     2.6458    0.7559    0.7559
+                                                                 0.0000    3.3806    0.1268
+                                                                 0.0000    0.0000    2.5323
+  |Q^T Q - I|_F                                            = 3.30e-07
+  |Q R - V|_F / |V|_F                                      = 4.07e-08
+  max |R(i,j)|, i > j                                      = 0.00e+00
+  linearly dependent vectors, v_2 = v_0 + 2 v_1:
+  R                                                        =     2.6458    0.7559    0.0000
+                                                                 0.0000    3.3806    0.0000
+                                                                 0.0000    0.0000    1.0000
+  |Q_2|                                                    = 0.00e+00
+  |Q^T Q - I|_F, first 2 columns                           = 3.05e-07
+  |Q R - V|_F / |V|_F, first 2 columns                     = 4.23e-08
+  v_2 = v_0 + 2 v_1 + delta w, delta / |v_0 + 2 v_1| = 1e-03:
+  R(:,2)                                                   =     0.0000    0.0000    1.0000
+  |Q_2|                                                    = 0.00e+00
+  v_2 = v_0 + 2 v_1 + delta w, delta / |v_0 + 2 v_1| = 1e-01:
+  R(:,2)                                                   =     4.1576    6.7612    0.7937
+  |Q_2|                                                    = 1.00e+00
+
+backward_substitution (double):
+  3x3: x                                                   =     1.0000   -2.0000    3.0000
+  3x3: |x - x_exact| / |x_exact|                           = 0.00e+00
+  2x2 block: x                                             =     1.0000   -2.0000
+  2x2 block: |x - x_exact| / |x_exact|                     = 0.00e+00
+
+backward_substitution (float):
+  3x3: x                                                   =     1.0000   -2.0000    3.0000
+  3x3: |x - x_exact| / |x_exact|                           = 0.00e+00
+  2x2 block: x                                             =     1.0000   -2.0000
+  2x2 block: |x - x_exact| / |x_exact|                     = 0.00e+00
+
+backward_substitution_multiple_rhs (double):
+  |sum_j R(i,j) Z_j - Q_i|_F / |Q|_F                       = 6.65e-17
+  |Z^T V - I|_F                                            = 2.52e-16
+
+backward_substitution_multiple_rhs (float):
+  |sum_j R(i,j) Z_j - Q_i|_F / |Q|_F                       = 3.34e-08
+  |Z^T V - I|_F                                            = 2.21e-07
+
+inv_jacobian_times_residual:
+  empty history: |b|                                       = 0.00e+00
+  one time step: |b - D c| / |D c|                         = 1.11e-16
+  two steps, r = R_new c: |b - D_new c| / |D_new c|        = 1.11e-16
+  two steps, r = R_old c: |b - D_old c| / |D_old c|        = 1.13e-16
+
+solve_cholesky:
+  SPD 3x3: n = 3
+  SPD 3x3: x                                               =     1.0000   -1.0000    2.0000
+  SPD 3x3: |x - x_exact| / |x_exact|                       = 0.00e+00
+  SPD 3x3: |C x - d| / |d|                                 = 0.00e+00
+  SPD 3x3: |L L^T - C|_F / |C|_F                           = 0.00e+00
+  Gram matrix, v_2 = v_0 + 2 v_1: n = 2
+  Gram matrix: x                                           =     1.0000   -1.0000    0.0000
+  Gram matrix: |x - x_exact| / |x_exact|                   = 0.00e+00
+  Gram matrix: |C x - d| / |d|                             = 0.00e+00
+  Gram matrix: |L L^T - C|_F / |C|_F, 2x2                  = 6.26e-17
+  empty system: n = 0
+  NaN in C(1,1): n = 1
+  NaN in C(1,1): x                                         =     0.5000    0.0000    0.0000
+
+least-squares problem, size 1000, m = 6, b in range of A X:
+  QR: |Q^T Q - I|_F                                        = 3.58e-16
+  QR: |Q R - A X|_F / |A X|_F                              = 5.64e-17
+  QR: |gamma - gamma_exact| / |gamma_exact|                = 1.09e-16
+  QR: |A X gamma - b| / |b|                                = 1.37e-16
+  QR: |(A X)^T (A X gamma - b)| / (|A X|_F |b|)            = 4.07e-17
+  Cholesky: n = 6
+  Cholesky: |L L^T - C|_F / |C|_F                          = 1.13e-17
+  Cholesky: |C gamma - d| / |d|                            = 9.44e-17
+  Cholesky: |gamma - gamma_exact| / |gamma_exact|          = 1.56e-16
+  Cholesky: |A X gamma - b| / |b|                          = 1.81e-16
+  Cholesky: |(A X)^T (A X gamma - b)| / (|A X|_F |b|)      = 6.23e-17
+
+least-squares problem, size 1000, m = 6, b = A X gamma + r, r orthogonal to A X:
+  QR: |gamma - gamma_exact| / |gamma_exact|                = 1.19e-16
+  QR: |(A X)^T (A X gamma - b)| / (|A X|_F |b|)            = 4.11e-17
+  Cholesky: n = 6
+  Cholesky: |C gamma - d| / |d|                            = 1.25e-16
+  Cholesky: |gamma - gamma_exact| / |gamma_exact|          = 1.49e-16
+  Cholesky: |(A X)^T (A X gamma - b)| / (|A X|_F |b|)      = 5.37e-17
