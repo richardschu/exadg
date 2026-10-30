@@ -141,7 +141,7 @@ backward_substitution(Matrix<Number> const &      matrix,
 
   for(int i = n - 1; i >= 0; --i)
   {
-    double value = rhs[i];
+    Number value = rhs[i];
     for(int j = i + 1; j < n; ++j)
     {
       value -= matrix.get(i, j) * dst[j];
@@ -202,8 +202,8 @@ inv_jacobian_times_residual(VectorType &                                        
     std::shared_ptr<std::vector<VectorType>> R = R_history[idx];
     std::shared_ptr<std::vector<VectorType>> Z = Z_history[idx];
 
-    int const           k = Z->size();
-    std::vector<double> Z_times_a(k, 0.0);
+    int const                                    k = Z->size();
+    std::vector<typename VectorType::value_type> Z_times_a(k, 0.0);
     for(int i = 0; i < k; ++i)
       Z_times_a[i] = (*Z)[i] * a;
 
