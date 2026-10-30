@@ -160,13 +160,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -175,7 +176,7 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
@@ -449,13 +450,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -464,7 +466,7 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
@@ -676,7 +678,7 @@ Coupled Navier-Stokes solver:
 Linear solver:
   Solver:                                    FGMRES
   Maximum number of iterations:              10000
-  Absolute solver tolerance:                 1.0000e-12
+  Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
@@ -961,7 +963,7 @@ Coupled Navier-Stokes solver:
 Linear solver:
   Solver:                                    FGMRES
   Maximum number of iterations:              10000
-  Absolute solver tolerance:                 1.0000e-12
+  Absolute solver tolerance:                 1.0000e-14
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
@@ -1239,7 +1241,7 @@ Pressure-correction scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
@@ -1392,7 +1394,7 @@ Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 1.33327e-06
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.56896e-05
+  Relative error (L2-norm): 1.56894e-05
 
 
 
@@ -1530,7 +1532,7 @@ Pressure-correction scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
@@ -1800,13 +1802,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Initial guess type:                        Extrapolation
   Preconditioner:                            PointJacobi
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
 
 Generating grid for 2-dimensional problem:
 
@@ -2071,13 +2074,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -2086,7 +2090,7 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
@@ -2331,13 +2335,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
   Multigrid operator type:                   ReactionDiffusion
   Multigrid type:                            cphMG
   p-sequence:                                DecreaseByOne
@@ -2346,7 +2351,7 @@ High-order dual splitting scheme:
   Preconditioner smoother:                   PointJacobi
   Iterations smoother:                       5
   Smoothing range:                           2.0000e+01
-  Iterations eigenvalue estimation:          60
+  Iterations eigenvalue estimation:          20
   Coarse grid solver:                        CG
   Coarse grid preconditioner:                PointJacobi
   Maximum number of iterations:              1000
@@ -2464,7 +2469,7 @@ Calculate error for velocity at time t = 2.5000e-02:
   Relative error (L2-norm): 2.93130e-09
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 9.72172e-08
+  Relative error (L2-norm): 9.72173e-08
 
 
 
@@ -2607,13 +2612,14 @@ High-order dual splitting scheme:
   Momentum step:
   Linear solver:
   Solver:                                    CG
-  Maximum number of iterations:              1000
+  Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              InitialResidual
   Initial guess type:                        Extrapolation
   Preconditioner:                            PointJacobi
-  Update of preconditioner:                  false
+  Update of preconditioner:                  true
+  Update every time steps:                   1
 
 Generating grid for 2-dimensional problem:
 

@@ -366,6 +366,9 @@ public:
       prm.add_parameter("GeneralizedNewtonianLambda",          generalized_newtonian_model_data.lambda,           "Generalized Newtonian models: lambda.",           dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianA",               generalized_newtonian_model_data.a,                "Generalized Newtonian models: a.",                dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianN",               generalized_newtonian_model_data.n,                "Generalized Newtonian models: n.",                dealii::Patterns::Double());
+      prm.add_parameter("TimeStepSize",                        time_step_size,                                    "Time step size, values <= 0 use (EndTime - StartTime) / 20.", dealii::Patterns::Double());
+      prm.add_parameter("OrderTimeIntegrator",                 order_time_integrator,                             "Order of the BDF time integrator.",               dealii::Patterns::Integer(1, 3));
+      prm.add_parameter("ComputeConvergenceTable",             compute_convergence_table,                         "Compute a convergence table from all runs in the output directory.", dealii::Patterns::Bool());
       // clang-format off
     }
     prm.leave_subsection();
@@ -401,8 +404,8 @@ private:
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
-    this->param.time_step_size                = std::abs(end_time - start_time) / 20;
-    this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
+    this->param.time_step_size                = time_step_size > 0.0 ? time_step_size : std::abs(end_time - start_time) / 20;
+    this->param.order_time_integrator         = order_time_integrator;
     this->param.start_with_low_order          = false; // true;
 
     // output of solver information
@@ -513,10 +516,14 @@ private:
     {
       LinearSolver const linear_solver = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
           LinearSolver::CG : LinearSolver::FGMRES;
-      this->param.solver_data_momentum = SolverData(1000, 1e-12, 1e-8, linear_solver);
+      this->param.solver_data_momentum = SolverData(1e4, 1e-12, 1e-8, linear_solver, 100);
+      // nonlinear tolerances above the residual reachable with the linear solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-10, 1.e-6);
       this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                              MomentumPreconditioner::Multigrid :
                                              MomentumPreconditioner::PointJacobi;
+      // as for the pressure-correction scheme, the viscosity changes in time
+      this->param.update_preconditioner_momentum = true;
     }
 
 
@@ -530,7 +537,7 @@ private:
     if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
     {
       // Newton solver
-      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-10, 1.e-6);
 
       // linear solver
       this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, LinearSolver::GMRES, 100);
@@ -549,7 +556,8 @@ private:
       this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
       this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
       this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
-      this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 60; // Chebyshev, default: 20
+      // more iterations break down (NaN) on the small continuous `cphMG` levels in float
+      this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
 
       this->param.multigrid_data_momentum.coarse_problem.solver         = this->param.non_explicit_convective_problem() ? MultigridCoarseGridSolver::GMRES : MultigridCoarseGridSolver::CG; // MultigridCoarseGridSolver::AMG
       this->param.multigrid_data_momentum.coarse_problem.solver_data    = SolverData(1000, 1e-12, 1e-8, LinearSolver::Undefined, 30);
@@ -570,7 +578,8 @@ private:
     this->param.newton_solver_data_coupled = Newton::SolverData(100, 1.e-10, 1.e-6);
 
     // linear solver
-    this->param.solver_data_coupled = SolverData(1e4, 1.e-12, 1.e-8, LinearSolver::FGMRES, 100);
+    // abs_tol 1e-12 limits the pressure accuracy for a (linearly) implicit convective term
+    this->param.solver_data_coupled = SolverData(1e4, 1.e-14, 1.e-8, LinearSolver::FGMRES, 100);
 
     // preconditioning linear solver
     this->param.preconditioner_coupled        = PreconditionerCoupled::BlockTriangular;
@@ -789,7 +798,7 @@ private:
     pp_data.output_data.write_higher_order = true;
 
     // calculation of velocity error
-    pp_data.error_data_u.compute_convergence_table          = false;
+    pp_data.error_data_u.compute_convergence_table          = compute_convergence_table;
     pp_data.error_data_u.write_errors_to_file               = true;
     pp_data.error_data_u.time_control_data.is_active        = true;
     pp_data.error_data_u.time_control_data.start_time       = start_time;
@@ -829,6 +838,14 @@ private:
   double            density                 = 1000.0;
   double            kinematic_viscosity     = 5e-6;
   bool              use_turbulence_model    = false;
+
+  // time step size, values <= 0 use (end_time - start_time) / 20
+  double       time_step_size        = -1.0;
+  unsigned int order_time_integrator = 2;
+
+  // compute a convergence table from the error files of all runs (`run_<id>_*`)
+  // in the output directory, which hence has to be empty before the first run
+  bool compute_convergence_table = false;
 
   FormulationViscousTerm formulation_viscous_term = FormulationViscousTerm::DivergenceFormulation;
   TemporalDiscretization temporal_discretization  = TemporalDiscretization::Undefined;
