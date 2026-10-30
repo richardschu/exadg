@@ -40,7 +40,7 @@
         "GeneralizedNewtonianN": "0.5"
     },
     "Output": {
-        "OutputDirectory": "output/",
+        "OutputDirectory": "results/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

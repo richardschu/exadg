@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/kelvin_helmholtz/",
+        "OutputDirectory": "results/kelvin_helmholtz/",
         "OutputName": "Re1e4_l1_k7",
         "WriteOutput": "false"
     }

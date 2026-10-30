@@ -78,7 +78,7 @@ private:
     this->param.restart_data.interval_time       = 5.0;
     this->param.restart_data.interval_wall_time  = 1.e6;
     this->param.restart_data.interval_time_steps = 1e8;
-    this->param.restart_data.filename            = "output/cavity/cavity_restart";
+    this->param.restart_data.filename            = "results/cavity/cavity_restart";
 
     // output of solver information
     this->param.solver_info_data.interval_time_steps = 1;

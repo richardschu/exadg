@@ -19,7 +19,7 @@
         "WriteRestart": "false"
     },
     "Output": {
-        "OutputDirectory": "output/sine_wave/",
+        "OutputDirectory": "results/sine_wave/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

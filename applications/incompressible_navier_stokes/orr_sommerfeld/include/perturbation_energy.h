@@ -38,7 +38,7 @@ namespace IncNS
 struct PerturbationEnergyData
 {
   PerturbationEnergyData()
-    : directory("output/"), filename("orr_sommerfeld"), omega_i(0.0), h(1.0), U_max(1.0)
+    : directory("results/"), filename("orr_sommerfeld"), omega_i(0.0), h(1.0), U_max(1.0)
   {
   }
 

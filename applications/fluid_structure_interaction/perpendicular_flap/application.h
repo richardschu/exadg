@@ -167,7 +167,7 @@ private:
     param.restart_data.interval_time       = 0.25;
     param.restart_data.interval_wall_time  = 1.e6;
     param.restart_data.interval_time_steps = 1e8;
-    param.restart_data.filename            = "output/vortex/vortex";
+    param.restart_data.filename            = "results/vortex/vortex";
 
 
     // SPATIAL DISCRETIZATION

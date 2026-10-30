@@ -74,7 +74,7 @@ double const end_time             = 250.0 * T_0; // 150.0*T_0;
 // postprocessing
 
 // output folder
-std::string const directory = "output/fda/Re3500/";
+std::string const directory = "results/fda/Re3500/";
 
 // flow-rate
 std::string const filename_flowrate = "precursor_mean_velocity";

@@ -22,7 +22,7 @@
         "AnalyticalSolutionAvailable": "true"
     },
     "Output": {
-        "OutputDirectory": "output/normal_incidenting_wave/",
+        "OutputDirectory": "results/normal_incidenting_wave/",
         "OutputName": "normal_incidenting_wave",
         "WriteOutput": "false"
     }

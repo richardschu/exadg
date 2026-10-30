@@ -22,7 +22,7 @@
         "TriangulationType": "Distributed"
     },
     "Output": {
-        "OutputDirectory": "output/circular_moving_gauss_pulse/",
+        "OutputDirectory": "results/circular_moving_gauss_pulse/",
         "OutputName": "circular_moving_gauss_pulse",
         "WriteOutput": "false"
     }

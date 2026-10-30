@@ -19,7 +19,7 @@
         "WriteRestart": "false"
     },
     "Output": {
-        "OutputDirectory": "output/manufactured_solution/",
+        "OutputDirectory": "results/manufactured_solution/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

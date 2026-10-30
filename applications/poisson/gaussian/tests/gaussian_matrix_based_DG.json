@@ -20,7 +20,7 @@
         "MinDegreeMatrixFree": "1"
     },
     "Output": {
-        "OutputDirectory": "output/poisson/gaussian/",
+        "OutputDirectory": "results/poisson/gaussian/",
         "OutputName": "gaussian",
         "WriteOutput": "false"
     }

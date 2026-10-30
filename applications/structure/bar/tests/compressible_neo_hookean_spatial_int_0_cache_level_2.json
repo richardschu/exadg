@@ -34,7 +34,7 @@
         "Traction":	"0.0"
     },
     "Output": {
-        "OutputDirectory": "output/bar/",
+        "OutputDirectory": "results/bar/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

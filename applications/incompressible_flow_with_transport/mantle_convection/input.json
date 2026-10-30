@@ -10,7 +10,7 @@
             "RefineSpace": "4"
         },
         "Output": {
-            "OutputDirectory": "output/mantle_convection/",
+            "OutputDirectory": "results/mantle_convection/",
             "OutputName": "fluid",
             "WriteOutput": "false"
         }
@@ -20,7 +20,7 @@
             "Degree": "3"
         },
         "Output": {
-            "OutputDirectory": "output/mantle_convection/",
+            "OutputDirectory": "results/mantle_convection/",
             "OutputName": "scalar0",
             "WriteOutput": "false"
         }

@@ -24,7 +24,7 @@
         "UseExplicitTimeIntegration": "false"
     },
     "Output": {
-        "OutputDirectory": "output/rotating_hill/",
+        "OutputDirectory": "results/rotating_hill/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

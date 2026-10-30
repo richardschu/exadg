@@ -20,7 +20,7 @@
         "TemporalDiscretization": "BDFDualSplitting"
     },
     "Output": {
-        "OutputDirectory": "output/poiseuille/",
+        "OutputDirectory": "results/poiseuille/",
         "OutputName": "l0_k2",
         "WriteOutput": "false"
     }

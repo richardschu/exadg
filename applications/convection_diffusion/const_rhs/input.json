@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/const_rhs/",
+        "OutputDirectory": "results/const_rhs/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

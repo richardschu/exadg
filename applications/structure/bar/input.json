@@ -45,7 +45,7 @@
         "MinDegreeMatrixFree": "1"
     },
     "Output": {
-        "OutputDirectory": "output/bar/",
+        "OutputDirectory": "results/bar/",
         "OutputName": "test",
         "WriteOutput": "true"
     }

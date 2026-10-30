@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/couette/",
+        "OutputDirectory": "results/couette/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

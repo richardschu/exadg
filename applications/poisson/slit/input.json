@@ -13,7 +13,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/poisson/slit/",
+        "OutputDirectory": "results/poisson/slit/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

@@ -29,7 +29,7 @@
         "PointsPerLine": "16"
     },
     "Output": {
-        "OutputDirectory": "output/periodic_hill/",
+        "OutputDirectory": "results/periodic_hill/",
         "OutputName": "16_l2_k3",
         "WriteOutput": "false"
     }
