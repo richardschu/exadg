@@ -231,8 +231,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 5.02874e-07
-  ||d_k+1 - d_k||/||d_k+1|| = 1.59944e-08
+  ||d_k+1 - d_k||           = 5.02787e-07
+  ||d_k+1 - d_k||/||d_k+1|| = 1.59916e-08
 
 ======================================================================
  Fixed-point iteration: iteration counter = 3       
@@ -240,8 +240,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 1.64252e-10
-  ||d_k+1 - d_k||/||d_k+1|| = 5.22419e-12
+  ||d_k+1 - d_k||           = 5.35107e-11
+  ||d_k+1 - d_k||/||d_k+1|| = 1.70196e-12
 
 Fixed-point iteration took 4 iterations
 until `lambda_check_convergence()` returned `true`.
@@ -250,7 +250,7 @@ until `lambda_check_convergence()` returned `true`.
 
 The entire ramp/solve phase took:
   14 fixed point evaluations
-  28 nonlinear iterations.
+  27 nonlinear iterations.
 
 OUTPUT << Write initial data
 

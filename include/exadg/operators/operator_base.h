@@ -175,6 +175,19 @@ public:
   void
   vmult(VectorType & dst, VectorType const & src) const;
 
+  /*
+   * Matrix-vector product with operations `before(begin, end)` and
+   * `after(begin, end)` on index ranges of the vectors, used by solvers fusing
+   * their vector updates with the operator evaluation (e.g. `dealii::SolverCG`
+   * or `dealii::PreconditionChebyshev` with a `dealii::DiagonalMatrix`
+   * preconditioner). These operations are passed by the solver; `before` has
+   * to be executed before `src` is read and `after` once `dst` is final in the
+   * range. For DG, they are fused into the matrix-free loop. For continuous
+   * elements and matrix-based operators, `before` and `after` are executed on
+   * all indices around `apply()` (or `apply_matrix_based()`), which gives the
+   * same result as the standard `vmult()` and is a safe fallback for derived
+   * classes overriding `apply()` only.
+   */
   void
   vmult(VectorType &                                                        dst,
         VectorType const &                                                  src,
@@ -281,7 +294,11 @@ public:
   virtual void
   apply(VectorType & dst, VectorType const & src) const;
 
-  virtual void
+  /*
+   * Version of apply() with fused operations `before` and `after`, see
+   * vmult(). Only for DG.
+   */
+  void
   apply_before_after(
     VectorType &                                                        dst,
     VectorType const &                                                  src,

@@ -175,9 +175,19 @@ OperatorBase<dim, Number, n_components>::vmult(
   std::function<void(const unsigned int, const unsigned int)> const & before,
   std::function<void(const unsigned int, const unsigned int)> const & after) const
 {
-  if(this->data.use_matrix_based_operator_level)
+  if(is_dg and not this->data.use_matrix_based_operator_level)
   {
-    // Execute the `before` and `after` operations on the locally owned indices manually.
+    this->apply_before_after(dst, src, before, after);
+  }
+  else
+  {
+    // Execute `before` and `after` on all locally owned indices around the
+    // standard operator evaluation. For continuous elements, the fused
+    // matrix-free loop did not give the operator of `apply()` with its special
+    // treatment of constrained degrees of freedom, and the eigenvalue
+    // estimation of the Chebyshev smoother on coarse multigrid levels broke
+    // down with NaN. Derived classes overriding `apply()` only (e.g. for
+    // structure) are evaluated correctly in this way.
     dealii::DoFHandler<dim> const & dof_handler =
       this->matrix_free->get_dof_handler(this->data.dof_index);
     dealii::IndexSet const & owned_dofs =
@@ -188,16 +198,15 @@ OperatorBase<dim, Number, n_components>::vmult(
       before(0, n_elements);
     }
 
-    this->apply_matrix_based(dst, src);
+    if(this->data.use_matrix_based_operator_level)
+      this->apply_matrix_based(dst, src);
+    else
+      this->apply(dst, src);
 
     if(n_elements > 0)
     {
       after(0, n_elements);
     }
-  }
-  else
-  {
-    this->apply_before_after(dst, src, before, after);
   }
 }
 
@@ -351,45 +360,22 @@ OperatorBase<dim, Number, n_components>::apply_before_after(
   std::function<void(const unsigned int, const unsigned int)> const & before,
   std::function<void(const unsigned int, const unsigned int)> const & after) const
 {
+  AssertThrow(is_dg, dealii::ExcMessage("Fused operations are used for DG only, see vmult()."));
+
   if(evaluate_face_integrals())
   {
-    if(is_dg)
-    {
-      matrix_free->loop(&This::cell_loop,
-                        &This::face_loop,
-                        &This::boundary_face_loop_hom_operator,
-                        this,
-                        dst,
-                        src,
-                        before,
-                        after);
-    }
-    else
-    {
-      // See function `apply()` for additional comments.
-      matrix_free->loop(&This::cell_loop,
-                        &This::face_loop_empty,
-                        &This::boundary_face_loop_hom_operator,
-                        this,
-                        dst,
-                        src,
-                        before,
-                        after);
-    }
+    matrix_free->loop(&This::cell_loop,
+                      &This::face_loop,
+                      &This::boundary_face_loop_hom_operator,
+                      this,
+                      dst,
+                      src,
+                      before,
+                      after);
   }
   else
   {
     matrix_free->cell_loop(&This::cell_loop, this, dst, src, before, after);
-  }
-
-  if(not is_dg)
-  {
-    // See function `apply()` for additional comments.
-    for(unsigned int const constrained_index :
-        matrix_free->get_constrained_dofs(this->data.dof_index))
-    {
-      dst.local_element(constrained_index) = src.local_element(constrained_index);
-    }
   }
 }
 

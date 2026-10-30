@@ -816,6 +816,8 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_smoother(
       smoother_data.degree          = data.smoother_data.iterations;
       smoother_data.iterations_eigenvalue_estimation =
         data.smoother_data.iterations_eigenvalue_estimation;
+      // fused vector operations only for DG, see ChebyshevSmoother
+      smoother_data.use_fused_operations = level_info[level].is_dg();
 
       std::shared_ptr<Chebyshev> smoother = std::dynamic_pointer_cast<Chebyshev>(smoothers[level]);
       smoother->setup(mg_operator, initialize_preconditioner, smoother_data);
