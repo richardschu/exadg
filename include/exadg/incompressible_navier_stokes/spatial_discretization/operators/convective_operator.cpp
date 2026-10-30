@@ -72,7 +72,9 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator(VectorType &       
 {
   this->time = time;
 
-  kernel->update_ghost_values_velocity();
+  // The kernel's velocity is not used here, the nonlinear operator is evaluated
+  // for `src`. After a linearly implicit step, the kernel may point to a
+  // transport velocity that is out of scope.
   kernel->update_ghost_values_grid_velocity();
 
   this->matrix_free->loop(&This::cell_loop_nonlinear_operator,
@@ -85,7 +87,6 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator(VectorType &       
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values,
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values);
 
-  kernel->zero_out_ghost_values_velocity();
   kernel->zero_out_ghost_values_grid_velocity();
 }
 
@@ -97,7 +98,9 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator_add(VectorType &   
 {
   this->time = time;
 
-  kernel->update_ghost_values_velocity();
+  // The kernel's velocity is not used here, the nonlinear operator is evaluated
+  // for `src`. After a linearly implicit step, the kernel may point to a
+  // transport velocity that is out of scope.
   kernel->update_ghost_values_grid_velocity();
 
   this->matrix_free->loop(&This::cell_loop_nonlinear_operator,
@@ -110,7 +113,6 @@ ConvectiveOperator<dim, Number>::evaluate_nonlinear_operator_add(VectorType &   
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values,
                           dealii::MatrixFree<dim, Number>::DataAccessOnFaces::values);
 
-  kernel->zero_out_ghost_values_velocity();
   kernel->zero_out_ghost_values_grid_velocity();
 }
 
