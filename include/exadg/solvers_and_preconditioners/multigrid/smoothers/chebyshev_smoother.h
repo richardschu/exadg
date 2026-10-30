@@ -37,8 +37,8 @@ namespace ExaDG
 /*
  * Wrapper around an operator providing only the standard matrix-vector product
  * vmult(dst, src), i.e., hiding vmult(dst, src, before, after) with fused
- * vector operations. With this wrapper, dealii::PreconditionChebyshev and its
- * eigenvalue estimation (dealii::SolverCG) use their non-fused algorithms.
+ * vector operations. With this wrapper, `dealii::PreconditionChebyshev` and its
+ * eigenvalue estimation (`dealii::SolverCG`) use their non-fused algorithms.
  */
 template<typename Operator, typename VectorType>
 class OperatorWithoutFusedOperations : public dealii::EnableObserverPointer
@@ -122,14 +122,14 @@ public:
     // number of CG iterations for estimation of eigenvalues
     unsigned int iterations_eigenvalue_estimation;
 
-    // use vmult(dst, src, before, after) of the operator with vector operations
+    // use `vmult(dst, src, before, after)` of the operator with vector operations
     // fused into the matrix-vector product, when available (point Jacobi only).
-    // In single precision, the fused dealii::SolverCG of the eigenvalue
+    // In single precision, the fused `dealii::SolverCG` of the eigenvalue
     // estimation can break down (NaN) on small continuous multigrid levels with
     // clustered spectra, where the fused residual norm suffers from
     // cancellation and the absolute tolerance is not reached before the Krylov
     // space is exhausted. Continuous levels do not profit from fusion anyway,
-    // see OperatorBase::vmult().
+    // see `OperatorBase::vmult()`.
     bool use_fused_operations;
   };
 
