@@ -38,7 +38,7 @@ struct KineticEnergyData
   KineticEnergyData()
     : evaluate_individual_terms(false),
       viscosity(1.0),
-      directory("output/"),
+      directory("results/"),
       filename("kinetic_energy"),
       clear_file(true)
   {

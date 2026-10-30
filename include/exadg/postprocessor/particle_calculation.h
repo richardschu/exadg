@@ -35,7 +35,7 @@ namespace ExaDG
 {
 struct ParticleData
 {
-  ParticleData() : directory("output/"), filename("particle")
+  ParticleData() : directory("results/"), filename("particle")
   {
   }
 

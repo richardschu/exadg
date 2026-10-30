@@ -36,7 +36,7 @@ struct LiftAndDragData
   LiftAndDragData()
     : viscosity(1.0),
       reference_value(1.0),
-      directory("output/"),
+      directory("results/"),
       filename_lift("lift"),
       filename_drag("drag")
   {

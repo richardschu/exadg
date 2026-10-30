@@ -36,7 +36,7 @@ namespace IncNS
 {
 struct MassConservationData
 {
-  MassConservationData() : directory("output/"), filename("mass"), reference_length_scale(1.0)
+  MassConservationData() : directory("results/"), filename("mass"), reference_length_scale(1.0)
   {
   }
 

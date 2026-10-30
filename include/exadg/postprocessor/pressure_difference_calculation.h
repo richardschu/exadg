@@ -38,7 +38,7 @@ namespace ExaDG
 template<int dim>
 struct PressureDifferenceData
 {
-  PressureDifferenceData() : directory("output/"), filename("pressure_difference")
+  PressureDifferenceData() : directory("results/"), filename("pressure_difference")
   {
   }
 

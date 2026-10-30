@@ -41,7 +41,7 @@ struct KineticEnergySpectrumData
   KineticEnergySpectrumData()
     : write_raw_data_to_files(false),
       do_fftw(true),
-      directory("output/"),
+      directory("results/"),
       filename("energy_spectrum"),
       clear_file(true),
       degree(0),

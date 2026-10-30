@@ -175,7 +175,7 @@ struct LineHomogeneousAveraging : Line<dim>
 template<int dim>
 struct LinePlotDataBase
 {
-  LinePlotDataBase() : directory("output/"), precision(10)
+  LinePlotDataBase() : directory("results/"), precision(10)
   {
   }
 

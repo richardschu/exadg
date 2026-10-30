@@ -40,7 +40,7 @@ namespace Acoustics
 struct SoundEnergyCalculatorData
 {
   SoundEnergyCalculatorData()
-    : directory("output/"),
+    : directory("results/"),
       filename("sound_energy.csv"),
       clear_file(true),
       density(-1.0),

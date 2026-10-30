@@ -40,7 +40,7 @@ struct TurbulentChannelData
     : cells_are_stretched(false),
       viscosity(1.0),
       density(1.0),
-      directory("output/"),
+      directory("results/"),
       filename("channel")
   {
   }

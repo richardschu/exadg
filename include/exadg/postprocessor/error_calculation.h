@@ -45,7 +45,7 @@ struct ErrorCalculationData
       spatially_weight_error(false),
       weight(nullptr),
       additional_quadrature_points(3),
-      directory("output/"),
+      directory("results/"),
       name("all fields")
   {
   }
