@@ -119,13 +119,16 @@ public:
   }
 
   static MappingFlags
-  get_mapping_flags()
+  get_mapping_flags(bool const compute_interior_face_integrals,
+                    bool const compute_boundary_face_integrals)
   {
     MappingFlags flags;
 
-    flags.cells          = dealii::update_JxW_values | dealii::update_gradients;
-    flags.inner_faces    = dealii::update_JxW_values | dealii::update_normal_vectors;
-    flags.boundary_faces = dealii::update_JxW_values | dealii::update_normal_vectors;
+    flags.cells = dealii::update_JxW_values | dealii::update_gradients;
+    if(compute_interior_face_integrals)
+      flags.inner_faces = dealii::update_JxW_values | dealii::update_normal_vectors;
+    if(compute_boundary_face_integrals)
+      flags.boundary_faces = dealii::update_JxW_values | dealii::update_normal_vectors;
 
     return flags;
   }

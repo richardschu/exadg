@@ -304,7 +304,7 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
 
   if(param.convective_problem())
     matrix_free_data.append_mapping_flags(
-      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
+      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags(true, true));
 
   if(param.viscous_problem())
     matrix_free_data.append_mapping_flags(

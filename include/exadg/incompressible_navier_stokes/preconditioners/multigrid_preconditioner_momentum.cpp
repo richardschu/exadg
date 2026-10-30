@@ -193,9 +193,12 @@ MultigridPreconditioner<dim, Number>::fill_matrix_free_data(
 
   if(data.unsteady_problem)
     matrix_free_data.append_mapping_flags(MassKernel<dim, Number>::get_mapping_flags());
+  // Continuous levels (`cphMG`) do not evaluate face integrals, as for the
+  // `ViscousKernel` below.
   if(data.convective_problem)
     matrix_free_data.append_mapping_flags(
-      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
+      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags(this->level_info[level].is_dg(),
+                                                                  this->level_info[level].is_dg()));
   if(data.viscous_problem)
     matrix_free_data.append_mapping_flags(
       Operators::ViscousKernel<dim, Number>::get_mapping_flags(this->level_info[level].is_dg(),
