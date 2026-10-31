@@ -369,6 +369,10 @@ public:
       prm.add_parameter("TimeStepSize",                        time_step_size,                                    "Time step size, values <= 0 use (EndTime - StartTime) / 20.", dealii::Patterns::Double());
       prm.add_parameter("OrderTimeIntegrator",                 order_time_integrator,                             "Order of the BDF time integrator.",               dealii::Patterns::Integer(1, 3));
       prm.add_parameter("ComputeConvergenceTable",             compute_convergence_table,                         "Compute a convergence table from all runs in the output directory.", dealii::Patterns::Bool());
+      prm.add_parameter("InitialGuessTypePressurePoisson",     initial_guess_type_pressure_poisson,               "Initial guess of the pressure Poisson solver.");
+      prm.add_parameter("InitialGuessTypeMomentum",            initial_guess_type_momentum,                       "Initial guess of the momentum solver.");
+      prm.add_parameter("InitialGuessTypeCoupled",             initial_guess_type_coupled,                        "Initial guess of the coupled solver.");
+      prm.add_parameter("RelTolReference",                     rel_tol_reference,                                 "Reference of the relative tolerances of the linear solvers.");
       // clang-format off
     }
     prm.leave_subsection();
@@ -628,6 +632,18 @@ private:
     this->param.multigrid_data_pressure_block.smoother_data.relaxation_factor = 0.7;
     this->param.multigrid_data_pressure_block.coarse_problem.solver =
       MultigridCoarseGridSolver::GMRES;
+
+    // INITIAL GUESSES AND RELATIVE TOLERANCES
+
+    // after all `SolverData` above, since assigning a new `SolverData` resets
+    // `rel_tol_reference`
+    this->param.initial_guess_type_pressure_poisson = initial_guess_type_pressure_poisson;
+    this->param.initial_guess_type_momentum         = initial_guess_type_momentum;
+    this->param.initial_guess_type_coupled          = initial_guess_type_coupled;
+    this->param.solver_data_pressure_poisson.rel_tol_reference = rel_tol_reference;
+    this->param.solver_data_projection.rel_tol_reference       = rel_tol_reference;
+    this->param.solver_data_momentum.rel_tol_reference         = rel_tol_reference;
+    this->param.solver_data_coupled.rel_tol_reference          = rel_tol_reference;
   }
 
   void
@@ -853,6 +869,13 @@ private:
     TreatmentOfConvectiveTerm::LinearlyImplicit;
   TreatmentOfVariableViscosity treatment_of_variable_viscosity =
     TreatmentOfVariableViscosity::Explicit;
+
+  // initial guesses of the solvers and reference of the relative tolerances of
+  // the linear solvers
+  InitialGuessType initial_guess_type_pressure_poisson = InitialGuessType::Extrapolation;
+  InitialGuessType initial_guess_type_momentum         = InitialGuessType::Extrapolation;
+  InitialGuessType initial_guess_type_coupled          = InitialGuessType::Extrapolation;
+  RelTolReference  rel_tol_reference                   = RelTolReference::InitialResidual;
 
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
   double                        interval_start = 0.0;
