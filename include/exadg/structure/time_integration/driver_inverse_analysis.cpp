@@ -352,9 +352,16 @@ DriverInverseAnalysis<dim, Number>::do_solve()
   pcout << "\n"
         << "The entire ramp/solve phase took:\n"
         << "  " << std::to_string(iterations.first) << " fixed point evaluations"
-        << "\n"
-        << "  " << std::to_string(std::get<0>(iterations.second)) << " nonlinear iterations."
         << "\n";
+
+  // The accumulated number of Newton iterations is sensitive to round-off,
+  // since the initial residuals in the last fixed-point iterations are close
+  // to the absolute Newton tolerance. Hence, we do not print it in tests.
+  if(not(is_test))
+  {
+    pcout << "  " << std::to_string(std::get<0>(iterations.second)) << " nonlinear iterations."
+          << "\n";
+  }
 
   timer_tree->insert({"DriverInverseAnalysis", "Solve"}, timer.wall_time());
 }

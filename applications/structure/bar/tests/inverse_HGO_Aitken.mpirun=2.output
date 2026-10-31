@@ -248,7 +248,6 @@ until `lambda_check_convergence()` returned `true`.
 
 The entire ramp/solve phase took:
   16 fixed point evaluations
-  28 nonlinear iterations.
 
 OUTPUT << Write initial data
 
