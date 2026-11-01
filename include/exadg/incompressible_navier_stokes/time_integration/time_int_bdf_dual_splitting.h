@@ -172,6 +172,11 @@ private:
 
   VectorType pressure_np;
 
+  // velocities and pressures older than `velocity` and `pressure`, stored for
+  // `InitialGuessType::Projection` only
+  std::vector<VectorType> vector_projection_velocity;
+  std::vector<VectorType> vector_projection_pressure;
+
   std::vector<VectorType> velocity_dbc;
   VectorType              velocity_dbc_np;
 

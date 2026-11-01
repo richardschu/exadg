@@ -116,6 +116,7 @@ High-order dual splitting scheme:
   Relative solver tolerance:                 1.0000e-08
   Relative tolerance reference:              RightHandSide
   Initial guess type:                        Projection
+  Number of vectors projection:              6
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            hMG
@@ -152,6 +153,7 @@ High-order dual splitting scheme:
   Relative tolerance reference:              RightHandSide
   Maximum size of Krylov space:              100
   Initial guess type:                        Projection
+  Number of vectors projection:              6
   Preconditioner:                            Multigrid
   Update of preconditioner:                  true
   Update every time steps:                   1
@@ -266,4 +268,4 @@ Calculate error for velocity at time t = 1.0000e-01:
   Relative error (L2-norm): 6.86036e-06
 
 Calculate error for pressure at time t = 1.0000e-01:
-  Relative error (L2-norm): 4.64327e-05
+  Relative error (L2-norm): 4.64326e-05

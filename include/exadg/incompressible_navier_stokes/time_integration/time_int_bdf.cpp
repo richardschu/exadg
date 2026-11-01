@@ -205,17 +205,25 @@ void
 TimeIntBDF<dim, Number>::compute_initial_guess_projection(
   VectorType &                                                  dst,
   std::vector<VectorType> const &                               history,
+  std::vector<VectorType> const &                               history_projection,
   VectorType const &                                            rhs,
   std::function<void(VectorType &, VectorType const &)> const & vmult) const
 {
-  // Minimize |A (sum_i gamma_i x_i) - b| with x_i = history[i] via the normal equations
+  // all previous solutions, ordered from the newest to the oldest
+  std::vector<VectorType const *> vectors;
+  for(VectorType const & vector : history)
+    vectors.push_back(&vector);
+  for(VectorType const & vector : history_projection)
+    vectors.push_back(&vector);
+
+  // Minimize |A (sum_i gamma_i x_i) - b| with x_i = *vectors[i] via the normal equations
   // C gamma = d, where C_ij = (A x_i, A x_j) and d_i = (A x_i, b).
-  unsigned int const      m = history.size();
+  unsigned int const      m = vectors.size();
   std::vector<VectorType> products(m);
   for(unsigned int i = 0; i < m; ++i)
   {
     products[i].reinit(rhs, true /* omit_zeroing_entries */);
-    vmult(products[i], history[i]);
+    vmult(products[i], *vectors[i]);
   }
 
   LinearAlgebra::Matrix<double> C(m);
@@ -235,7 +243,19 @@ TimeIntBDF<dim, Number>::compute_initial_guess_projection(
   // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
   dst = 0.0;
   for(unsigned int i = 0; i < n; ++i)
-    dst.add(gamma[i], history[i]);
+    dst.add(gamma[i], *vectors[i]);
+}
+
+template<int dim, typename Number>
+unsigned int
+TimeIntBDF<dim, Number>::get_n_vectors_projection_additional(
+  InitialGuessType const initial_guess_type,
+  unsigned int const     n_vectors_projection) const
+{
+  if(initial_guess_type == InitialGuessType::Projection and n_vectors_projection > this->order)
+    return n_vectors_projection - this->order;
+  else
+    return 0;
 }
 
 template<int dim, typename Number>

@@ -516,6 +516,11 @@ public:
   // initial guess of the pressure Poisson solver
   InitialGuessType initial_guess_type_pressure_poisson;
 
+  // number of previous pressures spanning the space of
+  // `InitialGuessType::Projection`; the `order_time_integrator` vectors of the
+  // time integrator are always used, larger values also store older pressures
+  unsigned int n_vectors_projection_pressure_poisson;
+
   // description: see enum declaration
   PreconditionerPressurePoisson preconditioner_pressure_poisson;
 
@@ -572,6 +577,10 @@ public:
 
   // initial guess of the momentum solver
   InitialGuessType initial_guess_type_momentum;
+
+  // number of previous velocities spanning the space of
+  // `InitialGuessType::Projection`, see `n_vectors_projection_pressure_poisson`
+  unsigned int n_vectors_projection_momentum;
 
   // description: see enum declaration
   MomentumPreconditioner preconditioner_momentum;

@@ -640,6 +640,8 @@ private:
     this->param.initial_guess_type_pressure_poisson = initial_guess_type_pressure_poisson;
     this->param.initial_guess_type_momentum         = initial_guess_type_momentum;
     this->param.initial_guess_type_coupled          = initial_guess_type_coupled;
+    this->param.n_vectors_projection_pressure_poisson = 6;
+    this->param.n_vectors_projection_momentum         = 6;
     this->param.solver_data_pressure_poisson.rel_tol_reference = rel_tol_reference;
     this->param.solver_data_projection.rel_tol_reference       = rel_tol_reference;
     this->param.solver_data_momentum.rel_tol_reference         = rel_tol_reference;

@@ -158,13 +158,24 @@ protected:
    * `history`, minimizing the residual of the linear system with operator `vmult` and right-hand
    * side `rhs`, see `InitialGuessType::Projection`. The products of `vmult` with `history` are
    * recomputed in each call.
+   * `history_projection` holds older solutions, which the time integrator no
+   * longer needs and which are stored for the projection only; it may be empty.
    */
   void
   compute_initial_guess_projection(
     VectorType &                                                  dst,
     std::vector<VectorType> const &                               history,
+    std::vector<VectorType> const &                               history_projection,
     VectorType const &                                            rhs,
     std::function<void(VectorType &, VectorType const &)> const & vmult) const;
+
+  /*
+   * Returns the number of older solutions to be stored for the projection
+   * initial guess in addition to the `order` solutions of the time integrator.
+   */
+  unsigned int
+  get_n_vectors_projection_additional(InitialGuessType const initial_guess_type,
+                                      unsigned int const     n_vectors_projection) const;
 
   Parameters const & param;
 

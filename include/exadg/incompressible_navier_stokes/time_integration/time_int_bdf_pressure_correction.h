@@ -170,6 +170,11 @@ private:
   VectorType              pressure_np;
   std::vector<VectorType> pressure;
 
+  // velocities and pressures older than `velocity` and `pressure`, stored for
+  // `InitialGuessType::Projection` only
+  std::vector<VectorType> vector_projection_velocity;
+  std::vector<VectorType> vector_projection_pressure;
+
   // incremental formulation of pressure-correction scheme
   unsigned int order_pressure_extrapolation;
 

@@ -45,6 +45,12 @@ TimeIntBDFPressureCorrection<dim, Number>::TimeIntBDFPressureCorrection(
     pde_operator(operator_in),
     velocity(param_in.order_time_integrator),
     pressure(param_in.order_time_integrator),
+    vector_projection_velocity(
+      this->get_n_vectors_projection_additional(param_in.initial_guess_type_momentum,
+                                                param_in.n_vectors_projection_momentum)),
+    vector_projection_pressure(
+      this->get_n_vectors_projection_additional(param_in.initial_guess_type_pressure_poisson,
+                                                param_in.n_vectors_projection_pressure_poisson)),
     order_pressure_extrapolation(param_in.order_pressure_extrapolation),
     extra_pressure_gradient(param_in.order_pressure_extrapolation, param_in.start_with_low_order),
     pressure_dbc(param_in.order_pressure_extrapolation),
@@ -147,6 +153,12 @@ TimeIntBDFPressureCorrection<dim, Number>::allocate_vectors()
   for(unsigned int i = 0; i < pressure.size(); ++i)
     pde_operator->initialize_vector_pressure(pressure[i]);
   pde_operator->initialize_vector_pressure(pressure_np);
+
+  // zero vectors are dropped by the projection until they are filled
+  for(unsigned int i = 0; i < vector_projection_velocity.size(); ++i)
+    pde_operator->initialize_vector_velocity(vector_projection_velocity[i]);
+  for(unsigned int i = 0; i < vector_projection_pressure.size(); ++i)
+    pde_operator->initialize_vector_pressure(vector_projection_pressure[i]);
 
   for(unsigned int i = 0; i < pressure_dbc.size(); ++i)
     pde_operator->initialize_vector_pressure(pressure_dbc[i]);
@@ -510,7 +522,11 @@ TimeIntBDFPressureCorrection<dim, Number>::momentum_step()
            this->param.initial_guess_type_momentum == InitialGuessType::Projection)
         {
           this->compute_initial_guess_projection(
-            velocity_np, velocity, rhs, [&](VectorType & dst, VectorType const & src) {
+            velocity_np,
+            velocity,
+            vector_projection_velocity,
+            rhs,
+            [&](VectorType & dst, VectorType const & src) {
               pde_operator->apply_linear_momentum_operator(
                 dst, src, transport_velocity, this->get_scaling_factor_time_derivative_term());
             });
@@ -736,6 +752,7 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
       // increment directly
       this->compute_initial_guess_projection(pressure_increment,
                                              pressure,
+                                             vector_projection_pressure,
                                              rhs,
                                              [&](VectorType & dst, VectorType const & src) {
                                                pde_operator->apply_laplace_operator(dst, src);
@@ -1051,6 +1068,19 @@ void
 TimeIntBDFPressureCorrection<dim, Number>::prepare_vectors_for_next_timestep()
 {
   Base::prepare_vectors_for_next_timestep();
+
+  // keep the oldest velocity and pressure for the projection initial guess,
+  // the oldest vectors stored for the projection are overwritten below
+  if(not vector_projection_velocity.empty())
+  {
+    swap_back_one_step(vector_projection_velocity);
+    vector_projection_velocity[0].swap(velocity.back());
+  }
+  if(not vector_projection_pressure.empty())
+  {
+    swap_back_one_step(vector_projection_pressure);
+    vector_projection_pressure[0].swap(pressure.back());
+  }
 
   swap_back_one_step(velocity);
   velocity[0].swap(velocity_np);
