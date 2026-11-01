@@ -149,7 +149,8 @@ Parameters::Parameters()
     solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::CG, 100)),
     initial_guess_type_pressure_poisson(InitialGuessType::Extrapolation),
     n_vectors_projection_pressure_poisson(0),
-    eps_projection_pressure_poisson(1.e-8),
+    eps_projection_pressure_poisson(1.e-6),
+    store_products_projection_pressure_poisson(false),
     preconditioner_pressure_poisson(PreconditionerPressurePoisson::Multigrid),
     multigrid_data_pressure_poisson(MultigridData()),
     update_preconditioner_pressure_poisson(false),
@@ -170,7 +171,8 @@ Parameters::Parameters()
     solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
     initial_guess_type_momentum(InitialGuessType::Extrapolation),
     n_vectors_projection_momentum(0),
-    eps_projection_momentum(1.e-8),
+    eps_projection_momentum(1.e-6),
+    store_products_projection_momentum(false),
     preconditioner_momentum(MomentumPreconditioner::InverseMassMatrix),
     update_preconditioner_momentum(false),
     update_preconditioner_momentum_every_newton_iter(1),
@@ -466,6 +468,29 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     AssertThrow(not nonlinear_problem_has_to_be_solved(),
                 dealii::ExcMessage("`InitialGuessType::Projection` is not implemented for a "
                                    "nonlinear momentum equation."));
+
+    // A(c) = A_0 + c A_1 with constant A_0 and A_1, see `ProductsProjection`
+    if(store_products_projection_momentum)
+    {
+      AssertThrow(not ale_formulation,
+                  dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                     "require a constant operator, i.e., no ALE formulation."));
+      AssertThrow(not(viscous_problem() and viscosity_is_variable()),
+                  dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                     "require a constant viscosity, i.e., a Newtonian fluid."));
+      AssertThrow(not non_explicit_convective_problem(),
+                  dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                     "require an explicit convective term."));
+    }
+  }
+
+  // the Laplace operator is constant unless the mesh moves
+  if(initial_guess_type_pressure_poisson == InitialGuessType::Projection and
+     store_products_projection_pressure_poisson)
+  {
+    AssertThrow(not ale_formulation,
+                dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                   "require a constant operator, i.e., no ALE formulation."));
   }
 
   // HIGH-ORDER DUAL SPLITTING SCHEME
@@ -1094,6 +1119,9 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
   {
     print_parameter(pcout, "Number of vectors projection", n_vectors_projection_pressure_poisson);
     print_parameter(pcout, "Tolerance projection", eps_projection_pressure_poisson);
+    print_parameter(pcout,
+                    "Store products projection",
+                    store_products_projection_pressure_poisson);
   }
 
   print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);
@@ -1258,6 +1286,7 @@ Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pc
   {
     print_parameter(pcout, "Number of vectors projection", n_vectors_projection_momentum);
     print_parameter(pcout, "Tolerance projection", eps_projection_momentum);
+    print_parameter(pcout, "Store products projection", store_products_projection_momentum);
   }
 
   print_parameter(pcout, "Preconditioner", preconditioner_momentum);

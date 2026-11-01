@@ -203,12 +203,14 @@ TimeIntBDF<dim, Number>::compute_initial_guess(BlockVectorType &                
 template<int dim, typename Number>
 void
 TimeIntBDF<dim, Number>::compute_initial_guess_projection(
-  VectorType &                                                  dst,
-  std::vector<VectorType> const &                               history,
-  std::vector<VectorType> const &                               history_projection,
-  double const                                                  eps,
-  VectorType const &                                            rhs,
-  std::function<void(VectorType &, VectorType const &)> const & vmult) const
+  VectorType &                                                                dst,
+  std::vector<VectorType> const &                                             history,
+  std::vector<VectorType> const &                                             history_projection,
+  double const                                                                eps,
+  VectorType const &                                                          rhs,
+  std::function<void(VectorType &, VectorType const &, double const)> const & vmult,
+  double const                                                                scaling_factor,
+  ProductsProjection &                                                        products_stored) const
 {
   // all previous solutions, ordered from the newest to the oldest
   std::vector<VectorType const *> vectors;
@@ -222,10 +224,35 @@ TimeIntBDF<dim, Number>::compute_initial_guess_projection(
   // squared condition number of the normal equations.
   unsigned int const      m = vectors.size();
   std::vector<VectorType> products(m);
+  AssertThrow(not products_stored.is_stored() or products_stored.up_to_date.size() == m,
+              dealii::ExcMessage("Number of stored products does not match number of vectors."));
   for(unsigned int i = 0; i < m; ++i)
   {
     products[i].reinit(rhs, true /* omit_zeroing_entries */);
-    vmult(products[i], *vectors[i]);
+    if(products_stored.is_stored())
+    {
+      // A_1 x_i = A(1) x_i - A(0) x_i
+      if(not products_stored.up_to_date[i])
+      {
+        products_stored.products_0[i].reinit(rhs, true /* omit_zeroing_entries */);
+        vmult(products_stored.products_0[i], *vectors[i], 0.0);
+        if(not products_stored.products_1.empty())
+        {
+          products_stored.products_1[i].reinit(rhs, true /* omit_zeroing_entries */);
+          vmult(products_stored.products_1[i], *vectors[i], 1.0);
+          products_stored.products_1[i] -= products_stored.products_0[i];
+        }
+        products_stored.up_to_date[i] = true;
+      }
+
+      products[i] = products_stored.products_0[i];
+      if(not products_stored.products_1.empty())
+        products[i].add(scaling_factor, products_stored.products_1[i]);
+    }
+    else
+    {
+      vmult(products[i], *vectors[i], scaling_factor);
+    }
   }
 
   // A vector whose product is (numerically) linearly dependent on the products

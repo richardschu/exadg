@@ -525,6 +525,11 @@ public:
   // dependent on the newer ones and dropped from the projection space
   double eps_projection_pressure_poisson;
 
+  // store the products of the Laplace operator with the previous pressures of
+  // `InitialGuessType::Projection` instead of recomputing them in each time
+  // step, which requires a constant operator, i.e., no ALE formulation
+  bool store_products_projection_pressure_poisson;
+
   // description: see enum declaration
   PreconditionerPressurePoisson preconditioner_pressure_poisson;
 
@@ -588,6 +593,11 @@ public:
 
   // see `eps_projection_pressure_poisson`
   double eps_projection_momentum;
+
+  // see `store_products_projection_pressure_poisson`, the momentum operator has
+  // to be constant apart from the scaling of the time derivative term, i.e., a
+  // Newtonian fluid, no ALE formulation and no implicit convective term
+  bool store_products_projection_momentum;
 
   // description: see enum declaration
   MomentumPreconditioner preconditioner_momentum;

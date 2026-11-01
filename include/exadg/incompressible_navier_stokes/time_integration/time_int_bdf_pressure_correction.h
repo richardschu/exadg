@@ -175,6 +175,13 @@ private:
   std::vector<VectorType> vector_projection_velocity;
   std::vector<VectorType> vector_projection_pressure;
 
+  // products of the momentum operator with `velocity` and
+  // `vector_projection_velocity` and of the Laplace operator with `pressure`
+  // and `vector_projection_pressure`, stored for `InitialGuessType::Projection`
+  // only
+  typename Base::ProductsProjection products_projection_velocity;
+  typename Base::ProductsProjection products_projection_pressure;
+
   // incremental formulation of pressure-correction scheme
   unsigned int order_pressure_extrapolation;
 

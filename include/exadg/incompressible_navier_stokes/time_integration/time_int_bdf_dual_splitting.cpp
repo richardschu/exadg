@@ -151,6 +151,17 @@ TimeIntBDFDualSplitting<dim, Number>::allocate_vectors()
   for(unsigned int i = 0; i < vector_projection_pressure.size(); ++i)
     pde_operator->initialize_vector_pressure(vector_projection_pressure[i]);
 
+  // the momentum operator is A(c) = A_0 + c A_1, where c is the scaling of the
+  // time derivative term, while the Laplace operator has no scaled part
+  if(this->param.initial_guess_type_momentum == InitialGuessType::Projection and
+     this->param.store_products_projection_momentum)
+    products_projection_velocity.initialize(velocity.size() + vector_projection_velocity.size(),
+                                            true /* with_scaled_part */);
+  if(this->param.initial_guess_type_pressure_poisson == InitialGuessType::Projection and
+     this->param.store_products_projection_pressure_poisson)
+    products_projection_pressure.initialize(pressure.size() + vector_projection_pressure.size(),
+                                            false /* with_scaled_part */);
+
   // velocity_dbc
   for(unsigned int i = 0; i < velocity_dbc.size(); ++i)
     pde_operator->initialize_vector_velocity(velocity_dbc[i]);
@@ -274,6 +285,7 @@ TimeIntBDFDualSplitting<dim, Number>::set_velocity(VectorType const & velocity_i
                                                    unsigned int const i)
 {
   velocity[i] = velocity_in;
+  products_projection_velocity.set_outdated(i);
 }
 
 template<int dim, typename Number>
@@ -282,6 +294,7 @@ TimeIntBDFDualSplitting<dim, Number>::set_pressure(VectorType const & pressure_i
                                                    unsigned int const i)
 {
   pressure[i] = pressure_in;
+  products_projection_pressure.set_outdated(i);
 }
 
 template<int dim, typename Number>
@@ -507,9 +520,13 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
                                              vector_projection_pressure,
                                              this->param.eps_projection_pressure_poisson,
                                              rhs,
-                                             [&](VectorType & dst, VectorType const & src) {
+                                             [&](VectorType &       dst,
+                                                 VectorType const & src,
+                                                 double const /* scaling_factor */) {
                                                pde_operator->apply_laplace_operator(dst, src);
-                                             });
+                                             },
+                                             0.0 /* no scaled part */,
+                                             products_projection_pressure);
     else
       this->compute_initial_guess(pressure_np,
                                   pressure,
@@ -928,10 +945,14 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
             vector_projection_velocity,
             this->param.eps_projection_momentum,
             rhs,
-            [&](VectorType & dst, VectorType const & src) {
-              pde_operator->apply_linear_momentum_operator(
-                dst, src, transport_velocity, this->get_scaling_factor_time_derivative_term());
-            });
+            [&](VectorType & dst, VectorType const & src, double const scaling_factor) {
+              pde_operator->apply_linear_momentum_operator(dst,
+                                                           src,
+                                                           transport_velocity,
+                                                           scaling_factor);
+            },
+            this->get_scaling_factor_time_derivative_term(),
+            products_projection_velocity);
         }
 
         // Solve the linearized problem.
@@ -1171,9 +1192,11 @@ TimeIntBDFDualSplitting<dim, Number>::prepare_vectors_for_next_timestep()
 
   swap_back_one_step(velocity);
   velocity[0].swap(velocity_np);
+  products_projection_velocity.swap_back_one_step();
 
   swap_back_one_step(pressure);
   pressure[0].swap(pressure_np);
+  products_projection_pressure.swap_back_one_step();
 
   // We also have to care about the history of velocity Dirichlet boundary conditions.
   // Note that velocity_dbc_np has already been updated.
