@@ -23,7 +23,6 @@
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_UTILITIES_LINEAR_ALGEBRA_H_
 
 // C/C++
-#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -215,66 +214,6 @@ inv_jacobian_times_residual(VectorType &                                        
     for(int i = 0; i < k; ++i)
       a.add(-Z_times_a[i], (*R)[i]);
   }
-}
-
-/*
- * Solves the symmetric positive semi-definite system `C x = d` via the Cholesky decomposition
- * `C = L L^T`. Only the lower triangle of `C` is accessed and overwritten by `L`. The decomposition
- * stops at the first row whose pivot is not larger than `tol` times the first diagonal entry of
- * `C`, i.e., at the first unknown that is (numerically) linearly dependent on the previous ones.
- * This and all following unknowns are dropped and set to zero, such that the system is solved for
- * the first `n` unknowns only.
- *
- * On input, `x` contains the right-hand side `d`, on output the solution. Returns `n`.
- */
-template<typename Number>
-unsigned int
-solve_cholesky(Matrix<Number> & C, std::vector<Number> & x, Number const tol)
-{
-  unsigned int const m = x.size();
-  if(m == 0)
-    return 0;
-
-  // Cholesky decomposition, stopping at the first (numerically) linearly dependent unknown. The
-  // negated comparison also stops for a NaN pivot.
-  Number const tolerance_dependence = tol * C.get(0, 0);
-  unsigned int n                    = 0;
-  for(; n < m; ++n)
-  {
-    Number pivot = C.get(n, n);
-    for(unsigned int k = 0; k < n; ++k)
-      pivot -= C.get(n, k) * C.get(n, k);
-    if(not(pivot > tolerance_dependence))
-      break;
-    C.set(std::sqrt(pivot), n, n);
-    for(unsigned int i = n + 1; i < m; ++i)
-    {
-      Number value = C.get(i, n);
-      for(unsigned int k = 0; k < n; ++k)
-        value -= C.get(i, k) * C.get(n, k);
-      C.set(value / C.get(n, n), i, n);
-    }
-  }
-
-  // forward substitution L y = d and backward substitution L^T x = y for the first n unknowns
-  for(unsigned int i = 0; i < n; ++i)
-  {
-    for(unsigned int k = 0; k < i; ++k)
-      x[i] -= C.get(i, k) * x[k];
-    x[i] /= C.get(i, i);
-  }
-  for(unsigned int i = n; i-- > 0;)
-  {
-    for(unsigned int k = i + 1; k < n; ++k)
-      x[i] -= C.get(k, i) * x[k];
-    x[i] /= C.get(i, i);
-  }
-
-  // dropped unknowns
-  for(unsigned int i = n; i < m; ++i)
-    x[i] = Number(0.0);
-
-  return n;
 }
 
 } // namespace LinearAlgebra

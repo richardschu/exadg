@@ -21,9 +21,8 @@
 
 /*
  * Tests the small dense linear algebra in linear_algebra.h. Each check computes a relative norm by
- * inserting the result back into its definition, e.g., |Q R - V| / |V| for the QR decomposition
- * or |C x - d| / |d| for the Cholesky solver. The norms are printed directly, numdiff regards
- * values below 1e-6 as zero.
+ * inserting the result back into its definition, e.g., |Q R - V| / |V| for the QR decomposition.
+ * The norms are printed directly, numdiff regards values below 1e-6 as zero.
  */
 
 // C++
@@ -31,7 +30,6 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -190,39 +188,6 @@ lower_triangle(Matrix<Number> const & R, unsigned int const size)
   return max;
 }
 
-// |C x - d| / |d| with the full symmetric matrix `C` given by its lower triangle
-double
-residual_symmetric(Matrix<double> const &      C,
-                   std::vector<double> const & x,
-                   std::vector<double> const & d)
-{
-  std::vector<double> Cx(x.size(), 0.0);
-  for(unsigned int i = 0; i < x.size(); ++i)
-    for(unsigned int j = 0; j < x.size(); ++j)
-      Cx[i] += (j <= i ? C.get(i, j) : C.get(j, i)) * x[j];
-  return relative_error(Cx, d);
-}
-
-// |L L^T - C|_F / |C|_F, with `L` and `C` given by their lower triangles
-double
-reconstruction_error_cholesky(Matrix<double> const & L,
-                              Matrix<double> const & C,
-                              unsigned int const     size)
-{
-  double error = 0.0, norm = 0.0;
-  for(unsigned int i = 0; i < size; ++i)
-    for(unsigned int j = 0; j < size; ++j)
-    {
-      double LLT = 0.0;
-      for(unsigned int k = 0; k <= std::min(i, j); ++k)
-        LLT += L.get(i, k) * L.get(j, k);
-      double const C_ij = j <= i ? C.get(i, j) : C.get(j, i);
-      error += std::pow(LLT - C_ij, 2);
-      norm += std::pow(C_ij, 2);
-    }
-  return std::sqrt(error / norm);
-}
-
 // vectors of size 5, the first three are linearly independent
 std::vector<std::vector<double>> const small_vectors = {{1.0, 2.0, 0.0, 1.0, 1.0},
                                                         {0.0, 1.0, 3.0, 1.0, -1.0},
@@ -295,6 +260,24 @@ test_QR_decomposition()
     print_norm("|Q_2|", Q[2].l2_norm());
     print_norm("|Q^T Q - I|_F, first 2 columns", orthogonality_error(Q, 2));
     print_norm("|Q R - V|_F / |V|_F, first 2 columns", reconstruction_error_QR(V, Q, R, 2));
+  }
+
+  // zero column v_0 = 0 is dropped without division by zero: Q_0 = 0 and
+  // R(:,0) = e_0, the other columns are orthonormalized as without v_0
+  {
+    std::vector<Vector<Number>> V(1, Vector<Number>(small_vectors[0].size()));
+    for(unsigned int i = 0; i < 2; ++i)
+      V.push_back(make_vector<Number>(small_vectors[i]));
+    std::vector<Vector<Number>> Q = V;
+    Matrix<Number>              R(3);
+    LinearAlgebra::compute_QR_decomposition(Q, R);
+
+    std::cout << "  zero column, v_0 = 0:" << std::endl;
+    print_matrix("R", R, 3);
+    print_norm("|Q_0|", Q[0].l2_norm());
+    print_norm("|Q^T Q - I|_F, columns 1 and 2",
+               orthogonality_error(std::vector<Vector<Number>>(Q.begin() + 1, Q.end()), 2));
+    print_norm("|Q R - V|_F / |V|_F", reconstruction_error_QR(V, Q, R, 3));
   }
 
   // v_2 = v_0 + 2 v_1 + delta w with w orthogonal to v_0, v_1, |w| = 1: v_2 is dropped if
@@ -472,93 +455,11 @@ test_inv_jacobian_times_residual()
   }
 }
 
-void
-test_solve_cholesky()
-{
-  print_header("solve_cholesky");
-
-  double const tol = 1e-14;
-
-  // SPD matrix with x = (1, -1, 2), the upper triangle is filled with values that must not be
-  // accessed
-  {
-    std::vector<std::vector<double>> const entries = {{4.0, 99.0, 99.0},
-                                                      {2.0, 5.0, 99.0},
-                                                      {0.0, 1.0, 3.0}};
-    Matrix<double>                         C(3);
-    for(unsigned int i = 0; i < 3; ++i)
-      for(unsigned int j = 0; j < 3; ++j)
-        C.set(entries[i][j], i, j);
-    Matrix<double> const      C_original = C;
-    std::vector<double> const x_exact    = {1.0, -1.0, 2.0};
-    std::vector<double> const d          = {2.0, -1.0, 5.0};
-    std::vector<double>       x          = d;
-    unsigned int const        n          = LinearAlgebra::solve_cholesky(C, x, tol);
-
-    std::cout << "  SPD 3x3: n = " << n << std::endl;
-    print_values("SPD 3x3: x", x);
-    print_norm("SPD 3x3: |x - x_exact| / |x_exact|", relative_error(x, x_exact));
-    print_norm("SPD 3x3: |C x - d| / |d|", residual_symmetric(C_original, x, d));
-    print_norm("SPD 3x3: |L L^T - C|_F / |C|_F", reconstruction_error_cholesky(C, C_original, 3));
-  }
-
-  // Gram matrix of v_0, v_1, v_2 = v_0 + 2 v_1: v_2 is dropped, x = (1, -1, 0)
-  {
-    std::vector<Vector<double>> V;
-    for(unsigned int i = 0; i < 2; ++i)
-      V.push_back(make_vector<double>(small_vectors[i]));
-    V.push_back(V[0]);
-    V[2].add(2.0, V[1]);
-
-    Matrix<double> C(3);
-    for(unsigned int i = 0; i < 3; ++i)
-      for(unsigned int j = 0; j <= i; ++j)
-        C.set(V[i] * V[j], i, j);
-    Matrix<double> const      C_original = C;
-    std::vector<double> const x_exact    = {1.0, -1.0, 0.0};
-    std::vector<double>       d(3, 0.0);
-    for(unsigned int i = 0; i < 3; ++i)
-      for(unsigned int j = 0; j < 3; ++j)
-        d[i] += (j <= i ? C.get(i, j) : C.get(j, i)) * x_exact[j];
-    std::vector<double> x = d;
-    unsigned int const  n = LinearAlgebra::solve_cholesky(C, x, tol);
-
-    std::cout << "  Gram matrix, v_2 = v_0 + 2 v_1: n = " << n << std::endl;
-    print_values("Gram matrix: x", x);
-    print_norm("Gram matrix: |x - x_exact| / |x_exact|", relative_error(x, x_exact));
-    print_norm("Gram matrix: |C x - d| / |d|", residual_symmetric(C_original, x, d));
-    print_norm("Gram matrix: |L L^T - C|_F / |C|_F, 2x2",
-               reconstruction_error_cholesky(C, C_original, 2));
-  }
-
-  // empty system
-  {
-    Matrix<double>      C(0);
-    std::vector<double> x;
-    std::cout << "  empty system: n = " << LinearAlgebra::solve_cholesky(C, x, tol) << std::endl;
-  }
-
-  // NaN pivot in row 1: stops at n = 1, x_0 = d_0 / C(0,0)
-  {
-    Matrix<double> C(3);
-    C.set(4.0, 0, 0);
-    C.set(2.0, 1, 0);
-    C.set(std::numeric_limits<double>::quiet_NaN(), 1, 1);
-    C.set(1.0, 2, 1);
-    C.set(3.0, 2, 2);
-    std::vector<double> x = {2.0, -1.0, 5.0};
-    unsigned int const  n = LinearAlgebra::solve_cholesky(C, x, tol);
-
-    std::cout << "  NaN in C(1,1): n = " << n << std::endl;
-    print_values("NaN in C(1,1): x", x);
-  }
-}
-
 /*
  * Least-squares problem of the projection initial guess (see TimeIntBDF::
  * compute_initial_guess_projection()): minimize |A sum_k gamma_k x_k - b| for m = 6 vectors x_k
  * of size 1000 and the matrix A of a 1D finite difference stencil, solved via the QR decomposition
- * of the products A x_k and via the Cholesky decomposition of the normal equations.
+ * of the products A x_k.
  */
 void
 test_least_squares_problem()
@@ -632,28 +533,6 @@ test_least_squares_problem()
       }
       print_residuals("QR", gamma);
     }
-
-    // Cholesky: C gamma = d with C = (A X)^T A X and d = (A X)^T b
-    {
-      Matrix<double>      C(m);
-      std::vector<double> d(m);
-      for(unsigned int i = 0; i < m; ++i)
-      {
-        for(unsigned int j = 0; j <= i; ++j)
-          C.set(products[i] * products[j], i, j);
-        d[i] = products[i] * b;
-      }
-      Matrix<double> const C_original = C;
-      std::vector<double>  gamma      = d;
-      unsigned int const   n          = LinearAlgebra::solve_cholesky(C, gamma, 1e-14);
-
-      std::cout << "  Cholesky: n = " << n << std::endl;
-      if(consistent)
-        print_norm("Cholesky: |L L^T - C|_F / |C|_F",
-                   reconstruction_error_cholesky(C, C_original, m));
-      print_norm("Cholesky: |C gamma - d| / |d|", residual_symmetric(C_original, gamma, d));
-      print_residuals("Cholesky", gamma);
-    }
   }
 }
 
@@ -680,8 +559,6 @@ main(int argc, char ** argv)
     ExaDG::test_backward_substitution_multiple_rhs<float>();
 
     ExaDG::test_inv_jacobian_times_residual();
-
-    ExaDG::test_solve_cholesky();
 
     ExaDG::test_least_squares_problem();
   }
