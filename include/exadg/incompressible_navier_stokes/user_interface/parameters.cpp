@@ -149,6 +149,7 @@ Parameters::Parameters()
     solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::CG, 100)),
     initial_guess_type_pressure_poisson(InitialGuessType::Extrapolation),
     n_vectors_projection_pressure_poisson(0),
+    eps_projection_pressure_poisson(1.e-8),
     preconditioner_pressure_poisson(PreconditionerPressurePoisson::Multigrid),
     multigrid_data_pressure_poisson(MultigridData()),
     update_preconditioner_pressure_poisson(false),
@@ -169,6 +170,7 @@ Parameters::Parameters()
     solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
     initial_guess_type_momentum(InitialGuessType::Extrapolation),
     n_vectors_projection_momentum(0),
+    eps_projection_momentum(1.e-8),
     preconditioner_momentum(MomentumPreconditioner::InverseMassMatrix),
     update_preconditioner_momentum(false),
     update_preconditioner_momentum_every_newton_iter(1),
@@ -1089,7 +1091,10 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
   solver_data_pressure_poisson.print(pcout);
   print_parameter(pcout, "Initial guess type", initial_guess_type_pressure_poisson);
   if(initial_guess_type_pressure_poisson == InitialGuessType::Projection)
+  {
     print_parameter(pcout, "Number of vectors projection", n_vectors_projection_pressure_poisson);
+    print_parameter(pcout, "Tolerance projection", eps_projection_pressure_poisson);
+  }
 
   print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);
 
@@ -1250,7 +1255,10 @@ Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pc
   solver_data_momentum.print(pcout);
   print_parameter(pcout, "Initial guess type", initial_guess_type_momentum);
   if(initial_guess_type_momentum == InitialGuessType::Projection)
+  {
     print_parameter(pcout, "Number of vectors projection", n_vectors_projection_momentum);
+    print_parameter(pcout, "Tolerance projection", eps_projection_momentum);
+  }
 
   print_parameter(pcout, "Preconditioner", preconditioner_momentum);
 

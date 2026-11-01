@@ -160,12 +160,15 @@ protected:
    * recomputed in each call.
    * `history_projection` holds older solutions, which the time integrator no
    * longer needs and which are stored for the projection only; it may be empty.
+   * `eps` is the relative tolerance below which a vector is considered linearly
+   * dependent on the newer ones and dropped, see `compute_QR_decomposition()`.
    */
   void
   compute_initial_guess_projection(
     VectorType &                                                  dst,
     std::vector<VectorType> const &                               history,
     std::vector<VectorType> const &                               history_projection,
+    double const                                                  eps,
     VectorType const &                                            rhs,
     std::function<void(VectorType &, VectorType const &)> const & vmult) const;
 

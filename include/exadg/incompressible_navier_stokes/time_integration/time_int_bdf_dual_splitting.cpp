@@ -505,6 +505,7 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
       this->compute_initial_guess_projection(pressure_np,
                                              pressure,
                                              vector_projection_pressure,
+                                             this->param.eps_projection_pressure_poisson,
                                              rhs,
                                              [&](VectorType & dst, VectorType const & src) {
                                                pde_operator->apply_laplace_operator(dst, src);
@@ -925,6 +926,7 @@ TimeIntBDFDualSplitting<dim, Number>::viscous_step()
             velocity_np,
             velocity,
             vector_projection_velocity,
+            this->param.eps_projection_momentum,
             rhs,
             [&](VectorType & dst, VectorType const & src) {
               pde_operator->apply_linear_momentum_operator(

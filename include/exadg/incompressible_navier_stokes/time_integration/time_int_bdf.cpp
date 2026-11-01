@@ -206,6 +206,7 @@ TimeIntBDF<dim, Number>::compute_initial_guess_projection(
   VectorType &                                                  dst,
   std::vector<VectorType> const &                               history,
   std::vector<VectorType> const &                               history_projection,
+  double const                                                  eps,
   VectorType const &                                            rhs,
   std::function<void(VectorType &, VectorType const &)> const & vmult) const
 {
@@ -216,8 +217,9 @@ TimeIntBDF<dim, Number>::compute_initial_guess_projection(
   for(VectorType const & vector : history_projection)
     vectors.push_back(&vector);
 
-  // Minimize |A (sum_i gamma_i x_i) - b| with x_i = *vectors[i] via the normal equations
-  // C gamma = d, where C_ij = (A x_i, A x_j) and d_i = (A x_i, b).
+  // Minimize |A (sum_i gamma_i x_i) - b| with x_i = *vectors[i] via the QR
+  // decomposition A X = Q R, i.e., solve R gamma = Q^T b. This avoids the
+  // squared condition number of the normal equations.
   unsigned int const      m = vectors.size();
   std::vector<VectorType> products(m);
   for(unsigned int i = 0; i < m; ++i)
@@ -226,23 +228,20 @@ TimeIntBDF<dim, Number>::compute_initial_guess_projection(
     vmult(products[i], *vectors[i]);
   }
 
-  LinearAlgebra::Matrix<double> C(m);
-  std::vector<double>           gamma(m);
-  for(unsigned int i = 0; i < m; ++i)
-  {
-    for(unsigned int j = 0; j <= i; ++j)
-      C.set(products[i] * products[j], i, j);
-    gamma[i] = products[i] * rhs;
-  }
+  // A vector whose product is (numerically) linearly dependent on the products
+  // of the newer ones, based on the relative tolerance `eps`, gets a zero
+  // coefficient, while older vectors are kept.
+  LinearAlgebra::Matrix<double> R(m);
+  LinearAlgebra::compute_QR_decomposition(products, R, eps);
 
-  // The Cholesky solver stops at the first vector that is (numerically) linearly dependent on the
-  // newer ones based on the tolerance `tol`, which drops this and all older vectors.
-  double constexpr tol = 1e-14;
-  unsigned int const n = LinearAlgebra::solve_cholesky(C, gamma, tol);
+  std::vector<double> Q_T_rhs(m), gamma(m);
+  for(unsigned int i = 0; i < m; ++i)
+    Q_T_rhs[i] = products[i] * rhs;
+  LinearAlgebra::backward_substitution(R, gamma, Q_T_rhs);
 
   // zeroing first also resets the ghost values, see `dealii::LinearAlgebra::distributed::Vector`
   dst = 0.0;
-  for(unsigned int i = 0; i < n; ++i)
+  for(unsigned int i = 0; i < m; ++i)
     dst.add(gamma[i], *vectors[i]);
 }
 

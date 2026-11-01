@@ -109,9 +109,9 @@ compute_QR_decomposition(std::vector<VectorType> & Q, Matrix<Number> & R, Number
       Q[i].add(-r_ji, Q[j]);
     }
 
-    // normalize or drop if linear dependent
+    // normalize or drop if linear dependent, `<=` also drops zero columns
     Number r_ii = Number(Q[i].l2_norm());
-    if(r_ii < eps * norm_initial)
+    if(r_ii <= eps * norm_initial)
     {
       Q[i] = 0.0;
       for(unsigned int j = 0; j < i; ++j)

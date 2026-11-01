@@ -521,6 +521,10 @@ public:
   // time integrator are always used, larger values also store older pressures
   unsigned int n_vectors_projection_pressure_poisson;
 
+  // relative tolerance below which a previous pressure is considered linearly
+  // dependent on the newer ones and dropped from the projection space
+  double eps_projection_pressure_poisson;
+
   // description: see enum declaration
   PreconditionerPressurePoisson preconditioner_pressure_poisson;
 
@@ -581,6 +585,9 @@ public:
   // number of previous velocities spanning the space of
   // `InitialGuessType::Projection`, see `n_vectors_projection_pressure_poisson`
   unsigned int n_vectors_projection_momentum;
+
+  // see `eps_projection_pressure_poisson`
+  double eps_projection_momentum;
 
   // description: see enum declaration
   MomentumPreconditioner preconditioner_momentum;

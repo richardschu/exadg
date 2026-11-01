@@ -373,6 +373,10 @@ public:
       prm.add_parameter("InitialGuessTypeMomentum",            initial_guess_type_momentum,                       "Initial guess of the momentum solver.");
       prm.add_parameter("InitialGuessTypeCoupled",             initial_guess_type_coupled,                        "Initial guess of the coupled solver.");
       prm.add_parameter("RelTolReference",                     rel_tol_reference,                                 "Reference of the relative tolerances of the linear solvers.");
+      prm.add_parameter("NVectorsProjectionPressurePoisson",   n_vectors_projection_pressure_poisson,             "Number of previous pressures used by the projection initial guess.", dealii::Patterns::Integer(0));
+      prm.add_parameter("NVectorsProjectionMomentum",          n_vectors_projection_momentum,                     "Number of previous velocities used by the projection initial guess.", dealii::Patterns::Integer(0));
+      prm.add_parameter("EpsProjectionPressurePoisson",        eps_projection_pressure_poisson,                   "Relative tolerance dropping linearly dependent pressures from the projection.", dealii::Patterns::Double(0.0));
+      prm.add_parameter("EpsProjectionMomentum",               eps_projection_momentum,                           "Relative tolerance dropping linearly dependent velocities from the projection.", dealii::Patterns::Double(0.0));
       // clang-format off
     }
     prm.leave_subsection();
@@ -640,8 +644,10 @@ private:
     this->param.initial_guess_type_pressure_poisson = initial_guess_type_pressure_poisson;
     this->param.initial_guess_type_momentum         = initial_guess_type_momentum;
     this->param.initial_guess_type_coupled          = initial_guess_type_coupled;
-    this->param.n_vectors_projection_pressure_poisson = 6;
-    this->param.n_vectors_projection_momentum         = 6;
+    this->param.n_vectors_projection_pressure_poisson = n_vectors_projection_pressure_poisson;
+    this->param.n_vectors_projection_momentum         = n_vectors_projection_momentum;
+    this->param.eps_projection_pressure_poisson       = eps_projection_pressure_poisson;
+    this->param.eps_projection_momentum               = eps_projection_momentum;
     this->param.solver_data_pressure_poisson.rel_tol_reference = rel_tol_reference;
     this->param.solver_data_projection.rel_tol_reference       = rel_tol_reference;
     this->param.solver_data_momentum.rel_tol_reference         = rel_tol_reference;
@@ -878,6 +884,13 @@ private:
   InitialGuessType initial_guess_type_momentum         = InitialGuessType::Extrapolation;
   InitialGuessType initial_guess_type_coupled          = InitialGuessType::Extrapolation;
   RelTolReference  rel_tol_reference                   = RelTolReference::InitialResidual;
+
+  // projection initial guess: number of previous solutions used and relative
+  // tolerance for dropping linearly dependent ones
+  unsigned int n_vectors_projection_pressure_poisson = 6;
+  unsigned int n_vectors_projection_momentum         = 6;
+  double       eps_projection_pressure_poisson       = 1e-8;
+  double       eps_projection_momentum               = 1e-8;
 
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
   double                        interval_start = 0.0;
