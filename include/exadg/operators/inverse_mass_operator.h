@@ -148,6 +148,13 @@ private:
                                          VectorType const & src,
                                          Range const &      cell_range) const;
 
+  /**
+   * The matrix-free cell-wise inverse mass operator on non-hypercube elements is based on the
+   * mass matrix of the reference cell and therefore requires affine cells.
+   */
+  void
+  check_affine_mapping() const;
+
   dealii::MatrixFree<dim, Number> const * matrix_free;
 
   unsigned int dof_index, quad_index;

@@ -68,6 +68,12 @@ public:
       prm.add_parameter("MultigridTypeVelocityBlock",
                         multigrid_type_velocity_block,
                         "Multigrid type of the velocity block preconditioner (coupled solver).");
+      prm.add_parameter("TemporalDiscretization",
+                        temporal_discretization,
+                        "Temporal discretization.");
+      prm.add_parameter("MultigridTypeMomentum",
+                        multigrid_type_momentum,
+                        "Multigrid type of the momentum preconditioner (projection methods).");
     }
     prm.leave_subsection();
   }
@@ -96,7 +102,7 @@ private:
 
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                     = SolverType::Unsteady;
-    this->param.temporal_discretization         = TemporalDiscretization::BDFCoupledSolution;
+    this->param.temporal_discretization         = temporal_discretization;
     this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
     this->param.order_time_integrator           = 2;
     this->param.start_with_low_order            = false;
@@ -155,6 +161,13 @@ private:
     this->param.implement_block_diagonal_preconditioner_matrix_free = false;
     this->param.use_cell_based_face_loops                           = false;
     this->param.quad_rule_linearization = QuadratureRuleLinearization::Overintegration32k;
+    // The matrix-free inverse mass operator on simplices requires affine cells, which is violated
+    // by the deformed mapping of the ALE formulation.
+    if(this->param.grid.element_type == ElementType::Simplex)
+    {
+      this->param.inverse_mass_operator.implementation_type       = InverseMassType::BlockMatrices;
+      this->param.inverse_mass_preconditioner.implementation_type = InverseMassType::BlockMatrices;
+    }
 
     // PROJECTION METHODS
 
@@ -191,7 +204,7 @@ private:
     {
       this->param.solver_data_momentum         = SolverData(1000, 1.e-14, 1.e-14, LinearSolver::CG);
       this->param.preconditioner_momentum      = MomentumPreconditioner::Multigrid;
-      this->param.multigrid_data_momentum.type = MultigridType::hMG;
+      this->param.multigrid_data_momentum.type = multigrid_type_momentum;
       this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
       this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
       this->param.multigrid_data_momentum.coarse_problem.solver =
@@ -217,7 +230,7 @@ private:
       this->param.solver_data_momentum = SolverData(1e4, 1.e-14, 1.e-14, LinearSolver::FGMRES, 100);
       this->param.update_preconditioner_momentum   = false;
       this->param.preconditioner_momentum          = MomentumPreconditioner::Multigrid;
-      this->param.multigrid_data_momentum.type     = MultigridType::hMG;
+      this->param.multigrid_data_momentum.type     = multigrid_type_momentum;
       this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
       this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
       this->param.multigrid_data_momentum.coarse_problem.solver =
@@ -390,6 +403,10 @@ private:
   ElementType element_type = ElementType::Hypercube;
 
   MultigridType multigrid_type_velocity_block = MultigridType::phMG;
+
+  TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFCoupledSolution;
+
+  MultigridType multigrid_type_momentum = MultigridType::hMG;
 };
 
 } // namespace IncNS
