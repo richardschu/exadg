@@ -152,6 +152,9 @@ public:
     // Note that the grid parameters in Poisson::Parameters are ignored since
     // the grid is created using the parameters specified in IncNS::Parameters
     set_parameters_poisson();
+    // The Poisson operator relies on grid parameters, e.g., the element type, which have to be
+    // consistent with the grid.
+    poisson_param.grid = param.grid;
     poisson_param.check();
     poisson_param.print(pcout, "List of parameters for Poisson solver (moving mesh):");
 

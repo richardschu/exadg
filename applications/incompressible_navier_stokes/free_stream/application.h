@@ -74,6 +74,9 @@ public:
       prm.add_parameter("MultigridTypeMomentum",
                         multigrid_type_momentum,
                         "Multigrid type of the momentum preconditioner (projection methods).");
+      prm.add_parameter("MeshMovementType",
+                        mesh_movement_type,
+                        "Mesh movement type: Function or Poisson.");
     }
     prm.leave_subsection();
   }
@@ -91,7 +94,7 @@ private:
 
     // ALE
     this->param.ale_formulation    = ALE;
-    this->param.mesh_movement_type = MeshMovementType::Function;
+    this->param.mesh_movement_type = mesh_movement_type;
     this->param.neumann_with_variable_normal_vector =
       false; // no Neumann boundaries for this test case
 
@@ -330,6 +333,48 @@ private:
   }
 
   void
+  set_parameters_poisson() final
+  {
+    // MATHEMATICAL MODEL
+    this->poisson_param.right_hand_side = false;
+
+    // SPATIAL DISCRETIZATION
+    this->poisson_param.degree                 = this->param.mapping_degree;
+    this->poisson_param.spatial_discretization = Poisson::SpatialDiscretization::CG;
+
+    // SOLVER
+    this->poisson_param.solver_data         = SolverData(1e4, 1e-20, 1e-10, LinearSolver::CG);
+    this->poisson_param.preconditioner      = Poisson::Preconditioner::Multigrid;
+    this->poisson_param.multigrid_data.type = MultigridType::phMG;
+    // MG smoother
+    this->poisson_param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
+    // MG coarse grid solver
+    this->poisson_param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::CG;
+    this->poisson_param.multigrid_data.coarse_problem.preconditioner =
+      MultigridCoarseGridPreconditioner::PointJacobi;
+  }
+
+  void
+  set_boundary_descriptor_poisson() final
+  {
+    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+      pair;
+
+    // the mesh displacement is prescribed on the boundary and extended into the domain
+    this->poisson_boundary_descriptor->dirichlet_bc.insert(
+      pair(0, this->create_mesh_movement_function()));
+  }
+
+  void
+  set_field_functions_poisson() final
+  {
+    this->poisson_field_functions->initial_solution.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->poisson_field_functions->right_hand_side.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+  }
+
+  void
   set_boundary_descriptor() final
   {
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
@@ -407,6 +452,8 @@ private:
   TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFCoupledSolution;
 
   MultigridType multigrid_type_momentum = MultigridType::hMG;
+
+  MeshMovementType mesh_movement_type = MeshMovementType::Function;
 };
 
 } // namespace IncNS
