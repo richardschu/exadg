@@ -291,7 +291,7 @@ public:
       AssertThrow(ale_elasticity_param.body_force == false,
                   dealii::ExcMessage("Parameter does not make sense in context of FSI."));
       AssertThrow(
-        ale_poisson_param.grid.create_coarse_triangulations ==
+        ale_elasticity_param.grid.create_coarse_triangulations ==
           param.grid.create_coarse_triangulations,
         dealii::ExcMessage(
           "ALE and fluid use the same Grid, requiring the same settings in terms of multigrid coarsening."));

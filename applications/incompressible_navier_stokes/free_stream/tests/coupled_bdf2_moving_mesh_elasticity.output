@@ -1,0 +1,321 @@
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       1
+
+Setting up incompressible Navier-Stokes solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              Unsteady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            ConvectiveFormulation
+  Outflow BC for convective term:            false
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       true
+  Mesh movement type:                        Elasticity
+  NBC with variable normal vector:           false
+
+Physical quantities:
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e+01
+  Viscosity:                                 2.5000e-02
+  Density:                                   1.0000e+00
+
+Temporal discretization:
+  Temporal discretization method:            BDFCoupledSolution
+  Calculation of time step size:             CFL
+  Adaptive time stepping:                    true
+  Adaptive time stepping limiting factor:    1.2000e+00
+  Maximum allowable time step size:          1.7977e+308
+  Type of CFL condition:                     VelocityNorm
+  Maximum number of time steps:              4294967295
+  Temporal refinements:                      0
+  Order of time integration scheme:          2
+  Start with low order method:               false
+  Treatment of convective term:              Explicit
+  Solver information:
+  Interval physical time:                    1.0000e+01
+  Interval wall time:                        1.7977e+308
+  Interval time steps:                       4294967295
+  Restarted simulation:                      false
+  Restart:
+  Write restart:                             false
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              2
+  Create coarse triangulations:              false
+  Mapping degree:                            3
+  Mapping degree coarse grids:               3
+  FE space:                                  L2
+  Polynomial degree velocity:                3
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Strong
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Strong
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyAnalyticalSolutionInPoint
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:false
+  Use boundary data:                         true
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+Coupled Navier-Stokes solver:
+  Use scaling of continuity equation:        false
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-14
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            BlockTriangular
+  Update preconditioner:                     false
+
+  Velocity/momentum block:
+  Preconditioner:                            Multigrid
+  Multigrid operator type:                   ReactionDiffusion
+  Multigrid type:                            phMG
+  p-sequence:                                Bisect
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   BlockJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of velocity block:         false
+
+  Pressure/Schur-complement block:
+  Preconditioner:                            PressureConvectionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of Laplace operator:       false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                2
+  Number of cells:                           16
+
+List of parameters for elasticity solver (moving mesh):
+
+Mathematical model:
+  Problem type:                              Steady
+  Body force:                                false
+  Large deformation:                         false
+
+Physical quantities:
+
+Temporal discretization:
+
+Spatial Discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              2
+  Create coarse triangulations:              false
+  Mapping degree:                            3
+  Mapping degree coarse grids:               3
+  Polynomial degree:                         3
+  Use matrix-based operator:                 false
+
+Solver:
+
+Linear solver:
+  Solver:                                    CG
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-20
+  Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
+  Preconditioner:                            Multigrid
+  Multigrid type:                            phMG
+  p-sequence:                                Bisect
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        CG
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+
+Construct elasticity operator ...
+
+Continuous Galerkin finite element discretization:
+
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   32
+  number of dofs (total):                    338
+
+... done!
+
+Setup elasticity operator ...
+
+... done!
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   32
+  number of dofs (total):                    512
+Pressure:
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   9
+  number of dofs (total):                    144
+Velocity and pressure:
+  number of dofs per cell:                   41
+  number of dofs (total):                    656
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Setup Multistep time integrator ...
+
+Calculation of time step size according to CFL condition:
+
+  CFL:                                       2.5000e-01
+  Time step size (global):                   1.2028e-02
+  Time step size (adaptive):                 8.5050e-03
+
+... done!
+
+Starting time loop ...
+
+Calculate error for velocity at time t = 0.0000e+00:
+  Relative error (L2-norm): 1.77897e-16
+
+Calculate error for pressure at time t = 0.0000e+00:
+  Relative error (L2-norm): 1.28188e-16
+
+________________________________________________________________________________
+
+ Time step number = 1       t = 0.00000e+00, dt = 8.50500e-03
+________________________________________________________________________________
+
+Calculate error for velocity at time t = 1.0035e+00:
+  Relative error (L2-norm): 1.35860e-15
+
+Calculate error for pressure at time t = 1.0035e+00:
+  Relative error (L2-norm): 1.32286e-13
+
+Calculate error for velocity at time t = 2.0047e+00:
+  Relative error (L2-norm): 3.18608e-15
+
+Calculate error for pressure at time t = 2.0047e+00:
+  Relative error (L2-norm): 7.78104e-14
+
+Calculate error for velocity at time t = 3.0060e+00:
+  Relative error (L2-norm): 3.06817e-15
+
+Calculate error for pressure at time t = 3.0060e+00:
+  Relative error (L2-norm): 8.02130e-14
+
+Calculate error for velocity at time t = 4.0006e+00:
+  Relative error (L2-norm): 3.16468e-15
+
+Calculate error for pressure at time t = 4.0006e+00:
+  Relative error (L2-norm): 1.05186e-13
+
+Calculate error for velocity at time t = 5.0018e+00:
+  Relative error (L2-norm): 2.98422e-15
+
+Calculate error for pressure at time t = 5.0018e+00:
+  Relative error (L2-norm): 8.08142e-14
+
+Calculate error for velocity at time t = 6.0031e+00:
+  Relative error (L2-norm): 9.71061e-16
+
+Calculate error for pressure at time t = 6.0031e+00:
+  Relative error (L2-norm): 8.72950e-13
+
+Calculate error for velocity at time t = 7.0044e+00:
+  Relative error (L2-norm): 2.90231e-15
+
+Calculate error for pressure at time t = 7.0044e+00:
+  Relative error (L2-norm): 1.24609e-13
+
+Calculate error for velocity at time t = 8.0056e+00:
+  Relative error (L2-norm): 4.97267e-15
+
+Calculate error for pressure at time t = 8.0056e+00:
+  Relative error (L2-norm): 1.74897e-13
+
+Calculate error for velocity at time t = 9.0002e+00:
+  Relative error (L2-norm): 2.80270e-15
+
+Calculate error for pressure at time t = 9.0002e+00:
+  Relative error (L2-norm): 1.92117e-13
+
+Calculate error for velocity at time t = 1.0001e+01:
+  Relative error (L2-norm): 1.76823e-15
+
+Calculate error for pressure at time t = 1.0001e+01:
+  Relative error (L2-norm): 1.83370e-13

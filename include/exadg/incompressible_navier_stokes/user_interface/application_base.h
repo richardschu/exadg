@@ -41,6 +41,10 @@
 #include <exadg/poisson/user_interface/field_functions.h>
 #include <exadg/poisson/user_interface/parameters.h>
 #include <exadg/postprocessor/output_parameters.h>
+#include <exadg/structure/user_interface/boundary_descriptor.h>
+#include <exadg/structure/user_interface/field_functions.h>
+#include <exadg/structure/user_interface/material_descriptor.h>
+#include <exadg/structure/user_interface/parameters.h>
 
 namespace ExaDG
 {
@@ -188,6 +192,58 @@ public:
     return poisson_field_functions;
   }
 
+  // elasticity-type mesh motion (solve PDE problem)
+  void
+  setup_elasticity(std::shared_ptr<Grid<dim> const> const & grid)
+  {
+    // Note that the grid parameters in Structure::Parameters are ignored since
+    // the grid is created using the parameters specified in IncNS::Parameters
+    set_parameters_elasticity();
+    // The Structure operator relies on grid parameters, e.g., the element type, which have to be
+    // consistent with the grid.
+    elasticity_param.grid = param.grid;
+    elasticity_param.check();
+    elasticity_param.print(pcout, "List of parameters for elasticity solver (moving mesh):");
+
+    elasticity_boundary_descriptor = std::make_shared<Structure::BoundaryDescriptor<dim>>();
+    set_boundary_descriptor_elasticity();
+    verify_boundary_conditions(*elasticity_boundary_descriptor, *grid);
+
+    elasticity_material_descriptor = std::make_shared<Structure::MaterialDescriptor>();
+    set_material_descriptor_elasticity();
+
+    elasticity_field_functions = std::make_shared<Structure::FieldFunctions<dim>>();
+    set_field_functions_elasticity();
+
+    AssertThrow(elasticity_param.body_force == false,
+                dealii::ExcMessage("Elasticity problem is used for mesh movement. Hence, "
+                                   "body forces have to be disabled for the elasticity problem."));
+  }
+
+  Structure::Parameters const &
+  get_parameters_elasticity() const
+  {
+    return elasticity_param;
+  }
+
+  std::shared_ptr<Structure::BoundaryDescriptor<dim> const>
+  get_boundary_descriptor_elasticity() const
+  {
+    return elasticity_boundary_descriptor;
+  }
+
+  std::shared_ptr<Structure::MaterialDescriptor const>
+  get_material_descriptor_elasticity() const
+  {
+    return elasticity_material_descriptor;
+  }
+
+  std::shared_ptr<Structure::FieldFunctions<dim> const>
+  get_field_functions_elasticity() const
+  {
+    return elasticity_field_functions;
+  }
+
 protected:
   virtual void
   parse_parameters()
@@ -210,6 +266,12 @@ protected:
   Poisson::Parameters                                  poisson_param;
   std::shared_ptr<Poisson::FieldFunctions<dim>>        poisson_field_functions;
   std::shared_ptr<Poisson::BoundaryDescriptor<1, dim>> poisson_boundary_descriptor;
+
+  // solve mesh deformation by an elasticity problem
+  Structure::Parameters                               elasticity_param;
+  std::shared_ptr<Structure::FieldFunctions<dim>>     elasticity_field_functions;
+  std::shared_ptr<Structure::BoundaryDescriptor<dim>> elasticity_boundary_descriptor;
+  std::shared_ptr<Structure::MaterialDescriptor>      elasticity_material_descriptor;
 
   std::string parameter_file;
 
@@ -255,6 +317,39 @@ private:
     AssertThrow(false,
                 dealii::ExcMessage("Has to be overwritten by derived classes in order "
                                    "to use Poisson solver for mesh movement."));
+  }
+
+  // elasticity-type mesh motion
+  virtual void
+  set_parameters_elasticity()
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Has to be overwritten by derived classes in order "
+                                   "to use elasticity solver for mesh movement."));
+  }
+
+  virtual void
+  set_boundary_descriptor_elasticity()
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Has to be overwritten by derived classes in order "
+                                   "to use elasticity solver for mesh movement."));
+  }
+
+  virtual void
+  set_material_descriptor_elasticity()
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Has to be overwritten by derived classes in order "
+                                   "to use elasticity solver for mesh movement."));
+  }
+
+  virtual void
+  set_field_functions_elasticity()
+  {
+    AssertThrow(false,
+                dealii::ExcMessage("Has to be overwritten by derived classes in order "
+                                   "to use elasticity solver for mesh movement."));
   }
 };
 

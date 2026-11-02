@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/grid/mesh_movement_functions.h>
+#include <exadg/structure/material/library/st_venant_kirchhoff.h>
 
 namespace ExaDG
 {
@@ -76,7 +77,7 @@ public:
                         "Multigrid type of the momentum preconditioner (projection methods).");
       prm.add_parameter("MeshMovementType",
                         mesh_movement_type,
-                        "Mesh movement type: Function or Poisson.");
+                        "Mesh movement type: Function, Poisson, or Elasticity.");
     }
     prm.leave_subsection();
   }
@@ -371,6 +372,69 @@ private:
     this->poisson_field_functions->initial_solution.reset(
       new dealii::Functions::ZeroFunction<dim>(dim));
     this->poisson_field_functions->right_hand_side.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+  }
+
+  void
+  set_parameters_elasticity() final
+  {
+    this->elasticity_param.problem_type         = Structure::ProblemType::Steady;
+    this->elasticity_param.body_force           = false;
+    this->elasticity_param.pull_back_body_force = false;
+    this->elasticity_param.large_deformation    = false;
+    this->elasticity_param.pull_back_traction   = false;
+
+    this->elasticity_param.degree                      = this->param.mapping_degree;
+    this->elasticity_param.mapping_degree              = this->param.mapping_degree;
+    this->elasticity_param.mapping_degree_coarse_grids = this->param.mapping_degree_coarse_grids;
+
+    this->elasticity_param.solver_data         = SolverData(1e4, 1e-20, 1e-10, LinearSolver::CG);
+    this->elasticity_param.preconditioner      = Structure::Preconditioner::Multigrid;
+    this->elasticity_param.multigrid_data.type = MultigridType::phMG;
+    this->elasticity_param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
+    this->elasticity_param.multigrid_data.coarse_problem.solver  = MultigridCoarseGridSolver::CG;
+    this->elasticity_param.multigrid_data.coarse_problem.preconditioner =
+      MultigridCoarseGridPreconditioner::PointJacobi;
+    this->elasticity_param.update_preconditioner = false;
+  }
+
+  void
+  set_boundary_descriptor_elasticity() final
+  {
+    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+                                                                                  pair;
+    typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
+
+    // the mesh displacement is prescribed on the boundary and extended into the domain
+    this->elasticity_boundary_descriptor->dirichlet_bc.insert(
+      pair(0, this->create_mesh_movement_function()));
+    this->elasticity_boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->elasticity_boundary_descriptor->dirichlet_bc_component_mask.insert(
+      pair_mask(0, dealii::ComponentMask()));
+  }
+
+  void
+  set_material_descriptor_elasticity() final
+  {
+    typedef std::pair<dealii::types::material_id, std::shared_ptr<Structure::MaterialData>> Pair;
+
+    this->elasticity_material_descriptor->insert(
+      Pair(0,
+           new Structure::StVenantKirchhoffData<dim>(Structure::MaterialType::StVenantKirchhoff,
+                                                     1.0 /* Young's modulus */,
+                                                     0.3 /* Poisson's ratio */,
+                                                     Structure::Type2D::PlaneStress)));
+  }
+
+  void
+  set_field_functions_elasticity() final
+  {
+    this->elasticity_field_functions->right_hand_side.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->elasticity_field_functions->initial_displacement.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->elasticity_field_functions->initial_velocity.reset(
       new dealii::Functions::ZeroFunction<dim>(dim));
   }
 
