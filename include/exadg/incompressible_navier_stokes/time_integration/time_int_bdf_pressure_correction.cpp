@@ -768,18 +768,17 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_step(VectorType & pressure_i
       // the extrapolation of the pressure subtracted for the other initial guesses is in the span
       // of the previous pressures, so the projection initial guess is computed for the pressure
       // increment directly
-      this->compute_initial_guess_projection(pressure_increment,
-                                             pressure,
-                                             vector_projection_pressure,
-                                             this->param.eps_projection_pressure_poisson,
-                                             rhs,
-                                             [&](VectorType &       dst,
-                                                 VectorType const & src,
-                                                 double const /* scaling_factor */) {
-                                               pde_operator->apply_laplace_operator(dst, src);
-                                             },
-                                             0.0 /* no scaled part */,
-                                             products_projection_pressure);
+      this->compute_initial_guess_projection(
+        pressure_increment,
+        pressure,
+        vector_projection_pressure,
+        this->param.eps_projection_pressure_poisson,
+        rhs,
+        [&](VectorType & dst, VectorType const & src, double const /* scaling_factor */) {
+          pde_operator->apply_laplace_operator(dst, src);
+        },
+        0.0 /* no scaled part */,
+        products_projection_pressure);
     }
     else
     {

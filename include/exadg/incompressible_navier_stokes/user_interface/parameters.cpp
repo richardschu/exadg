@@ -1119,9 +1119,7 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
   {
     print_parameter(pcout, "Number of vectors projection", n_vectors_projection_pressure_poisson);
     print_parameter(pcout, "Tolerance projection", eps_projection_pressure_poisson);
-    print_parameter(pcout,
-                    "Store products projection",
-                    store_products_projection_pressure_poisson);
+    print_parameter(pcout, "Store products projection", store_products_projection_pressure_poisson);
   }
 
   print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);

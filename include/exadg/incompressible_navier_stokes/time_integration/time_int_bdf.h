@@ -229,7 +229,7 @@ protected:
     VectorType const &                                                          rhs,
     std::function<void(VectorType &, VectorType const &, double const)> const & vmult,
     double const                                                                scaling_factor,
-    ProductsProjection &                                                        products_stored) const;
+    ProductsProjection & products_stored) const;
 
   /*
    * Returns the number of older solutions to be stored for the projection

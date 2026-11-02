@@ -515,18 +515,17 @@ TimeIntBDFDualSplitting<dim, Number>::pressure_step()
   if(this->first_coupling_iteration)
   {
     if(this->param.initial_guess_type_pressure_poisson == InitialGuessType::Projection)
-      this->compute_initial_guess_projection(pressure_np,
-                                             pressure,
-                                             vector_projection_pressure,
-                                             this->param.eps_projection_pressure_poisson,
-                                             rhs,
-                                             [&](VectorType &       dst,
-                                                 VectorType const & src,
-                                                 double const /* scaling_factor */) {
-                                               pde_operator->apply_laplace_operator(dst, src);
-                                             },
-                                             0.0 /* no scaled part */,
-                                             products_projection_pressure);
+      this->compute_initial_guess_projection(
+        pressure_np,
+        pressure,
+        vector_projection_pressure,
+        this->param.eps_projection_pressure_poisson,
+        rhs,
+        [&](VectorType & dst, VectorType const & src, double const /* scaling_factor */) {
+          pde_operator->apply_laplace_operator(dst, src);
+        },
+        0.0 /* no scaled part */,
+        products_projection_pressure);
     else
       this->compute_initial_guess(pressure_np,
                                   pressure,

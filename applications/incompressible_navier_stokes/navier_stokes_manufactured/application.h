@@ -643,15 +643,16 @@ private:
 
     // after all `SolverData` above, since assigning a new `SolverData` resets
     // `rel_tol_reference`
-    this->param.initial_guess_type_pressure_poisson = initial_guess_type_pressure_poisson;
-    this->param.initial_guess_type_momentum         = initial_guess_type_momentum;
-    this->param.initial_guess_type_coupled          = initial_guess_type_coupled;
+    this->param.initial_guess_type_pressure_poisson   = initial_guess_type_pressure_poisson;
+    this->param.initial_guess_type_momentum           = initial_guess_type_momentum;
+    this->param.initial_guess_type_coupled            = initial_guess_type_coupled;
     this->param.n_vectors_projection_pressure_poisson = n_vectors_projection_pressure_poisson;
     this->param.n_vectors_projection_momentum         = n_vectors_projection_momentum;
     this->param.eps_projection_pressure_poisson       = eps_projection_pressure_poisson;
     this->param.eps_projection_momentum               = eps_projection_momentum;
-    this->param.store_products_projection_pressure_poisson = store_products_projection_pressure_poisson;
-    this->param.store_products_projection_momentum         = store_products_projection_momentum;
+    this->param.store_products_projection_pressure_poisson =
+      store_products_projection_pressure_poisson;
+    this->param.store_products_projection_momentum             = store_products_projection_momentum;
     this->param.solver_data_pressure_poisson.rel_tol_reference = rel_tol_reference;
     this->param.solver_data_projection.rel_tol_reference       = rel_tol_reference;
     this->param.solver_data_momentum.rel_tol_reference         = rel_tol_reference;
@@ -891,10 +892,10 @@ private:
 
   // projection initial guess: number of previous solutions used, relative
   // tolerance for dropping linearly dependent ones and storing the products
-  unsigned int n_vectors_projection_pressure_poisson = 6;
-  unsigned int n_vectors_projection_momentum         = 6;
-  double       eps_projection_pressure_poisson       = 1e-6;
-  double       eps_projection_momentum               = 1e-6;
+  unsigned int n_vectors_projection_pressure_poisson      = 6;
+  unsigned int n_vectors_projection_momentum              = 6;
+  double       eps_projection_pressure_poisson            = 1e-6;
+  double       eps_projection_momentum                    = 1e-6;
   bool         store_products_projection_pressure_poisson = false;
   bool         store_products_projection_momentum         = false;
 
