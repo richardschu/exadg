@@ -280,6 +280,37 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
       treatment_of_convective_term != TreatmentOfConvectiveTerm::LinearlyImplicit,
       dealii::ExcMessage(
         "ALE formulation is currently not implemented for a linearly implicit convective term."));
+
+    // The matrix-free cell-wise inverse mass operator on simplex elements requires affine cells,
+    // which do not remain affine on a moving mesh.
+    if(grid.element_type == ElementType::Simplex)
+    {
+      AssertThrow(inverse_mass_operator.implementation_type != InverseMassType::MatrixfreeOperator,
+                  dealii::ExcMessage(
+                    "InverseMassType::MatrixfreeOperator requires affine simplex elements and "
+                    "can not be used for inverse_mass_operator with ALE formulation. Use "
+                    "InverseMassType::BlockMatrices or InverseMassType::ElementwiseKrylovSolver."));
+
+      bool const coupled = temporal_discretization == TemporalDiscretization::BDFCoupledSolution;
+      bool const inverse_mass_preconditioner_used =
+        preconditioner_projection == PreconditionerProjection::InverseMassMatrix or
+        (not coupled and preconditioner_momentum == MomentumPreconditioner::InverseMassMatrix) or
+        (coupled and preconditioner_velocity_block == MomentumPreconditioner::InverseMassMatrix) or
+        (coupled and
+         (preconditioner_pressure_block == SchurComplementPreconditioner::InverseMassMatrix or
+          preconditioner_pressure_block == SchurComplementPreconditioner::CahouetChabard or
+          preconditioner_pressure_block ==
+            SchurComplementPreconditioner::PressureConvectionDiffusion));
+      if(inverse_mass_preconditioner_used)
+      {
+        AssertThrow(
+          inverse_mass_preconditioner.implementation_type != InverseMassType::MatrixfreeOperator,
+          dealii::ExcMessage(
+            "InverseMassType::MatrixfreeOperator requires affine simplex elements and can not "
+            "be used for inverse_mass_preconditioner with ALE formulation. Use "
+            "InverseMassType::BlockMatrices or InverseMassType::ElementwiseKrylovSolver."));
+      }
+    }
   }
 
   // PHYSICAL QUANTITIES

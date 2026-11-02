@@ -129,8 +129,11 @@ constrain_dof_of_singular_operator(dealii::AffineConstraints<Number> & affine_co
     }
     else
     {
-      Assert(lines->size() == 1 and std::abs((*lines)[0].second - 1.) < 1e-15,
-             dealii::ExcMessage("Periodic index expected, bailing out"));
+      AssertThrow(lines->size() == 1 and std::abs((*lines)[0].second - 1.) < 1e-15,
+                  dealii::ExcMessage("Periodic index expected, bailing out. Constraining a dof "
+                                     "of a singular operator is not implemented if dof " +
+                                     std::to_string(line_index) +
+                                     " is subject to other constraints, e.g., hanging nodes."));
 
       line_index = (*lines)[0].first;
     }

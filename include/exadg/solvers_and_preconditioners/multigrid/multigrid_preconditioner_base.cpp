@@ -805,6 +805,15 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_smoother(
               dealii::ExcMessage(
                 "Multigrid level is invalid when initializing multigrid smoother!"));
 
+  AssertThrow(level_info[level].is_dg() or
+                data.smoother_data.preconditioner != PreconditionerSmoother::BlockJacobi,
+              dealii::ExcMessage("PreconditionerSmoother::BlockJacobi is only implemented for DG, "
+                                 "but multigrid level " +
+                                 std::to_string(level) +
+                                 " uses continuous elements, e.g., due to a multigrid type with "
+                                 "c-transfer (MultigridType::cphMG). Use "
+                                 "PreconditionerSmoother::PointJacobi instead."));
+
   switch(data.smoother_data.smoother)
   {
     case MultigridSmoother::Chebyshev:

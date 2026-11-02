@@ -257,7 +257,10 @@ InverseMassOperator<dim, n_components, Number>::check_affine_mapping() const
                 });
   AssertThrow(cartesian_or_affine_mapping,
               dealii::ExcMessage("The matrix-free cell-wise inverse mass operator can only be "
-                                 "applied with affine mapping on non-hypercube elements."));
+                                 "applied with affine mapping on non-hypercube elements, which "
+                                 "might be violated after a deformation of the grid. Use "
+                                 "InverseMassType::BlockMatrices or "
+                                 "InverseMassType::ElementwiseKrylovSolver instead."));
 }
 
 template<int dim, int n_components, typename Number>

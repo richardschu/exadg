@@ -343,8 +343,16 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
   std::shared_ptr<dealii::Quadrature<dim>> quadrature_p =
     create_quadrature<dim>(param.grid.element_type, param.get_degree_p(param.degree_u) + 1);
   matrix_free_data.insert_quadrature(*quadrature_p, field + quad_index_p);
+  unsigned int const n_q_points_1d_overintegration = param.degree_u + (param.degree_u + 2) / 2;
+  // dealii::MatrixFree supports dealii::QGaussSimplex with at most 4 points, see
+  // dealii::internal::MatrixFreeFunctions::get_unique_face_quadratures()
+  AssertThrow(param.grid.element_type != ElementType::Simplex or n_q_points_1d_overintegration <= 4,
+              dealii::ExcMessage("The over-integration quadrature for simplex elements requires " +
+                                 std::to_string(n_q_points_1d_overintegration) +
+                                 " points, but dealii::MatrixFree supports dealii::QGaussSimplex "
+                                 "with at most 4 points. Use a velocity degree of at most 2."));
   std::shared_ptr<dealii::Quadrature<dim>> quadrature_u_overintegration =
-    create_quadrature<dim>(param.grid.element_type, param.degree_u + (param.degree_u + 2) / 2);
+    create_quadrature<dim>(param.grid.element_type, n_q_points_1d_overintegration);
   matrix_free_data.insert_quadrature(*quadrature_u_overintegration,
                                      field + quad_index_u_overintegration);
 
