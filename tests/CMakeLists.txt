@@ -27,6 +27,7 @@
 
 ADD_SUBDIRECTORY(solvers_and_preconditioners)
 ADD_SUBDIRECTORY(utilities)
+ADD_SUBDIRECTORY(grid)
 ADD_SUBDIRECTORY(time_integration)
 ADD_SUBDIRECTORY(operators)
 ADD_SUBDIRECTORY(restart)
