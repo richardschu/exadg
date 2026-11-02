@@ -26,10 +26,12 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/mapping_fe_field.h>
 #include <deal.II/fe/mapping_q_cache.h>
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
+#include <exadg/operators/finite_element.h>
 #include <exadg/solvers_and_preconditioners/multigrid/transfer.h>
 
 namespace ExaDG
@@ -37,6 +39,11 @@ namespace ExaDG
 /**
  * A mapping class based on dealii::MappingQCache equipped with practical
  * interfaces that can be used to initialize the mapping.
+ *
+ * For simplex elements, dealii::MappingQCache is not available and a
+ * dealii::MappingFEField object is used instead. It is set up in
+ * initialize_mapping_from_dof_vector() and holds references to a DoFHandler
+ * and a vector of grid coordinates owned by this class.
  */
 template<int dim, typename Number>
 class MappingDoFVector
@@ -67,6 +74,9 @@ public:
   std::shared_ptr<dealii::Mapping<dim> const>
   get_mapping() const;
 
+  /**
+   * Only available for hypercube elements, use get_mapping() otherwise.
+   */
   std::shared_ptr<dealii::MappingQCache<dim>>
   get_mapping_q_cache() const;
 
@@ -105,6 +115,12 @@ public:
    * If the displacement_vector is empty or uninitialized, this implies that no
    * displacements will be added to the grid coordinates of the reference
    * configuration described by mapping.
+   *
+   * For simplex elements, the grid coordinates are represented in a
+   * FE_SimplexP^dim space of the mapping degree, and the displacement is
+   * evaluated in the support points of that space. Hence, `dof_handler` may
+   * use any vector-valued finite element with dim components. Multigrid levels
+   * are not supported for simplex elements.
    */
   void
   initialize_mapping_from_dof_vector(
@@ -118,6 +134,30 @@ public:
 
 protected:
   std::shared_ptr<dealii::MappingQCache<dim>> mapping_q_cache;
+
+private:
+  /**
+   * Simplex variant of initialize_mapping_from_dof_vector().
+   */
+  void
+  initialize_mapping_fe_field(dealii::Mapping<dim> const *    mapping,
+                              VectorType const &              displacement_vector,
+                              dealii::DoFHandler<dim> const & dof_handler,
+                              unsigned int const              level);
+
+  /**
+   * For simplex elements. dealii::MappingFEField stores references to the
+   * DoFHandler and the vector of absolute grid coordinates, which are hence
+   * owned by this class. The dealii::MappingFEField object is created once and
+   * only updated afterwards, such that pointers obtained via get_mapping()
+   * stay valid. The grid coordinates are stored in double precision
+   * independently of `Number`, as done by dealii::MappingQCache.
+   */
+  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeFEField;
+
+  std::shared_ptr<dealii::DoFHandler<dim>>                             dof_handler_fe_field;
+  VectorTypeFEField                                                    grid_coordinates_fe_field;
+  std::shared_ptr<dealii::MappingFEField<dim, dim, VectorTypeFEField>> mapping_fe_field;
 };
 
 
@@ -145,6 +185,13 @@ initialize_coarse_mappings_from_mapping_dof_vector(
   std::shared_ptr<MappingDoFVector<dim, Number> const> const &  fine_mapping,
   dealii::Triangulation<dim> const &                            triangulation)
 {
+  // This variant relies on dealii::MappingQCache and multigrid levels of a
+  // single triangulation, which are not available for simplex elements.
+  AssertThrow(get_element_type(triangulation) == ElementType::Hypercube,
+              dealii::ExcMessage("Coarse mappings on the levels of a single triangulation are "
+                                 "only implemented for hypercube elements. For simplex elements, "
+                                 "use separate coarse triangulations."));
+
   AssertThrow(dealii::MultithreadInfo::n_threads() == 1, dealii::ExcNotImplemented());
 
   std::shared_ptr<dealii::MappingQCache<dim>> mapping_q_cache = fine_mapping->get_mapping_q_cache();
@@ -288,13 +335,17 @@ initialize_coarse_mappings_from_mapping_dof_vector(
   std::shared_ptr<dealii::Triangulation<dim> const> const &              fine_triangulation,
   std::vector<std::shared_ptr<dealii::Triangulation<dim> const>> const & coarse_triangulations)
 {
-  std::shared_ptr<dealii::MappingQCache<dim>> mapping_q_cache = fine_mapping->get_mapping_q_cache();
-  AssertThrow(mapping_q_cache.get(),
-              dealii::ExcMessage("Shared pointer mapping_q_cache is invalid."));
+  AssertThrow(fine_mapping->get_mapping().get(),
+              dealii::ExcMessage("Fine-level mapping is invalid."));
 
   // setup dof-handlers and constraints for all levels using
   // `degree_coarse_mappings`
-  dealii::FESystem<dim>                          fe(dealii::FE_Q<dim>(degree_coarse_mappings), dim);
+  std::shared_ptr<dealii::FiniteElement<dim>> fe_ptr =
+    create_finite_element<dim>(get_element_type(*fine_triangulation),
+                               false /* is_dg */,
+                               dim /* n_components */,
+                               degree_coarse_mappings);
+  dealii::FiniteElement<dim> const &             fe         = *fe_ptr;
   unsigned int const                             n_h_levels = coarse_triangulations.size() + 1;
   std::vector<dealii::DoFHandler<dim>>           dof_handlers_all_levels(n_h_levels);
   std::vector<dealii::AffineConstraints<Number>> constraints_all_levels(n_h_levels);
