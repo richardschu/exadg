@@ -23,6 +23,7 @@
 #define EXADG_GRID_MAPPING_DOF_VECTOR_H_
 
 // deal.II
+#include <deal.II/base/function.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_system.h>
@@ -126,6 +127,19 @@ public:
     VectorType const &              displacement_vector,
     dealii::DoFHandler<dim> const & dof_handler,
     unsigned int const              level = dealii::numbers::invalid_unsigned_int);
+
+  /**
+   * Initializes the mapping by providing a `mapping` that describes an
+   * undeformed reference configuration and a `displacement_function` with dim
+   * components that describes the displacement of the mesh compared to that
+   * reference configuration. The displacement is evaluated in the mapping
+   * support points of all cells of `triangulation`. Works for hypercube and
+   * simplex elements.
+   */
+  void
+  initialize_mapping_from_function(dealii::Mapping<dim> const &       mapping,
+                                   dealii::Triangulation<dim> const & triangulation,
+                                   dealii::Function<dim> const &      displacement_function);
 
   std::vector<unsigned int> hierarchic_to_lexicographic_numbering;
   std::vector<unsigned int> lexicographic_to_hierarchic_numbering;

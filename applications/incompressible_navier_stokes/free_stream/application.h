@@ -64,6 +64,10 @@ public:
     prm.enter_subsection("Application");
     {
       prm.add_parameter("ALE", ALE, "Moving mesh (ALE).", dealii::Patterns::Bool());
+      prm.add_parameter("ElementType", element_type, "Element type: Hypercube or Simplex.");
+      prm.add_parameter("MultigridTypeVelocityBlock",
+                        multigrid_type_velocity_block,
+                        "Multigrid type of the velocity block preconditioner (coupled solver).");
     }
     prm.leave_subsection();
   }
@@ -108,7 +112,16 @@ private:
     this->param.solver_info_data.interval_time = this->param.end_time - this->param.start_time;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.grid.element_type = element_type;
+    if(this->param.grid.element_type == ElementType::Simplex)
+    {
+      this->param.grid.triangulation_type           = TriangulationType::FullyDistributed;
+      this->param.grid.create_coarse_triangulations = true;
+    }
+    else
+    {
+      this->param.grid.triangulation_type = TriangulationType::Distributed;
+    }
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
     this->param.degree_p                    = DegreePressure::MixedOrder;
@@ -227,11 +240,14 @@ private:
     // preconditioner momentum block
     this->param.preconditioner_velocity_block          = MomentumPreconditioner::Multigrid;
     this->param.multigrid_operator_type_velocity_block = MultigridOperatorType::ReactionDiffusion;
-    this->param.multigrid_data_velocity_block.type     = MultigridType::phMG;
+    this->param.multigrid_data_velocity_block.type     = multigrid_type_velocity_block;
     this->param.multigrid_data_velocity_block.smoother_data.smoother =
       MultigridSmoother::Chebyshev; // GMRES;
+    // block Jacobi is only implemented for DG, i.e., not for the continuous levels of c-transfer
     this->param.multigrid_data_velocity_block.smoother_data.preconditioner =
-      PreconditionerSmoother::BlockJacobi;
+      this->param.multigrid_data_velocity_block.involves_c_transfer() ?
+        PreconditionerSmoother::PointJacobi :
+        PreconditionerSmoother::BlockJacobi;
     this->param.multigrid_data_velocity_block.smoother_data.iterations        = 5;
     this->param.multigrid_data_velocity_block.smoother_data.relaxation_factor = 0.7;
     // coarse grid solver
@@ -256,7 +272,10 @@ private:
           std::vector<unsigned int> const &                        vector_local_refinements) {
         (void)periodic_face_pairs;
         (void)vector_local_refinements;
-        dealii::GridGenerator::hyper_cube(tria, left, right);
+        if(this->param.grid.element_type == ElementType::Simplex)
+          dealii::GridGenerator::subdivided_hyper_cube_with_simplices(tria, 1, left, right);
+        else
+          dealii::GridGenerator::hyper_cube(tria, left, right);
 
         tria.refine_global(global_refinements);
       };
@@ -334,6 +353,9 @@ private:
     pp_data.output_data.filename           = this->output_parameters.filename;
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree_u;
+    // Currently, we can not use higher order output with 3D simplices.
+    if(this->param.grid.element_type == ElementType::Simplex and dim == 3)
+      pp_data.output_data.write_higher_order = false;
 
     // calculation of velocity error
     pp_data.error_data_u.time_control_data.is_active        = true;
@@ -364,6 +386,10 @@ private:
   double const end_time   = 10.0;
 
   bool ALE = true;
+
+  ElementType element_type = ElementType::Hypercube;
+
+  MultigridType multigrid_type_velocity_block = MultigridType::phMG;
 };
 
 } // namespace IncNS

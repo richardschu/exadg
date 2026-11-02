@@ -106,6 +106,37 @@ add_periodicity_constraints(
   }
 }
 
+/**
+ * Constrains dof 0 to remove the nullspace of a singular operator in the
+ * continuous case and returns the index of the constrained dof. If dof 0 is
+ * already constrained, it must be a periodic dof, so we take the dof on the
+ * other side. Must be called after adding periodicity constraints and only on
+ * a process that can store line 0.
+ */
+template<typename Number>
+dealii::types::global_dof_index
+constrain_dof_of_singular_operator(dealii::AffineConstraints<Number> & affine_constraints_own)
+{
+  dealii::types::global_dof_index line_index = 0;
+  while(true)
+  {
+    auto const * lines = affine_constraints_own.get_constraint_entries(line_index);
+
+    if(lines == 0)
+    {
+      affine_constraints_own.add_line(line_index);
+      return line_index;
+    }
+    else
+    {
+      Assert(lines->size() == 1 and std::abs((*lines)[0].second - 1.) < 1e-15,
+             dealii::ExcMessage("Periodic index expected, bailing out"));
+
+      line_index = (*lines)[0].first;
+    }
+  }
+}
+
 template<int dim, typename Number>
 void
 add_constraints(bool                                is_dg,
@@ -156,37 +187,19 @@ add_constraints(bool                                is_dg,
   // is required.
   if(operator_is_singular and affine_constraints_own.can_store_line(0))
   {
-    // if dof 0 is constrained, it must be a periodic dof, so we take the
-    // value on the other side
-    dealii::types::global_dof_index line_index = 0;
-    while(true)
+    dealii::types::global_dof_index const line_index =
+      constrain_dof_of_singular_operator(affine_constraints_own);
+
+    // add the constraint back to the dealii::MGConstrainedDoFs field. This
+    // is potentially dangerous but we know what we are doing... ;-)
+    if(mg_constrained_dofs.have_boundary_indices() &&
+       level != dealii::numbers::invalid_unsigned_int)
     {
-      auto const * lines = affine_constraints_own.get_constraint_entries(line_index);
-
-      if(lines == 0)
-      {
-        affine_constraints_own.add_line(line_index);
-        // add the constraint back to the dealii::MGConstrainedDoFs field. This
-        // is potentially dangerous but we know what we are doing... ;-)
-        if(mg_constrained_dofs.have_boundary_indices() &&
-           level != dealii::numbers::invalid_unsigned_int)
-        {
-          if(mg_constrained_dofs.get_boundary_indices(level).size() != dof_handler.n_dofs(level))
-            const_cast<dealii::IndexSet &>(mg_constrained_dofs.get_boundary_indices(level))
-              .set_size(dof_handler.n_dofs(level));
-          const_cast<dealii::IndexSet &>(mg_constrained_dofs.get_boundary_indices(level))
-            .add_index(line_index);
-        }
-
-        break;
-      }
-      else
-      {
-        Assert(lines->size() == 1 and std::abs((*lines)[0].second - 1.) < 1e-15,
-               dealii::ExcMessage("Periodic index expected, bailing out"));
-
-        line_index = (*lines)[0].first;
-      }
+      if(mg_constrained_dofs.get_boundary_indices(level).size() != dof_handler.n_dofs(level))
+        const_cast<dealii::IndexSet &>(mg_constrained_dofs.get_boundary_indices(level))
+          .set_size(dof_handler.n_dofs(level));
+      const_cast<dealii::IndexSet &>(mg_constrained_dofs.get_boundary_indices(level))
+        .add_index(line_index);
     }
   }
 

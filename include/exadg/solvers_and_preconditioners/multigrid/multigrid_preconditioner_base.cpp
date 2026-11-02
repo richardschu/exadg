@@ -439,8 +439,6 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
 
       auto affine_constraints_own = new dealii::AffineConstraints<MultigridNumber>();
 
-      AssertThrow(is_singular == false, dealii::ExcNotImplemented());
-
       dealii::IndexSet const locally_relevant_dofs =
         dealii::DoFTools::extract_locally_relevant_dofs(*dof_handler);
       affine_constraints_own->reinit(dof_handler->locally_owned_dofs(), locally_relevant_dofs);
@@ -501,6 +499,10 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
         dealii::VectorTools::interpolate_boundary_values(
           mapping_dummy, *dof_handler, it.first, zero_function, *affine_constraints_own, mask);
       }
+
+      // constrain one dof in the continuous case, see ConstraintUtil::add_constraints()
+      if(is_singular and not(level.is_dg()) and affine_constraints_own->can_store_line(0))
+        ConstraintUtil::constrain_dof_of_singular_operator(*affine_constraints_own);
 
       affine_constraints_own->close();
 

@@ -23,6 +23,9 @@
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/fe/fe_values.h>
 
+// C/C++
+#include <numeric>
+
 // ExaDG
 #include <exadg/grid/mapping_dof_vector.h>
 
@@ -468,6 +471,86 @@ MappingDoFVector<dim, Number>::initialize_mapping_fe_cache(
 
       return grid_coordinates;
     });
+}
+
+template<int dim, typename Number>
+void
+MappingDoFVector<dim, Number>::initialize_mapping_from_function(
+  dealii::Mapping<dim> const &       mapping,
+  dealii::Triangulation<dim> const & triangulation,
+  dealii::Function<dim> const &      displacement_function)
+{
+  AssertThrow(displacement_function.n_components == dim,
+              dealii::ExcMessage("Expected displacement function with dim components."));
+
+  ElementType const element_type = get_element_type(triangulation);
+  AssertThrow(element_type == ElementType::Hypercube or element_type == ElementType::Simplex,
+              dealii::ExcMessage("Only implemented for hypercube and simplex elements."));
+
+  bool const is_simplex = element_type == ElementType::Simplex;
+
+  // Create the mapping only once, see initialize_mapping_fe_cache().
+  if(is_simplex and not mapping_fe_cache.get())
+  {
+    mapping_fe_cache = std::make_shared<MappingFECache<dim>>(
+      dealii::FE_SimplexP<dim>(mapping_q_cache->get_degree()));
+  }
+
+  // The mapping support points are the Gauss-Lobatto points in hierarchic
+  // numbering for dealii::MappingQCache and the unit support points of
+  // FE_SimplexP for MappingFECache.
+  dealii::Quadrature<dim>   support_points;
+  std::vector<unsigned int> numbering;
+  if(is_simplex)
+  {
+    support_points = dealii::Quadrature<dim>(mapping_fe_cache->get_unit_support_points());
+    numbering.resize(support_points.size());
+    std::iota(numbering.begin(), numbering.end(), 0);
+  }
+  else
+  {
+    support_points = dealii::QGaussLobatto<dim>(mapping_q_cache->get_degree() + 1);
+    numbering      = hierarchic_to_lexicographic_numbering;
+  }
+
+  // dummy FE for compatibility with interface of dealii::FEValues
+  dealii::FE_Nothing<dim> fe_nothing(is_simplex ? dealii::ReferenceCells::get_simplex<dim>() :
+                                                  dealii::ReferenceCells::get_hypercube<dim>());
+  dealii::FEValues<dim>   fe_values(mapping,
+                                  fe_nothing,
+                                  support_points,
+                                  dealii::update_quadrature_points);
+
+  auto const compute_points_on_cell =
+    [&](typename dealii::Triangulation<dim>::cell_iterator const & cell)
+    -> std::vector<dealii::Point<dim>> {
+    fe_values.reinit(cell);
+
+    // compute displacement and add to original position
+    std::vector<dealii::Point<dim>> points_moved(fe_values.n_quadrature_points);
+    for(unsigned int i = 0; i < fe_values.n_quadrature_points; ++i)
+    {
+      dealii::Point<dim> const point = fe_values.quadrature_point(numbering[i]);
+      dealii::Point<dim>       displacement;
+      for(unsigned int d = 0; d < dim; ++d)
+        displacement[d] = displacement_function.value(point, d);
+
+      points_moved[i] = point + displacement;
+    }
+
+    return points_moved;
+  };
+
+  if(is_simplex)
+  {
+    mapping_fe_cache->initialize(triangulation, compute_points_on_cell);
+  }
+  else
+  {
+    AssertThrow(dealii::MultithreadInfo::n_threads() == 1, dealii::ExcNotImplemented());
+
+    mapping_q_cache->initialize(triangulation, compute_points_on_cell);
+  }
 }
 
 template class MappingDoFVector<2, float>;
