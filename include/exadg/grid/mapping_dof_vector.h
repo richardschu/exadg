@@ -26,11 +26,11 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_system.h>
-#include <deal.II/fe/mapping_fe_field.h>
 #include <deal.II/fe/mapping_q_cache.h>
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
+#include <exadg/grid/mapping_fe_cache.h>
 #include <exadg/operators/finite_element.h>
 #include <exadg/solvers_and_preconditioners/multigrid/transfer.h>
 
@@ -41,9 +41,8 @@ namespace ExaDG
  * interfaces that can be used to initialize the mapping.
  *
  * For simplex elements, dealii::MappingQCache is not available and a
- * dealii::MappingFEField object is used instead. It is set up in
- * initialize_mapping_from_dof_vector() and holds references to a DoFHandler
- * and a vector of grid coordinates owned by this class.
+ * MappingFECache object of the same degree is used instead, which stores the
+ * mapping support points of all cells in the same way.
  */
 template<int dim, typename Number>
 class MappingDoFVector
@@ -116,11 +115,10 @@ public:
    * displacements will be added to the grid coordinates of the reference
    * configuration described by mapping.
    *
-   * For simplex elements, the grid coordinates are represented in a
-   * FE_SimplexP^dim space of the mapping degree, and the displacement is
-   * evaluated in the support points of that space. Hence, `dof_handler` may
-   * use any vector-valued finite element with dim components. Multigrid levels
-   * are not supported for simplex elements.
+   * For simplex elements, the displacement is evaluated in the support points
+   * of the FE_SimplexP mapping. Hence, `dof_handler` may use any finite element
+   * with dim components. Multigrid levels are not supported for simplex
+   * elements.
    */
   void
   initialize_mapping_from_dof_vector(
@@ -140,24 +138,16 @@ private:
    * Simplex variant of initialize_mapping_from_dof_vector().
    */
   void
-  initialize_mapping_fe_field(dealii::Mapping<dim> const *    mapping,
+  initialize_mapping_fe_cache(dealii::Mapping<dim> const *    mapping,
                               VectorType const &              displacement_vector,
                               dealii::DoFHandler<dim> const & dof_handler,
                               unsigned int const              level);
 
   /**
-   * For simplex elements. dealii::MappingFEField stores references to the
-   * DoFHandler and the vector of absolute grid coordinates, which are hence
-   * owned by this class. The dealii::MappingFEField object is created once and
-   * only updated afterwards, such that pointers obtained via get_mapping()
-   * stay valid. The grid coordinates are stored in double precision
-   * independently of `Number`, as done by dealii::MappingQCache.
+   * Mapping for simplex elements, created in the first call of
+   * initialize_mapping_from_dof_vector() and only updated afterwards.
    */
-  typedef dealii::LinearAlgebra::distributed::Vector<double> VectorTypeFEField;
-
-  std::shared_ptr<dealii::DoFHandler<dim>>                             dof_handler_fe_field;
-  VectorTypeFEField                                                    grid_coordinates_fe_field;
-  std::shared_ptr<dealii::MappingFEField<dim, dim, VectorTypeFEField>> mapping_fe_field;
+  std::shared_ptr<MappingFECache<dim>> mapping_fe_cache;
 };
 
 

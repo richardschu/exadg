@@ -81,9 +81,9 @@ template<int dim, typename Number>
 std::shared_ptr<dealii::Mapping<dim> const>
 MappingDoFVector<dim, Number>::get_mapping() const
 {
-  if(mapping_fe_field.get())
+  if(mapping_fe_cache.get())
   {
-    return mapping_fe_field;
+    return mapping_fe_cache;
   }
 
   AssertThrow(mapping_q_cache.get(),
@@ -96,7 +96,7 @@ template<int dim, typename Number>
 std::shared_ptr<dealii::MappingQCache<dim>>
 MappingDoFVector<dim, Number>::get_mapping_q_cache() const
 {
-  AssertThrow(not mapping_fe_field.get(),
+  AssertThrow(not mapping_fe_cache.get(),
               dealii::ExcMessage("dealii::MappingQCache is only used for hypercube elements. "
                                  "Use get_mapping() instead."));
 
@@ -113,7 +113,7 @@ MappingDoFVector<dim, Number>::fill_grid_coordinates_vector(
   dealii::DoFHandler<dim> const & dof_handler) const
 {
   // use the deformed state described by the dealii::MappingQCache object (or
-  // dealii::MappingFEField object for simplex elements)
+  // the MappingFECache object for simplex elements)
   fill_grid_coordinates_vector(*get_mapping(), grid_coordinates, dof_handler);
 }
 
@@ -216,7 +216,7 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
 {
   if(get_element_type(dof_handler.get_triangulation()) == ElementType::Simplex)
   {
-    initialize_mapping_fe_field(mapping, displacement_vector, dof_handler, level);
+    initialize_mapping_fe_cache(mapping, displacement_vector, dof_handler, level);
     return;
   }
 
@@ -367,7 +367,7 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
 
 template<int dim, typename Number>
 void
-MappingDoFVector<dim, Number>::initialize_mapping_fe_field(
+MappingDoFVector<dim, Number>::initialize_mapping_fe_cache(
   dealii::Mapping<dim> const *    mapping,
   VectorType const &              displacement_vector,
   dealii::DoFHandler<dim> const & dof_handler,
@@ -385,94 +385,89 @@ MappingDoFVector<dim, Number>::initialize_mapping_fe_field(
     AssertThrow(dof_handler.n_dofs() > 0,
                 dealii::ExcMessage("DoFHandler has no DoFs distributed; this "
                                    "is required for adding a displacement."));
+    AssertThrow(dof_handler.get_fe().n_components() == dim,
+                dealii::ExcMessage("Expected finite element with dim components."));
   }
 
-  // The DoFHandler and the dealii::MappingFEField object are created only once,
-  // see the documentation of the member variables.
-  dealii::Triangulation<dim> const & triangulation = dof_handler.get_triangulation();
-  if(not dof_handler_fe_field.get())
+  // Create the mapping only once, such that pointers obtained via get_mapping()
+  // stay valid.
+  if(not mapping_fe_cache.get())
   {
-    dof_handler_fe_field = std::make_shared<dealii::DoFHandler<dim>>(triangulation);
-  }
-  AssertThrow(&dof_handler_fe_field->get_triangulation() == &triangulation,
-              dealii::ExcMessage("MappingDoFVector was initialized with another triangulation."));
-
-  // Distribute the DoFs in every call to account for changes of the
-  // triangulation, e.g., due to adaptive mesh refinement.
-  dealii::FESystem<dim> const fe_fe_field(dealii::FE_SimplexP<dim>(mapping_q_cache->get_degree()),
-                                          dim);
-  dof_handler_fe_field->distribute_dofs(fe_fe_field);
-
-  grid_coordinates_fe_field.reinit(dof_handler_fe_field->locally_owned_dofs(),
-                                   dealii::DoFTools::extract_locally_relevant_dofs(
-                                     *dof_handler_fe_field),
-                                   dof_handler_fe_field->get_mpi_communicator());
-
-  // Grid coordinates of the reference configuration, zero if no mapping is
-  // provided.
-  if(mapping_valid)
-  {
-    fill_grid_coordinates_at_support_points(*mapping,
-                                            grid_coordinates_fe_field,
-                                            *dof_handler_fe_field);
+    mapping_fe_cache = std::make_shared<MappingFECache<dim>>(
+      dealii::FE_SimplexP<dim>(mapping_q_cache->get_degree()));
   }
 
-  // Add the displacement evaluated in the support points of `fe_fe_field`. For
-  // a discontinuous displacement field, the value of the last cell visited is
-  // taken in support points shared by several cells.
+  dealii::Quadrature<dim> const support_points(mapping_fe_cache->get_unit_support_points());
+
+  // Setup ghosted displacement vector to interpolate.
+  VectorType displacement_vector_ghosted;
   if(vector_initialized)
   {
-    dealii::FiniteElement<dim> const & fe = dof_handler.get_fe();
-    AssertThrow(fe.n_components() == dim,
-                dealii::ExcMessage("Expected finite element with dim components."));
-
-    VectorType displacement_vector_ghosted(dof_handler.locally_owned_dofs(),
-                                           dealii::DoFTools::extract_locally_relevant_dofs(
-                                             dof_handler),
-                                           dof_handler.get_mpi_communicator());
+    displacement_vector_ghosted.reinit(dof_handler.locally_owned_dofs(),
+                                       dealii::DoFTools::extract_locally_relevant_dofs(dof_handler),
+                                       dof_handler.get_mpi_communicator());
     displacement_vector_ghosted.copy_locally_owned_data_from(displacement_vector);
     displacement_vector_ghosted.update_ghost_values();
+  }
 
-    dealii::Quadrature<dim> const support_points(
-      fe_fe_field.base_element(0).get_unit_support_points());
-    dealii::FEValues<dim> fe_values(fe, support_points, dealii::update_values);
+  // Set up `dealii::FEValues` with `dealii::FE_Nothing` to evaluate the
+  // undeformed grid in the support points, see
+  // initialize_mapping_from_dof_vector().
+  dealii::FE_Nothing<dim>                fe_nothing(dealii::ReferenceCells::get_simplex<dim>());
+  std::shared_ptr<dealii::FEValues<dim>> fe_values_mapping;
+  if(mapping_valid)
+  {
+    fe_values_mapping = std::make_shared<dealii::FEValues<dim>>(*mapping,
+                                                                fe_nothing,
+                                                                support_points,
+                                                                dealii::update_quadrature_points);
+  }
 
-    std::vector<dealii::Vector<Number>>          displacement_values(support_points.size(),
-                                                            dealii::Vector<Number>(dim));
-    std::vector<dealii::types::global_dof_index> dof_indices(fe_fe_field.dofs_per_cell);
+  // The displacement is evaluated in the support points of the mapping, such
+  // that `dof_handler` may use any finite element with dim components.
+  std::shared_ptr<dealii::FEValues<dim>> fe_values_displacement;
+  if(vector_initialized)
+  {
+    fe_values_displacement = std::make_shared<dealii::FEValues<dim>>(dof_handler.get_fe(),
+                                                                     support_points,
+                                                                     dealii::update_values);
+  }
+  std::vector<dealii::Vector<Number>> displacement_values(support_points.size(),
+                                                          dealii::Vector<Number>(dim));
 
-    VectorTypeFEField displacement_fe_field(dof_handler_fe_field->locally_owned_dofs(),
-                                            dof_handler_fe_field->get_mpi_communicator());
+  mapping_fe_cache->initialize(
+    dof_handler.get_triangulation(),
+    [&](typename dealii::Triangulation<dim>::cell_iterator const & cell_tria)
+      -> std::vector<dealii::Point<dim>> {
+      // Zero coordinates if the mapping pointer is invalid, see
+      // initialize_mapping_from_dof_vector().
+      std::vector<dealii::Point<dim>> grid_coordinates(support_points.size());
 
-    for(auto const & cell : dof_handler.active_cell_iterators())
-    {
-      if(cell->is_locally_owned())
+      if(mapping_valid)
       {
-        fe_values.reinit(cell);
-        fe_values.get_function_values(displacement_vector_ghosted, displacement_values);
-
-        cell->as_dof_handler_iterator(*dof_handler_fe_field)->get_dof_indices(dof_indices);
-        for(unsigned int i = 0; i < fe_fe_field.dofs_per_cell; ++i)
+        fe_values_mapping->reinit(cell_tria);
+        for(unsigned int i = 0; i < support_points.size(); ++i)
         {
-          auto const [d, i_scalar] = fe_fe_field.system_to_component_index(i);
-          if(displacement_fe_field.get_partitioner()->in_local_range(dof_indices[i]))
+          grid_coordinates[i] = fe_values_mapping->quadrature_point(i);
+        }
+      }
+
+      if(vector_initialized and cell_tria->is_active() and not(cell_tria->is_artificial()))
+      {
+        fe_values_displacement->reinit(cell_tria->as_dof_handler_iterator(dof_handler));
+        fe_values_displacement->get_function_values(displacement_vector_ghosted,
+                                                    displacement_values);
+        for(unsigned int i = 0; i < support_points.size(); ++i)
+        {
+          for(unsigned int d = 0; d < dim; ++d)
           {
-            displacement_fe_field(dof_indices[i]) = displacement_values[i_scalar][d];
+            grid_coordinates[i][d] += displacement_values[i][d];
           }
         }
       }
-    }
 
-    grid_coordinates_fe_field += displacement_fe_field;
-  }
-
-  grid_coordinates_fe_field.update_ghost_values();
-
-  if(not mapping_fe_field.get())
-  {
-    mapping_fe_field = std::make_shared<dealii::MappingFEField<dim, dim, VectorTypeFEField>>(
-      *dof_handler_fe_field, grid_coordinates_fe_field);
-  }
+      return grid_coordinates;
+    });
 }
 
 template class MappingDoFVector<2, float>;
