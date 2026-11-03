@@ -72,6 +72,19 @@ KineticEnergyCalculator<dim, Number>::evaluate(VectorType const & velocity,
 }
 
 template<int dim, typename Number>
+Number
+KineticEnergyCalculator<dim, Number>::calculate(VectorType const & velocity,
+                                                Number &           energy,
+                                                Number &           enstrophy,
+                                                Number &           dissipation,
+                                                Number &           max_vorticity)
+{
+  AssertThrow(matrix_free != nullptr, dealii::ExcMessage("Call setup() first."));
+
+  return integrate(*matrix_free, velocity, energy, enstrophy, dissipation, max_vorticity);
+}
+
+template<int dim, typename Number>
 void
 KineticEnergyCalculator<dim, Number>::calculate_basic(VectorType const & velocity,
                                                       double const       time)

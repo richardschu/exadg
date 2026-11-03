@@ -98,6 +98,17 @@ public:
   void
   evaluate(VectorType const & velocity, double const time, bool const unsteady);
 
+  /*
+   * Calculates the quantities described in integrate() without writing them to
+   * file, e.g., to print them. Returns the volume.
+   */
+  Number
+  calculate(VectorType const & velocity,
+            Number &           energy,
+            Number &           enstrophy,
+            Number &           dissipation,
+            Number &           max_vorticity);
+
   TimeControl time_control;
 
 protected:
