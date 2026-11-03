@@ -248,6 +248,13 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   }
 
   // Set up and insert `dealii::Quadrature` objects.
+  // dealii::MatrixFree supports dealii::QGaussSimplex with at most 4 points, see
+  // dealii::internal::MatrixFreeFunctions::get_unique_face_quadratures()
+  AssertThrow(param.grid.element_type != ElementType::Simplex or param.degree + 1 <= 4,
+              dealii::ExcMessage("The quadrature for simplex elements requires " +
+                                 std::to_string(param.degree + 1) +
+                                 " points, but dealii::MatrixFree supports dealii::QGaussSimplex "
+                                 "with at most 4 points. Use a degree of at most 3."));
   std::shared_ptr<dealii::Quadrature<dim>> quadrature =
     create_quadrature<dim>(param.grid.element_type, param.degree + 1);
   matrix_free_data.insert_quadrature(*quadrature, get_quad_name());
