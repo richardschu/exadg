@@ -574,9 +574,14 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
                 dealii::ExcMessage("Invalid parameter order_extrapolation_pressure_nbc!"));
 
     // ALE and consequently FSI (including storing of last iterates therein) are disabled.
-    AssertThrow(!ale_formulation, dealii::ExcMessage("Not implemented."));
+    AssertThrow(!ale_formulation,
+                dealii::ExcMessage("ALE formulation (and hence FSI) is not implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
 
-    AssertThrow(!viscosity_is_variable(), dealii::ExcMessage("Not implemented."));
+    AssertThrow(!viscosity_is_variable(),
+                dealii::ExcMessage("Variable viscosity (turbulence or generalized Newtonian "
+                                   "models) is not implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
 
     AssertThrow(initial_guess_type_pressure_poisson == InitialGuessType::Extrapolation and
                   initial_guess_type_momentum == InitialGuessType::Extrapolation,
