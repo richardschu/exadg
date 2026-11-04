@@ -470,7 +470,7 @@ LaplaceOperator<dim, Number, n_components>::set_inhomogeneous_constrained_values
   if(not(operator_data.bc->dirichlet_cached_bc.empty()))
   {
     unsigned int const dof_index  = operator_data.dof_index;
-    unsigned int const quad_index = operator_data.quad_index_gauss_lobatto;
+    unsigned int const quad_index = operator_data.quad_index_support_points;
 
     IntegratorFace integrator(*this->matrix_free, true, dof_index, quad_index);
 

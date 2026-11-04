@@ -48,7 +48,7 @@ struct OperatorData : public OperatorBaseData
       mapping_degree(1),
       unsteady(false),
       density(1.0),
-      quad_index_gauss_lobatto(0)
+      quad_index_support_points(0)
   {
   }
 
@@ -91,7 +91,7 @@ struct OperatorData : public OperatorBaseData
 
   // for DirichletCached boundary conditions, another quadrature rule
   // is needed to set the constrained DoFs.
-  unsigned int quad_index_gauss_lobatto;
+  unsigned int quad_index_support_points;
 };
 
 template<int dim, typename Number>

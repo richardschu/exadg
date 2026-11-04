@@ -473,7 +473,7 @@ private:
   get_quad_name() const;
 
   std::string
-  get_quad_gauss_lobatto_name() const;
+  get_quad_support_points_name() const;
 
   unsigned int
   get_dof_index_periodicity_and_hanging_node_constraints() const;
@@ -488,7 +488,7 @@ private:
   get_quad_index() const;
 
   unsigned int
-  get_quad_index_gauss_lobatto() const;
+  get_quad_index_support_points() const;
 
   /**
    * Scaling factor for mass matrix assuming a weak damping operator leading to a scaled mass
@@ -605,8 +605,8 @@ private:
   std::string const dof_index_scalar_postprocessing = "dof_scalar_postprocessing";
   std::string const dof_index_vector_postprocessing = "dof_vector_postprocessing";
 
-  std::string const quad_index               = "quad";
-  std::string const quad_index_gauss_lobatto = "quad_gauss_lobatto";
+  std::string const quad_index                = "quad";
+  std::string const quad_index_support_points = "quad_support_points";
 
   /*
    * Matrix-free operator evaluation.

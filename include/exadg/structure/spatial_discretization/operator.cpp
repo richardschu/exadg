@@ -259,7 +259,8 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
     create_quadrature<dim>(param.grid.element_type, param.degree + 1);
   matrix_free_data.insert_quadrature(*quadrature, get_quad_name());
 
-  // Create a Gauss-Lobatto quadrature rule for `DirichletCached` boundary conditions.
+  // Create a quadrature rule at the support points (Gauss-Lobatto points for
+  // hypercubes) for `DirichletCached` boundary conditions.
   // These quadrature points coincide with the nodes of the discretization, so that
   // the values stored in the DirichletCached boundary condition can be directly
   // injected into the DoF vector. This allows to set constrained degrees of freedom
@@ -267,11 +268,10 @@ Operator<dim, Number>::fill_matrix_free_data(MatrixFreeData<dim, Number> & matri
   // conditions.
   if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
-    AssertThrow(this->grid->triangulation->all_reference_cells_are_hyper_cube(),
-                ExcNotImplemented());
-
-    matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.degree + 1),
-                                       get_quad_gauss_lobatto_name());
+    std::shared_ptr<dealii::Quadrature<dim>> quadrature_at_support_points =
+      create_quadrature_at_support_points<dim>(param.grid.element_type, param.degree);
+    matrix_free_data.insert_quadrature(*quadrature_at_support_points,
+                                       get_quad_support_points_name());
   }
 }
 
@@ -283,8 +283,8 @@ Operator<dim, Number>::setup_coupling_boundary_conditions()
   {
     interface_data_dirichlet_cached = std::make_shared<ContainerInterfaceData<1, dim, double>>();
     std::vector<unsigned int> quad_indices;
-    // Gauss-Lobatto quadrature rule for DirichletCached boundary conditions!
-    quad_indices.emplace_back(get_quad_index_gauss_lobatto());
+    // Quadrature rule at the support points for DirichletCached boundary conditions!
+    quad_indices.emplace_back(get_quad_index_support_points());
 
     interface_data_dirichlet_cached->setup(*matrix_free,
                                            get_dof_index(),
@@ -322,10 +322,7 @@ Operator<dim, Number>::setup_operators()
 
   if(not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
-    AssertThrow(this->grid->triangulation->all_reference_cells_are_hyper_cube(),
-                ExcNotImplemented());
-
-    operator_data.quad_index_gauss_lobatto = get_quad_index_gauss_lobatto();
+    operator_data.quad_index_support_points = get_quad_index_support_points();
   }
   operator_data.bc                  = boundary_descriptor;
   operator_data.material_descriptor = material_descriptor;
@@ -846,9 +843,9 @@ Operator<dim, Number>::get_quad_name() const
 
 template<int dim, typename Number>
 std::string
-Operator<dim, Number>::get_quad_gauss_lobatto_name() const
+Operator<dim, Number>::get_quad_support_points_name() const
 {
-  return field + "_" + quad_index_gauss_lobatto;
+  return field + "_" + quad_index_support_points;
 }
 
 template<int dim, typename Number>
@@ -1030,9 +1027,9 @@ Operator<dim, Number>::get_quad_index() const
 
 template<int dim, typename Number>
 unsigned int
-Operator<dim, Number>::get_quad_index_gauss_lobatto() const
+Operator<dim, Number>::get_quad_index_support_points() const
 {
-  return matrix_free_data->get_quad_index(get_quad_gauss_lobatto_name());
+  return matrix_free_data->get_quad_index(get_quad_support_points_name());
 }
 
 template<int dim, typename Number>

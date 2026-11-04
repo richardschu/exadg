@@ -105,12 +105,18 @@ write_grid(dealii::Triangulation<dim> const & triangulation,
 
   dealii::DataOut<dim> data_out;
 
+  // For simplices, dealii::DataOut supports at most 2 subdivisions, which are
+  // written as one quadratic cell, and no higher-order cells.
+  bool const         is_simplex = not triangulation.all_reference_cells_are_hyper_cube();
+  unsigned int const n_subdivisions_patches =
+    is_simplex ? std::min(n_subdivisions, 2u) : n_subdivisions;
+
   dealii::DataOutBase::VtkFlags flags;
-  flags.write_higher_order_cells = n_subdivisions > 1;
+  flags.write_higher_order_cells = n_subdivisions > 1 and not is_simplex;
   data_out.set_flags(flags);
 
   data_out.attach_triangulation(triangulation);
-  data_out.build_patches(mapping, n_subdivisions, dealii::DataOut<dim>::curved_inner_cells);
+  data_out.build_patches(mapping, n_subdivisions_patches, dealii::DataOut<dim>::curved_inner_cells);
   data_out.write_vtu_with_pvtu_record(folder, filename, counter, mpi_comm, 4);
 }
 
