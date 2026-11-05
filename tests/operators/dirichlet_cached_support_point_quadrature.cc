@@ -27,8 +27,8 @@
  * degree of freedom given by face_to_cell_index_nodal. The result is compared
  * to the nodal interpolation of the same function on the boundary, for
  * hypercube and simplex elements on a ball with a curved mapping. The vectors
- * are written to ./vtu/<dim>d_<element type>_degree_<degree>/solution.vtu, the
- * boundary values only to boundary.vtu in the same folder.
+ * on the boundary are written to
+ * ./vtu/<dim>d_<element type>_degree_<degree>/boundary_0.pvtu.
  *
  * Note that face_to_cell_index_nodal of simplices assumes the default face
  * orientation. deal.II orients each face like the first cell containing it,
@@ -37,18 +37,19 @@
 
 // C/C++
 #include <filesystem>
-#include <fstream>
 
 // deal.II
 #include <deal.II/base/function.h>
+#include <deal.II/distributed/fully_distributed_tria.h>
+#include <deal.II/distributed/tria.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/fe/mapping_fe.h>
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/manifold_lib.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/matrix_free/matrix_free.h>
-#include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/data_out_faces.h>
 #include <deal.II/numerics/vector_tools.h>
 
@@ -85,13 +86,15 @@ public:
 };
 
 template<int dim>
-void
-create_ball(dealii::Triangulation<dim> & tria, ElementType const element_type)
+std::shared_ptr<dealii::Triangulation<dim>>
+create_ball(ElementType const element_type, MPI_Comm const & mpi_comm)
 {
   if(element_type == ElementType::Hypercube)
   {
-    dealii::GridGenerator::hyper_ball(tria);
-    tria.refine_global(1);
+    auto tria = std::make_shared<dealii::parallel::distributed::Triangulation<dim>>(mpi_comm);
+    dealii::GridGenerator::hyper_ball(*tria);
+    tria->refine_global(1);
+    return tria;
   }
   else
   {
@@ -105,8 +108,19 @@ create_ball(dealii::Triangulation<dim> & tria, ElementType const element_type)
     tria_flat.set_all_manifold_ids(dealii::numbers::flat_manifold_id);
     tria_flat.set_all_manifold_ids_on_boundary(0);
     tria_flat.set_manifold(0, dealii::SphericalManifold<dim>());
-    dealii::GridGenerator::convert_hypercube_to_simplex_mesh(tria_flat, tria);
-    tria.set_manifold(0, dealii::SphericalManifold<dim>());
+    dealii::Triangulation<dim> tria_serial;
+    dealii::GridGenerator::convert_hypercube_to_simplex_mesh(tria_flat, tria_serial);
+
+    dealii::GridTools::partition_triangulation(dealii::Utilities::MPI::n_mpi_processes(mpi_comm),
+                                               tria_serial);
+    auto tria = std::make_shared<dealii::parallel::fullydistributed::Triangulation<dim>>(mpi_comm);
+    tria->create_triangulation(
+      dealii::TriangulationDescription::Utilities::create_description_from_triangulation(
+        tria_serial, mpi_comm));
+
+    // A fully distributed triangulation only keeps the manifold IDs.
+    tria->set_manifold(0, dealii::SphericalManifold<dim>());
+    return tria;
   }
 }
 
@@ -117,8 +131,11 @@ test(ElementType const element_type, unsigned int const degree)
   using Number     = double;
   using VectorType = dealii::LinearAlgebra::distributed::Vector<Number>;
 
-  dealii::Triangulation<dim> tria;
-  create_ball(tria, element_type);
+  MPI_Comm const             mpi_comm = MPI_COMM_WORLD;
+  dealii::ConditionalOStream pcout(std::cout,
+                                   dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0);
+
+  std::shared_ptr<dealii::Triangulation<dim>> const tria = create_ball<dim>(element_type, mpi_comm);
 
   std::shared_ptr<dealii::Mapping<dim> const> mapping;
   if(element_type == ElementType::Hypercube)
@@ -128,17 +145,20 @@ test(ElementType const element_type, unsigned int const degree)
 
   std::shared_ptr<dealii::FiniteElement<dim>> fe =
     create_finite_element<dim>(element_type, false /* is_dg */, dim, degree);
-  dealii::DoFHandler<dim> dof_handler(tria);
+  dealii::DoFHandler<dim> dof_handler(*tria);
   dof_handler.distribute_dofs(*fe);
 
   // Boundary faces that the adjacent cell does not see in the default
   // orientation.
   unsigned int n_faces_non_default_orientation = 0;
-  for(auto const & cell : tria.active_cell_iterators())
-    for(unsigned int const f : cell->face_indices())
-      if(cell->at_boundary(f) and
-         cell->combined_face_orientation(f) != dealii::numbers::default_geometric_orientation)
-        ++n_faces_non_default_orientation;
+  for(auto const & cell : tria->active_cell_iterators())
+    if(cell->is_locally_owned())
+      for(unsigned int const f : cell->face_indices())
+        if(cell->at_boundary(f) and
+           cell->combined_face_orientation(f) != dealii::numbers::default_geometric_orientation)
+          ++n_faces_non_default_orientation;
+  n_faces_non_default_orientation =
+    dealii::Utilities::MPI::sum(n_faces_non_default_orientation, mpi_comm);
 
   MatrixFreeData<dim, Number> matrix_free_data;
 
@@ -204,67 +224,49 @@ test(ElementType const element_type, unsigned int const degree)
   }
 
   // Compare to the nodal interpolation on the boundary, the other entries
-  // have to remain zero.
+  // have to remain zero. The boundary DoFs include the ones on boundary faces
+  // of ghost cells.
   VectorType reference;
   matrix_free.initialize_dof_vector(reference, dof_index);
   dealii::VectorTools::interpolate(*mapping, dof_handler, boundary_values, reference);
 
   dealii::IndexSet const boundary_dofs = dealii::DoFTools::extract_boundary_dofs(dof_handler);
 
-  VectorType difference;
-  matrix_free.initialize_dof_vector(difference, dof_index);
-
-  double error_boundary = 0.0, error_interior = 0.0;
-  for(dealii::types::global_dof_index i = 0; i < dof_handler.n_dofs(); ++i)
+  unsigned int n_boundary_dofs = 0;
+  double       error_boundary = 0.0, error_interior = 0.0;
+  for(dealii::types::global_dof_index const i : dof_handler.locally_owned_dofs())
   {
     if(boundary_dofs.is_element(i))
     {
-      difference(i)  = dst(i) - reference(i);
-      error_boundary = std::max(error_boundary, std::abs(difference(i)));
+      ++n_boundary_dofs;
+      error_boundary = std::max(error_boundary, std::abs(dst(i) - reference(i)));
     }
     else
       error_interior = std::max(error_interior, std::abs(dst(i)));
   }
+  n_boundary_dofs = dealii::Utilities::MPI::sum(n_boundary_dofs, mpi_comm);
+  error_boundary  = dealii::Utilities::MPI::max(error_boundary, mpi_comm);
+  error_interior  = dealii::Utilities::MPI::max(error_interior, mpi_comm);
 
-  // Write the vectors on the curved mesh for visual inspection. For simplices,
-  // dealii::DataOut supports at most 2 subdivisions and no higher-order cells.
+  // Write the vectors on the boundary of the curved mesh for visual
+  // inspection. For simplices, dealii::DataOutFaces supports at most 2
+  // subdivisions and no higher-order cells.
   {
     std::string const directory = "./vtu/" + std::to_string(dim) + "d_" + to_string(element_type) +
                                   "_degree_" + std::to_string(degree) + "/";
     std::filesystem::create_directories(directory);
 
-    dealii::DataOut<dim>          data_out;
+    dst.update_ghost_values();
+    reference.update_ghost_values();
+
+    dealii::DataOutFaces<dim>     data_out_faces(true /* surface only */);
     dealii::DataOutBase::VtkFlags flags;
     flags.write_higher_order_cells = element_type == ElementType::Hypercube;
-    data_out.set_flags(flags);
-    data_out.attach_dof_handler(dof_handler);
+    data_out_faces.set_flags(flags);
+    data_out_faces.attach_dof_handler(dof_handler);
 
     std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation> const
       interpretation(dim, dealii::DataComponentInterpretation::component_is_part_of_vector);
-    data_out.add_data_vector(dst,
-                             std::vector<std::string>(dim, "dirichlet_cached"),
-                             dealii::DataOut<dim>::type_dof_data,
-                             interpretation);
-    data_out.add_data_vector(reference,
-                             std::vector<std::string>(dim, "interpolation"),
-                             dealii::DataOut<dim>::type_dof_data,
-                             interpretation);
-    data_out.add_data_vector(difference,
-                             std::vector<std::string>(dim, "difference_on_boundary"),
-                             dealii::DataOut<dim>::type_dof_data,
-                             interpretation);
-
-    unsigned int const n_subdivisions =
-      element_type == ElementType::Hypercube ? degree : std::min(degree, 2u);
-    data_out.build_patches(*mapping, n_subdivisions, dealii::DataOut<dim>::curved_inner_cells);
-
-    std::ofstream file(directory + "solution.vtu");
-    data_out.write_vtu(file);
-
-    // The boundary only, where the vectors coincide.
-    dealii::DataOutFaces<dim> data_out_faces(true /* surface only */);
-    data_out_faces.set_flags(flags);
-    data_out_faces.attach_dof_handler(dof_handler);
     data_out_faces.add_data_vector(dst,
                                    std::vector<std::string>(dim, "dirichlet_cached"),
                                    dealii::DataOutFaces<dim>::type_dof_data,
@@ -273,18 +275,19 @@ test(ElementType const element_type, unsigned int const degree)
                                    std::vector<std::string>(dim, "interpolation"),
                                    dealii::DataOutFaces<dim>::type_dof_data,
                                    interpretation);
-    data_out_faces.build_patches(*mapping, n_subdivisions);
 
-    std::ofstream file_faces(directory + "boundary.vtu");
-    data_out_faces.write_vtu(file_faces);
+    unsigned int const n_subdivisions =
+      element_type == ElementType::Hypercube ? degree : std::min(degree, 2u);
+    data_out_faces.build_patches(*mapping, n_subdivisions);
+    data_out_faces.write_vtu_with_pvtu_record(directory, "boundary", 0, mpi_comm, 1);
   }
 
-  std::cout << "  dim = " << dim << ", " << to_string(element_type) << ", degree = " << degree
-            << ": " << tria.n_active_cells() << " cells, " << boundary_dofs.n_elements() << " of "
-            << dof_handler.n_dofs() << " DoFs on the boundary, " << n_faces_non_default_orientation
-            << " boundary faces in non-default orientation" << std::endl
-            << "    max error on boundary DoFs:     " << error_boundary << std::endl
-            << "    max value of other DoFs:        " << error_interior << std::endl;
+  pcout << "  dim = " << dim << ", " << to_string(element_type) << ", degree = " << degree << ": "
+        << tria->n_global_active_cells() << " cells, " << n_boundary_dofs << " of "
+        << dof_handler.n_dofs() << " DoFs on the boundary, " << n_faces_non_default_orientation
+        << " boundary faces in non-default orientation" << std::endl
+        << "    max error on boundary DoFs:     " << error_boundary << std::endl
+        << "    max value of other DoFs:        " << error_interior << std::endl;
 }
 
 int

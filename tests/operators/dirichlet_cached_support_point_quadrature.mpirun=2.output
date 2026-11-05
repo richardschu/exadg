@@ -2,13 +2,13 @@
     max error on boundary DoFs:     6.66134e-16
     max value of other DoFs:        0
   dim = 3, Hypercube, degree = 1: 56 cells, 78 of 237 DoFs on the boundary, 0 boundary faces in non-default orientation
-    max error on boundary DoFs:     8.88178e-16
+    max error on boundary DoFs:     4.44089e-16
     max value of other DoFs:        0
   dim = 2, Hypercube, degree = 2: 20 cells, 32 of 178 DoFs on the boundary, 0 boundary faces in non-default orientation
     max error on boundary DoFs:     6.66134e-16
     max value of other DoFs:        0
   dim = 3, Hypercube, degree = 2: 56 cells, 294 of 1551 DoFs on the boundary, 0 boundary faces in non-default orientation
-    max error on boundary DoFs:     8.88178e-16
+    max error on boundary DoFs:     4.44089e-16
     max value of other DoFs:        0
   dim = 2, Hypercube, degree = 3: 20 cells, 48 of 386 DoFs on the boundary, 0 boundary faces in non-default orientation
     max error on boundary DoFs:     6.66134e-16
