@@ -35,6 +35,7 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_tools.h>
+#include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/data_out_faces.h>
 #include <deal.II/particles/data_out.h>
@@ -42,6 +43,7 @@
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
+#include <exadg/operators/finite_element.h>
 #include <exadg/operators/quadrature.h>
 #include <exadg/postprocessor/output_data_base.h>
 #include <exadg/postprocessor/solution_field.h>
@@ -65,6 +67,39 @@ write_surface_mesh(dealii::Triangulation<dim> const & triangulation,
   data_out_surface.write_vtu_with_pvtu_record(folder, file + "_surface", counter, mpi_comm, 4);
 }
 
+/**
+ * Postprocessor for dealii::DataOutFaces writing the boundary and manifold IDs
+ * of the faces, see the documentation of dealii::DataPostprocessor.
+ */
+template<int dim>
+class FaceIDPostprocessor : public dealii::DataPostprocessor<dim>
+{
+public:
+  void
+  evaluate_scalar_field(dealii::DataPostprocessorInputs::Scalar<dim> const & inputs,
+                        std::vector<dealii::Vector<double>> & computed_quantities) const final
+  {
+    auto const face = inputs.template get_cell<dim>()->face(inputs.get_face_number());
+    for(dealii::Vector<double> & output : computed_quantities)
+    {
+      output(0) = face->boundary_id();
+      output(1) = static_cast<int>(face->manifold_id());
+    }
+  }
+
+  std::vector<std::string>
+  get_names() const final
+  {
+    return {"boundary_id", "manifold_id"};
+  }
+
+  dealii::UpdateFlags
+  get_needed_update_flags() const final
+  {
+    return dealii::update_default;
+  }
+};
+
 template<int dim>
 void
 write_boundary_IDs(dealii::Triangulation<dim> const & triangulation,
@@ -72,23 +107,22 @@ write_boundary_IDs(dealii::Triangulation<dim> const & triangulation,
                    std::string const &                file,
                    MPI_Comm const &                   mpi_communicator)
 {
-  unsigned int const rank    = dealii::Utilities::MPI::this_mpi_process(mpi_communicator);
-  unsigned int const n_ranks = dealii::Utilities::MPI::n_mpi_processes(mpi_communicator);
+  // In contrast to dealii::GridOut, which writes the boundary faces of the
+  // artificial cells as well, dealii::DataOutFaces only writes the boundary
+  // faces of the locally owned cells. The postprocessor needs a DoF vector,
+  // for which we use a dummy DG0 vector.
+  dealii::DoFHandler<dim> dof_handler(triangulation);
+  dof_handler.distribute_dofs(
+    *create_finite_element<dim>(get_element_type(triangulation), true, 1, 0));
+  dealii::LinearAlgebra::distributed::Vector<double> dummy(dof_handler.locally_owned_dofs(),
+                                                           mpi_communicator);
 
-  unsigned int const n_digits = static_cast<int>(std::ceil(std::log10(std::fabs(n_ranks))));
-
-  std::string filename = folder + file + "_boundary_IDs" + "." +
-                         dealii::Utilities::int_to_string(rank, n_digits) + ".vtk";
-  std::ofstream output(filename);
-
-  dealii::GridOut           grid_out;
-  dealii::GridOutFlags::Vtk flags;
-  flags.output_cells         = false;
-  flags.output_faces         = true;
-  flags.output_edges         = false;
-  flags.output_only_relevant = false;
-  grid_out.set_flags(flags);
-  grid_out.write_vtk(triangulation, output);
+  FaceIDPostprocessor<dim>  postprocessor;
+  dealii::DataOutFaces<dim> data_out(true /*surface only*/);
+  data_out.attach_dof_handler(dof_handler);
+  data_out.add_data_vector(dummy, postprocessor);
+  data_out.build_patches(dealii::get_default_linear_mapping(triangulation), 1);
+  data_out.write_vtu_with_pvtu_record(folder, file + "_boundary_IDs", 0, mpi_communicator, 4);
 }
 
 template<int dim>
