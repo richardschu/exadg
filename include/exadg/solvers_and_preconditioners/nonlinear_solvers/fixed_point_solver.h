@@ -121,6 +121,13 @@ public:
         std::function<bool(VectorType const &)> const & lambda_check_convergence,
         bool const                                      force_relaxation = false);
 
+  /**
+   * Enable or disable printing the solver info in subsequent calls to `solve()`, e.g., to print
+   * only in certain time steps.
+   */
+  void
+  set_print_solver_info(bool const print_solver_info);
+
 private:
   void
   print_solver_info_header(unsigned int const iteration) const;

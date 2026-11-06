@@ -173,6 +173,9 @@ PartitionedSolver<dim, Number>::solve(
     return check_convergence(residual);
   };
 
+  // Print the solver info in the same time steps as the fluid time integrator.
+  fixed_point_solver->set_print_solver_info(fluid->time_integrator->print_solver_info());
+
   unsigned int const iteration_counter = fixed_point_solver->solve(lambda_set_up_vector,
                                                                    lambda_get_iterate,
                                                                    lambda_set_iterate,

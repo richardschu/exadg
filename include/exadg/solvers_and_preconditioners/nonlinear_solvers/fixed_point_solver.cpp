@@ -525,6 +525,13 @@ FixedPointSolver<Number, VectorType>::solve(
 
 template<typename Number, typename VectorType>
 void
+FixedPointSolver<Number, VectorType>::set_print_solver_info(bool const print_solver_info)
+{
+  parameters.print_solver_info = print_solver_info;
+}
+
+template<typename Number, typename VectorType>
+void
 FixedPointSolver<Number, VectorType>::print_solver_info_header(unsigned int const iteration) const
 {
   if(parameters.print_solver_info)
