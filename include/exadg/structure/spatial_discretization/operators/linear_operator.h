@@ -45,7 +45,7 @@ private:
   /*
    * Calculates the integral
    *
-   *  (v_h, factor * d_h)_Omega + (grad(v_h), sigma_h)_Omega
+   *  (v_h, factor * density * d_h)_Omega + (grad(v_h), sigma_h)_Omega
    *
    * with
    *
@@ -56,17 +56,22 @@ private:
    *  d_h denotes the displacement vector.
    */
   void
-  do_cell_integral(IntegratorCell & integrator) const final;
+  do_cell_integral(IntegratorCell & integrator) const override;
 
   /*
-   * Computes the linear Neumann boundary term
+   * Computes boundary integrals
    *
-   *  - (v_h, t)_{Gamma_N}
+   * inhomogeneous operator:
+   *  - (v_h, t)_{Gamma_N} - (v_h, - p * N)_{Gamma_R}
+   *
+   * homogeneous operator:
+   *  + (v_h, k * d_h + c * factor_velocity * d_h)_{Gamma_R}
    */
   void
-  do_boundary_integral_continuous(IntegratorFace &                   integrator,
+  do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
                                   OperatorType const &               operator_type,
-                                  dealii::types::boundary_id const & boundary_id) const final;
+                                  unsigned int const                 face,
+                                  dealii::types::boundary_id const & boundary_id) const override;
 };
 
 } // namespace Structure

@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/decaying_hill/",
+        "OutputDirectory": "results/decaying_hill/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

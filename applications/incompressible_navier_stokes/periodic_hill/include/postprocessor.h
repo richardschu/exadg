@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_PERIODIC_HILL_POSTPROCESSOR_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_PERIODIC_HILL_POSTPROCESSOR_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_PERIODIC_HILL_INCLUDE_POSTPROCESSOR_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_PERIODIC_HILL_INCLUDE_POSTPROCESSOR_H_
 
 // ExaDG
 #include <exadg/incompressible_navier_stokes/postprocessor/line_plot_calculation_statistics_homogeneous.h>
@@ -62,10 +62,10 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     // calculation of mean velocity
     mean_velocity_calculator.reset(
@@ -82,7 +82,7 @@ public:
                                                                *pde_operator.get_mapping(),
                                                                this->mpi_comm));
 
-    line_plot_calculator_statistics->setup(my_pp_data.line_plot_data);
+    line_plot_calculator_statistics->setup(my_pp_data.line_plot_data, restarted_simulation);
   }
 
   void
@@ -100,7 +100,7 @@ public:
         mean_velocity_calculator->calculate_flow_rate_volume(velocity, time, length);
 
       // update body force
-      flow_rate_controller.update_body_force(flow_rate, time, time_step_number);
+      flow_rate_controller.update_body_force(flow_rate, time);
     }
 
     // line plot statistics
@@ -138,4 +138,4 @@ private:
 } // namespace ExaDG
 
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_PERIODIC_HILL_POSTPROCESSOR_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_PERIODIC_HILL_INCLUDE_POSTPROCESSOR_H_ */

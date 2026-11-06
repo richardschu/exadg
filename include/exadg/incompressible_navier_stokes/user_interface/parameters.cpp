@@ -147,6 +147,10 @@ Parameters::Parameters()
     // pressure Poisson equation
     IP_factor_pressure(1.),
     solver_data_pressure_poisson(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::CG, 100)),
+    initial_guess_type_pressure_poisson(InitialGuessType::Extrapolation),
+    n_vectors_projection_pressure_poisson(0),
+    eps_projection_pressure_poisson(1.e-6),
+    store_products_projection_pressure_poisson(false),
     preconditioner_pressure_poisson(PreconditionerPressurePoisson::Multigrid),
     multigrid_data_pressure_poisson(MultigridData()),
     update_preconditioner_pressure_poisson(false),
@@ -165,6 +169,10 @@ Parameters::Parameters()
     // momentum step
     newton_solver_data_momentum(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
     solver_data_momentum(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
+    initial_guess_type_momentum(InitialGuessType::Extrapolation),
+    n_vectors_projection_momentum(0),
+    eps_projection_momentum(1.e-6),
+    store_products_projection_momentum(false),
     preconditioner_momentum(MomentumPreconditioner::InverseMassMatrix),
     update_preconditioner_momentum(false),
     update_preconditioner_momentum_every_newton_iter(1),
@@ -201,6 +209,7 @@ Parameters::Parameters()
 
     // linear solver
     solver_data_coupled(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
+    initial_guess_type_coupled(InitialGuessType::Extrapolation),
 
     // preconditioning linear solver
     preconditioner_coupled(PreconditionerCoupled::BlockTriangular),
@@ -271,6 +280,37 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
       treatment_of_convective_term != TreatmentOfConvectiveTerm::LinearlyImplicit,
       dealii::ExcMessage(
         "ALE formulation is currently not implemented for a linearly implicit convective term."));
+
+    // The matrix-free cell-wise inverse mass operator on simplex elements requires affine cells,
+    // which do not remain affine on a moving mesh.
+    if(grid.element_type == ElementType::Simplex)
+    {
+      AssertThrow(inverse_mass_operator.implementation_type != InverseMassType::MatrixfreeOperator,
+                  dealii::ExcMessage(
+                    "InverseMassType::MatrixfreeOperator requires affine simplex elements and "
+                    "can not be used for inverse_mass_operator with ALE formulation. Use "
+                    "InverseMassType::BlockMatrices or InverseMassType::ElementwiseKrylovSolver."));
+
+      bool const coupled = temporal_discretization == TemporalDiscretization::BDFCoupledSolution;
+      bool const inverse_mass_preconditioner_used =
+        preconditioner_projection == PreconditionerProjection::InverseMassMatrix or
+        (not coupled and preconditioner_momentum == MomentumPreconditioner::InverseMassMatrix) or
+        (coupled and preconditioner_velocity_block == MomentumPreconditioner::InverseMassMatrix) or
+        (coupled and
+         (preconditioner_pressure_block == SchurComplementPreconditioner::InverseMassMatrix or
+          preconditioner_pressure_block == SchurComplementPreconditioner::CahouetChabard or
+          preconditioner_pressure_block ==
+            SchurComplementPreconditioner::PressureConvectionDiffusion));
+      if(inverse_mass_preconditioner_used)
+      {
+        AssertThrow(
+          inverse_mass_preconditioner.implementation_type != InverseMassType::MatrixfreeOperator,
+          dealii::ExcMessage(
+            "InverseMassType::MatrixfreeOperator requires affine simplex elements and can not "
+            "be used for inverse_mass_preconditioner with ALE formulation. Use "
+            "InverseMassType::BlockMatrices or InverseMassType::ElementwiseKrylovSolver."));
+      }
+    }
   }
 
   // PHYSICAL QUANTITIES
@@ -453,6 +493,37 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     }
   }
 
+  // the projection initial guess is implemented for linear momentum equations only
+  if(initial_guess_type_momentum == InitialGuessType::Projection)
+  {
+    AssertThrow(not nonlinear_problem_has_to_be_solved(),
+                dealii::ExcMessage("`InitialGuessType::Projection` is not implemented for a "
+                                   "nonlinear momentum equation."));
+
+    // A(c) = A_0 + c A_1 with constant A_0 and A_1, see `ProductsProjection`
+    if(store_products_projection_momentum)
+    {
+      AssertThrow(not ale_formulation,
+                  dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                     "require a constant operator, i.e., no ALE formulation."));
+      AssertThrow(not(viscous_problem() and viscosity_is_variable()),
+                  dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                     "require a constant viscosity, i.e., a Newtonian fluid."));
+      AssertThrow(not non_explicit_convective_problem(),
+                  dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                     "require an explicit convective term."));
+    }
+  }
+
+  // the Laplace operator is constant unless the mesh moves
+  if(initial_guess_type_pressure_poisson == InitialGuessType::Projection and
+     store_products_projection_pressure_poisson)
+  {
+    AssertThrow(not ale_formulation,
+                dealii::ExcMessage("Stored products for `InitialGuessType::Projection` "
+                                   "require a constant operator, i.e., no ALE formulation."));
+  }
+
   // HIGH-ORDER DUAL SPLITTING SCHEME
   if(temporal_discretization == TemporalDiscretization::BDFDualSplitting)
   {
@@ -503,9 +574,19 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
                 dealii::ExcMessage("Invalid parameter order_extrapolation_pressure_nbc!"));
 
     // ALE and consequently FSI (including storing of last iterates therein) are disabled.
-    AssertThrow(!ale_formulation, dealii::ExcMessage("Not implemented."));
+    AssertThrow(!ale_formulation,
+                dealii::ExcMessage("ALE formulation (and hence FSI) is not implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
 
-    AssertThrow(!viscosity_is_variable(), dealii::ExcMessage("Not implemented."));
+    AssertThrow(!viscosity_is_variable(),
+                dealii::ExcMessage("Variable viscosity (turbulence or generalized Newtonian "
+                                   "models) is not implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
+
+    AssertThrow(initial_guess_type_pressure_poisson == InitialGuessType::Extrapolation and
+                  initial_guess_type_momentum == InitialGuessType::Extrapolation,
+                dealii::ExcMessage("Only `InitialGuessType::Extrapolation` is implemented for "
+                                   "`TemporalDiscretization::BDFConsistentSplitting`."));
 
     AssertThrow(divu_integrated_by_parts, dealii::ExcMessage("Needed for optimal convergence."));
     AssertThrow(divu_formulation == FormulationVelocityDivergenceTerm::Weak,
@@ -529,6 +610,10 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   {
     if(use_scaling_continuity == true)
       AssertThrow(scaling_factor_continuity > 0.0, dealii::ExcMessage("Invalid parameter"));
+
+    AssertThrow(initial_guess_type_coupled != InitialGuessType::Projection,
+                dealii::ExcMessage(
+                  "`InitialGuessType::Projection` is not implemented for the coupled solver."));
 
     if(preconditioner_velocity_block == MomentumPreconditioner::Multigrid)
     {
@@ -676,11 +761,12 @@ Parameters::involves_h_multigrid() const
       }
     }
   }
-  // TODO: we currently treat TemporalDiscretization::InterpolateAnalyticalSolution as a splitting
+  // TODO: we currently treat `TemporalDiscretization::InterpolateAnalyticalSolution` as a splitting
   // scheme, since the implementation creates a spatial operator related to the pressure-correction
-  // scheme in case of InterpolateAnalyticalSolution. This is only a temporary solution and we need
-  // to write a separate class SpatialOperatorInterpolateAnalyticalSolution that does not create
-  // preconditioners (including multigrid)
+  // scheme in case of `TemporalDiscretization::InterpolateAnalyticalSolution`. This is only a
+  // temporary solution and we need to write a separate class
+  // `SpatialOperatorInterpolateAnalyticalSolution` that does not create preconditioners (including
+  // multigrid)
   else if(temporal_discretization == TemporalDiscretization::BDFDualSplitting or
           temporal_discretization == TemporalDiscretization::BDFConsistentSplitting or
           temporal_discretization == TemporalDiscretization::BDFPressureCorrection or
@@ -1064,6 +1150,13 @@ Parameters::print_parameters_pressure_poisson(dealii::ConditionalOStream const &
   print_parameter(pcout, "interior penalty factor", IP_factor_pressure);
 
   solver_data_pressure_poisson.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_pressure_poisson);
+  if(initial_guess_type_pressure_poisson == InitialGuessType::Projection)
+  {
+    print_parameter(pcout, "Number of vectors projection", n_vectors_projection_pressure_poisson);
+    print_parameter(pcout, "Tolerance projection", eps_projection_pressure_poisson);
+    print_parameter(pcout, "Store products projection", store_products_projection_pressure_poisson);
+  }
 
   print_parameter(pcout, "Preconditioner", preconditioner_pressure_poisson);
 
@@ -1222,6 +1315,13 @@ Parameters::print_parameters_momentum_step(dealii::ConditionalOStream const & pc
   pcout << "  Linear solver:" << std::endl;
 
   solver_data_momentum.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_momentum);
+  if(initial_guess_type_momentum == InitialGuessType::Projection)
+  {
+    print_parameter(pcout, "Number of vectors projection", n_vectors_projection_momentum);
+    print_parameter(pcout, "Tolerance projection", eps_projection_momentum);
+    print_parameter(pcout, "Store products projection", store_products_projection_momentum);
+  }
 
   print_parameter(pcout, "Preconditioner", preconditioner_momentum);
 
@@ -1311,6 +1411,7 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
   pcout << "Linear solver:" << std::endl;
 
   solver_data_coupled.print(pcout);
+  print_parameter(pcout, "Initial guess type", initial_guess_type_coupled);
 
   print_parameter(pcout, "Preconditioner", preconditioner_coupled);
 

@@ -56,38 +56,81 @@ LinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) const
 template<int dim, typename Number>
 void
 LinearOperator<dim, Number>::do_boundary_integral_continuous(
-  IntegratorFace &                   integrator,
+  IntegratorFace &                   integrator_m,
   OperatorType const &               operator_type,
+  unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
-  if(operator_type == OperatorType::inhomogeneous or operator_type == OperatorType::full)
-  {
-    BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
+  (void)face;
 
-    for(unsigned int q = 0; q < integrator.n_q_points; ++q)
-    {
-      vector const neumann_value = calculate_neumann_value<dim, Number>(
-        q, integrator, boundary_type, boundary_id, this->operator_data.bc, this->time);
+  // Note that for the spatial integration approach, this is a quasi-Newton method
+  // as the finite deformation of the body is ignored in the directional derivative.
 
-      integrator.submit_value(-neumann_value, q);
-    }
-  }
-  else if(operator_type == OperatorType::homogeneous)
+  BoundaryType boundary_type = this->operator_data.bc->get_boundary_type(boundary_id);
+
+  vector traction;
+
+  for(unsigned int q = 0; q < integrator_m.n_q_points; ++q)
   {
-    // `OperatorType::homogeneous` does not involve boundary integrals. We still need to submit
-    // zeroes for consistency.
-    vector zero;
-    zero = 0.0;
-    for(unsigned int q = 0; q < integrator.n_q_points; ++q)
+    // reset traction for each q-point evaluation
+    traction = 0.0;
+
+    // integrate standard (stored) traction or exterior pressure on Robin boundaries
+    if(boundary_type == BoundaryType::Neumann or boundary_type == BoundaryType::NeumannCached or
+       boundary_type == BoundaryType::RobinSpringDashpotPressure)
     {
-      integrator.submit_value(zero, q);
+      if(operator_type == OperatorType::inhomogeneous or operator_type == OperatorType::full)
+      {
+        traction -= calculate_neumann_value<dim, Number>(
+          q, integrator_m, boundary_type, boundary_id, this->operator_data.bc, this->time);
+      }
     }
-  }
-  else
-  {
-    AssertThrow(false,
-                dealii::ExcMessage("OperatorType not supported in "
-                                   "LinearOperator::do_boundary_integral_continuous()"));
+
+    // check boundary ID in `robin_bc` to add boundary mass integrals from Robin boundaries on
+    // `BoundaryType::NeumannCached` or `BoundaryType::RobinSpringDashpotPressure`
+    if(boundary_type == BoundaryType::NeumannCached or
+       boundary_type == BoundaryType::RobinSpringDashpotPressure)
+    {
+      if(operator_type == OperatorType::homogeneous or operator_type == OperatorType::full)
+      {
+        auto const it = this->operator_data.bc->robin_bc.find(boundary_id);
+
+        if(it != this->operator_data.bc->robin_bc.end())
+        {
+          RobinParameters const & robin_parameters = it->second;
+          Number const displacement_coefficient_k  = robin_parameters.displacement_coefficient_k;
+
+          if(robin_parameters.displacement_normal_projection)
+          {
+            vector const N = integrator_m.normal_vector(q);
+            traction += N * (displacement_coefficient_k * (N * integrator_m.get_value(q)));
+          }
+          else
+          {
+            traction += displacement_coefficient_k * integrator_m.get_value(q);
+          }
+
+          if(this->operator_data.unsteady)
+          {
+            Number const velocity_coefficient_c = robin_parameters.velocity_coefficient_c;
+
+            if(robin_parameters.velocity_normal_projection)
+            {
+              vector const N = integrator_m.normal_vector(q);
+              traction += N * (velocity_coefficient_c * this->scaling_factor_mass_boundary *
+                               (N * integrator_m.get_value(q)));
+            }
+            else
+            {
+              traction += velocity_coefficient_c * this->scaling_factor_mass_boundary *
+                          integrator_m.get_value(q);
+            }
+          }
+        }
+      }
+    }
+
+    integrator_m.submit_value(traction, q);
   }
 }
 

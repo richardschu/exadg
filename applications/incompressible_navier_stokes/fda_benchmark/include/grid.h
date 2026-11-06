@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_GRID_TOOLS_FDA_BENCHMARK_NOZZLE_H_
-#define APPLICATIONS_GRID_TOOLS_FDA_BENCHMARK_NOZZLE_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FDA_BENCHMARK_INCLUDE_GRID_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FDA_BENCHMARK_INCLUDE_GRID_H_
 
 // ExaDG
 #include <exadg/grid/one_sided_cylindrical_manifold.h>
@@ -540,4 +540,4 @@ create_grid_and_set_boundary_ids_precursor(
 } // namespace ExaDG
 
 
-#endif /* APPLICATIONS_GRID_TOOLS_FDA_BENCHMARK_NOZZLE_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FDA_BENCHMARK_INCLUDE_GRID_H_ */

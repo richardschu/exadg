@@ -25,7 +25,7 @@
 // ExaDG
 #include <exadg/incompressible_navier_stokes/preconditioners/multigrid_preconditioner_momentum.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/block_jacobi_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/inverse_mass_preconditioner.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/jacobi_preconditioner.h>
@@ -170,6 +170,16 @@ public:
                                  VectorType const & rhs,
                                  VectorType const & transport_velocity,
                                  bool const &       update_preconditioner,
+                                 double const &     scaling_factor_mass);
+
+  /*
+   * This function applies the operator of the linear momentum equation solved in
+   * `solve_linear_momentum_equation()`, e.g., to compute an initial guess for that solver.
+   */
+  void
+  apply_linear_momentum_operator(VectorType &       dst,
+                                 VectorType const & src,
+                                 VectorType const & transport_velocity,
                                  double const &     scaling_factor_mass);
 
   /*

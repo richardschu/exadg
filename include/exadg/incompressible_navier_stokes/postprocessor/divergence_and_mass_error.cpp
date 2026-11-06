@@ -50,14 +50,15 @@ DivergenceAndMassErrorCalculator<dim, Number>::setup(
   dealii::MatrixFree<dim, Number> const & matrix_free_in,
   unsigned int const                      dof_index_in,
   unsigned int const                      quad_index_in,
-  MassConservationData const &            data_in)
+  MassConservationData const &            data_in,
+  bool const                              restarted_simulation)
 {
   matrix_free = &matrix_free_in;
   dof_index   = dof_index_in;
   quad_index  = quad_index_in;
   data        = data_in;
 
-  time_control.setup(data_in.time_control_data);
+  time_control.setup(data_in.time_control_data, restarted_simulation);
 
   if(data.time_control_data.is_active)
     create_directories(data.directory, mpi_comm);

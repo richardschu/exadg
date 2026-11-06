@@ -19,7 +19,7 @@
         "CFL": "0.27"
     },
     "Output": {
-        "OutputDirectory": "output/",
+        "OutputDirectory": "results/",
         "OutputName": "flow",
         "WriteOutput": "false"
     }

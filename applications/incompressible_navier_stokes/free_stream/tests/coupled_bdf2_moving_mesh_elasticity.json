@@ -1,0 +1,26 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "2",
+        "IsTest": "true"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "3",
+        "DegreeMax": "3",
+        "RefineSpaceMin": "2",
+        "RefineSpaceMax": "2"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "0",
+        "RefineTimeMax": "0"
+    },
+    "Application": {
+        "ALE": "true",
+        "MeshMovementType": "Elasticity"
+    },
+    "Output": {
+        "OutputDirectory": "results/free_stream/",
+        "OutputName": "test",
+        "WriteOutput": "false"
+    }
+}

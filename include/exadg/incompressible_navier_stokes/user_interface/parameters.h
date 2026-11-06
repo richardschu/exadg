@@ -31,7 +31,7 @@
 #include <exadg/incompressible_navier_stokes/user_interface/viscosity_model_data.h>
 #include <exadg/operators/inverse_mass_parameters.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver_data.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
 #include <exadg/solvers_and_preconditioners/preconditioners/enum_types.h>
 #include <exadg/solvers_and_preconditioners/solvers/solver_data.h>
 #include <exadg/time_integration/enum_types.h>
@@ -513,6 +513,23 @@ public:
   // solver data for pressure Poisson equation
   SolverData solver_data_pressure_poisson;
 
+  // initial guess of the pressure Poisson solver
+  InitialGuessType initial_guess_type_pressure_poisson;
+
+  // number of previous pressures spanning the space of
+  // `InitialGuessType::Projection`; the `order_time_integrator` vectors of the
+  // time integrator are always used, larger values also store older pressures
+  unsigned int n_vectors_projection_pressure_poisson;
+
+  // relative tolerance below which a previous pressure is considered linearly
+  // dependent on the newer ones and dropped from the projection space
+  double eps_projection_pressure_poisson;
+
+  // store the products of the Laplace operator with the previous pressures of
+  // `InitialGuessType::Projection` instead of recomputing them in each time
+  // step, which requires a constant operator, i.e., no ALE formulation
+  bool store_products_projection_pressure_poisson;
+
   // description: see enum declaration
   PreconditionerPressurePoisson preconditioner_pressure_poisson;
 
@@ -566,6 +583,21 @@ public:
 
   // Solver data for (linearized) momentum equation
   SolverData solver_data_momentum;
+
+  // initial guess of the momentum solver
+  InitialGuessType initial_guess_type_momentum;
+
+  // number of previous velocities spanning the space of
+  // `InitialGuessType::Projection`, see `n_vectors_projection_pressure_poisson`
+  unsigned int n_vectors_projection_momentum;
+
+  // see `eps_projection_pressure_poisson`
+  double eps_projection_momentum;
+
+  // see `store_products_projection_pressure_poisson`, the momentum operator has
+  // to be constant apart from the scaling of the time derivative term, i.e., a
+  // Newtonian fluid, no ALE formulation and no implicit convective term
+  bool store_products_projection_momentum;
 
   // description: see enum declaration
   MomentumPreconditioner preconditioner_momentum;
@@ -657,6 +689,9 @@ public:
 
   // Solver data for coupled solver
   SolverData solver_data_coupled;
+
+  // initial guess of the coupled solver
+  InitialGuessType initial_guess_type_coupled;
 
   // description: see enum declaration
   PreconditionerCoupled preconditioner_coupled;

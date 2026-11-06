@@ -59,12 +59,14 @@ Driver<dim, Number>::setup()
 
   application->setup(grid, mapping, multigrid_mappings);
 
-  bool setup_scalar_field = false;
+  bool setup_scalar_postprocessing_field = false;
+  bool setup_vector_postprocessing_field = false;
   if(not is_throughput_study)
   {
     // initialize postprocessor, i.e., get user parameters
-    postprocessor      = application->create_postprocessor();
-    setup_scalar_field = postprocessor->requires_scalar_field();
+    postprocessor                     = application->create_postprocessor();
+    setup_scalar_postprocessing_field = postprocessor->requires_scalar_postprocessing_field();
+    setup_vector_postprocessing_field = postprocessor->requires_vector_postprocessing_field();
   }
 
   // setup spatial operator
@@ -76,7 +78,8 @@ Driver<dim, Number>::setup()
                                                          application->get_material_descriptor(),
                                                          application->get_parameters(),
                                                          "elasticity",
-                                                         setup_scalar_field,
+                                                         setup_scalar_postprocessing_field,
+                                                         setup_vector_postprocessing_field,
                                                          mpi_comm);
 
   pde_operator->setup();
@@ -84,7 +87,7 @@ Driver<dim, Number>::setup()
   if(not is_throughput_study)
   {
     // set up postprocessor
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     // initialize time integrator/driver
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
@@ -104,6 +107,12 @@ Driver<dim, Number>::setup()
       driver_quasi_static = std::make_shared<DriverQuasiStatic<dim, Number>>(
         pde_operator, postprocessor, application->get_parameters(), mpi_comm, is_test);
       driver_quasi_static->setup();
+    }
+    else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+    {
+      driver_inverse_analysis = std::make_shared<DriverInverseAnalysis<dim, Number>>(
+        pde_operator, postprocessor, application->get_parameters(), mpi_comm, is_test);
+      driver_inverse_analysis->setup();
     }
     else
     {
@@ -132,6 +141,10 @@ Driver<dim, Number>::solve() const
   {
     driver_quasi_static->solve();
   }
+  else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+  {
+    driver_inverse_analysis->solve();
+  }
   else
   {
     AssertThrow(false, dealii::ExcMessage("Not implemented."));
@@ -155,6 +168,11 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
     pcout << std::endl << "Average number of iterations:" << std::endl;
     driver_quasi_static->print_iterations();
   }
+  else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+  {
+    pcout << std::endl << "Average number of iterations:" << std::endl;
+    driver_inverse_analysis->print_iterations();
+  }
   else if(application->get_parameters().problem_type == ProblemType::Unsteady)
   {
     pcout << std::endl << "Average number of iterations:" << std::endl;
@@ -174,6 +192,10 @@ Driver<dim, Number>::print_performance_results(double const total_time) const
   else if(application->get_parameters().problem_type == ProblemType::QuasiStatic)
   {
     timer_tree.insert({"Elasticity"}, driver_quasi_static->get_timings());
+  }
+  else if(application->get_parameters().problem_type == ProblemType::InverseAnalysis)
+  {
+    timer_tree.insert({"Elasticity"}, driver_inverse_analysis->get_timings());
   }
   else
   {
@@ -226,41 +248,70 @@ Driver<dim, Number>::apply_operator(OperatorType const & operator_type,
   pde_operator->initialize_dof_vector(dst);
   src = 1.0;
 
-  pde_operator->update_elasticity_operator(1.0, 0.0);
-
-  if(operator_type == OperatorType::Apply)
+  if(application->get_parameters().large_deformation)
   {
-    if(application->get_parameters().large_deformation)
-    {
-      pde_operator->initialize_dof_vector(linearization);
-      linearization = 1.0;
+    pde_operator->initialize_dof_vector(linearization);
+    linearization = 1.0;
 
-      // note that this function assembles the matrix in case of a matrix-based implementation
-      pde_operator->set_solution_linearization(linearization);
-    }
-    else
-    {
-      pde_operator->assemble_matrix_if_matrix_based();
-    }
+    // note that this function assembles the matrix in case of a matrix-based implementation
+    pde_operator->set_solution_linearization(linearization);
+  }
+  else
+  {
+    pde_operator->assemble_matrix_if_matrix_based();
   }
 
-  const std::function<void(void)> operator_evaluation = [&](void) {
-    if(operator_type == OperatorType::Evaluate)
-    {
-      pde_operator->evaluate_elasticity_operator(dst, src, 1.0, 0.0);
-    }
-    else if(operator_type == OperatorType::Apply)
-    {
-      pde_operator->apply_elasticity_operator(dst, src);
-    }
-  };
+  double wall_time = std::numeric_limits<double>::max();
+  {
+    dealii::Timer global_timer;
+    global_timer.restart();
+    dealii::Utilities::MPI::MinMaxAvg global_time;
 
-  // do the measurements
-  double const wall_time = measure_operator_evaluation_time(operator_evaluation,
-                                                            application->get_parameters().degree,
-                                                            n_repetitions_inner,
-                                                            n_repetitions_outer,
-                                                            mpi_comm);
+    do
+    {
+      for(unsigned int i_outer = 0; i_outer < n_repetitions_outer; ++i_outer)
+      {
+        dealii::Timer timer;
+        timer.restart();
+
+#ifdef EXADG_WITH_LIKWID
+        unsigned int const degree = application->get_parameters().degree;
+        LIKWID_MARKER_START(("degree_" + std::to_string(degree)).c_str());
+#endif
+
+        // apply matrix-vector product several times
+        for(unsigned int i = 0; i < n_repetitions_inner; ++i)
+        {
+          if(operator_type == OperatorType::Evaluate)
+          {
+            // Contains update of mapping for `large_deformation == true`, but
+            // does neither update underlying matrices of operators nor cell data.
+            pde_operator->evaluate_elasticity_operator(dst, src, 1.0, 0.0, 0.0);
+          }
+          else if(operator_type == OperatorType::Apply)
+          {
+            if(i == 0 and application->get_parameters().large_deformation)
+            {
+              pde_operator->set_solution_linearization(linearization);
+            }
+            pde_operator->apply_elasticity_operator(dst, src);
+          }
+        }
+
+#ifdef EXADG_WITH_LIKWID
+        LIKWID_MARKER_STOP(("degree_" + std::to_string(degree)).c_str());
+#endif
+
+        MPI_Barrier(mpi_comm);
+        dealii::Utilities::MPI::MinMaxAvg wall_time_inner =
+          dealii::Utilities::MPI::min_max_avg(timer.wall_time(), mpi_comm);
+
+        wall_time = std::min(wall_time, wall_time_inner.avg / (double)n_repetitions_inner);
+      }
+
+      global_time = dealii::Utilities::MPI::min_max_avg(global_timer.wall_time(), mpi_comm);
+    } while(global_time.avg < 1.0 /*wall time in seconds*/);
+  }
 
   // calculate throughput
   dealii::types::global_dof_index const dofs = pde_operator->get_number_of_dofs();
@@ -272,10 +323,10 @@ Driver<dim, Number>::apply_operator(OperatorType const & operator_type,
   if(not(is_test))
   {
     // clang-format off
-    pcout << std::endl
-          << std::scientific << std::setprecision(4)
-          << "DoFs/sec:        " << throughput << std::endl
-          << "DoFs/(sec*core): " << throughput/(double)N_mpi_processes << std::endl;
+	    pcout << std::endl
+	          << std::scientific << std::setprecision(4)
+	          << "DoFs/sec:        " << throughput << std::endl
+	          << "DoFs/(sec*core): " << throughput/(double)N_mpi_processes << std::endl;
     // clang-format on
   }
 

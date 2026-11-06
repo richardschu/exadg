@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_AERO_ACOUSTIC_CO_ROTATING_VORTEX_PAIR_H_
-#define APPLICATIONS_AERO_ACOUSTIC_CO_ROTATING_VORTEX_PAIR_H_
+#ifndef APPLICATIONS_AERO_ACOUSTIC_CO_ROTATING_VORTEX_PAIR_APPLICATION_H_
+#define APPLICATIONS_AERO_ACOUSTIC_CO_ROTATING_VORTEX_PAIR_APPLICATION_H_
 
 #include <deal.II/base/function.h>
 #include <deal.II/distributed/tria.h>
@@ -902,4 +902,4 @@ private:
 
 #include <exadg/aero_acoustic/user_interface/implement_get_application.h>
 
-#endif /*APPLICATIONS_AERO_ACOUSTIC_CO_ROTATING_VORTEX_PAIR_H_*/
+#endif /* APPLICATIONS_AERO_ACOUSTIC_CO_ROTATING_VORTEX_PAIR_APPLICATION_H_ */

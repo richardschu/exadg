@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_CAVITY_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_CAVITY_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_CAVITY_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_CAVITY_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -78,7 +78,7 @@ private:
     this->param.restart_data.interval_time       = 5.0;
     this->param.restart_data.interval_wall_time  = 1.e6;
     this->param.restart_data.interval_time_steps = 1e8;
-    this->param.restart_data.filename            = "output/cavity/cavity_restart";
+    this->param.restart_data.filename            = "results/cavity/cavity_restart";
 
     // output of solver information
     this->param.solver_info_data.interval_time_steps = 1;
@@ -363,4 +363,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_CAVITY_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_CAVITY_APPLICATION_H_ */

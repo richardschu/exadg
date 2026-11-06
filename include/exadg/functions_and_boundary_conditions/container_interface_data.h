@@ -52,9 +52,9 @@ private:
 
   using SetBoundaryIDs = std::set<dealii::types::boundary_id>;
 
-  using quad_index = unsigned int;
+  using QuadIndex = unsigned int;
 
-  using Id = std::tuple<unsigned int /*face*/, unsigned int /*q*/, unsigned int /*v*/>;
+  using Id = std::tuple<unsigned int /* face */, unsigned int /* q */, unsigned int /* v */>;
 
   using MapVectorIndex = std::map<Id, dealii::types::global_dof_index>;
 
@@ -69,12 +69,12 @@ public:
   void
   setup(dealii::MatrixFree<dim, Number> const & matrix_free_,
         unsigned int const                      dof_index_,
-        std::vector<quad_index> const &         quad_indices_,
-        SetBoundaryIDs const &                  set_bids_)
+        std::vector<QuadIndex> const &          quad_indices_,
+        SetBoundaryIDs const &                  relevant_boundary_ids_)
   {
     quad_indices = quad_indices_;
 
-    for(auto q_index : quad_indices)
+    for(auto const q_index : quad_indices)
     {
       // initialize maps
       map_vector_index.emplace(q_index, MapVectorIndex());
@@ -91,10 +91,11 @@ public:
           ++face)
       {
         // only consider relevant boundary IDs
-        if(set_bids_.find(matrix_free_.get_boundary_id(face)) != set_bids_.end())
+        if(relevant_boundary_ids_.find(matrix_free_.get_boundary_id(face)) !=
+           relevant_boundary_ids_.end())
         {
           FaceIntegrator<dim, n_components, Number> integrator(matrix_free_,
-                                                               true,
+                                                               true /* is_interior_face */,
                                                                dof_index_,
                                                                q_index);
           integrator.reinit(face);
@@ -110,8 +111,8 @@ public:
               for(unsigned int d = 0; d < dim; ++d)
                 q_point[d] = q_points[d][v];
 
-              Id                              id    = std::make_tuple(face, q, v);
-              dealii::types::global_dof_index index = array_q_points_dst.size();
+              Id const                              id    = std::make_tuple(face, q, v);
+              dealii::types::global_dof_index const index = array_q_points_dst.size();
               map_index.emplace(id, index);
               array_q_points_dst.push_back(q_point);
             }
@@ -119,31 +120,32 @@ public:
         }
       }
 
+      // set to correct size and default initialize
       array_solution_dst.resize(array_q_points_dst.size(), data_type());
     }
   }
 
-  std::vector<quad_index> const &
+  std::vector<QuadIndex> const &
   get_quad_indices();
 
   ArrayQuadraturePoints &
-  get_array_q_points(quad_index const & q_index);
+  get_array_q_points(QuadIndex const & q_index);
 
   ArraySolutionValues &
-  get_array_solution(quad_index const & q_index);
+  get_array_solution(QuadIndex const & q_index);
 
   data_type
-  get_data(unsigned int const q_index,
-           unsigned int const face,
-           unsigned int const q,
-           unsigned int const v) const;
+  access_data_container(unsigned int const q_index,
+                        unsigned int const face,
+                        unsigned int const q,
+                        unsigned int const v) const;
 
 private:
-  std::vector<quad_index> quad_indices;
+  std::vector<QuadIndex> quad_indices;
 
-  mutable std::map<quad_index, MapVectorIndex>        map_vector_index;
-  mutable std::map<quad_index, ArrayQuadraturePoints> map_q_points;
-  mutable std::map<quad_index, ArraySolutionValues>   map_solution;
+  mutable std::map<QuadIndex, MapVectorIndex>        map_vector_index;
+  mutable std::map<QuadIndex, ArrayQuadraturePoints> map_q_points;
+  mutable std::map<QuadIndex, ArraySolutionValues>   map_solution;
 };
 } // namespace ExaDG
 

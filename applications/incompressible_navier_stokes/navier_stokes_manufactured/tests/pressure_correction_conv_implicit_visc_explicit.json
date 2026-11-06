@@ -1,0 +1,49 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "2",
+        "IsTest": "true"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "3",
+        "DegreeMax": "3",
+        "RefineSpaceMin": "2",
+        "RefineSpaceMax": "2"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "0",
+        "RefineTimeMax": "0"
+    },
+    "Application": {
+        "TriangulationType": "Distributed",
+        "SpatialDiscretization": "L2",
+        "MoveGrid": "false",
+        "ReadRestart": "false",
+        "WriteRestart": "false",
+        "IncludeConvectiveTerm": "true",
+        "BoundaryCondition": "PureDirichlet",
+        "StartTime": "0.0",
+        "EndTime": "1e-1",
+        "TimeStepSize": "1e-3",
+        "OrderTimeIntegrator": "2",
+        "IntervalStart": "0.0",
+        "IntervalEnd": "1.0",
+        "Density": "1.0",
+        "KinematicViscosity": "5e-2",
+        "UseGeneralizedNewtonianModel": "true",
+        "FormulationViscousTerm" : "DivergenceFormulation",
+        "TemporalDiscretization" : "BDFPressureCorrection",
+        "TreatmentOfConvectiveTerm" : "Implicit",
+        "TreatmentOfVariableViscosity" : "Explicit",
+        "GeneralizedNewtonianViscosityMargin": "5e-2",
+        "GeneralizedNewtonianKappa": "1.0",
+        "GeneralizedNewtonianLambda": "1.0",
+        "GeneralizedNewtonianA": "2.0",
+        "GeneralizedNewtonianN": "0.5"
+    },
+    "Output": {
+        "OutputDirectory": "output_test_navier_stokes_manufactured/",
+        "OutputName": "pressure_correction_conv_implicit_visc_explicit",
+        "WriteOutput": "false"
+    }
+}

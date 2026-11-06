@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/poiseuille/",
+        "OutputDirectory": "results/poiseuille/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

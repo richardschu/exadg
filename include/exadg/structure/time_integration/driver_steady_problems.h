@@ -77,7 +77,7 @@ private:
   do_solve();
 
   void
-  postprocessing() const;
+  postprocessing(bool const errors_only = false) const;
 
   std::shared_ptr<Interface::Operator<Number>> pde_operator;
 

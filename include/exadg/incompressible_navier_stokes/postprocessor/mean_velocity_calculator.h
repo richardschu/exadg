@@ -37,7 +37,7 @@ struct MeanVelocityCalculatorData
     : calculate(false),
       write_to_file(false),
       direction(dealii::Tensor<1, dim, double>()),
-      directory("output/"),
+      directory("results/"),
       filename("mean_velocity")
   {
   }

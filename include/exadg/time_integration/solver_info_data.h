@@ -42,7 +42,8 @@ struct SolverInfoData
       interval_time_steps(std::numeric_limits<unsigned int>::max()),
       counter(0),
       do_output_in_this_time_step(false),
-      old_time_step_number(0)
+      old_time_step_number(0),
+      is_first_call(true)
   {
   }
 
@@ -60,13 +61,14 @@ struct SolverInfoData
                    double const           time,
                    types::time_step const time_step_number) const
   {
-    // After a restart, the counter is reset to 1, but time = current_time - start time != 0 after a
-    // restart. Hence, we have to explicitly reset the counter in that case. There is nothing to do
-    // if the restart is controlled by the wall time or the time_step_number because these
-    // variables are reinitialized after a restart anyway.
-    if(time_step_number == 1)
+    // After a restart, the counter starts again, but time = current_time - start time might be
+    // != 0. Hence, we have to explicitly reset the counter in that case. There is nothing to do for
+    // the wall time, which is reinitialized after a restart anyway, or the time_step_number, which
+    // counts the time steps across restarts.
+    if(is_first_call)
     {
       counter += int((time + 1.e-10) / interval_time);
+      is_first_call = false;
     }
 
     do_output_in_this_time_step = wall_time > interval_wall_time * counter or
@@ -113,6 +115,9 @@ struct SolverInfoData
   // we need to store the old time step number since the function write() might be called multiple
   // times during one time step
   mutable unsigned int old_time_step_number;
+
+  // whether `check_for_output()` is called for the first time in this simulation
+  mutable bool is_first_call;
 };
 
 } // namespace ExaDG

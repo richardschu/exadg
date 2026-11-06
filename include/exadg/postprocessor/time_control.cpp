@@ -74,14 +74,20 @@ TimeControlData::print(dealii::ConditionalOStream & pcout, bool const unsteady) 
 }
 
 TimeControl::TimeControl()
-  : EPSILON(1.0e-10), reset_counter(true), counter(0), end_time_reached(false)
+  : EPSILON(1.0e-10),
+    restarted_simulation(false),
+    is_first_call(true),
+    reset_counter(true),
+    counter(0),
+    end_time_reached(false)
 {
 }
 
 void
-TimeControl::setup(TimeControlData const & time_control_data_in)
+TimeControl::setup(TimeControlData const & time_control_data_in, bool const restarted_simulation_in)
 {
-  time_control_data = time_control_data_in;
+  time_control_data    = time_control_data_in;
+  restarted_simulation = restarted_simulation_in;
 }
 
 bool
@@ -96,6 +102,10 @@ TimeControl::needs_evaluation(double const time, types::time_step const time_ste
     ++counter;
     return true;
   }
+
+  // The first call of a restarted simulation is at the restart time.
+  bool const is_first_call_after_restart = restarted_simulation and is_first_call;
+  is_first_call                          = false;
 
   // unsteady evaluation
   AssertThrow(get_unsteady_evaluation_type(time_control_data) !=
@@ -132,6 +142,17 @@ TimeControl::needs_evaluation(double const time, types::time_step const time_ste
     {
       counter += static_cast<unsigned int>((time - time_control_data.start_time + EPSILON) /
                                            time_control_data.trigger_interval);
+
+      // The restart file is written right before the postprocessing of the same time step. Hence,
+      // all evaluations up to and including the restart time were already done in the previous
+      // simulation and are not repeated. This does not apply if the restart time lies before
+      // `start_time`, since the first call then returns early and this is a regular first
+      // evaluation.
+      if(is_first_call_after_restart)
+      {
+        ++counter;
+      }
+
       reset_counter = false;
     }
 

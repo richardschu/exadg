@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef STRUCTURE_CAN
-#define STRUCTURE_CAN
+#ifndef APPLICATIONS_STRUCTURE_CAN_APPLICATION_H_
+#define APPLICATIONS_STRUCTURE_CAN_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -359,4 +359,4 @@ private:
 
 #include <exadg/structure/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_STRUCTURE_CAN_APPLICATION_H_ */

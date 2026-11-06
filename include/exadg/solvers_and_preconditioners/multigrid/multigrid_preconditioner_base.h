@@ -210,12 +210,6 @@ protected:
   unsigned int
   get_number_of_levels() const;
 
-  /*
-   * Returns the correct mapping depending on the multigrid transfer type and the current h-level.
-   */
-  dealii::Mapping<dim> const &
-  get_mapping(unsigned int const h_level) const;
-
   /**
    * This is a generic function allowing to loop over all multigrid levels (including the coarsest
    * level). The operation to be performed on each level is passed as a lambda with argument level.
@@ -254,6 +248,15 @@ protected:
       levelwise_transfer(fine_level, fine_level - 1);
   }
 
+  /*
+   * Returns the correct mapping depending on the multigrid transfer type and the current h-level.
+   */
+  dealii::Mapping<dim> const &
+  get_mapping(unsigned int const h_level) const;
+
+  std::shared_ptr<dealii::Mapping<dim> const>
+  get_mapping_ptr(unsigned int const level) const;
+
   // Pointer to grid class.
   std::shared_ptr<Grid<dim> const> grid;
 
@@ -272,6 +275,8 @@ protected:
   std::shared_ptr<MultigridTransfer<dim, MultigridNumber, VectorTypeMG>> transfers;
 
   std::vector<MGLevelInfo> level_info;
+
+  std::vector<unsigned int> dof_renumbering;
 
 private:
   /**
@@ -303,11 +308,11 @@ private:
   /*
    * This function initializes an operator for a specified level. It needs to be implemented by
    * derived classes. The parameter `use_matrix_based_operator_level` describes whether a
-   * matrix-based implementation is used on a given level. The parameter assemble_matrix describes
-   * whether the matrix should be assembled during initialize_operator(). This parameter only has an
-   * effect if `use_matrix_based_operator_level = true`. Note that you have to make sure that the
+   * matrix-based implementation is used on a given level. The parameter `assemble_matrix` describes
+   * whether the matrix should be assembled during `initialize_operator()`. This parameter only has
+   * an effect if `use_matrix_based_operator_level = true`. Note that you have to make sure that the
    * parameter `use_matrix_based_operator_level` is passed correctly to the underlying PDE operator
-   * when implementing the function initialize_operator() in derived classes.
+   * when implementing the function `initialize_operator()` in derived classes.
    */
   virtual std::shared_ptr<Operator>
   initialize_operator(unsigned int const level,

@@ -140,7 +140,7 @@ Driver<dim, Number>::setup()
   {
     // initialize postprocessor
     postprocessor = application->create_postprocessor();
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     // initialize time integrator or driver for steady problems
     if(application->get_parameters().problem_type == ProblemType::Unsteady)
@@ -278,10 +278,12 @@ Driver<dim, Number>::solve()
         time_integrator->advance_one_timestep_solve();
 
         // Adapt the mesh before post_solve(), in order to recalculate the
-        // time step size based on the new mesh.
+        // time step size based on the new mesh. Count the time steps across
+        // restarts to keep the schedule of the original simulation. The
+        // restart data already contains the adapted mesh.
         if(trigger_coarsening_and_refinement_now(
              application->get_parameters().amr_data.trigger_every_n_time_steps,
-             time_integrator->get_number_of_time_steps()))
+             time_integrator->get_total_number_of_time_steps()))
         {
           // Mark cells for coarsening and refinement based on the most recent solution.
           if(application->get_parameters().temporal_discretization ==

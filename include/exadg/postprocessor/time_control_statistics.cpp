@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+// C++
+#include <limits>
+
 // ExaDG
 #include <exadg/postprocessor/time_control_statistics.h>
 #include <exadg/utilities/print_functions.h>
@@ -45,10 +48,11 @@ TimeControlStatistics::TimeControlStatistics() : final_output_written(false)
 }
 
 void
-TimeControlStatistics::setup(TimeControlDataStatistics const & time_control_data_statistics_in)
+TimeControlStatistics::setup(TimeControlDataStatistics const & time_control_data_statistics_in,
+                             bool const                        restarted_simulation)
 {
   time_control_data_statistics = time_control_data_statistics_in;
-  time_control.setup(time_control_data_statistics.time_control_data);
+  time_control.setup(time_control_data_statistics.time_control_data, restarted_simulation);
 }
 
 bool

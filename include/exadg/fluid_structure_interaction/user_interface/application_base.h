@@ -75,7 +75,7 @@ public:
     output_parameters.add_parameters(prm, "Output");
   }
 
-  void
+  virtual void
   parse_parameters()
   {
     dealii::ParameterHandler prm;
@@ -88,7 +88,7 @@ public:
         std::shared_ptr<dealii::Mapping<dim>> &           mapping,
         std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings)
   {
-    parse_parameters();
+    this->parse_parameters();
 
     set_resolution_parameters();
 
@@ -214,7 +214,7 @@ public:
     output_parameters.add_parameters(prm, "Output");
   }
 
-  void
+  virtual void
   parse_parameters()
   {
     dealii::ParameterHandler prm;
@@ -227,7 +227,7 @@ public:
         std::shared_ptr<dealii::Mapping<dim>> &           mapping,
         std::shared_ptr<MultigridMappings<dim, Number>> & multigrid_mappings)
   {
-    parse_parameters();
+    this->parse_parameters();
 
     set_resolution_parameters();
 
@@ -262,15 +262,15 @@ public:
     if(param.mesh_movement_type == IncNS::MeshMovementType::Poisson)
     {
       // parameters
+      // ALE and fluid use the same Grid. The Poisson operator relies on grid
+      // parameters, e.g., the element type, which have to be consistent with
+      // the grid.
+      ale_poisson_param.grid = param.grid;
       set_parameters_ale_poisson();
+      assert_grid_data_of_fluid(ale_poisson_param.grid, "Poisson");
       ale_poisson_param.check();
       AssertThrow(ale_poisson_param.right_hand_side == false,
                   dealii::ExcMessage("Parameter does not make sense in context of FSI."));
-      AssertThrow(
-        ale_poisson_param.grid.create_coarse_triangulations ==
-          param.grid.create_coarse_triangulations,
-        dealii::ExcMessage(
-          "ALE and fluid use the same Grid, requiring the same settings in terms of multigrid coarsening."));
 
       ale_poisson_param.print(pcout, "List of parameters for ALE solver (Poisson):");
 
@@ -286,15 +286,15 @@ public:
     else if(param.mesh_movement_type == IncNS::MeshMovementType::Elasticity)
     {
       // parameters
+      // ALE and fluid use the same Grid. The elasticity operator relies on grid
+      // parameters, e.g., the element type, which have to be consistent with
+      // the grid.
+      ale_elasticity_param.grid = param.grid;
       set_parameters_ale_elasticity();
+      assert_grid_data_of_fluid(ale_elasticity_param.grid, "elasticity");
       ale_elasticity_param.check();
       AssertThrow(ale_elasticity_param.body_force == false,
                   dealii::ExcMessage("Parameter does not make sense in context of FSI."));
-      AssertThrow(
-        ale_poisson_param.grid.create_coarse_triangulations ==
-          param.grid.create_coarse_triangulations,
-        dealii::ExcMessage(
-          "ALE and fluid use the same Grid, requiring the same settings in terms of multigrid coarsening."));
 
       ale_elasticity_param.print(pcout, "List of parameters for ALE solver (elasticity):");
 
@@ -413,6 +413,23 @@ private:
   {
     param.degree_u             = resolution.degree;
     param.grid.n_refine_global = resolution.refine_space;
+  }
+
+  // ALE and fluid use the same Grid, i.e., the grid parameters of the ALE
+  // solver are those of the fluid and must not be changed in
+  // set_parameters_ale_*().
+  void
+  assert_grid_data_of_fluid(GridData const & data, std::string const & solver) const
+  {
+    AssertThrow(data.triangulation_type == param.grid.triangulation_type and
+                  data.element_type == param.grid.element_type and
+                  data.partitioning_type == param.grid.partitioning_type and
+                  data.n_refine_global == param.grid.n_refine_global and
+                  data.file_name == param.grid.file_name and
+                  data.create_coarse_triangulations == param.grid.create_coarse_triangulations,
+                dealii::ExcMessage("The grid parameters of the ALE solver (" + solver +
+                                   ") are those of the fluid. Do not change them in "
+                                   "set_parameters_ale_*()."));
   }
 
   // fluid

@@ -36,8 +36,6 @@ namespace Poisson
 {
 /**
  * Class for moving grid problems based on a Poisson-type grid motion technique.
- *
- * TODO: extend this class to simplicial elements.
  */
 template<int dim, typename Number>
 class DeformedMapping : public DeformedMappingBase<dim, Number>
@@ -120,7 +118,7 @@ public:
       print_solver_info_linear(pcout, n_iter, timer.wall_time());
     }
 
-    this->initialize_mapping_from_dof_vector(this->mapping_undeformed,
+    this->initialize_mapping_from_dof_vector(this->mapping_undeformed.get(),
                                              displacement,
                                              pde_operator->get_dof_handler());
   }

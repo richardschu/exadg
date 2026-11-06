@@ -61,7 +61,6 @@ CONFIGURE_FILE(
   ${CMAKE_BINARY_DIR}/include/exadg/utilities/exadg_revision.h
   )
 
-
 # Set the source files to be compiled
 SET(TARGET_SRC
      include/exadg/utilities/evaluate_convergence_study.cpp
@@ -76,12 +75,14 @@ SET(TARGET_SRC
      include/exadg/time_integration/time_int_bdf_base.cpp
      include/exadg/time_integration/time_int_explicit_runge_kutta_base.cpp
      include/exadg/time_integration/time_int_gen_alpha_base.cpp
+     include/exadg/grid/mapping_dof_vector.cpp
      include/exadg/functions_and_boundary_conditions/container_interface_data.cpp
      include/exadg/functions_and_boundary_conditions/linear_interpolation.cpp
      include/exadg/functions_and_boundary_conditions/interface_coupling.cpp
      include/exadg/solvers_and_preconditioners/multigrid/multigrid_preconditioner_base.cpp
      include/exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.cpp
      include/exadg/solvers_and_preconditioners/multigrid/transfer.cpp
+     include/exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.cpp
      include/exadg/postprocessor/time_control.cpp
      include/exadg/postprocessor/time_control_statistics.cpp
      include/exadg/postprocessor/error_calculation.cpp
@@ -95,6 +96,7 @@ SET(TARGET_SRC
      include/exadg/postprocessor/statistics_manager.cpp
      include/exadg/operators/operator_base.cpp
      include/exadg/operators/mass_operator.cpp
+     include/exadg/operators/boundary_mass_operator.cpp
      include/exadg/operators/inverse_mass_operator.cpp
      include/exadg/operators/rhs_operator.cpp
      include/exadg/operators/navier_stokes_calculators.cpp
@@ -179,6 +181,8 @@ SET(TARGET_SRC
      include/exadg/structure/user_interface/parameters.cpp
      include/exadg/structure/material/library/st_venant_kirchhoff.cpp
      include/exadg/structure/material/library/incompressible_neo_hookean.cpp
+     include/exadg/structure/material/library/compressible_neo_hookean.cpp
+     include/exadg/structure/material/library/incompressible_fibrous_tissue.cpp
      include/exadg/structure/spatial_discretization/operators/elasticity_operator_base.cpp
      include/exadg/structure/spatial_discretization/operators/nonlinear_operator.cpp
      include/exadg/structure/spatial_discretization/operators/linear_operator.cpp
@@ -188,12 +192,14 @@ SET(TARGET_SRC
      include/exadg/structure/preconditioners/multigrid_preconditioner.cpp
      include/exadg/structure/time_integration/driver_steady_problems.cpp
      include/exadg/structure/time_integration/driver_quasi_static_problems.cpp
+     include/exadg/structure/time_integration/driver_inverse_analysis.cpp
      include/exadg/structure/time_integration/time_int_gen_alpha.cpp
      include/exadg/structure/postprocessor/output_generator.cpp
      include/exadg/structure/postprocessor/postprocessor.cpp
      include/exadg/structure/driver.cpp
      # fluid-structure-interaction
      include/exadg/fluid_structure_interaction/driver.cpp
+     include/exadg/fluid_structure_interaction/acceleration_schemes/partitioned_solver.cpp
      # acoustic conservation equations
      include/exadg/acoustic_conservation_equations/user_interface/parameters.cpp
      include/exadg/acoustic_conservation_equations/spatial_discretization/spatial_operator.cpp
@@ -219,9 +225,17 @@ ADD_LIBRARY(exadg ${TARGET_SRC})
 SET(EXADG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/bundled ${CMAKE_BINARY_DIR}/include)
 TARGET_INCLUDE_DIRECTORIES(exadg PUBLIC ${EXADG_INCLUDE_DIRS})
 
+# ExaDG-Bio
+# ExaDG is only allowed to include headers of ExaDG-Bio.
+OPTION(EXADG_WITH_EXADG_BIO "Use ExaDG-Bio" EXADG_WITH_EXADG_BIO)
+IF(${EXADG_WITH_EXADG_BIO})
+    target_compile_definitions(exadg PUBLIC EXADG_WITH_EXADG_BIO=1)
+    target_include_directories(exadg PUBLIC ${EXADG_BIO_INCLUDE})
+ENDIF()
+
 # FFTW
 OPTION(EXADG_WITH_FFTW "Use FFTW" OFF)
-IF(${EXADG_WITH_FFTW})
+IF(${EXADG_WITH_FFTW})  
     ADD_DEFINITIONS(-DEXADG_WITH_FFTW)
     INCLUDE_DIRECTORIES(${FFTW_INCLUDE})
     IF(${BUILD_SHARED_LIBS})

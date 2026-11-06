@@ -38,7 +38,12 @@ public:
   void
   setup(std::shared_ptr<StructureFSI::ApplicationBase<dim, Number>> application,
         MPI_Comm const                                              mpi_comm,
-        bool const                                                  is_test);
+        bool const                                                  is_test,
+        double const &                                              robin_parameter_in);
+
+  void
+  set_fsi_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
+                           double const &                               robin_parameter) const;
 
   // grid and mapping
   std::shared_ptr<Grid<dim>>            grid;
@@ -65,14 +70,18 @@ void
 SolverStructure<dim, Number>::setup(
   std::shared_ptr<StructureFSI::ApplicationBase<dim, Number>> application,
   MPI_Comm const                                              mpi_comm,
-  bool const                                                  is_test)
+  bool const                                                  is_test,
+  double const &                                              robin_parameter_in)
 {
   // setup application
   application->setup(grid, mapping, multigrid_mappings);
 
   // initialize postprocessor, i.e., get user parameters
-  postprocessor                 = application->create_postprocessor();
-  bool const setup_scalar_field = postprocessor->requires_scalar_field();
+  postprocessor = application->create_postprocessor();
+  bool const setup_scalar_postprocessing_field =
+    postprocessor->requires_scalar_postprocessing_field();
+  bool const setup_vector_postprocessing_field =
+    postprocessor->requires_vector_postprocessing_field();
 
   // setup spatial operator
   pde_operator =
@@ -84,7 +93,8 @@ SolverStructure<dim, Number>::setup(
                                                        application->get_material_descriptor(),
                                                        application->get_parameters(),
                                                        "elasticity",
-                                                       setup_scalar_field,
+                                                       setup_scalar_postprocessing_field,
+                                                       setup_vector_postprocessing_field,
                                                        mpi_comm);
 
   // initialize matrix_free
@@ -101,13 +111,26 @@ SolverStructure<dim, Number>::setup(
   pde_operator->setup(matrix_free, matrix_free_data);
 
   // set up postprocessor
-  postprocessor->setup(*pde_operator);
+  postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
   // initialize time integrator
   time_integrator = std::make_shared<Structure::TimeIntGenAlpha<dim, Number>>(
     pde_operator, postprocessor, application->get_parameters(), mpi_comm, is_test);
 
   time_integrator->setup(application->get_parameters().restarted_simulation);
+
+  // Robin parameters need to be set *before* solver setup
+  set_fsi_robin_parameters(application->get_boundary_descriptor()->neumann_cached_bc,
+                           robin_parameter_in);
+}
+
+template<int dim, typename Number>
+void
+SolverStructure<dim, Number>::set_fsi_robin_parameters(
+  std::set<dealii::types::boundary_id> const & boundary_IDs,
+  double const &                               robin_parameter) const
+{
+  pde_operator->set_fsi_robin_parameters(boundary_IDs, robin_parameter);
 }
 
 } // namespace FSI

@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/time_integration/time_int_gen_alpha.h>
 
 namespace ExaDG
@@ -63,10 +64,26 @@ public:
                                double const       time) const = 0;
 
   virtual void
+  shift_reference_configuration(VectorType const & vector) = 0;
+
+  virtual void
+  export_configuration(OutputData const & output_data, VectorType const & vector) const = 0;
+
+  virtual void
+  get_reference_coordinates(VectorType & grid_coordinates) const = 0;
+
+  virtual void
   evaluate_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void
   apply_add_damping_operator(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
+  evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
+  set_fsi_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
+                           double const &                               robin_parameter) const = 0;
 
   virtual std::tuple<unsigned int, unsigned int>
   solve_nonlinear(VectorType &       sol,

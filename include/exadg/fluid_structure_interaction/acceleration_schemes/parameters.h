@@ -27,18 +27,28 @@
 #include <deal.II/base/patterns.h>
 
 // ExaDG
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.h>
 #include <exadg/utilities/enum_patterns.h>
 
 namespace ExaDG
 {
 namespace FSI
 {
-enum class AccelerationMethod
+enum class UpdateMethod
 {
   Undefined,
-  Aitken,
-  IQN_ILS,
-  IQN_IMVLS
+  Implicit,
+  GeometricExplicit,
+  ImplicitPressureStructure,
+  ImplicitVelocityStructure
+};
+
+enum class CouplingMethod
+{
+  Undefined,
+  DirichletNeumann,
+  DirichletRobinFixedParameter,
+  DirichletRobinAdaptiveParameter
 };
 
 // The initial guess used in the FSI coupling loop is computed using an extrapolation of suitable
@@ -53,18 +63,18 @@ enum class InitialGuessCouplingScheme
 struct Parameters
 {
   Parameters()
-    : acceleration_method(AccelerationMethod::Undefined),
+    : acceleration_method(FixedPointSolver::AccelerationMethod::Undefined),
+      update_method(UpdateMethod::Implicit),
+      coupling_method(CouplingMethod::DirichletNeumann),
+      robin_parameter_scale(0.0),
       abs_tol(1.e-12),
       rel_tol(1.e-3),
       omega_init(0.1),
       initial_guess_coupling_scheme(
         InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep),
       reused_time_steps(0),
-      partitioned_iter_max(100),
-      geometric_tolerance(1.e-10),
-      update_ale(true),
-      update_fluid_velocity(true),
-      update_fluid_pressure(true)
+      partitioned_max_iter(100),
+      geometric_tolerance(1.e-10)
   {
   }
 
@@ -76,8 +86,20 @@ struct Parameters
       prm.add_parameter("AccelerationMethod",
                         acceleration_method,
                         "Acceleration method.",
-                        Patterns::Enum<AccelerationMethod>(),
+                        Patterns::Enum<FixedPointSolver::AccelerationMethod>(),
                         true);
+      prm.add_parameter(
+        "UpdateMethod", update_method, "Update method.", Patterns::Enum<UpdateMethod>(), false);
+      prm.add_parameter("CouplingMethod",
+                        coupling_method,
+                        "Coupling method.",
+                        Patterns::Enum<CouplingMethod>(),
+                        false);
+      prm.add_parameter("RobinParameterScale",
+                        robin_parameter_scale,
+                        "Parameter scale for Robin coupling.",
+                        dealii::Patterns::Double(),
+                        false);
       prm.add_parameter(
         "AbsTol", abs_tol, "Absolute solver tolerance.", dealii::Patterns::Double(0.0, 1.0), true);
       prm.add_parameter(
@@ -97,8 +119,8 @@ struct Parameters
                         "Number of time steps reused for acceleration.",
                         dealii::Patterns::Integer(0, 100),
                         false);
-      prm.add_parameter("PartitionedIterMax",
-                        partitioned_iter_max,
+      prm.add_parameter("PartitionedMaxIter",
+                        partitioned_max_iter,
                         "Maximum number of fixed-point iterations.",
                         dealii::Patterns::Integer(1, 1000),
                         true);
@@ -107,43 +129,23 @@ struct Parameters
                         "Tolerance used to locate points at FSI interface.",
                         dealii::Patterns::Double(0.0, 1.0),
                         false);
-      prm.add_parameter("UpdateALE",
-                        update_ale,
-                        "Include ALE update in the strong coupling.",
-                        dealii::Patterns::Bool(),
-                        false);
-      prm.add_parameter("UpdateFluidVelocity",
-                        update_fluid_velocity,
-                        "Include fluid velocity subproblem in the strong coupling.",
-                        dealii::Patterns::Bool(),
-                        false);
-      prm.add_parameter("UpdateFluidPressure",
-                        update_fluid_pressure,
-                        "Include fluid pressure subproblem in the strong coupling.",
-                        dealii::Patterns::Bool(),
-                        false);
     }
     prm.leave_subsection();
   }
 
-  AccelerationMethod         acceleration_method;
-  double                     abs_tol;
-  double                     rel_tol;
-  double                     omega_init;
-  InitialGuessCouplingScheme initial_guess_coupling_scheme;
-  unsigned int               reused_time_steps;
-  unsigned int               partitioned_iter_max;
+  FixedPointSolver::AccelerationMethod acceleration_method;
+  UpdateMethod                         update_method;
+  CouplingMethod                       coupling_method;
+  double                               robin_parameter_scale;
+  double                               abs_tol;
+  double                               rel_tol;
+  double                               omega_init;
+  InitialGuessCouplingScheme           initial_guess_coupling_scheme;
+  unsigned int                         reused_time_steps;
+  unsigned int                         partitioned_max_iter;
 
   // tolerance used to locate points at the fluid-structure interface
   double geometric_tolerance;
-
-  // Semi-implicit coupling variants iteratively update only a subset of all
-  // fields after the first coupling step. Stability properties are altered,
-  // but temporal order of accuracy is preserved starting from suitable
-  // extrapolations in time controlled via `InitialGuessCouplingScheme`.
-  bool update_ale;
-  bool update_fluid_velocity;
-  bool update_fluid_pressure;
 };
 
 } // namespace FSI

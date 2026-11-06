@@ -59,11 +59,13 @@ PointwiseOutputGenerator<dim, Number>::setup(
   dealii::DoFHandler<dim> const &  dof_handler_pressure_in,
   dealii::DoFHandler<dim> const &  dof_handler_velocity_in,
   dealii::Mapping<dim> const &     mapping_in,
-  PointwiseOutputData<dim> const & pointwise_output_data_in)
+  PointwiseOutputData<dim> const & pointwise_output_data_in,
+  bool const                       restarted_simulation)
 {
   this->setup_base(dof_handler_pressure_in.get_triangulation(),
                    mapping_in,
-                   pointwise_output_data_in);
+                   pointwise_output_data_in,
+                   restarted_simulation);
 
   dof_handler_pressure = &dof_handler_pressure_in;
   dof_handler_velocity = &dof_handler_velocity_in;

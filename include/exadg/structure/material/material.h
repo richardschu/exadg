@@ -27,7 +27,9 @@
 #include <deal.II/base/vectorization.h>
 
 // ExaDG
+#include <exadg/matrix_free/integrators.h>
 #include <exadg/structure/material/material_data.h>
+#include <exadg/structure/spatial_discretization/operators/continuum_mechanics.h>
 
 namespace ExaDG
 {
@@ -37,11 +39,8 @@ template<int dim, typename Number>
 class Material
 {
 public:
-  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
-  typedef std::pair<unsigned int, unsigned int>              Range;
-  typedef CellIntegrator<dim, dim, Number>                   IntegratorCell;
-
   typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>          vector;
   typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
   typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
 
@@ -50,25 +49,268 @@ public:
   }
 
   /*
-   * Evaluate 2nd Piola-Kirchhoff stress tensor given the gradient of the displacement field
-   * with respect to the reference configuration (not to be confused with the deformation gradient).
+   * Total Lagrangian Formulation: evaluate 2nd Piola-Kirchhoff stress tensor given
+   * the gradient of the displacement field with respect to the reference configuration
+   * (not to be confused with the deformation gradient).
    */
   virtual symmetric_tensor
   second_piola_kirchhoff_stress(tensor const &     gradient_displacement,
                                 unsigned int const cell,
-                                unsigned int const q) const = 0;
+                                unsigned int const q) const
+  {
+    (void)gradient_displacement;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a total Lagrangian formulation, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
 
   /*
-   * Evaluate the directional derivative with respect to the displacement of the 2nd Piola-Kirchhoff
-   * stress tensor given gradient of the displacment increment with respect to the reference
-   * configuration `gradient_increment` and deformation gradient at the current linearization point
-   * `deformation_gradient`.
+   * Variant of the above function to force evaluation (not loading) a stress tensor.
+   */
+  virtual symmetric_tensor
+  second_piola_kirchhoff_stress_eval(tensor const &     gradient_displacement,
+                                     unsigned int const cell,
+                                     unsigned int const q) const
+  {
+    (void)gradient_displacement;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a total Lagrangian formulation, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Variant of the above function intended for loading a stored stress tensor.
+   */
+  virtual symmetric_tensor
+  second_piola_kirchhoff_stress(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a total Lagrangian formulation, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Total Lagrangian Formulation: evaluate the directional derivative with respect
+   * to the displacement of the 2nd Piola-Kirchhoff stress tensor given gradient of
+   * the displacement increment with respect to the reference configuration
+   * `gradient_increment` and the gradient of the current linearization point
+   * `gradient_displacement`.
    */
   virtual symmetric_tensor
   second_piola_kirchhoff_stress_displacement_derivative(tensor const &     gradient_increment,
-                                                        tensor const &     deformation_gradient,
+                                                        tensor const &     gradient_displacement,
                                                         unsigned int const cell,
-                                                        unsigned int const q) const = 0;
+                                                        unsigned int const q) const
+  {
+    (void)gradient_increment;
+    (void)gradient_displacement;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a total Lagrangian formulation, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Lagrangian formulation with integration in the spatial configuration: provide
+   * Kirchhoff stress tau = J * sigma = F * S * F^T given the gradient of the
+   * displacement field with respect to the reference configuration
+   * (not to be confused with the deformation gradient).
+   */
+  virtual symmetric_tensor
+  kirchhoff_stress(tensor const &     gradient_displacement,
+                   unsigned int const cell,
+                   unsigned int const q) const
+  {
+    (void)gradient_displacement;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a Lagrangian formulation in spatial domain, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Variant of the above function to force evaluation (not loading) a stress tensor.
+   */
+  virtual symmetric_tensor
+  kirchhoff_stress_eval(tensor const &     gradient_displacement,
+                        unsigned int const cell,
+                        unsigned int const q) const
+  {
+    (void)gradient_displacement;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a Lagrangian formulation in spatial domain, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Variant of the above function intended for loading a stored stress tensor.
+   */
+  virtual symmetric_tensor
+  kirchhoff_stress(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a Lagrangian formulation in spatial domain, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Lagrangian formulation with integration in the spatial configuration: provide
+   * operation J*c:(X), where c is the spatial tangent tensor and X is a symmetric
+   * second order tensor.
+   */
+  virtual symmetric_tensor
+  contract_with_J_times_C(symmetric_tensor const & symmetric_gradient_increment,
+                          tensor const &           gradient_displacement,
+                          unsigned int const       cell,
+                          unsigned int const       q) const
+  {
+    (void)symmetric_gradient_increment;
+    (void)gradient_displacement;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a Lagrangian formulation in spatial domain, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  virtual symmetric_tensor
+  contract_with_J_times_C(symmetric_tensor const & symmetric_gradient_increment,
+                          unsigned int const       cell,
+                          unsigned int const       q) const
+  {
+    (void)symmetric_gradient_increment;
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage("For a Lagrangian formulation in spatial domain, "
+                                   "overwrite this method in derived class."));
+
+    symmetric_tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Update the linearization data stored for in each integration point via VariableCoefficients
+   * given the current linearization vector.
+   */
+  virtual void
+  do_set_cell_linearization_data(
+    std::shared_ptr<CellIntegrator<dim, dim /* n_components */, Number>> const integrator_lin,
+    unsigned int const                                                         cell) const
+  {
+    (void)integrator_lin;
+    (void)cell;
+  }
+
+  virtual scalar
+  one_over_J(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage(
+                  "Overwrite this method in derived class to access stored one_over_J."));
+
+    scalar dummy;
+    return dummy;
+  }
+
+  virtual tensor
+  gradient_displacement(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(false,
+                dealii::ExcMessage(
+                  "Overwrite this method in derived class to access stored deformation gradient."));
+
+    tensor dummy;
+    return dummy;
+  }
+
+  /*
+   * Return the stored material orientations `E_1` and `E_2`.
+   */
+  virtual std::vector<vector>
+  get_material_orientation_E1_E2(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(
+      false,
+      dealii::ExcMessage(
+        "Overwrite this method in derived class to access stored material orientation data."));
+
+    std::vector<vector> dummy;
+    return dummy;
+  }
+
+  /*
+   * Return the stored mean fiber orientation `M_1` per fiber family.
+   */
+  virtual std::vector<vector>
+  get_mean_fiber_directions_M1(unsigned int const cell, unsigned int const q) const
+  {
+    (void)cell;
+    (void)q;
+    AssertThrow(
+      false,
+      dealii::ExcMessage(
+        "Overwrite this method in derived class to access stored mean fiber orientation data."));
+
+    std::vector<vector> dummy;
+    return dummy;
+  }
+
+  /*
+   * Get the scaling parameter for the Robin boundary condition's displacement component. Overwrite
+   * this function in the derived class to, e.g., provide stored values of a parameter field or
+   * evaluate a more elaborate analytical function.
+   */
+  virtual scalar
+  get_robin_k_scaling(unsigned int const face, unsigned int const q) const
+  {
+    (void)face;
+    (void)q;
+
+    return dealii::make_vectorized_array<Number>(1.0);
+  }
 };
 
 } // namespace Structure

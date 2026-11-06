@@ -125,7 +125,8 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
       application->get_material_descriptor_ale_elasticity(),
       application->get_parameters_ale_elasticity(),
       "ale_elasticity",
-      false /* setup_scalar_field */,
+      false /* setup_scalar_postprocessing_field */,
+      false /* setup_vector_postprocessing_field */,
       mpi_comm);
   }
   else
@@ -151,7 +152,7 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
 
   // setup postprocessor
   postprocessor = application->create_postprocessor();
-  postprocessor->setup(*pde_operator);
+  postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
   // setup time integrator before calling setup_solvers (this is necessary since the setup
   // of the solvers depends on quantities such as the time_step_size or gamma0!)
@@ -161,9 +162,10 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
   // initialize time_integrator
   helpers_ale = std::make_shared<HelpersALE<dim, Number>>();
 
-  helpers_ale->move_grid = [&](double const & time) {
+  // The solver info contains wall times, which are not printed in tests.
+  helpers_ale->move_grid = [&, is_test](double const & time) {
     ale_mapping->update(time,
-                        time_integrator->print_solver_info(),
+                        time_integrator->print_solver_info() and not(is_test),
                         this->time_integrator->get_number_of_time_steps());
   };
 

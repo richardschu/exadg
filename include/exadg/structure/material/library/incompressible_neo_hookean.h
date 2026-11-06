@@ -60,22 +60,28 @@ struct IncompressibleNeoHookeanData : public MaterialData
   Type2D type_two_dim;
 };
 
-template<int dim, typename Number>
+template<int dim,
+         typename Number,
+         unsigned int check_type,
+         bool         stable_formulation,
+         unsigned int cache_level>
 class IncompressibleNeoHookean : public Material<dim, Number>
 {
 public:
-  typedef typename Material<dim, Number>::VectorType     VectorType;
-  typedef typename Material<dim, Number>::Range          Range;
-  typedef typename Material<dim, Number>::IntegratorCell IntegratorCell;
+  typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+  typedef std::pair<unsigned int, unsigned int>              Range;
+  typedef CellIntegrator<dim, dim, Number>                   IntegratorCell;
 
-  typedef typename Material<dim, Number>::scalar           scalar;
-  typedef typename Material<dim, Number>::tensor           tensor;
-  typedef typename Material<dim, Number>::symmetric_tensor symmetric_tensor;
+  typedef dealii::VectorizedArray<Number>                                  scalar;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>          tensor;
+  typedef dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> symmetric_tensor;
 
   IncompressibleNeoHookean(dealii::MatrixFree<dim, Number> const &   matrix_free,
                            unsigned int const                        dof_index,
                            unsigned int const                        quad_index,
-                           IncompressibleNeoHookeanData<dim> const & data);
+                           IncompressibleNeoHookeanData<dim> const & data,
+                           bool const                                spatial_integration,
+                           bool const                                force_material_residual);
 
   /*
    * The second Piola-Kirchhoff stress is defined as S = S_vol + S_iso (Flory split),
@@ -112,10 +118,56 @@ public:
                                 unsigned int const q) const final;
 
   symmetric_tensor
+  second_piola_kirchhoff_stress_eval(tensor const &     gradient_displacement,
+                                     unsigned int const cell,
+                                     unsigned int const q) const final;
+
+  symmetric_tensor
+  second_piola_kirchhoff_stress(unsigned int const cell, unsigned int const q) const final;
+
+  symmetric_tensor
   second_piola_kirchhoff_stress_displacement_derivative(tensor const &     gradient_increment,
-                                                        tensor const &     deformation_gradient,
+                                                        tensor const &     gradient_displacement,
                                                         unsigned int const cell,
                                                         unsigned int const q) const final;
+
+  symmetric_tensor
+  kirchhoff_stress(tensor const &     gradient_displacement,
+                   unsigned int const cell,
+                   unsigned int const q) const final;
+
+  symmetric_tensor
+  kirchhoff_stress_eval(tensor const &     gradient_displacement,
+                        unsigned int const cell,
+                        unsigned int const q) const final;
+
+  symmetric_tensor
+  kirchhoff_stress(unsigned int const cell, unsigned int const q) const final;
+
+  symmetric_tensor
+  contract_with_J_times_C(symmetric_tensor const & symmetric_gradient_increment,
+                          tensor const &           gradient_displacement,
+                          unsigned int const       cell,
+                          unsigned int const       q) const final;
+
+  symmetric_tensor
+  contract_with_J_times_C(symmetric_tensor const & symmetric_gradient_increment,
+                          unsigned int const       cell,
+                          unsigned int const       q) const final;
+
+  /*
+   * Store linearization data depending on cache level.
+   */
+  void
+  do_set_cell_linearization_data(
+    std::shared_ptr<CellIntegrator<dim, dim /* n_components */, Number>> const integrator_lin,
+    unsigned int const                                                         cell) const final;
+
+  scalar
+  one_over_J(unsigned int const cell, unsigned int const q) const final;
+
+  tensor
+  gradient_displacement(unsigned int const cell, unsigned int const q) const final;
 
 private:
   /*
@@ -127,10 +179,61 @@ private:
                              VectorType const & src,
                              Range const &      cell_range) const;
 
+  /*
+   * Helper functions to replace frequently appearing terms.
+   */
+  template<bool force_evaluation>
+  DEAL_II_ALWAYS_INLINE scalar
+  get_c1(scalar const &           Jm1,
+         scalar const &           J_pow,
+         symmetric_tensor const & E,
+         scalar const &           shear_modulus_stored,
+         unsigned int const       cell,
+         unsigned int const       q) const;
+
+  template<bool force_evaluation>
+  DEAL_II_ALWAYS_INLINE scalar
+  get_c2(scalar const &           Jm1,
+         scalar const &           J_pow,
+         symmetric_tensor const & E,
+         scalar const &           shear_modulus_stored,
+         unsigned int const       cell,
+         unsigned int const       q) const;
+
+  template<bool force_evaluation>
+  DEAL_II_ALWAYS_INLINE scalar
+  get_J_pow(scalar const & Jm1, unsigned int const cell, unsigned int const q) const;
+
+  DEAL_II_ALWAYS_INLINE symmetric_tensor
+  compute_S_stable(tensor const &           gradient_displacement,
+                   symmetric_tensor const & C_inv,
+                   scalar const &           J_pow,
+                   scalar const &           Jm1,
+                   scalar const &           shear_modulus) const;
+
+  DEAL_II_ALWAYS_INLINE symmetric_tensor
+  compute_S_unstable(symmetric_tensor const & C_inv,
+                     scalar const &           J_pow,
+                     scalar const &           c1,
+                     scalar const &           shear_modulus) const;
+
+  DEAL_II_ALWAYS_INLINE symmetric_tensor
+  compute_tau_stable(tensor const & gradient_displacement,
+                     scalar const & Jm1,
+                     scalar const & J_pow,
+                     scalar const & shear_modulus) const;
+
+  DEAL_II_ALWAYS_INLINE symmetric_tensor
+  compute_tau_unstable(tensor const & F,
+                       scalar const & J_pow,
+                       scalar const & c1,
+                       scalar const & shear_modulus) const;
+
   unsigned int dof_index;
   unsigned int quad_index;
 
   IncompressibleNeoHookeanData<dim> const & data;
+  Number const                              bulk_modulus;
 
   mutable scalar shear_modulus_stored;
 
@@ -138,7 +241,27 @@ private:
   bool                                 shear_modulus_is_variable;
   mutable VariableCoefficients<scalar> shear_modulus_coefficients;
 
-  Number static constexpr one_third = 1.0 / 3.0;
+  // cache linearization data depending on cache_level and spatial_integration
+  bool spatial_integration;
+  bool force_material_residual;
+
+  // required for nonlinear operator
+  mutable VariableCoefficients<scalar> one_over_J_coefficients;
+  mutable VariableCoefficients<tensor> gradient_displacement_coefficients;
+
+  // scalar cache level
+  mutable VariableCoefficients<scalar> Jm1_coefficients;
+  mutable VariableCoefficients<scalar> J_pow_coefficients;
+  mutable VariableCoefficients<scalar> c1_coefficients;
+  mutable VariableCoefficients<scalar> c2_coefficients;
+
+  // tensor cache level
+  mutable VariableCoefficients<symmetric_tensor> kirchhoff_stress_coefficients;
+  mutable VariableCoefficients<symmetric_tensor> C_coefficients;
+
+  mutable VariableCoefficients<symmetric_tensor> second_piola_kirchhoff_stress_coefficients;
+  mutable VariableCoefficients<tensor>           F_inv_coefficients;
+  mutable VariableCoefficients<symmetric_tensor> C_inv_coefficients;
 };
 } // namespace Structure
 } // namespace ExaDG

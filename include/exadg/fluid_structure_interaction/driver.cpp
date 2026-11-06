@@ -59,15 +59,6 @@ Driver<dim, Number>::setup()
 
   pcout << std::endl << "Setting up fluid-structure interaction solver:" << std::endl;
 
-  // setup structure
-  {
-    dealii::Timer timer_local;
-
-    structure->setup(application->structure, mpi_comm, is_test);
-
-    timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
-  }
-
   // setup fluid
   {
     dealii::Timer timer_local;
@@ -75,6 +66,15 @@ Driver<dim, Number>::setup()
     fluid->setup(application->fluid, mpi_comm, is_test);
 
     timer_tree.insert({"FSI", "Setup", "Fluid"}, timer_local.wall_time());
+  }
+
+  // setup structure
+  {
+    dealii::Timer timer_local;
+
+    structure->setup(application->structure, mpi_comm, is_test, compute_robin_parameter());
+
+    timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
   }
 
   setup_interface_coupling();
@@ -95,13 +95,16 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling structure -> ALE ..." << std::endl;
 
-    auto const & tria       = structure->pde_operator->get_dof_handler().get_triangulation();
-    auto const boundary_ids = application->structure->get_boundary_descriptor()->neumann_cached_bc;
-    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    dealii::Triangulation<dim> const & tria =
+      structure->pde_operator->get_dof_handler().get_triangulation();
+    std::set<dealii::types::boundary_id> const boundary_ids_interface =
+      application->structure->get_boundary_descriptor()->neumann_cached_bc;
+    std::vector<bool> const marked_vertices_structure =
+      get_marked_vertices_via_boundary_ids(tria, boundary_ids_interface);
 
     if(application->fluid->get_parameters().mesh_movement_type == IncNS::MeshMovementType::Poisson)
     {
-      structure_to_ale = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+      structure_to_ale = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
 
       std::shared_ptr<Poisson::DeformedMapping<dim, Number>> poisson_grid_motion =
         std::dynamic_pointer_cast<Poisson::DeformedMapping<dim, Number>>(fluid->ale_mapping);
@@ -115,7 +118,7 @@ Driver<dim, Number>::setup_interface_coupling()
     else if(application->fluid->get_parameters().mesh_movement_type ==
             IncNS::MeshMovementType::Elasticity)
     {
-      structure_to_ale = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+      structure_to_ale = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
 
       std::shared_ptr<Structure::DeformedMapping<dim, Number>> elasticity_grid_motion =
         std::dynamic_pointer_cast<Structure::DeformedMapping<dim, Number>>(fluid->ale_mapping);
@@ -143,11 +146,14 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling structure -> fluid ..." << std::endl;
 
-    auto const & tria       = structure->pde_operator->get_dof_handler().get_triangulation();
-    auto const boundary_ids = application->structure->get_boundary_descriptor()->neumann_cached_bc;
-    auto const marked_vertices_structure = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    dealii::Triangulation<dim> const & tria =
+      structure->pde_operator->get_dof_handler().get_triangulation();
+    std::set<dealii::types::boundary_id> const boundary_ids_interface =
+      application->structure->get_boundary_descriptor()->neumann_cached_bc;
+    std::vector<bool> const marked_vertices_structure =
+      get_marked_vertices_via_boundary_ids(tria, boundary_ids_interface);
 
-    structure_to_fluid = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+    structure_to_fluid = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
     structure_to_fluid->setup(fluid->pde_operator->get_container_interface_data(),
                               structure->pde_operator->get_dof_handler(),
                               *structure->mapping,
@@ -166,12 +172,14 @@ Driver<dim, Number>::setup_interface_coupling()
 
     pcout << std::endl << "Setup interface coupling fluid -> structure ..." << std::endl;
 
-    auto const & tria = fluid->pde_operator->get_dof_handler_u().get_triangulation();
-    auto const   boundary_ids =
+    dealii::Triangulation<dim> const & tria =
+      fluid->pde_operator->get_dof_handler_u().get_triangulation();
+    std::set<dealii::types::boundary_id> const boundary_ids_interface =
       application->fluid->get_boundary_descriptor()->velocity->dirichlet_cached_bc;
-    auto const marked_vertices_fluid = get_marked_vertices_via_boundary_ids(tria, boundary_ids);
+    std::vector<bool> const marked_vertices_fluid =
+      get_marked_vertices_via_boundary_ids(tria, boundary_ids_interface);
 
-    fluid_to_structure = std::make_shared<InterfaceCoupling<1, dim, Number>>();
+    fluid_to_structure = std::make_shared<InterfaceCoupling<1 /* rank */, dim, Number>>();
     fluid_to_structure->setup(structure->pde_operator->get_container_interface_data_neumann(),
                               fluid->pde_operator->get_dof_handler_u(),
                               *fluid->mapping,
@@ -258,9 +266,9 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::solve_subproblem_ale(VectorType const & displacement_structure) const
+Driver<dim, Number>::solve_subproblem_mesh(VectorType const & displacement_structure) const
 {
-  // update displacement boundary data at interface
+  // update displacement condition at interface
   coupling_structure_to_ale(displacement_structure);
 
   // move the fluid mesh and update dependent data structures
@@ -278,7 +286,7 @@ Driver<dim, Number>::solve_subproblem_fluid(unsigned int const iteration,
 
   // solve fluid problem
   fluid->time_integrator->advance_one_timestep_partitioned_solve(
-    iteration == 0 /* use_extrapolation */, update_velocity, update_pressure);
+    iteration == 0 /* first_coupling_iteration */, update_velocity, update_pressure);
 }
 
 template<int dim, typename Number>
@@ -289,28 +297,91 @@ Driver<dim, Number>::solve_subproblem_structure(unsigned int const iteration) co
   coupling_fluid_to_structure(true /* end_of_time_step */);
 
   // solve structural problem
-  structure->time_integrator->advance_one_timestep_partitioned_solve(iteration ==
-                                                                     0 /* use_extrapolation */);
+  structure->time_integrator->advance_one_timestep_partitioned_solve(
+    iteration == 0 /* first_coupling_iteration */);
+}
+
+template<int dim, typename Number>
+double
+Driver<dim, Number>::compute_robin_parameter() const
+{
+  if(parameters.coupling_method == CouplingMethod::DirichletNeumann)
+  {
+    return 0.0;
+  }
+  else if(parameters.coupling_method == CouplingMethod::DirichletRobinFixedParameter)
+  {
+    return parameters.robin_parameter_scale;
+  }
+  else if(parameters.coupling_method == CouplingMethod::DirichletRobinAdaptiveParameter)
+  {
+    return parameters.robin_parameter_scale * application->fluid->get_parameters().density /
+           fluid->time_integrator->get_time_step_size();
+  }
+  else
+  {
+    AssertThrow(false, dealii::ExcMessage("This CouplingScheme is not implemented."));
+  }
+
+  return 0.0;
 }
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::apply_dirichlet_neumann_scheme(VectorType & displacement_structure_updated,
-                                                    VectorType const & displacement_structure,
-                                                    unsigned int       iteration) const
+Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) const
 {
-  if(iteration == 0 or parameters.update_ale)
+  // update Robin parameter in fluid operator traction output
+  fluid->pde_operator->set_robin_parameter_traction_output(robin_parameter_in);
+
+  // update Robin parameters in boundary descriptor, we assume that the fluid--structure interface
+  // is the only boundary in `neumann_cached_bc`.
+  structure->set_fsi_robin_parameters(
+    application->structure->get_boundary_descriptor()->neumann_cached_bc, robin_parameter_in);
+}
+
+template<int dim, typename Number>
+void
+Driver<dim, Number>::apply_dirichlet_robin_scheme(VectorType &       displacement_structure_tilde,
+                                                  VectorType const & displacement_structure,
+                                                  unsigned int const iteration) const
+{
+  if(parameters.update_method == UpdateMethod::Implicit)
   {
-    solve_subproblem_ale(displacement_structure);
+    solve_subproblem_mesh(displacement_structure);
+    solve_subproblem_fluid(iteration, true /* update_velocity */, true /* update_pressure */);
+    solve_subproblem_structure(iteration);
+  }
+  else if(parameters.update_method == UpdateMethod::GeometricExplicit)
+  {
+    if(iteration == 0)
+    {
+      solve_subproblem_mesh(displacement_structure);
+    }
+    solve_subproblem_fluid(iteration, true /* update_velocity */, true /* update_pressure */);
+    solve_subproblem_structure(iteration);
+  }
+  else if(parameters.update_method == UpdateMethod::ImplicitPressureStructure or
+          parameters.update_method == UpdateMethod::ImplicitVelocityStructure)
+  {
+    if(iteration == 0)
+    {
+      solve_subproblem_mesh(displacement_structure);
+    }
+
+    bool const update_velocity =
+      iteration == 0 or parameters.update_method == UpdateMethod::ImplicitVelocityStructure;
+    bool const update_pressure =
+      iteration == 0 or parameters.update_method == UpdateMethod::ImplicitPressureStructure;
+    solve_subproblem_fluid(iteration, update_velocity, update_pressure);
+    solve_subproblem_structure(iteration);
+  }
+  else
+  {
+    AssertThrow(false, dealii::ExcMessage("UpdateMethod not implemented."));
   }
 
-  solve_subproblem_fluid(iteration,
-                         iteration == 0 or parameters.update_fluid_velocity,
-                         iteration == 0 or parameters.update_fluid_pressure);
-
-  solve_subproblem_structure(iteration);
-
-  displacement_structure_updated = structure->time_integrator->get_displacement_np();
+  // update displacement iterate in partitioned scheme
+  displacement_structure_tilde = structure->time_integrator->get_displacement_np();
 }
 
 template<int dim, typename Number>
@@ -324,7 +395,8 @@ Driver<dim, Number>::solve() const
   // compute initial acceleration for structural problem
   {
     // update stress boundary condition for solid at time t_n (not t_{n+1})
-    coupling_fluid_to_structure(/* end_of_time_step = */ false);
+    update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
+    coupling_fluid_to_structure(false /* end_of_time_step */);
     structure->time_integrator->compute_initial_acceleration(
       application->structure->get_parameters().restarted_simulation);
   }
@@ -336,12 +408,15 @@ Driver<dim, Number>::solve() const
     fluid->time_integrator->advance_one_timestep_pre_solve(true);
     structure->time_integrator->advance_one_timestep_pre_solve(false);
 
+    // Update Robin parameters before entering coupling loop
+    update_robin_parameters(compute_robin_parameter());
+
     // solve (using strongly-coupled partitioned scheme)
-    auto const lambda_dirichlet_neumann =
+    auto const lambda_dirichlet_robin =
       [&](VectorType & d_tilde, VectorType const & d, unsigned int k) {
-        apply_dirichlet_neumann_scheme(d_tilde, d, k);
+        apply_dirichlet_robin_scheme(d_tilde, d, k);
       };
-    partitioned_solver->solve(lambda_dirichlet_neumann);
+    partitioned_solver->solve(lambda_dirichlet_robin);
 
     // post-solve
     fluid->time_integrator->advance_one_timestep_post_solve();

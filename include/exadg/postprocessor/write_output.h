@@ -24,14 +24,18 @@
 
 // C/C++
 #include <fstream>
+#include <string>
 
 // deal.II
 #include <deal.II/base/bounding_box.h>
+#include <deal.II/base/data_out_base.h>
+#include <deal.II/base/mpi.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_tools.h>
+#include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/data_out_faces.h>
 #include <deal.II/particles/data_out.h>
@@ -39,6 +43,7 @@
 
 // ExaDG
 #include <exadg/grid/grid_data.h>
+#include <exadg/operators/finite_element.h>
 #include <exadg/operators/quadrature.h>
 #include <exadg/postprocessor/output_data_base.h>
 #include <exadg/postprocessor/solution_field.h>
@@ -62,6 +67,39 @@ write_surface_mesh(dealii::Triangulation<dim> const & triangulation,
   data_out_surface.write_vtu_with_pvtu_record(folder, file + "_surface", counter, mpi_comm, 4);
 }
 
+/**
+ * Postprocessor for dealii::DataOutFaces writing the boundary and manifold IDs
+ * of the faces, see the documentation of dealii::DataPostprocessor.
+ */
+template<int dim>
+class FaceIDPostprocessor : public dealii::DataPostprocessor<dim>
+{
+public:
+  void
+  evaluate_scalar_field(dealii::DataPostprocessorInputs::Scalar<dim> const & inputs,
+                        std::vector<dealii::Vector<double>> & computed_quantities) const final
+  {
+    auto const face = inputs.template get_cell<dim>()->face(inputs.get_face_number());
+    for(dealii::Vector<double> & output : computed_quantities)
+    {
+      output(0) = face->boundary_id();
+      output(1) = static_cast<int>(face->manifold_id());
+    }
+  }
+
+  std::vector<std::string>
+  get_names() const final
+  {
+    return {"boundary_id", "manifold_id"};
+  }
+
+  dealii::UpdateFlags
+  get_needed_update_flags() const final
+  {
+    return dealii::update_default;
+  }
+};
+
 template<int dim>
 void
 write_boundary_IDs(dealii::Triangulation<dim> const & triangulation,
@@ -69,23 +107,22 @@ write_boundary_IDs(dealii::Triangulation<dim> const & triangulation,
                    std::string const &                file,
                    MPI_Comm const &                   mpi_communicator)
 {
-  unsigned int const rank    = dealii::Utilities::MPI::this_mpi_process(mpi_communicator);
-  unsigned int const n_ranks = dealii::Utilities::MPI::n_mpi_processes(mpi_communicator);
+  // In contrast to dealii::GridOut, which writes the boundary faces of the
+  // artificial cells as well, dealii::DataOutFaces only writes the boundary
+  // faces of the locally owned cells. The postprocessor needs a DoF vector,
+  // for which we use a dummy DG0 vector.
+  dealii::DoFHandler<dim> dof_handler(triangulation);
+  dof_handler.distribute_dofs(
+    *create_finite_element<dim>(get_element_type(triangulation), true, 1, 0));
+  dealii::LinearAlgebra::distributed::Vector<double> dummy(dof_handler.locally_owned_dofs(),
+                                                           mpi_communicator);
 
-  unsigned int const n_digits = static_cast<int>(std::ceil(std::log10(std::fabs(n_ranks))));
-
-  std::string filename = folder + file + "_boundary_IDs" + "." +
-                         dealii::Utilities::int_to_string(rank, n_digits) + ".vtk";
-  std::ofstream output(filename);
-
-  dealii::GridOut           grid_out;
-  dealii::GridOutFlags::Vtk flags;
-  flags.output_cells         = false;
-  flags.output_faces         = true;
-  flags.output_edges         = false;
-  flags.output_only_relevant = false;
-  grid_out.set_flags(flags);
-  grid_out.write_vtk(triangulation, output);
+  FaceIDPostprocessor<dim>  postprocessor;
+  dealii::DataOutFaces<dim> data_out(true /*surface only*/);
+  data_out.attach_dof_handler(dof_handler);
+  data_out.add_data_vector(dummy, postprocessor);
+  data_out.build_patches(dealii::get_default_linear_mapping(triangulation), 1);
+  data_out.write_vtu_with_pvtu_record(folder, file + "_boundary_IDs", 0, mpi_communicator, 4);
 }
 
 template<int dim>
@@ -102,12 +139,18 @@ write_grid(dealii::Triangulation<dim> const & triangulation,
 
   dealii::DataOut<dim> data_out;
 
+  // For simplices, dealii::DataOut supports at most 2 subdivisions, which are
+  // written as one quadratic cell, and no higher-order cells.
+  bool const         is_simplex = not triangulation.all_reference_cells_are_hyper_cube();
+  unsigned int const n_subdivisions_patches =
+    is_simplex ? std::min(n_subdivisions, 2u) : n_subdivisions;
+
   dealii::DataOutBase::VtkFlags flags;
-  flags.write_higher_order_cells = n_subdivisions > 1;
+  flags.write_higher_order_cells = n_subdivisions > 1 and not is_simplex;
   data_out.set_flags(flags);
 
   data_out.attach_triangulation(triangulation);
-  data_out.build_patches(mapping, n_subdivisions, dealii::DataOut<dim>::curved_inner_cells);
+  data_out.build_patches(mapping, n_subdivisions_patches, dealii::DataOut<dim>::curved_inner_cells);
   data_out.write_vtu_with_pvtu_record(folder, filename, counter, mpi_comm, 4);
 }
 
@@ -154,6 +197,91 @@ write_points_in_dummy_triangulation(std::vector<dealii::Point<dim>> const & poin
 
   write_points(
     particle_dummy_tria, particle_dummy_mapping, points, folder, file, counter, mpi_comm);
+}
+
+// Reads the `(time, filename)` entries of an existing `.pvd` record written by
+// `update_pvd_record()` whose pvtu files `<file>_<counter>.pvtu` have a counter
+// smaller than `output_counter`. Returns no entries if there is no such file.
+inline std::vector<std::pair<double, std::string>>
+read_pvd_record(std::string const & pvd_filename,
+                std::string const & file,
+                unsigned int const  output_counter)
+{
+  std::vector<std::pair<double, std::string>> times_and_names;
+
+  std::ifstream input(pvd_filename);
+  std::string   line;
+  while(std::getline(input, line))
+  {
+    std::string const time_key = "timestep=\"";
+    std::string const file_key = "file=\"";
+
+    std::size_t const time_begin = line.find(time_key);
+    std::size_t const file_begin = line.find(file_key);
+    if(time_begin == std::string::npos or file_begin == std::string::npos)
+    {
+      continue;
+    }
+
+    std::size_t const time_value = time_begin + time_key.size();
+    std::size_t const file_value = file_begin + file_key.size();
+    std::string const time_string =
+      line.substr(time_value, line.find('"', time_value) - time_value);
+    std::string const pvtu_filename =
+      line.substr(file_value, line.find('"', file_value) - file_value);
+
+    // Extract the counter from `<file>_<counter>.pvtu`.
+    std::string const prefix = file + "_";
+    std::string const suffix = ".pvtu";
+    if(pvtu_filename.size() <= prefix.size() + suffix.size() or
+       pvtu_filename.compare(0, prefix.size(), prefix) != 0 or
+       pvtu_filename.compare(pvtu_filename.size() - suffix.size(), suffix.size(), suffix) != 0)
+    {
+      continue;
+    }
+    std::string const counter_string =
+      pvtu_filename.substr(prefix.size(), pvtu_filename.size() - prefix.size() - suffix.size());
+    if(counter_string.find_first_not_of("0123456789") != std::string::npos)
+    {
+      continue;
+    }
+
+    if(std::stoul(counter_string) < output_counter)
+    {
+      times_and_names.emplace_back(std::stod(time_string), pvtu_filename);
+    }
+  }
+
+  return times_and_names;
+}
+
+// Appends `(time, filename)` to `times_and_names` and (re-)writes a `.pvd` record file on rank 0
+// used by ParaView to associate a vtu file with simulation time.
+inline void
+update_pvd_record(std::vector<std::pair<double, std::string>> & times_and_names,
+                  double const                                  time,
+                  std::string const &                           filename,
+                  std::string const &                           directory,
+                  std::string const &                           file,
+                  unsigned int const                            output_counter,
+                  MPI_Comm const &                              mpi_comm)
+{
+  if(dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0)
+  {
+    // The first output of a fresh simulation has counter 0. After a restart,
+    // the time control continues counting from the restart time, so the
+    // entries for the files already written before are kept. Files from the
+    // current counter on are (re-)written, so their entries are dropped.
+    std::string const pvd_filename = directory + file + ".pvd";
+    if(times_and_names.empty() and output_counter > 0)
+    {
+      times_and_names = read_pvd_record(pvd_filename, file, output_counter);
+    }
+
+    times_and_names.emplace_back(time, filename);
+    std::ofstream pvd_output(pvd_filename);
+    dealii::DataOutBase::write_pvd_record(pvd_output, times_and_names);
+  }
 }
 
 template<int dim, typename Number>
@@ -261,7 +389,9 @@ public:
     }
   }
 
-  void
+  // Write pvtu output and return the (directory-less) name of the pvtu record so that callers can
+  // accumulate it into a `.pvd` file via `update_pvd_record()`.
+  std::string
   write_pvtu(dealii::Mapping<dim> const * mapping = nullptr)
   {
     // Build patches, vectors to export must stay in scope until after this call.
@@ -277,7 +407,7 @@ public:
     }
 
     unsigned int constexpr n_groups = 4;
-    data_out.write_vtu_with_pvtu_record(
+    return data_out.write_vtu_with_pvtu_record(
       output_data.directory, output_data.filename, output_counter, mpi_comm, n_groups);
   }
 

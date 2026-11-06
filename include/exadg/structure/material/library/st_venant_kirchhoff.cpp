@@ -38,23 +38,25 @@ StVenantKirchhoff<dim, Number>::StVenantKirchhoff(
     quad_index(quad_index),
     data(data),
     large_deformation(large_deformation),
-    f0_factor(get_f0_factor(data.poissons_ratio, data.type_two_dim)),
-    f1_factor(get_f1_factor(data.poissons_ratio, data.type_two_dim)),
-    f2_factor(get_f2_factor(data.poissons_ratio, data.type_two_dim)),
-    youngs_modulus_is_variable(data.youngs_modulus_function != nullptr)
+    E_is_variable(data.E_function != nullptr)
 {
-  // initialize factors, overwritten using stored coefficients in variable coefficients case, i.e.,
-  // when `youngs_modulus_is_variable == true`.
-  f0 = dealii::make_vectorized_array<Number>(f0_factor * data.youngs_modulus);
-  f1 = dealii::make_vectorized_array<Number>(f1_factor * data.youngs_modulus);
-  f2 = dealii::make_vectorized_array<Number>(f2_factor * data.youngs_modulus);
+  // initialize (potentially variable) factors
+  Number const E = data.E;
+  f0             = dealii::make_vectorized_array<Number>(get_f0_factor() * E);
+  f1             = dealii::make_vectorized_array<Number>(get_f1_factor() * E);
+  f2             = dealii::make_vectorized_array<Number>(get_f2_factor() * E);
 
-  if(youngs_modulus_is_variable)
+  if(E_is_variable)
   {
-    // allocate vectors for variable coefficients
+    // allocate vectors for variable coefficients and initialize with constant values
     f0_coefficients.initialize(matrix_free, quad_index, false, false);
+    f0_coefficients.set_coefficients(get_f0_factor() * E);
+
     f1_coefficients.initialize(matrix_free, quad_index, false, false);
+    f1_coefficients.set_coefficients(get_f1_factor() * E);
+
     f2_coefficients.initialize(matrix_free, quad_index, false, false);
+    f2_coefficients.set_coefficients(get_f2_factor() * E);
 
     VectorType dummy;
     matrix_free.cell_loop(&StVenantKirchhoff<dim, Number>::cell_loop_set_coefficients,
@@ -66,70 +68,40 @@ StVenantKirchhoff<dim, Number>::StVenantKirchhoff(
 
 template<int dim, typename Number>
 Number
-StVenantKirchhoff<dim, Number>::get_f0_factor(Number const & poissons_ratio,
-                                              Type2D const   type_two_dim) const
+StVenantKirchhoff<dim, Number>::get_f0_factor() const
 {
-  if constexpr(dim == 3)
-  {
-    return (1. - poissons_ratio) / ((1. + poissons_ratio) * (1. - 2. * poissons_ratio));
-  }
-  else
-  {
-    if(type_two_dim == Type2D::PlaneStress)
-    {
-      return (1. / (1. - poissons_ratio * poissons_ratio));
-    }
-    else
-    {
-      return ((1. - poissons_ratio) / ((1. + poissons_ratio) * (1. - 2. * poissons_ratio)));
-    }
-  }
+  Number const nu           = data.nu;
+  Type2D const type_two_dim = data.type_two_dim;
+
+  return (dim == 3) ?
+           (1. - nu) / ((1. + nu) * (1. - 2. * nu)) :
+           (type_two_dim == Type2D::PlaneStress ? (1. / (1. - nu * nu)) :
+                                                  ((1. - nu) / ((1. + nu) * (1. - 2. * nu))));
 }
 
 template<int dim, typename Number>
 Number
-StVenantKirchhoff<dim, Number>::get_f1_factor(Number const & poissons_ratio,
-                                              Type2D const   type_two_dim) const
+StVenantKirchhoff<dim, Number>::get_f1_factor() const
 {
-  if constexpr(dim == 3)
-  {
-    return (poissons_ratio / ((1. + poissons_ratio) * (1. - 2. * poissons_ratio)));
-  }
-  else
-  {
-    if(type_two_dim == Type2D::PlaneStress)
-    {
-      return (poissons_ratio / (1. - poissons_ratio * poissons_ratio));
-    }
-    else
-    {
-      return (poissons_ratio / ((1. + poissons_ratio) * (1. - 2. * poissons_ratio)));
-    }
-  }
+  Number const nu           = data.nu;
+  Type2D const type_two_dim = data.type_two_dim;
+
+  return (dim == 3) ? (nu) / ((1. + nu) * (1. - 2. * nu)) :
+                      (type_two_dim == Type2D::PlaneStress ? (nu / (1. - nu * nu)) :
+                                                             (nu / ((1. + nu) * (1. - 2. * nu))));
 }
 
 template<int dim, typename Number>
 Number
-StVenantKirchhoff<dim, Number>::get_f2_factor(Number const & poissons_ratio,
-                                              Type2D const   type_two_dim) const
+StVenantKirchhoff<dim, Number>::get_f2_factor() const
 {
-  if constexpr(dim == 3)
-  {
-    return ((1. - 2. * poissons_ratio) /
-            (2.0 * (1. + poissons_ratio) * (1. - 2. * poissons_ratio)));
-  }
-  else
-  {
-    if(type_two_dim == Type2D::PlaneStress)
-    {
-      return ((1. - poissons_ratio) / (2.0 * (1. - poissons_ratio * poissons_ratio)));
-    }
-    else
-    {
-      return ((1. - 2. * poissons_ratio) /
-              (2.0 * (1. + poissons_ratio) * (1. - 2. * poissons_ratio)));
-    }
-  }
+  Number const nu           = data.nu;
+  Type2D const type_two_dim = data.type_two_dim;
+
+  return (dim == 3) ? (1. - 2. * nu) / (2.0 * (1. + nu) * (1. - 2. * nu)) :
+                      (type_two_dim == Type2D::PlaneStress ?
+                         ((1. - nu) / (2.0 * (1. - nu * nu))) :
+                         ((1. - 2. * nu) / (2.0 * (1. + nu) * (1. - 2. * nu))));
 }
 
 template<int dim, typename Number>
@@ -142,6 +114,10 @@ StVenantKirchhoff<dim, Number>::cell_loop_set_coefficients(
 {
   IntegratorCell integrator(matrix_free, dof_index, quad_index);
 
+  auto const f0_factor = get_f0_factor();
+  auto const f1_factor = get_f1_factor();
+  auto const f2_factor = get_f2_factor();
+
   // loop over all cells
   for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
   {
@@ -150,35 +126,35 @@ StVenantKirchhoff<dim, Number>::cell_loop_set_coefficients(
     // loop over all quadrature points
     for(unsigned int q = 0; q < integrator.n_q_points; ++q)
     {
-      dealii::VectorizedArray<Number> youngs_modulus_vec =
-        FunctionEvaluator<0, dim, Number>::value(*(data.youngs_modulus_function),
+      dealii::VectorizedArray<Number> E_vec =
+        FunctionEvaluator<0, dim, Number>::value(*(data.E_function),
                                                  integrator.quadrature_point(q),
                                                  0.0 /*time*/);
 
       // set the coefficients
-      f0_coefficients.set_coefficient_cell(cell, q, f0_factor * youngs_modulus_vec);
-      f1_coefficients.set_coefficient_cell(cell, q, f1_factor * youngs_modulus_vec);
-      f2_coefficients.set_coefficient_cell(cell, q, f2_factor * youngs_modulus_vec);
+      f0_coefficients.set_coefficient_cell(cell, q, f0_factor * E_vec);
+      f1_coefficients.set_coefficient_cell(cell, q, f1_factor * E_vec);
+      f2_coefficients.set_coefficient_cell(cell, q, f2_factor * E_vec);
     }
   }
 }
 
 template<int dim, typename Number>
-typename StVenantKirchhoff<dim, Number>::symmetric_tensor
+dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
 StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress_symmetrize(tensor const &     strain,
                                                                          unsigned int const cell,
                                                                          unsigned int const q) const
 {
-  symmetric_tensor S;
+  dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>> S;
 
-  if(youngs_modulus_is_variable)
+  if(E_is_variable)
   {
     f0 = f0_coefficients.get_coefficient_cell(cell, q);
     f1 = f1_coefficients.get_coefficient_cell(cell, q);
     f2 = f2_coefficients.get_coefficient_cell(cell, q);
   }
 
-  // Since we return a `symmetric_tensor`, we only need to set symmetric entries once.
+  // Since we return a dealii::SymmetricTensor, we only need to set symmetric entries once.
   if constexpr(dim == 3)
   {
     S[0][0] = f0 * strain[0][0] + f1 * (strain[1][1] + strain[2][2]);
@@ -199,7 +175,7 @@ StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress_symmetrize(tensor 
 }
 
 template<int dim, typename Number>
-typename StVenantKirchhoff<dim, Number>::symmetric_tensor
+dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
 StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress(tensor const & gradient_displacement,
                                                               unsigned int const cell,
                                                               unsigned int const q) const
@@ -207,7 +183,10 @@ StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress(tensor const & gra
   if(large_deformation)
   {
     return (this->second_piola_kirchhoff_stress_symmetrize(
-      get_E<dim, Number>(gradient_displacement), cell, q));
+      compute_E_scaled<dim, Number, Number, true /* stable_formulation */>(gradient_displacement,
+                                                                           1.0),
+      cell,
+      q));
   }
   else
   {
@@ -216,17 +195,41 @@ StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress(tensor const & gra
 }
 
 template<int dim, typename Number>
-typename StVenantKirchhoff<dim, Number>::symmetric_tensor
-StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress_displacement_derivative(
-  tensor const &     gradient_increment,
-  tensor const &     deformation_gradient,
+dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
+StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress_eval(
+  tensor const &     gradient_displacement,
   unsigned int const cell,
   unsigned int const q) const
 {
+  // Since we do not precompute and store data, the
+  // `second_piola_kirchhoff_stress_eval` and
+  // `second_piola_kirchhoff_stress` functions are identical.
+  return second_piola_kirchhoff_stress(gradient_displacement, cell, q);
+}
+
+template<int dim, typename Number>
+dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
+StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress(unsigned int const cell,
+                                                              unsigned int const q) const
+{
+  return Material<dim, Number>::second_piola_kirchhoff_stress(cell, q);
+}
+
+template<int dim, typename Number>
+dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
+StVenantKirchhoff<dim, Number>::second_piola_kirchhoff_stress_displacement_derivative(
+  tensor const &     gradient_increment,
+  tensor const &     gradient_displacement,
+  unsigned int const cell,
+  unsigned int const q) const
+{
+  tensor F = gradient_displacement;
+  add_scaled_identity<dim, Number, Number>(F, 1.0);
+
   // Exploit linear stress-strain relationship and symmetrizing in
-  // `second_piola_kirchhoff_stress_symmetrize()`.
-  return (this->second_piola_kirchhoff_stress_symmetrize(
-    transpose(deformation_gradient) * gradient_increment, cell, q));
+  // second_piola_kirchhoff_stress_symmetrize
+  return (
+    this->second_piola_kirchhoff_stress_symmetrize(transpose(F) * gradient_increment, cell, q));
 }
 
 template class StVenantKirchhoff<2, float>;

@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 // ExaDG
+#include <exadg/time_integration/enum_types.h>
 #include <exadg/time_integration/lambda_functions_ale.h>
 #include <exadg/time_integration/time_int_bdf_base.h>
 
@@ -94,7 +95,7 @@ public:
   ale_update();
 
   void
-  advance_one_timestep_partitioned_solve(bool const use_extrapolation,
+  advance_one_timestep_partitioned_solve(bool const first_coupling_iteration,
                                          bool const update_velocity,
                                          bool const update_pressure);
 
@@ -125,11 +126,118 @@ protected:
   set_vectors_deserialization(std::vector<VectorType> const & vectors_velocity,
                               std::vector<VectorType> const & vectors_pressure);
 
+  std::string
+  get_postprocessor_restart_state() const final;
+
+  void
+  set_postprocessor_restart_state(std::string const & state) final;
+
   virtual void
   update_after_deserialization();
 
   void
   prepare_vectors_for_next_timestep() override;
+
+  /*
+   * Overwrites `dst` by the initial guess of type `initial_guess_type` for an iterative solver,
+   * computed from the solutions at previous time steps, `history`, where history[i] is the
+   * solution at t_{n-i}.
+   */
+  void
+  compute_initial_guess(VectorType &                    dst,
+                        std::vector<VectorType> const & history,
+                        InitialGuessType const          initial_guess_type) const;
+
+  void
+  compute_initial_guess(BlockVectorType &                    dst,
+                        std::vector<BlockVectorType> const & history,
+                        InitialGuessType const               initial_guess_type) const;
+
+  /*
+   * Products of the operator A(c) = A_0 + c A_1 of
+   * `compute_initial_guess_projection()` with the previous solutions, where the
+   * scaling factor `c` may change in time, e.g., the scaling of the mass matrix
+   * by the time step size. Storing the products avoids recomputing them in each
+   * time step, which requires A_0 and A_1 to be constant in time.
+   */
+  struct ProductsProjection
+  {
+    // stores the products for `n_vectors` previous solutions, A_1 = 0 if not
+    // `with_scaled_part`
+    void
+    initialize(unsigned int const n_vectors, bool const with_scaled_part)
+    {
+      products_0.resize(n_vectors);
+      products_1.resize(with_scaled_part ? n_vectors : 0);
+      up_to_date.assign(n_vectors, false);
+    }
+
+    bool
+    is_stored() const
+    {
+      return not up_to_date.empty();
+    }
+
+    // shifts the products along with the previous solutions, see
+    // `swap_back_one_step()`, the products of the newest solution are outdated
+    void
+    swap_back_one_step()
+    {
+      for(int i = int(up_to_date.size()) - 1; i > 0; --i)
+      {
+        products_0[i].swap(products_0[i - 1]);
+        if(not products_1.empty())
+          products_1[i].swap(products_1[i - 1]);
+        up_to_date[i] = up_to_date[i - 1];
+      }
+      set_outdated(0);
+    }
+
+    // the products of solution `i` are recomputed when needed
+    void
+    set_outdated(unsigned int const i)
+    {
+      if(i < up_to_date.size())
+        up_to_date[i] = false;
+    }
+
+    // products_0[i] = A_0 x_i and products_1[i] = A_1 x_i, newest first
+    std::vector<VectorType> products_0;
+    std::vector<VectorType> products_1;
+    std::vector<bool>       up_to_date;
+  };
+
+  /*
+   * Overwrites `dst` by the linear combination of the solutions at previous time steps,
+   * `history`, minimizing the residual of the linear system with operator `vmult` and right-hand
+   * side `rhs`, see `InitialGuessType::Projection`.
+   * `vmult(dst, src, c)` applies A(c) with the current scaling factor
+   * `c = scaling_factor`, see `ProductsProjection`. The products of A(c) with
+   * the previous solutions are recomputed in each call, unless
+   * `products_stored` stores them.
+   * `history_projection` holds older solutions, which the time integrator no
+   * longer needs and which are stored for the projection only; it may be empty.
+   * `eps` is the relative tolerance below which a vector is considered linearly
+   * dependent on the newer ones and dropped, see `compute_QR_decomposition()`.
+   */
+  void
+  compute_initial_guess_projection(
+    VectorType &                                                                dst,
+    std::vector<VectorType> const &                                             history,
+    std::vector<VectorType> const &                                             history_projection,
+    double const                                                                eps,
+    VectorType const &                                                          rhs,
+    std::function<void(VectorType &, VectorType const &, double const)> const & vmult,
+    double const                                                                scaling_factor,
+    ProductsProjection & products_stored) const;
+
+  /*
+   * Returns the number of older solutions to be stored for the projection
+   * initial guess in addition to the `order` solutions of the time integrator.
+   */
+  unsigned int
+  get_n_vectors_projection_additional(InitialGuessType const initial_guess_type,
+                                      unsigned int const     n_vectors_projection) const;
 
   Parameters const & param;
 
@@ -149,7 +257,7 @@ protected:
   VectorType              convective_term_np;
 
   // required for strongly-coupled partitioned iteration
-  bool use_extrapolation;
+  bool first_coupling_iteration;
   bool store_solution;
   bool update_velocity;
   bool update_pressure;

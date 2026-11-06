@@ -25,7 +25,7 @@
         "ReadRestart": "false"
     },
     "Output": {
-        "OutputDirectory": "output/tgv/",
+        "OutputDirectory": "results/tgv/",
         "OutputName": "Re1600",
         "WriteOutput": "false"
     }

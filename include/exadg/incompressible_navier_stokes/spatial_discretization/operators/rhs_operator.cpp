@@ -48,7 +48,7 @@ RHSOperator<dim, Number>::evaluate(VectorType & dst, Number const evaluation_tim
   time = evaluation_time;
 
   VectorType src;
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src, true /*zero_dst_vector = true*/);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, src, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -58,7 +58,7 @@ RHSOperator<dim, Number>::evaluate_add(VectorType & dst, Number const evaluation
   time = evaluation_time;
 
   VectorType src;
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src, false /*zero_dst_vector = false*/);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, src, false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>

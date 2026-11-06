@@ -22,7 +22,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/manufactured/",
+        "OutputDirectory": "results/manufactured/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

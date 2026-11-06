@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_ORR_SOMMERFELD_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_ORR_SOMMERFELD_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ORR_SOMMERFELD_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ORR_SOMMERFELD_APPLICATION_H_
 
 // Orr-Sommerfeld application
 #include "include/orr_sommerfeld_equation.h"
@@ -443,4 +443,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_ORR_SOMMERFELD_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ORR_SOMMERFELD_APPLICATION_H_ */

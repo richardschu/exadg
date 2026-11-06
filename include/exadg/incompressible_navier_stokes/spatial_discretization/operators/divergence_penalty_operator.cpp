@@ -53,14 +53,14 @@ template<int dim, typename Number>
 void
 DivergencePenaltyOperator<dim, Number>::apply(VectorType & dst, VectorType const & src) const
 {
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src, true);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, src, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
 void
 DivergencePenaltyOperator<dim, Number>::apply_add(VectorType & dst, VectorType const & src) const
 {
-  matrix_free->cell_loop(&This::cell_loop, this, dst, src, false);
+  matrix_free->cell_loop(&This::cell_loop, this, dst, src, false /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>

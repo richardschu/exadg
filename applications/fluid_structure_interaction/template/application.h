@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_FSI_TEMPLATE_H_
-#define APPLICATIONS_FSI_TEMPLATE_H_
+#ifndef APPLICATIONS_FLUID_STRUCTURE_INTERACTION_TEMPLATE_APPLICATION_H_
+#define APPLICATIONS_FLUID_STRUCTURE_INTERACTION_TEMPLATE_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -309,4 +309,4 @@ public:
 
 #include <exadg/fluid_structure_interaction/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_FSI_TEMPLATE_H_ */
+#endif /* APPLICATIONS_FLUID_STRUCTURE_INTERACTION_TEMPLATE_APPLICATION_H_ */

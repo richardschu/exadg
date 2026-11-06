@@ -21,7 +21,7 @@
         "StressDataName": "Stress"
     },
     "Output": {
-        "OutputDirectory": "output/",
+        "OutputDirectory": "results/",
         "OutputName": "perpendicular_flap",
         "WriteOutput": "true"
     }

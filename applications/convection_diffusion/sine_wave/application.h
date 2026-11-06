@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_PROPAGATING_SINE_WAVE_H_
-#define APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_PROPAGATING_SINE_WAVE_H_
+#ifndef APPLICATIONS_CONVECTION_DIFFUSION_SINE_WAVE_APPLICATION_H_
+#define APPLICATIONS_CONVECTION_DIFFUSION_SINE_WAVE_APPLICATION_H_
 
 // test case for a purely convective problem
 // sine wave that is advected from left to right by a constant velocity field
@@ -283,4 +283,4 @@ private:
 
 #include <exadg/convection_diffusion/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_PROPAGATING_SINE_WAVE_H_ */
+#endif /* APPLICATIONS_CONVECTION_DIFFUSION_SINE_WAVE_APPLICATION_H_ */

@@ -102,7 +102,7 @@ public:
   // affect matrix-based vs. matrix-free implementations within multigrid.
   bool use_matrix_based_operator;
 
-  // this parameter is only relevant if use_matrix_based_operator == true
+  // this parameter is only relevant if `use_matrix_based_operator == true`
   SparseMatrixType sparse_matrix_type;
 
 

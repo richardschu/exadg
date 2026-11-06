@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_SHEAR_LAYER_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_SHEAR_LAYER_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_SHEAR_LAYER_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_SHEAR_LAYER_APPLICATION_H_
 
 /*
  * For a description of the test case, see
@@ -274,4 +274,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_SHEAR_LAYER_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_SHEAR_LAYER_APPLICATION_H_ */

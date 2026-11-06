@@ -54,7 +54,8 @@ StatisticsManager<dim, Number>::StatisticsManager(
 template<int dim, typename Number>
 void
 StatisticsManager<dim, Number>::setup(const std::function<double(double const &)> & grid_transform,
-                                      TurbulentChannelData const &                  data_in)
+                                      TurbulentChannelData const &                  data_in,
+                                      bool const restarted_simulation)
 {
   data = data_in;
 
@@ -62,7 +63,7 @@ StatisticsManager<dim, Number>::setup(const std::function<double(double const &)
                 data_in.time_control_data_statistics.write_preliminary_results_every_nth_time_step),
               dealii::ExcMessage("write_preliminary_results_every_nth_time_step has to be set."));
 
-  time_control_statistics.setup(data_in.time_control_data_statistics);
+  time_control_statistics.setup(data_in.time_control_data_statistics, restarted_simulation);
 
   if(data_in.time_control_data_statistics.time_control_data.is_active)
   {

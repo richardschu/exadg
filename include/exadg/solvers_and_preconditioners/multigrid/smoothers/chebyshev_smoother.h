@@ -34,12 +34,58 @@
 
 namespace ExaDG
 {
+/*
+ * Wrapper around an operator providing only the standard matrix-vector product
+ * vmult(dst, src), i.e., hiding vmult(dst, src, before, after) with fused
+ * vector operations. With this wrapper, `dealii::PreconditionChebyshev` and its
+ * eigenvalue estimation (`dealii::SolverCG`) use their non-fused algorithms.
+ */
+template<typename Operator, typename VectorType>
+class OperatorWithoutFusedOperations : public dealii::EnableObserverPointer
+{
+public:
+  OperatorWithoutFusedOperations(Operator const & operator_in) : underlying_operator(operator_in)
+  {
+  }
+
+  void
+  vmult(VectorType & dst, VectorType const & src) const
+  {
+    underlying_operator.vmult(dst, src);
+  }
+
+  dealii::types::global_dof_index
+  m() const
+  {
+    return underlying_operator.m();
+  }
+
+  dealii::types::global_dof_index
+  n() const
+  {
+    return underlying_operator.n();
+  }
+
+  typename VectorType::value_type
+  el(unsigned int const i, unsigned int const j) const
+  {
+    return underlying_operator.el(i, j);
+  }
+
+private:
+  Operator const & underlying_operator;
+};
+
 template<typename Operator, typename VectorType>
 class ChebyshevSmoother : public SmootherBase<VectorType>
 {
 public:
-  typedef dealii::PreconditionChebyshev<Operator, VectorType, JacobiPreconditioner<Operator>>
+  typedef dealii::PreconditionChebyshev<Operator, VectorType, dealii::DiagonalMatrix<VectorType>>
     ChebyshevPointJacobi;
+  typedef dealii::PreconditionChebyshev<OperatorWithoutFusedOperations<Operator, VectorType>,
+                                        VectorType,
+                                        dealii::DiagonalMatrix<VectorType>>
+    ChebyshevPointJacobiWithoutFusedOperations;
   typedef dealii::PreconditionChebyshev<Operator, VectorType, BlockJacobiPreconditioner<Operator>>
     ChebyshevBlockJacobi;
   typedef dealii::
@@ -59,7 +105,8 @@ public:
       : preconditioner(PreconditionerSmoother::PointJacobi),
         smoothing_range(20),
         degree(5),
-        iterations_eigenvalue_estimation(20)
+        iterations_eigenvalue_estimation(20),
+        use_fused_operations(true)
     {
     }
 
@@ -74,6 +121,16 @@ public:
 
     // number of CG iterations for estimation of eigenvalues
     unsigned int iterations_eigenvalue_estimation;
+
+    // use `vmult(dst, src, before, after)` of the operator with vector operations
+    // fused into the matrix-vector product, when available (point Jacobi only).
+    // In single precision, the fused `dealii::SolverCG` of the eigenvalue
+    // estimation can break down (NaN) on small continuous multigrid levels with
+    // clustered spectra, where the fused residual norm suffers from
+    // cancellation and the absolute tolerance is not reached before the Krylov
+    // space is exhausted. Continuous levels do not profit from fusion anyway,
+    // see `OperatorBase::vmult()`.
+    bool use_fused_operations;
   };
 
   void
@@ -81,7 +138,10 @@ public:
   {
     if(data.preconditioner == PreconditionerSmoother::PointJacobi)
     {
-      chebyshev_point_jacobi->vmult(dst, src);
+      if(data.use_fused_operations)
+        chebyshev_point_jacobi->vmult(dst, src);
+      else
+        chebyshev_point_jacobi_without_fused_operations->vmult(dst, src);
     }
     else if(data.preconditioner == PreconditionerSmoother::BlockJacobi)
     {
@@ -102,7 +162,10 @@ public:
   {
     if(data.preconditioner == PreconditionerSmoother::PointJacobi)
     {
-      chebyshev_point_jacobi->step(dst, src);
+      if(data.use_fused_operations)
+        chebyshev_point_jacobi->step(dst, src);
+      else
+        chebyshev_point_jacobi_without_fused_operations->step(dst, src);
     }
     else if(data.preconditioner == PreconditionerSmoother::BlockJacobi)
     {
@@ -126,8 +189,9 @@ public:
 
     if(data.preconditioner == PreconditionerSmoother::PointJacobi)
     {
-      preconditioner_point_jacobi->update();
-      chebyshev_point_jacobi->initialize(*underlying_operator, additional_data_point);
+      underlying_operator->calculate_inverse_diagonal(preconditioner_point_jacobi->get_vector());
+
+      initialize_chebyshev_point_jacobi();
     }
     else if(data.preconditioner == PreconditionerSmoother::BlockJacobi)
     {
@@ -156,19 +220,41 @@ public:
 
     if(data.preconditioner == PreconditionerSmoother::PointJacobi)
     {
-      preconditioner_point_jacobi =
-        std::make_shared<JacobiPreconditioner<Operator>>(*underlying_operator,
-                                                         initialize_preconditioner);
+      preconditioner_point_jacobi = std::make_shared<dealii::DiagonalMatrix<VectorType>>();
+      if(initialize_preconditioner)
+      {
+        underlying_operator->calculate_inverse_diagonal(preconditioner_point_jacobi->get_vector());
+      }
 
       additional_data_point.preconditioner      = preconditioner_point_jacobi;
       additional_data_point.smoothing_range     = data.smoothing_range;
       additional_data_point.degree              = data.degree;
       additional_data_point.eig_cg_n_iterations = data.iterations_eigenvalue_estimation;
 
-      chebyshev_point_jacobi = std::make_shared<ChebyshevPointJacobi>();
+      if(data.use_fused_operations)
+      {
+        chebyshev_point_jacobi = std::make_shared<ChebyshevPointJacobi>();
+      }
+      else
+      {
+        operator_without_fused_operations =
+          std::make_shared<OperatorWithoutFusedOperations<Operator, VectorType>>(
+            *underlying_operator);
+
+        additional_data_point_without_fused_operations.preconditioner = preconditioner_point_jacobi;
+        additional_data_point_without_fused_operations.smoothing_range = data.smoothing_range;
+        additional_data_point_without_fused_operations.degree          = data.degree;
+        additional_data_point_without_fused_operations.eig_cg_n_iterations =
+          data.iterations_eigenvalue_estimation;
+
+        chebyshev_point_jacobi_without_fused_operations =
+          std::make_shared<ChebyshevPointJacobiWithoutFusedOperations>();
+      }
 
       if(initialize_preconditioner)
-        chebyshev_point_jacobi->initialize(*underlying_operator, additional_data_point);
+      {
+        initialize_chebyshev_point_jacobi();
+      }
     }
     else if(data.preconditioner == PreconditionerSmoother::BlockJacobi)
     {
@@ -210,18 +296,35 @@ public:
   }
 
 private:
+  void
+  initialize_chebyshev_point_jacobi()
+  {
+    if(data.use_fused_operations)
+      chebyshev_point_jacobi->initialize(*underlying_operator, additional_data_point);
+    else
+      chebyshev_point_jacobi_without_fused_operations->initialize(
+        *operator_without_fused_operations, additional_data_point_without_fused_operations);
+  }
+
   Operator const * underlying_operator;
   AdditionalData   data;
 
-  std::shared_ptr<ChebyshevPointJacobi>     chebyshev_point_jacobi;
+  std::shared_ptr<OperatorWithoutFusedOperations<Operator, VectorType>>
+    operator_without_fused_operations;
+
+  std::shared_ptr<ChebyshevPointJacobi> chebyshev_point_jacobi;
+  std::shared_ptr<ChebyshevPointJacobiWithoutFusedOperations>
+                                            chebyshev_point_jacobi_without_fused_operations;
   std::shared_ptr<ChebyshevBlockJacobi>     chebyshev_block_jacobi;
   std::shared_ptr<ChebyshevAdditiveSchwarz> chebyshev_additive_schwarz;
 
-  std::shared_ptr<JacobiPreconditioner<Operator>>          preconditioner_point_jacobi;
+  std::shared_ptr<dealii::DiagonalMatrix<VectorType>>      preconditioner_point_jacobi;
   std::shared_ptr<BlockJacobiPreconditioner<Operator>>     preconditioner_block_jacobi;
   std::shared_ptr<AdditiveSchwarzPreconditioner<Operator>> preconditioner_additive_schwarz;
 
-  typename ChebyshevPointJacobi::AdditionalData     additional_data_point;
+  typename ChebyshevPointJacobi::AdditionalData additional_data_point;
+  typename ChebyshevPointJacobiWithoutFusedOperations::AdditionalData
+                                                    additional_data_point_without_fused_operations;
   typename ChebyshevBlockJacobi::AdditionalData     additional_data_block;
   typename ChebyshevAdditiveSchwarz::AdditionalData additional_data_additive_schwarz;
 };

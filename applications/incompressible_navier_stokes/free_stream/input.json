@@ -18,7 +18,7 @@
         "ALE": "true"
     },
     "Output": {
-        "OutputDirectory": "output/free_stream/",
+        "OutputDirectory": "results/free_stream/",
         "OutputName": "l3_k3",
         "WriteOutput": "false"
     }

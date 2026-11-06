@@ -10,7 +10,7 @@
 	        "RefineSpace": "0"
 	    },
 	    "Output": {
-	        "OutputDirectory": "output/overset_grids/",
+	        "OutputDirectory": "results/overset_grids/",
 	        "OutputName": "domain1",
 	        "WriteOutput": "false"
 	    }
@@ -21,7 +21,7 @@
 	        "RefineSpace": "2"
 	    },
 	    "Output": {
-	        "OutputDirectory": "output/overset_grids/",
+	        "OutputDirectory": "results/overset_grids/",
 	        "OutputName": "domain2",
 	        "WriteOutput": "false"
 	    }

@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef SOLVERS_INCOMPRESSIBLE_NAVIER_STOKES_APPLICATIONS_ORR_SOMMERFELD_PERTURBATION_ENERGY_H_
-#define SOLVERS_INCOMPRESSIBLE_NAVIER_STOKES_APPLICATIONS_ORR_SOMMERFELD_PERTURBATION_ENERGY_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ORR_SOMMERFELD_INCLUDE_PERTURBATION_ENERGY_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ORR_SOMMERFELD_INCLUDE_PERTURBATION_ENERGY_H_
 
 // C/C++
 #include <fstream>
@@ -38,7 +38,7 @@ namespace IncNS
 struct PerturbationEnergyData
 {
   PerturbationEnergyData()
-    : directory("output/"), filename("orr_sommerfeld"), omega_i(0.0), h(1.0), U_max(1.0)
+    : directory("results/"), filename("orr_sommerfeld"), omega_i(0.0), h(1.0), U_max(1.0)
   {
   }
 
@@ -97,14 +97,15 @@ public:
   setup(dealii::MatrixFree<dim, Number> const & matrix_free_in,
         unsigned int const                      dof_index_in,
         unsigned int const                      quad_index_in,
-        PerturbationEnergyData const &          data_in)
+        PerturbationEnergyData const &          data_in,
+        bool const                              restarted_simulation)
   {
     matrix_free = &matrix_free_in;
     dof_index   = dof_index_in;
     quad_index  = quad_index_in;
     data        = data_in;
 
-    time_control.setup(data.time_control_data);
+    time_control.setup(data.time_control_data, restarted_simulation);
 
     if(data.time_control_data.is_active)
       create_directories(data.directory, mpi_comm);
@@ -243,5 +244,5 @@ private:
 } // namespace IncNS
 } // namespace ExaDG
 
-#endif /* SOLVERS_INCOMPRESSIBLE_NAVIER_STOKES_APPLICATIONS_ORR_SOMMERFELD_PERTURBATION_ENERGY_H_ \
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ORR_SOMMERFELD_INCLUDE_PERTURBATION_ENERGY_H_ \
         */

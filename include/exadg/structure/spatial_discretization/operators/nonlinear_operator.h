@@ -23,7 +23,15 @@
 #define EXADG_STRUCTURE_SPATIAL_DISCRETIZATION_OPERATORS_NONLINEAR_OPERATOR_H_
 
 // ExaDG
+#include <exadg/grid/mapping_dof_vector.h>
+#include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/spatial_discretization/operators/elasticity_operator_base.h>
+#ifdef DEAL_II_WITH_TRILINOS
+#  include <deal.II/lac/trilinos_sparse_matrix.h>
+#endif
+#ifdef DEAL_II_WITH_PETSC
+#  include <deal.II/lac/petsc_sparse_matrix.h>
+#endif
 
 namespace ExaDG
 {
@@ -78,13 +86,104 @@ public:
    * Linearized operator: Sets the linearization vector.
    */
   void
-  set_solution_linearization(VectorType const & vector) const;
+  set_solution_linearization(VectorType const & vector,
+                             bool const         update_cell_data,
+                             bool const         update_mapping,
+                             bool const         update_matrix_if_necessary) const;
+
+  /**
+   * Set the mapping pointer for the undeformed mapping.
+   */
+  void
+  set_mapping_undeformed(std::shared_ptr<dealii::Mapping<dim> const> mapping) const;
+
+  /**
+   * Set the current reference configuration to be the initial reference configuration shifted by
+   * the vector in the argument. In the multigrid case, the `DoFHandler` and suitable multigrid
+   * level index have to be provided.
+   */
+  void
+  shift_reference_configuration(VectorType const &              vector,
+                                dealii::DoFHandler<dim> const * dof_handler = nullptr,
+                                unsigned int const level = dealii::numbers::invalid_unsigned_int);
+
+  /**
+   * Export the current configuration the operator is defined in. For the spatial integration
+   * approach, this is the spatial configuration (material configuration plus displacement map), for
+   * the inverse analysis, this is the current reference configuration considered (initial material
+   * configuration minus prestress displacement map). The vector, if non-empty, is exported as well.
+   */
+  void
+  export_configuration(OutputData const & output_data, VectorType const & vector) const;
 
   /**
    * Linearized operator: Returns the linearization vector.
    */
   VectorType const &
   get_solution_linearization() const;
+
+  /**
+   * Returns the shift vector used for shifting the reference configuration for inverse analysis
+   * problems.
+   */
+  VectorType const &
+  get_shift_vector() const;
+
+  /**
+   * Set the shift vector used for shifting the initial reference configuration.
+   */
+  void
+  set_shift_vector(VectorType const & vector);
+
+  /**
+   * Set cell data given a linearization vector.
+   */
+  void
+  set_cell_linearization_data(VectorType const & linearization_vector) const;
+
+  void
+  cell_loop_set_linearization_data(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                   VectorType &                            dst,
+                                   VectorType const &                      src,
+                                   Range const &                           range) const;
+
+  /**
+   * Overwrite members in OperatorBase to optionally use spatial integration
+   * via matrix_free_spatial.
+   */
+  void
+  apply(VectorType & dst, VectorType const & src) const override;
+
+  void
+  apply_add(VectorType & dst, VectorType const & src) const override;
+
+  void
+  rhs(VectorType & dst) const override;
+
+  void
+  rhs_add(VectorType & dst) const override;
+
+  void
+  evaluate(VectorType & dst, VectorType const & src) const override;
+
+  void
+  evaluate_add(VectorType & dst, VectorType const & src) const override;
+
+  void
+  add_diagonal(VectorType & diagonal) const override;
+
+  /*
+   * Initialize sparse matrix.
+   */
+#ifdef DEAL_II_WITH_TRILINOS
+  void
+  calculate_system_matrix(dealii::TrilinosWrappers::SparseMatrix & system_matrix) const override;
+#endif
+
+#ifdef DEAL_II_WITH_PETSC
+  void
+  calculate_system_matrix(dealii::PETScWrappers::MPI::SparseMatrix & system_matrix) const override;
+#endif
 
 private:
   /*
@@ -99,11 +198,20 @@ private:
                       VectorType const &                      src,
                       Range const &                           range) const;
 
+  /*
+   * Redefined member functions of OperatorBase for MatrixFree interface.
+   */
   void
-  face_loop_nonlinear(dealii::MatrixFree<dim, Number> const & matrix_free,
-                      VectorType &                            dst,
-                      VectorType const &                      src,
-                      Range const &                           range) const;
+  face_loop_empty(dealii::MatrixFree<dim, Number> const & matrix_free,
+                  VectorType &                            dst,
+                  VectorType const &                      src,
+                  Range const &                           range) const;
+
+  void
+  boundary_face_loop_hom_operator(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                  VectorType &                            dst,
+                                  VectorType const &                      src,
+                                  Range const &                           range) const;
 
   void
   boundary_face_loop_nonlinear(dealii::MatrixFree<dim, Number> const & matrix_free,
@@ -125,7 +233,7 @@ private:
   /*
    * Calculates the integral
    *
-   *  (v_h, factor * d_h)_Omega + (Grad(v_h), P_h)_Omega
+   *  (v_h, factor * density * d_h)_Omega + (Grad(v_h), P_h)_Omega ,
    *
    * with 1st Piola-Kirchhoff stress tensor P_h
    *
@@ -151,21 +259,32 @@ private:
   do_cell_integral_nonlinear(IntegratorCell & integrator) const;
 
   /*
-   * Computes the nonlinear Neumann boundary term
+   * Computes boundary integrals
    *
-   *  - (v_h, t_0)_{Gamma_N}
+   * inhomogeneous operator:
+   *  - (v_h, t_0)_{Gamma_N} - (v_h, - p * N)_{Gamma_R} ,
+   *
    *
    * with traction
    *
-   *  t_0 = da/dA t .
+   *  t_0 = da/dA t ,
    *
-   * If the traction is specified as force per surface area of the underformed
-   * body, the specified traction t is interpreted as t_0 = t, and no pull-back
-   * is necessary.
+   * and exterior pressure p. If the traction is specified as force per surface area of the
+   * underformed body, the specified traction t is interpreted as t_0 = t, and no pull-back is
+   * necessary.
+   *
+   * homogeneous operator on Robin boundary:
+   *  + (v_h, k * d_h + c * factor_velocity * d_h)_{Gamma_R} ,
+   *
+   * with spring stiffness k, dashpot coefficient c and time integration coefficient
+   * factor_velocity, which together with the remainding terms added via a const_vector on the rhs
+   * constitutes the complete .
    */
   void
-  do_boundary_integral_continuous_nonlinear(IntegratorFace &                   integrator,
-                                            dealii::types::boundary_id const & boundary_id) const;
+  do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
+                                  OperatorType const &               operator_type,
+                                  unsigned int const                 face,
+                                  dealii::types::boundary_id const & boundary_id) const final;
 
   /*
    * Linearized operator.
@@ -176,7 +295,7 @@ private:
   /*
    * Calculates the integral
    *
-   *  (v_h, factor * delta d_h)_Omega + (Grad(v_h), delta P_h)_Omega
+   *  (v_h, factor * density * delta d_h)_Omega + (Grad(v_h), delta P_h)_Omega
    *
    * with the directional derivative of the 1st Piola-Kirchhoff stress tensor P_h
    *
@@ -199,28 +318,27 @@ private:
    *  the area ratio da/dA = function(d) is neglected in the linearization.
    */
   void
-  do_cell_integral(IntegratorCell & integrator) const final;
+  do_cell_integral(IntegratorCell & integrator) const override;
 
-  /*
-   * Compute the boundary term of the linearized operator
-   *
-   *  - delta (v_h, t_0)_{Gamma_N}
-   *
-   * with traction
-   *
-   *  t_0 = da/dA t .
-   *
-   * If the traction is specified as force per surface area of the underformed
-   * body, the specified traction t is interpreted as t_0 = t, and no pull-back
-   * is necessary.
+  /**
+   * Overwrite members in OperatorBase to optionally use spatial integration via
+   * `matrix_free_spatial`. This is also used for inverse analysis, since we have to update the
+   * mapping *and* potentially check results solving the forward problem.
    */
   void
-  do_boundary_integral_continuous(IntegratorFace &                   integrator,
-                                  OperatorType const &               operator_type,
-                                  dealii::types::boundary_id const & boundary_id) const final;
+  cell_loop(dealii::MatrixFree<dim, Number> const & matrix_free,
+            VectorType &                            dst,
+            VectorType const &                      src,
+            Range const &                           range) const override;
 
   mutable std::shared_ptr<IntegratorCell> integrator_lin;
   mutable VectorType                      displacement_lin;
+
+  VectorType shift_vector;
+
+  mutable dealii::MatrixFree<dim, Number>                matrix_free_spatial;
+  mutable std::shared_ptr<MappingDoFVector<dim, Number>> mapping_spatial;
+  mutable std::shared_ptr<dealii::Mapping<dim> const>    mapping_undeformed;
 };
 
 } // namespace Structure

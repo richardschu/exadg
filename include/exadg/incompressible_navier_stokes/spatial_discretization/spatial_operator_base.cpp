@@ -63,6 +63,7 @@ SpatialOperatorBase<dim, Number>::SpatialOperatorBase(
     dof_handler_p(*grid_in->triangulation),
     dof_handler_u_scalar(*grid_in->triangulation),
     pressure_level_is_undefined(false),
+    robin_parameter_traction_output(0.0),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0),
     velocity_ptr(nullptr),
@@ -303,7 +304,7 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
 
   if(param.convective_problem())
     matrix_free_data.append_mapping_flags(
-      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
+      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags(true, true));
 
   if(param.viscous_problem())
     matrix_free_data.append_mapping_flags(
@@ -342,8 +343,16 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
   std::shared_ptr<dealii::Quadrature<dim>> quadrature_p =
     create_quadrature<dim>(param.grid.element_type, param.get_degree_p(param.degree_u) + 1);
   matrix_free_data.insert_quadrature(*quadrature_p, field + quad_index_p);
+  unsigned int const n_q_points_1d_overintegration = param.degree_u + (param.degree_u + 2) / 2;
+  // dealii::MatrixFree supports dealii::QGaussSimplex with at most 4 points, see
+  // dealii::internal::MatrixFreeFunctions::get_unique_face_quadratures()
+  AssertThrow(param.grid.element_type != ElementType::Simplex or n_q_points_1d_overintegration <= 4,
+              dealii::ExcMessage("The over-integration quadrature for simplex elements requires " +
+                                 std::to_string(n_q_points_1d_overintegration) +
+                                 " points, but dealii::MatrixFree supports dealii::QGaussSimplex "
+                                 "with at most 4 points. Use a velocity degree of at most 2."));
   std::shared_ptr<dealii::Quadrature<dim>> quadrature_u_overintegration =
-    create_quadrature<dim>(param.grid.element_type, param.degree_u + (param.degree_u + 2) / 2);
+    create_quadrature<dim>(param.grid.element_type, n_q_points_1d_overintegration);
   matrix_free_data.insert_quadrature(*quadrature_u_overintegration,
                                      field + quad_index_u_overintegration);
 
@@ -426,10 +435,11 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
                 [](auto g) {
                   return g <= dealii::internal::MatrixFreeFunctions::GeometryType::affine;
                 });
+  // the mapping does not remain affine in case of a moving mesh
   inverse_mass_operator_data_velocity_scalar.parameters.implementation_type =
     inverse_mass_operator_data_velocity_scalar.get_optimal_inverse_mass_type(
       matrix_free->get_dof_handler(get_dof_index_velocity_scalar()).get_fe(),
-      cartesian_or_affine_mapping);
+      cartesian_or_affine_mapping and not(param.ale_formulation));
   inverse_mass_velocity_scalar.initialize(*matrix_free, inverse_mass_operator_data_velocity_scalar);
 
   // body force operator
@@ -1218,6 +1228,14 @@ SpatialOperatorBase<dim, Number>::interpolate_stress_bc(VectorType &       stres
 
   velocity_ptr = nullptr;
   pressure_ptr = nullptr;
+}
+
+template<int dim, typename Number>
+void
+SpatialOperatorBase<dim, Number>::set_robin_parameter_traction_output(
+  double const robin_parameter_in) const
+{
+  this->robin_parameter_traction_output = robin_parameter_in;
 }
 
 template<int dim, typename Number>
@@ -2044,7 +2062,9 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
     if(boundary_type == BoundaryTypeU::DirichletCached)
     {
       integrator_u.reinit(face);
-      integrator_u.gather_evaluate(*velocity_ptr, dealii::EvaluationFlags::gradients);
+      integrator_u.gather_evaluate(*velocity_ptr,
+                                   dealii::EvaluationFlags::gradients |
+                                     dealii::EvaluationFlags::values);
 
       integrator_p.reinit(face);
       integrator_p.gather_evaluate(*pressure_ptr, dealii::EvaluationFlags::values);
@@ -2056,19 +2076,19 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         unsigned int const index = matrix_free.get_shape_info(dof_index_u, quad_index)
                                      .face_to_cell_index_nodal[local_face_number][q];
 
-        // compute traction acting on structure with normal vector in opposite direction
-        // as compared to the fluid domain
-        vector normal = integrator_u.normal_vector(q);
-        tensor grad_u = integrator_u.get_gradient(q);
-        scalar p      = integrator_p.get_value(q);
+        // Compute traction vector based on unit *outward* normal.
+        vector const normal = integrator_u.normal_vector(q);
+        vector const u      = integrator_u.get_value(q);
+        tensor const grad_u = integrator_u.get_gradient(q);
+        scalar const p      = integrator_p.get_value(q);
 
-        scalar viscosity = get_viscosity_boundary_face(face, q);
+        scalar const viscosity = get_viscosity_boundary_face(face, q);
 
-        // incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
-        // pressure
-        // -> multiply by density to get true traction in N/m^2.
-        vector traction =
-          param.density * (viscosity * (grad_u + transpose(grad_u)) * normal - p * normal);
+        // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
+        // pressure, hence multiply by density to get true traction in N/m^2.
+        vector const traction =
+          this->robin_parameter_traction_output * u +
+          param.density * (viscosity * ((grad_u + transpose(grad_u)) * normal) - p * normal);
 
         integrator_u.submit_dof_value(traction, index);
       }

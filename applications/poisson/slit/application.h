@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_POISSON_TEST_CASES_SLIT_H_
-#define APPLICATIONS_POISSON_TEST_CASES_SLIT_H_
+#ifndef APPLICATIONS_POISSON_SLIT_APPLICATION_H_
+#define APPLICATIONS_POISSON_SLIT_APPLICATION_H_
 
 // deal.II
 #include <deal.II/base/function_lib.h>
@@ -152,4 +152,4 @@ private:
 
 #include <exadg/poisson/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_POISSON_SLIT_APPLICATION_H_ */
