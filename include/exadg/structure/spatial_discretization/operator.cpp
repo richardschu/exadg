@@ -386,6 +386,10 @@ Operator<dim, Number>::setup_operators()
     boundary_mass_data.quad_index = get_quad_index();
 
     boundary_mass_operator.initialize(*matrix_free, affine_constraints, boundary_mass_data);
+    if(param.problem_type == ProblemType::Unsteady)
+    {
+      update_boundary_mass_operator(1.0);
+    }
 
     // vector-valued inverse mass operator for initial acceleration
     InverseMassOperatorData<Number> inverse_mass_operator_data;
@@ -1305,6 +1309,13 @@ Operator<dim, Number>::set_fsi_robin_parameters(
   }
 
   this->boundary_descriptor->set_robin_bc(robin_bc);
+
+  // The velocity terms of the Robin boundaries on the right-hand side have to
+  // use the same coefficients as the operator.
+  if(param.problem_type == ProblemType::Unsteady)
+  {
+    update_boundary_mass_operator(1.0);
+  }
 }
 
 template<int dim, typename Number>
