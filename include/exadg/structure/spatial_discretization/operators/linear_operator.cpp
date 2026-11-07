@@ -61,7 +61,7 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
   unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
-  (void)face;
+  std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
 
   // Note that for the spatial integration approach, this is a quasi-Newton method
   // as the finite deformation of the body is ignored in the directional derivative.
@@ -97,8 +97,9 @@ LinearOperator<dim, Number>::do_boundary_integral_continuous(
 
         if(it != this->operator_data.bc->robin_bc.end())
         {
-          RobinParameters const & robin_parameters = it->second;
-          Number const displacement_coefficient_k  = robin_parameters.displacement_coefficient_k;
+          RobinParameters const &               robin_parameters = it->second;
+          dealii::VectorizedArray<Number> const displacement_coefficient_k =
+            robin_parameters.displacement_coefficient_k * material->get_robin_k_scaling(face, q);
 
           if(robin_parameters.displacement_normal_projection)
           {
