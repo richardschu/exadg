@@ -775,7 +775,10 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
 #ifdef DEBUG
   if(this->operator_data.spatial_integration)
   {
-    // Assert nonzero Robin boundary terms for spatial integration.
+    // Assert nonzero Robin boundary terms for spatial integration. These are
+    // integrated over the deformed surface, while, e.g., the constant vector
+    // of the velocity terms from the boundary mass operator is integrated over
+    // the reference surface.
     auto const it = this->operator_data.bc->robin_bc.find(boundary_id);
     if(it != this->operator_data.bc->robin_bc.end())
     {
@@ -784,7 +787,8 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
       if(std::abs(robin_parameters.displacement_coefficient_k) > 1e-20 or
          std::abs(robin_parameters.velocity_coefficient_c) > 1e-20)
       {
-        AssertThrow(boundary_type != BoundaryType::RobinSpringDashpotPressure,
+        AssertThrow(boundary_type != BoundaryType::RobinSpringDashpotPressure and
+                      boundary_type != BoundaryType::NeumannCached,
                     dealii::ExcMessage(
                       "Residual of Robin terms incomplete for spatial integration."));
       }

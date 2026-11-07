@@ -1300,6 +1300,15 @@ Operator<dim, Number>::set_fsi_robin_parameters(
   // We assume that this function is called with only the fluid--structure interface boundary ID
   // given in `boundary_IDs`. All but the velocity scaling parameter are zero. Normal projection of
   // the velocity is not considered, corresponding to standard Robin fluid--structure coupling.
+
+  // With spatial integration, the Robin terms in the residual are integrated
+  // over the deformed surface, while the velocity terms on the right-hand side
+  // stemming from the time integrator and the fluid are integrated over the
+  // reference surface, such that these do not cancel.
+  AssertThrow(not(param.large_deformation and param.spatial_integration) or
+                std::abs(robin_parameter) < 1e-20,
+              dealii::ExcMessage("Robin coupling not implemented for spatial integration."));
+
   std::map<dealii::types::boundary_id, RobinParameters> robin_bc =
     this->boundary_descriptor->get_robin_bc();
 

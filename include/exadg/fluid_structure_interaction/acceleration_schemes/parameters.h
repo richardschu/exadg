@@ -43,6 +43,13 @@ enum class UpdateMethod
   ImplicitVelocityStructure
 };
 
+// The Robin coupling condition
+// sigma_s * n_s + alpha * v_s = sigma_f * n_s + alpha * g
+// is applied on the structure side only, where g is the velocity given to the
+// fluid as Dirichlet data in the current coupling iteration. The fluid sees a
+// pure Dirichlet condition u_f = g. The alpha terms cancel at convergence, so
+// alpha affects the convergence of the partitioned scheme, but the converged
+// solution only up to the tolerance of the partitioned scheme.
 enum class CouplingMethod
 {
   Undefined,
@@ -97,7 +104,13 @@ struct Parameters
                         false);
       prm.add_parameter("RobinParameterScale",
                         robin_parameter_scale,
-                        "Parameter scale for Robin coupling.",
+                        "Robin parameter alpha in kg/(m^2 s) for "
+                        "DirichletRobinFixedParameter. For "
+                        "DirichletRobinAdaptiveParameter, a length l in m "
+                        "giving alpha = l * rho_f / dt, e.g., l = gamma * mu_max "
+                        "with mu_max the largest eigenvalue of the added-mass "
+                        "operator and gamma ~ 0.01, see Badia, Nobile and "
+                        "Vergara, J. Comput. Phys. 227 (2008).",
                         dealii::Patterns::Double(),
                         false);
       prm.add_parameter(
