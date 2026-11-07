@@ -2086,8 +2086,12 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
 
         // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
         // pressure, hence multiply by density to get true traction in N/m^2.
+        // The Robin term enters with a negative sign, since this vector is
+        // multiplied by -1 to obtain the traction acting on the structure, which
+        // has to be sigma_f * n_s + alpha * u_f for the Robin condition
+        // sigma_s * n_s + alpha * v_s = sigma_f * n_s + alpha * u_f.
         vector const traction =
-          this->robin_parameter_traction_output * u +
+          -this->robin_parameter_traction_output * u +
           param.density * (viscosity * ((grad_u + transpose(grad_u)) * normal) - p * normal);
 
         integrator_u.submit_dof_value(traction, index);
