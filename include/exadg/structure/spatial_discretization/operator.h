@@ -260,6 +260,7 @@ public:
   void
   compute_initial_acceleration(VectorType &       initial_acceleration,
                                VectorType const & initial_displacement,
+                               VectorType const & initial_velocity,
                                double const       time) const final;
 
   void

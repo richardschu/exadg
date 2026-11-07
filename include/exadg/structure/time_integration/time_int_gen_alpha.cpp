@@ -97,7 +97,10 @@ TimeIntGenAlpha<dim, Number>::compute_initial_acceleration(bool const do_restart
   if(not(do_restart))
   {
     // solve momentum equation to obtain initial acceleration
-    pde_operator->compute_initial_acceleration(acceleration_n, displacement_n, this->get_time());
+    pde_operator->compute_initial_acceleration(acceleration_n,
+                                               displacement_n,
+                                               velocity_n,
+                                               this->get_time());
   }
 }
 

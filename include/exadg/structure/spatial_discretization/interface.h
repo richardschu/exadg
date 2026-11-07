@@ -61,6 +61,7 @@ public:
   virtual void
   compute_initial_acceleration(VectorType &       acceleration,
                                VectorType const & displacement,
+                               VectorType const & velocity,
                                double const       time) const = 0;
 
   virtual void

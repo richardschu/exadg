@@ -1116,6 +1116,7 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_acceleration,
                                                     VectorType const & initial_displacement,
+                                                    VectorType const & initial_velocity,
                                                     double const       time) const
 {
   if(field_functions->initial_acceleration.get())
@@ -1200,6 +1201,20 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
         // pull_back_body_force = false in this case.
         body_force_operator.evaluate_add(rhs, initial_displacement, time);
       }
+    }
+
+    // The velocity terms are deactivated in the elasticity operator above
+    // together with the (boundary) mass operator terms, so add the weak damping
+    // and Robin dashpot terms for the initial velocity on the right-hand side.
+    // On the fluid--structure interface, the Robin term on the structure side
+    // cancels with the one stemming from the fluid, assuming the fluid velocity
+    // equals the structure velocity at the interface initially.
+    {
+      VectorType velocity_rhs(initial_velocity);
+      velocity_rhs *= -1.0;
+      apply_add_damping_operator(rhs, velocity_rhs);
+      evaluate_add_boundary_mass_operator(rhs, velocity_rhs);
+      evaluate_add_boundary_mass_operator_fsi_robin(rhs, initial_velocity);
     }
 
     // Shift inhomogeneous part of mass matrix operator (i.e. mass matrix applied to a dof vector
