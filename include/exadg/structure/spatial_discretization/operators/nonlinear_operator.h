@@ -280,19 +280,49 @@ private:
    * factor_velocity, which together with the remainding terms added via a const_vector on the rhs
    * constitutes the complete .
    *
-   * With a pull-back of the traction in the material configuration, the
-   * exterior pressure is a follower load -p * n_star, n_star = J F^{-T} N, and
-   * the homogeneous operator additionally contains its directional derivative
-   *  + (v_h, p * D n_star[delta d_h])_{Gamma_R} ,
-   *  D n_star[delta d] = J (tr(F^{-1} Grad(delta d)) F^{-T}
-   *                         - F^{-T} Grad(delta d)^T F^{-T}) N ,
-   * with F evaluated at the point of linearization d_lin.
+   * With a pull-back of the traction in the material configuration, all loads
+   * act on the deformed surface (follower loads), see pull_back_load(), and the
+   * homogeneous operator additionally contains their directional derivatives,
+   * see pull_back_load_derivative(), with F evaluated at the point of
+   * linearization d_lin.
    */
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
                                   OperatorType const &               operator_type,
                                   unsigned int const                 face,
                                   dealii::types::boundary_id const & boundary_id) const final;
+
+  /*
+   * Pull-back of a load given in the spatial configuration to the material
+   * configuration with n_star = J F^{-T} N, |n_star| = da/dA:
+   *
+   * traction t (Neumann boundaries):  t_0 = |n_star| t ,
+   * exterior pressure p:              t_0 = -p n_star ,
+   *
+   * where `load` is the evaluated traction t, or p N for the exterior pressure.
+   */
+  vector
+  pull_back_load(vector const & load,
+                 tensor const & F,
+                 vector const & N,
+                 bool const     is_pressure) const;
+
+  /*
+   * Directional derivative D t_0[delta d] of the load t_0 of pull_back_load()
+   * for a given traction t or exterior pressure p:
+   *
+   * traction t:         D t_0 = (n_star * D n_star) / |n_star| t ,
+   * exterior pressure:  D t_0 = -p D n_star ,
+   *
+   * with D n_star = J (tr(F^{-1} Grad(delta d)) F^{-T}
+   *                    - F^{-T} Grad(delta d)^T F^{-T}) N .
+   */
+  vector
+  pull_back_load_derivative(vector const & load,
+                            tensor const & F,
+                            vector const & N,
+                            tensor const & grad_delta_d,
+                            bool const     is_pressure) const;
 
   /*
    * Linearized operator.
@@ -322,10 +352,8 @@ private:
    *  delta P_h = + Grad(delta_d) * S(d_lin)
    *              + F(d_lin) * (C_lin : (F^T(d_lin) * Grad(delta d))) .
    *
-   *  Note that a dependency of the Neumann BC on the displacements d through
-   *  the area ratio da/dA = function(d) is neglected in the linearization,
-   *  while the follower pressure load is linearized, see
-   *  do_boundary_integral_continuous().
+   *  The dependency of the boundary loads on the displacements d through the
+   *  pull-back is linearized in do_boundary_integral_continuous().
    */
   void
   do_cell_integral(IntegratorCell & integrator) const override;
@@ -345,12 +373,13 @@ private:
   mutable VectorType                      displacement_lin;
 
   // Evaluates the point of linearization on boundary faces for the
-  // linearization of the follower pressure load.
+  // linearization of the follower loads.
   mutable std::shared_ptr<IntegratorFace> integrator_lin_face;
 
-  // Linearize the exterior pressure as follower load, see
-  // do_boundary_integral_continuous().
-  bool linearize_follower_pressure = false;
+  // The follower loads are used with pull_back_traction. This flag states
+  // whether the linearized operator contains their directional derivative for
+  // the current configuration, see do_boundary_integral_continuous().
+  bool follower_load_tangent_implemented = false;
 
   VectorType shift_vector;
 

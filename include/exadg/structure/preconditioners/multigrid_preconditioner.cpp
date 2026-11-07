@@ -407,6 +407,9 @@ MultigridPreconditioner<dim, Number>::initialize_operator(
   // the choice matrix-free vs. matrix-based might be different from what we do on the fine level
   data.use_matrix_based_operator_level = use_matrix_based_operator_level;
 
+  // NeumannCached data is stored for the fine-level operator only.
+  data.neumann_cached_data_available = false;
+
   if(nonlinear)
   {
     std::shared_ptr<PDEOperatorNonlinearMG> pde_operator_level(new PDEOperatorNonlinearMG());

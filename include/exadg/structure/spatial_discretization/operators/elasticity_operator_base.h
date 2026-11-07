@@ -48,7 +48,8 @@ struct OperatorData : public OperatorBaseData
       mapping_degree(1),
       unsteady(false),
       density(1.0),
-      quad_index_support_points(0)
+      quad_index_support_points(0),
+      neumann_cached_data_available(true)
   {
   }
 
@@ -92,6 +93,10 @@ struct OperatorData : public OperatorBaseData
   // for DirichletCached boundary conditions, another quadrature rule
   // is needed to set the constrained DoFs.
   unsigned int quad_index_support_points;
+
+  // The data of NeumannCached boundary conditions is only stored for the
+  // operator on the fine level, but not for the multigrid level operators.
+  bool neumann_cached_data_available;
 };
 
 template<int dim, typename Number>
