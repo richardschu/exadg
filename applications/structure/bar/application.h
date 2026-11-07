@@ -229,6 +229,7 @@ public:
       prm.add_parameter("SpringCoefficient",     spring_coefficient,                         "Exterior spring stiffness.");
       prm.add_parameter("DashpotCoefficient",    dashpot_coefficient,                        "Exterior daspot coefficient.");
       prm.add_parameter("ExteriorPressure",      exterior_pressure,                          "Exterior pressure.");
+      prm.add_parameter("PullBackTraction",      pull_back_traction,                         "Traction and exterior pressure act on the deformed surface (follower load).");
       prm.add_parameter("InvAnalAccelMethRamp",  inverse_analysis_acceleration_method_ramp,  "Acceleration method for inverse analysis (ramp phase).");
       prm.add_parameter("InvAnalAccelMethFinal", inverse_analysis_acceleration_method_final, "Acceleration method for inverse analysis (final phase).");
       prm.add_parameter("AdaptiveRefinement",    adaptive_refinement,                        "Static adaptive refinement of the mesh.");
@@ -247,8 +248,9 @@ private:
     this->param.body_force        = use_volume_force;
     this->param.large_deformation = large_deformation;
     // The inverse problem needs the pull-back of the loading in case it immediately converges.
-    this->param.pull_back_body_force    = problem_type == ProblemType::InverseAnalysis;
-    this->param.pull_back_traction      = problem_type == ProblemType::InverseAnalysis;
+    this->param.pull_back_body_force = problem_type == ProblemType::InverseAnalysis;
+    this->param.pull_back_traction =
+      problem_type == ProblemType::InverseAnalysis or pull_back_traction;
     this->param.spatial_integration     = spatial_integration;
     this->param.cache_level             = cache_level;
     this->param.check_type              = check_type;
@@ -807,6 +809,8 @@ private:
 
   bool use_volume_force  = true;
   bool large_deformation = true;
+
+  bool pull_back_traction = false;
 
   bool spatial_integration     = false;
   bool force_material_residual = false;

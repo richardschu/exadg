@@ -47,6 +47,22 @@ NonLinearOperator<dim, Number>::initialize_derived()
   // `dof_index_inhomogeneous` at this point.
   this->matrix_free->initialize_dof_vector(displacement_lin, this->operator_data.dof_index);
 
+  // The follower pressure load is linearized for the residual evaluated in the
+  // material configuration with a pull-back of the traction. The linearized
+  // operator then needs the gradient of the increment on boundary faces.
+  linearize_follower_pressure =
+    this->operator_data.pull_back_traction and (not this->operator_data.spatial_integration);
+  if(linearize_follower_pressure)
+  {
+    integrator_lin_face =
+      std::make_shared<IntegratorFace>(*this->matrix_free,
+                                       true,
+                                       this->operator_data.dof_index_inhomogeneous,
+                                       this->operator_data.quad_index);
+
+    this->integrator_flags.face_evaluate |= dealii::EvaluationFlags::gradients;
+  }
+
   if(this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     this->matrix_free->initialize_dof_vector(shift_vector, this->operator_data.dof_index);
@@ -799,6 +815,17 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   bool const spatial_integration_residual =
     this->operator_data.spatial_integration and (not this->operator_data.force_material_residual);
 
+  // The linearized operator contains the directional derivative of the
+  // follower pressure load, which requires the point of linearization.
+  bool const linearize_pressure = linearize_follower_pressure and
+                                  operator_type == OperatorType::homogeneous and
+                                  boundary_type == BoundaryType::RobinSpringDashpotPressure;
+  if(linearize_pressure)
+  {
+    integrator_lin_face->reinit(face);
+    integrator_lin_face->gather_evaluate(displacement_lin, dealii::EvaluationFlags::gradients);
+  }
+
   vector traction;
 
   for(unsigned int q = 0; q < integrator.n_q_points; ++q)
@@ -854,8 +881,19 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
             // da/dA * n = det F F^{-T} * N := n_star
             // -> da/dA = n_star.norm()
             vector n_star = determinant(F) * transpose(invert(F)) * N;
-            // t_0 = da/dA * t
-            traction *= n_star.norm();
+            if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
+            {
+              // The exterior pressure acts on the deformed surface with normal
+              // n, i.e., t = -p n and t_0 = -p da/dA n = -p n_star (follower
+              // load). The traction evaluated above is -(-p N), so p = traction
+              // * N.
+              traction = (traction * N) * n_star;
+            }
+            else
+            {
+              // t_0 = da/dA * t
+              traction *= n_star.norm();
+            }
           }
           else
           {
@@ -948,6 +986,26 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
           }
         }
       }
+    }
+
+    // Directional derivative of the follower pressure load p * n_star with
+    // n_star = J F^{-T} N in the residual, see the header for the formula.
+    if(linearize_pressure)
+    {
+      vector const N = integrator.normal_vector(q);
+      // The exterior pressure is evaluated as -p * N.
+      scalar const p =
+        -(calculate_neumann_value<dim, Number>(
+            q, integrator, boundary_type, boundary_id, this->operator_data.bc, this->time) *
+          N);
+
+      tensor const F            = compute_F(integrator_lin_face->get_gradient(q));
+      tensor const F_inv        = invert(F);
+      tensor const grad_delta_d = integrator.get_gradient(q);
+      vector const F_inv_T_N    = transpose(F_inv) * N;
+
+      traction += (p * determinant(F)) * (trace(F_inv * grad_delta_d) * F_inv_T_N -
+                                          transpose(F_inv) * (transpose(grad_delta_d) * F_inv_T_N));
     }
 
     integrator.submit_value(traction, q);
