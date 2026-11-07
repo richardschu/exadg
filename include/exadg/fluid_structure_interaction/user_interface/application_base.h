@@ -96,8 +96,21 @@ public:
     set_parameters();
     param.check();
     // Some FSI specific Asserts
-    AssertThrow(param.pull_back_traction == true,
-                dealii::ExcMessage("Invalid parameter in context of fluid-structure interaction."));
+    if(param.large_deformation)
+    {
+      AssertThrow(param.pull_back_traction == true,
+                  dealii::ExcMessage(
+                    "Invalid parameter in context of fluid-structure interaction."));
+    }
+    else
+    {
+      // The traction is not pulled back for linear elasticity, while the fluid
+      // domain is still deformed in the ALE formulation.
+      pcout << std::endl
+            << "WARNING: Fluid-structure interaction with linear elasticity: the fluid "
+            << "traction is applied in the reference configuration of the structure "
+            << "without transformation." << std::endl;
+    }
     param.print(pcout, "List of parameters for structure:");
 
     // grid
