@@ -132,6 +132,13 @@ BoundaryMassOperator<dim, Number, n_components>::boundary_face_loop_full_operato
   VectorType const &                      src,
   Range const &                           range) const
 {
+  // Read `src` including the values in Dirichlet degrees of freedom, such that
+  // Robin boundaries adjacent to inhomogeneous Dirichlet boundaries see the
+  // full field, consistent with the residual of the operator. The result is
+  // not written into Dirichlet degrees of freedom.
+  IntegratorFace integrator_m_inhom =
+    IntegratorFace(matrix_free, true, this->get_dof_index_inhomogeneous(), this->get_quad_index());
+
   IntegratorFace integrator_m =
     IntegratorFace(matrix_free, true, this->get_dof_index(), this->get_quad_index());
 
@@ -143,17 +150,19 @@ BoundaryMassOperator<dim, Number, n_components>::boundary_face_loop_full_operato
     if(auto it{this->ids_normal_coefficients.find(boundary_id)};
        it != this->ids_normal_coefficients.end())
     {
-      this->reinit_boundary_face(integrator_m, face);
+      this->reinit_boundary_face(integrator_m_inhom, face);
 
       Number scaled_coefficient = it->second.second * scaling_factor;
       bool   normal_projection  = it->second.first;
 
       integrator_m.reinit(face);
-      integrator_m.gather_evaluate(src, this->integrator_flags.face_evaluate);
+      integrator_m_inhom.gather_evaluate(src, this->integrator_flags.face_evaluate);
 
-      this->do_boundary_segment_integral(integrator_m, scaled_coefficient, normal_projection);
+      this->do_boundary_segment_integral(integrator_m_inhom, scaled_coefficient, normal_projection);
 
-      integrator_m.integrate_scatter(this->integrator_flags.face_integrate, dst);
+      integrator_m_inhom.integrate(this->integrator_flags.face_integrate,
+                                   integrator_m.begin_dof_values());
+      integrator_m.distribute_local_to_global(dst);
     }
   }
 }

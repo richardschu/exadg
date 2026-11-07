@@ -382,7 +382,9 @@ Operator<dim, Number>::setup_operators()
 
     // setup boundary mass operator
     BoundaryMassOperatorData<dim, Number> boundary_mass_data;
-    boundary_mass_data.dof_index  = get_dof_index();
+    boundary_mass_data.dof_index = get_dof_index();
+    boundary_mass_data.dof_index_inhomogeneous =
+      get_dof_index_periodicity_and_hanging_node_constraints();
     boundary_mass_data.quad_index = get_quad_index();
 
     boundary_mass_operator.initialize(*matrix_free, affine_constraints, boundary_mass_data);
@@ -1233,8 +1235,9 @@ Operator<dim, Number>::apply_add_damping_operator(VectorType & dst, VectorType c
     tmp.reinit(src);
     tmp.equ(param.weak_damping_coefficient, src);
 
-    // mass_operator includes density as scaling_factor
-    mass_operator.apply_add(dst, tmp);
+    // mass_operator includes density as scaling_factor. Evaluate including the
+    // values in Dirichlet degrees of freedom, consistent with the residual.
+    mass_operator.evaluate_add(dst, tmp);
   }
 }
 
