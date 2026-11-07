@@ -271,6 +271,14 @@ public:
   void
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const final;
 
+  /*
+   * Adds the Robin parameter times the boundary mass operator on the
+   * fluid--structure interface applied to `src`.
+   */
+  void
+  evaluate_add_boundary_mass_operator_fsi_robin(VectorType &       dst,
+                                                VectorType const & src) const final;
+
   void
   update_boundary_mass_operator(Number const factor) const;
 
@@ -642,6 +650,11 @@ private:
   // BC) appearing on the right-hand side for linear problems and in the residual for nonlinear
   // problems.
   BoundaryMassOperator<dim, Number, dim> boundary_mass_operator;
+
+  // The boundary mass operator restricted to the fluid--structure interface
+  // with the Robin parameter as coefficient, used for the velocity term in the
+  // Robin coupling condition stemming from the fluid.
+  BoundaryMassOperator<dim, Number, dim> boundary_mass_operator_fsi_robin;
 
   /*
    * Solution of nonlinear systems of equations

@@ -96,6 +96,14 @@ public:
   set_displacement(VectorType const & displacement);
 
   /**
+   * Set the velocity given to the fluid as Dirichlet data in the current
+   * iteration of a partitioned fluid--structure interaction scheme. It enters
+   * the right-hand side via the Robin coupling condition at the interface.
+   */
+  void
+  set_velocity_fsi_interface(VectorType const & velocity);
+
+  /**
    * This function is for coupled multi-physics problems applying partitioned solution algorithms.
    * Set `first_coupling_iteration = true` in the first iteration of the partitioned scheme within
    * each time step.
@@ -145,6 +153,7 @@ private:
   bool       first_coupling_iteration;
   bool       store_solution;
   VectorType displacement_last_iter;
+  VectorType velocity_fsi_interface;
 
   std::pair<
     unsigned int /* number of calls */,

@@ -139,6 +139,18 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   // (rhs still holds const_vector_velocity_remainder)
   pde_operator->evaluate_add_boundary_mass_operator(const_vector, rhs);
 
+  // add contribution from the velocity g given to the fluid in the Robin
+  // coupling condition sigma_s * n_s + alpha * v_s = sigma_f * n_s + alpha * g.
+  // The structure velocity is evaluated at t_{n+1-alpha_f}, so is g, such that
+  // the velocity terms cancel exactly at convergence of the partitioned scheme.
+  // The sign is negative, since const_vector is on the left-hand side.
+  if(velocity_fsi_interface.size() > 0)
+  {
+    rhs.equ(-(1.0 - this->get_alpha_f()), velocity_fsi_interface);
+    rhs.add(-this->get_alpha_f(), velocity_n);
+    pde_operator->evaluate_add_boundary_mass_operator_fsi_robin(const_vector, rhs);
+  }
+
   if(param.large_deformation == false) // linear case
   {
     // calculate right-hand side vector
@@ -273,6 +285,13 @@ TimeIntGenAlpha<dim, Number>::set_displacement(VectorType const & displacement)
   this->update_velocity(velocity_np, displacement_np, displacement_n, velocity_n, acceleration_n);
   this->update_acceleration(
     acceleration_np, displacement_np, displacement_n, velocity_n, acceleration_n);
+}
+
+template<int dim, typename Number>
+void
+TimeIntGenAlpha<dim, Number>::set_velocity_fsi_interface(VectorType const & velocity)
+{
+  velocity_fsi_interface = velocity;
 }
 
 template<int dim, typename Number>

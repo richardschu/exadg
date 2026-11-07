@@ -386,6 +386,9 @@ Operator<dim, Number>::setup_operators()
     boundary_mass_data.quad_index = get_quad_index();
 
     boundary_mass_operator.initialize(*matrix_free, affine_constraints, boundary_mass_data);
+    boundary_mass_operator_fsi_robin.initialize(*matrix_free,
+                                                affine_constraints,
+                                                boundary_mass_data);
     if(param.problem_type == ProblemType::Unsteady)
     {
       update_boundary_mass_operator(1.0);
@@ -1250,6 +1253,17 @@ Operator<dim, Number>::evaluate_add_boundary_mass_operator(VectorType &       ds
 
 template<int dim, typename Number>
 void
+Operator<dim, Number>::evaluate_add_boundary_mass_operator_fsi_robin(VectorType &       dst,
+                                                                     VectorType const & src) const
+{
+  if(boundary_mass_operator_fsi_robin.non_empty() and param.problem_type == ProblemType::Unsteady)
+  {
+    boundary_mass_operator_fsi_robin.evaluate_add(dst, src);
+  }
+}
+
+template<int dim, typename Number>
+void
 Operator<dim, Number>::update_boundary_mass_operator(Number const factor) const
 {
   boundary_mass_operator.set_scaling_factor(factor);
@@ -1315,6 +1329,19 @@ Operator<dim, Number>::set_fsi_robin_parameters(
   if(param.problem_type == ProblemType::Unsteady)
   {
     update_boundary_mass_operator(1.0);
+
+    // The velocity term stemming from the fluid in the Robin coupling
+    // condition acts on the fluid--structure interface only.
+    std::map<dealii::types::boundary_id, std::pair<bool, Number>> robin_c_param_fsi;
+    if(std::abs(robin_parameter) > 1e-20)
+    {
+      for(auto it = boundary_IDs.begin(); it != boundary_IDs.end(); ++it)
+      {
+        robin_c_param_fsi.insert(
+          std::make_pair(*it, std::make_pair(false, static_cast<Number>(robin_parameter))));
+      }
+    }
+    boundary_mass_operator_fsi_robin.set_ids_normal_coefficients(robin_c_param_fsi);
   }
 }
 

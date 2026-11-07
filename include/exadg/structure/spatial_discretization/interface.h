@@ -82,6 +82,9 @@ public:
   evaluate_add_boundary_mass_operator(VectorType & dst, VectorType const & src) const = 0;
 
   virtual void
+  evaluate_add_boundary_mass_operator_fsi_robin(VectorType & dst, VectorType const & src) const = 0;
+
+  virtual void
   set_fsi_robin_parameters(std::set<dealii::types::boundary_id> const & boundary_IDs,
                            double const &                               robin_parameter) const = 0;
 

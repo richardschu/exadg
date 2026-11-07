@@ -232,6 +232,11 @@ Driver<dim, Number>::coupling_structure_to_fluid(unsigned int iteration) const
   partitioned_solver->get_structure_velocity(velocity_structure, iteration);
   structure_to_fluid->update_data(velocity_structure);
 
+  // The structure needs the velocity given to the fluid for the Robin coupling
+  // condition. This assumes that the structure is solved after the fluid
+  // within the same coupling iteration.
+  structure->time_integrator->set_velocity_fsi_interface(velocity_structure);
+
   timer_tree.insert({"FSI", "Coupling structure -> fluid"}, sub_timer.wall_time());
 }
 
@@ -330,9 +335,6 @@ template<int dim, typename Number>
 void
 Driver<dim, Number>::update_robin_parameters(double const & robin_parameter_in) const
 {
-  // update Robin parameter in fluid operator traction output
-  fluid->pde_operator->set_robin_parameter_traction_output(robin_parameter_in);
-
   // update Robin parameters in boundary descriptor, we assume that the fluid--structure interface
   // is the only boundary in `neumann_cached_bc`.
   structure->set_fsi_robin_parameters(

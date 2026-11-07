@@ -62,6 +62,9 @@ protected:
   double
   get_mid_time() const;
 
+  double
+  get_alpha_f() const;
+
   /*
    * Computes the finite element vector corresponding to the *remainder* of the acceleration term,
    * which depends on past time step data only. Denoting the acceleration by a, the velocity by v
