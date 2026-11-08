@@ -269,8 +269,35 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
     // Force acting on the structure in the quadrature points of the fluid,
     // which are the points the structure velocity is evaluated in for the
     // Dirichlet boundary condition of the fluid.
-    std::vector<dealii::Tensor<1, dim, double>> force_points;
-    fluid->pde_operator->compute_interface_force(force_points, velocity_fluid, pressure_fluid);
+    // The viscous part depends on the fluid velocity and on the Dirichlet data
+    // g it has been computed with, the pressure part on the fluid pressure. A
+    // part is only recomputed if the corresponding field has been updated in
+    // the last fluid solve, see solve_subproblem_fluid(). For example, the
+    // viscous part is kept from the first coupling iteration for
+    // `UpdateMethod::ImplicitPressureStructure`, since the penalty term of the
+    // viscous flux would otherwise combine the fluid velocity with the
+    // Dirichlet data of a later coupling iteration. The fluid mesh is only
+    // moved in coupling iterations that update both fields.
+    if(fluid_velocity_updated)
+    {
+      fluid->pde_operator->compute_interface_force(force_fluid_viscous,
+                                                   velocity_fluid,
+                                                   pressure_fluid,
+                                                   true /* viscous_part */,
+                                                   false /* pressure_part */);
+    }
+    if(fluid_pressure_updated)
+    {
+      fluid->pde_operator->compute_interface_force(force_fluid_pressure,
+                                                   velocity_fluid,
+                                                   pressure_fluid,
+                                                   false /* viscous_part */,
+                                                   true /* pressure_part */);
+    }
+
+    std::vector<dealii::Tensor<1, dim, double>> force_points = force_fluid_viscous;
+    for(unsigned int i = 0; i < force_points.size(); ++i)
+      force_points[i] += force_fluid_pressure[i];
 
     VectorType force_structure;
     structure->pde_operator->initialize_dof_vector(force_structure);
@@ -313,6 +340,10 @@ Driver<dim, Number>::solve_subproblem_fluid(unsigned int const iteration,
   // solve fluid problem
   fluid->time_integrator->advance_one_timestep_partitioned_solve(
     iteration == 0 /* first_coupling_iteration */, update_velocity, update_pressure);
+
+  // fields updated in this fluid solve, see coupling_fluid_to_structure()
+  fluid_velocity_updated = update_velocity;
+  fluid_pressure_updated = update_pressure;
 }
 
 template<int dim, typename Number>

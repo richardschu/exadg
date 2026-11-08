@@ -1234,7 +1234,9 @@ void
 SpatialOperatorBase<dim, Number>::compute_interface_force(
   std::vector<dealii::Tensor<1, dim, double>> & force,
   VectorType const &                            velocity,
-  VectorType const &                            pressure) const
+  VectorType const &                            pressure,
+  bool const                                    viscous_part,
+  bool const                                    pressure_part) const
 {
   AssertThrow(interface_data_dirichlet_cached.get(),
               dealii::ExcMessage("DirichletCached boundary conditions are not initialized."));
@@ -1318,7 +1320,11 @@ SpatialOperatorBase<dim, Number>::compute_interface_force(
 
       // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
       // pressure, hence multiply by density to get true traction in N/m^2.
-      vector const traction = param.density * (viscous_flux - integrator_p.get_value(q) * normal);
+      vector traction;
+      if(viscous_part)
+        traction += param.density * viscous_flux;
+      if(pressure_part)
+        traction -= param.density * integrator_p.get_value(q) * normal;
 
       // The force acting on the structure has the opposite sign.
       scalar const JxW = integrator_u.JxW(q);

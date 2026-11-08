@@ -281,11 +281,15 @@ public:
   // is the traction given by the numerical flux of the viscous term and the
   // pressure, times the integration weight JxW in the current (deformed)
   // configuration of the fluid mesh. The ordering of the points is that of the
-  // ContainerInterfaceData of the DirichletCached boundary conditions.
+  // ContainerInterfaceData of the DirichletCached boundary conditions. Only the
+  // viscous part (numerical flux of the viscous term) or the pressure part of
+  // the force is computed if `viscous_part` or `pressure_part` is true.
   void
   compute_interface_force(std::vector<dealii::Tensor<1, dim, double>> & force,
                           VectorType const &                            velocity,
-                          VectorType const &                            pressure) const;
+                          VectorType const &                            pressure,
+                          bool const                                    viscous_part,
+                          bool const                                    pressure_part) const;
 
   /*
    * Time step calculation.
