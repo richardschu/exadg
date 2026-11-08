@@ -73,7 +73,8 @@ private:
   coupling_structure_to_fluid(unsigned int const iteration) const;
 
   void
-  coupling_fluid_to_structure(bool const end_of_time_step) const;
+  coupling_fluid_to_structure(bool const end_of_time_step,
+                              bool const first_coupling_iteration) const;
 
   void
   solve_subproblem_mesh(VectorType const & displacement_structure) const;
@@ -126,6 +127,13 @@ private:
   mutable std::vector<dealii::Tensor<1, dim, double>> force_fluid_pressure;
   mutable bool                                        fluid_velocity_updated = true;
   mutable bool                                        fluid_pressure_updated = true;
+
+  // Fluid traction at t_n and t_{n+1} for the time integration of the
+  // structure, see coupling_fluid_to_structure(): the fluid stress for
+  // `TractionTransfer::PointEvaluation`, the force vector of the structure for
+  // `TractionTransfer::Residual`.
+  mutable VectorType traction_fluid_n;
+  mutable VectorType traction_fluid_np;
 
   // Parameters for partitioned FSI schemes
   Parameters parameters;

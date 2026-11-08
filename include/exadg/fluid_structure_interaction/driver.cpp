@@ -244,10 +244,38 @@ Driver<dim, Number>::coupling_structure_to_fluid(unsigned int iteration) const
 
 template<int dim, typename Number>
 void
-Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) const
+Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step,
+                                                 bool const first_coupling_iteration) const
 {
   dealii::Timer sub_timer;
   sub_timer.restart();
+
+  // The structure solves the balance of momentum at t_{n+1-alpha_f} of the
+  // generalized-alpha method, where the fluid traction is
+  // (1 - alpha_f) * traction_{n+1} + alpha_f * traction_n, consistent with the
+  // velocity g in the Robin coupling condition, see
+  // Structure::TimeIntGenAlpha::do_timestep_solve(). Both transfers are linear
+  // in the traction, so the traction is blended before the transfer.
+  // `traction_fluid_np` holds the traction computed last. In the first
+  // coupling iteration of a time step, this is the traction of the converged
+  // coupling iteration of the last time step or, in the first time step after
+  // the start or a restart, the traction computed in solve() before the time
+  // loop, i.e., the traction at t_n in both cases.
+  auto const blend_in_time = [&](VectorType & traction) {
+    if(end_of_time_step)
+    {
+      if(first_coupling_iteration)
+        traction_fluid_n.swap(traction_fluid_np);
+      traction_fluid_np = traction;
+
+      double const alpha_f = structure->time_integrator->get_alpha_f();
+      traction.sadd(1.0 - alpha_f, alpha_f, traction_fluid_n);
+    }
+    else
+    {
+      traction_fluid_np = traction;
+    }
+  };
 
   VectorType const & velocity_fluid = end_of_time_step ? fluid->time_integrator->get_velocity_np() :
                                                          fluid->time_integrator->get_velocity();
@@ -262,6 +290,7 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
     fluid->pde_operator->interpolate_stress_bc(stress_fluid, velocity_fluid, pressure_fluid);
 
     stress_fluid *= -1.0;
+    blend_in_time(stress_fluid);
     fluid_to_structure->update_data(stress_fluid);
   }
   else if(parameters.traction_transfer == TractionTransfer::Residual)
@@ -307,6 +336,7 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
       force_points,
       structure->pde_operator->get_affine_constraints());
 
+    blend_in_time(force_structure);
     structure->pde_operator->set_fsi_interface_force(force_structure);
   }
   else
@@ -351,7 +381,8 @@ void
 Driver<dim, Number>::solve_subproblem_structure(unsigned int const iteration) const
 {
   // update stress boundary condition for solid
-  coupling_fluid_to_structure(true /* end_of_time_step */);
+  coupling_fluid_to_structure(true /* end_of_time_step */,
+                              iteration == 0 /* first_coupling_iteration */);
 
   // solve structural problem
   structure->time_integrator->advance_one_timestep_partitioned_solve(
@@ -455,7 +486,7 @@ Driver<dim, Number>::solve() const
     // This is only the case for this initial acceleration and is consistent
     // for the typical start from a quiescent state.
     update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
-    coupling_fluid_to_structure(false /* end_of_time_step */);
+    coupling_fluid_to_structure(false /* end_of_time_step */, false /* first_coupling_iteration */);
     structure->time_integrator->compute_initial_acceleration(
       application->structure->get_parameters().restarted_simulation);
   }

@@ -52,6 +52,14 @@ public:
   void
   set_current_time_step_size(double const & time_step_size) final;
 
+  /*
+   * The balance equation is evaluated at t_{n+1-alpha_f}. Loads that are only
+   * known at t_n and t_{n+1}, e.g., in partitioned schemes, are applied as
+   * (1 - alpha_f) * f_{n+1} + alpha_f * f_n.
+   */
+  double
+  get_alpha_f() const;
+
 protected:
   double
   get_scaling_factor_acceleration() const;
@@ -61,9 +69,6 @@ protected:
 
   double
   get_mid_time() const;
-
-  double
-  get_alpha_f() const;
 
   /*
    * Computes the finite element vector corresponding to the *remainder* of the acceleration term,
