@@ -119,11 +119,11 @@ private:
   std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> structure_to_ale;
   std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> fluid_to_structure;
 
-  // `TractionTransfer::Residual`: viscous and pressure part of the fluid force
+  // `TractionTransfer::Residual`: velocity and pressure part of the fluid force
   // in the quadrature points of the fluid interface, and whether the fluid
   // velocity and pressure have been updated in the last fluid solve. Before
   // the first fluid solve, both parts are computed.
-  mutable std::vector<dealii::Tensor<1, dim, double>> force_fluid_viscous;
+  mutable std::vector<dealii::Tensor<1, dim, double>> force_fluid_velocity;
   mutable std::vector<dealii::Tensor<1, dim, double>> force_fluid_pressure;
   mutable bool                                        fluid_velocity_updated = true;
   mutable bool                                        fluid_pressure_updated = true;

@@ -278,17 +278,18 @@ public:
   // Computes the force acting on the structure in the quadrature points of the
   // fluid--structure interface (`BoundaryTypeU::DirichletCached`) for the
   // quadrature index get_quad_index_velocity_standard(). The force in a point
-  // is the traction given by the numerical flux of the viscous term and the
-  // pressure, times the integration weight JxW in the current (deformed)
+  // is the traction given by the numerical fluxes of the momentum equation on
+  // the boundary (viscous term, pressure, convective term and continuity
+  // penalty term), times the integration weight JxW in the current (deformed)
   // configuration of the fluid mesh. The ordering of the points is that of the
   // ContainerInterfaceData of the DirichletCached boundary conditions. Only the
-  // viscous part (numerical flux of the viscous term) or the pressure part of
-  // the force is computed if `viscous_part` or `pressure_part` is true.
+  // velocity part (all terms but the pressure) or the pressure part of the
+  // force is computed if `velocity_part` or `pressure_part` is true.
   void
   compute_interface_force(std::vector<dealii::Tensor<1, dim, double>> & force,
                           VectorType const &                            velocity,
                           VectorType const &                            pressure,
-                          bool const                                    viscous_part,
+                          bool const                                    velocity_part,
                           bool const                                    pressure_part) const;
 
   /*

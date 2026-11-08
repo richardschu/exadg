@@ -63,8 +63,10 @@ enum class CouplingMethod
 //    fluid velocity space and evaluated in the quadrature points of the
 //    structure, where it is applied as NeumannCached boundary condition.
 //  - Residual: the fluid computes the force in its quadrature points of the
-//    interface, i.e., the consistent (interior penalty) flux of the viscous
-//    term and the pressure, integrated over the deformed fluid interface. The
+//    interface, i.e., the numerical fluxes of the momentum equation on the
+//    boundary (the interior penalty flux of the viscous term, the pressure, the
+//    convective flux and the boundary term of the continuity penalty),
+//    integrated over the deformed fluid interface. The
 //    structure receives the corresponding force vector via the transpose of
 //    the evaluation of the structure velocity in these points, which makes the
 //    transfer energy conserving and applicable to non-matching grids. The force

@@ -1235,7 +1235,7 @@ SpatialOperatorBase<dim, Number>::compute_interface_force(
   std::vector<dealii::Tensor<1, dim, double>> & force,
   VectorType const &                            velocity,
   VectorType const &                            pressure,
-  bool const                                    viscous_part,
+  bool const                                    velocity_part,
   bool const                                    pressure_part) const
 {
   AssertThrow(interface_data_dirichlet_cached.get(),
@@ -1254,6 +1254,16 @@ SpatialOperatorBase<dim, Number>::compute_interface_force(
 
   FaceIntegratorU integrator_u(*matrix_free, true, dof_index_u, quad_index);
   FaceIntegratorP integrator_p(*matrix_free, true, dof_index_p, quad_index);
+
+  // terms of the velocity part in addition to the viscous term
+  bool const add_convective_flux = param.convective_problem();
+  bool const add_continuity_penalty_flux =
+    param.use_continuity_penalty and param.continuity_penalty_use_boundary_data;
+  bool const evaluate_grid_velocity = add_convective_flux and param.ale_formulation;
+
+  FaceIntegratorU integrator_grid_velocity(*matrix_free, true, dof_index_u, quad_index);
+  if(evaluate_grid_velocity)
+    convective_kernel->update_ghost_values_grid_velocity();
 
   for(unsigned int face = matrix_free->n_inner_face_batches();
       face < matrix_free->n_inner_face_batches() + matrix_free->n_boundary_face_batches();
@@ -1278,17 +1288,32 @@ SpatialOperatorBase<dim, Number>::compute_interface_force(
     // penalty parameter of the interior penalty method
     viscous_kernel->reinit_boundary_face(integrator_u, dof_index_u);
 
+    if(evaluate_grid_velocity)
+    {
+      integrator_grid_velocity.reinit(face);
+      integrator_grid_velocity.gather_evaluate(convective_kernel->get_grid_velocity(),
+                                               dealii::EvaluationFlags::values);
+    }
+
+    // penalty parameter of the continuity penalty term, computed in the last
+    // update of the penalty operators
+    if(add_continuity_penalty_flux)
+      conti_penalty_kernel->reinit_boundary_face(integrator_u);
+
     unsigned int const n_filled_lanes = matrix_free->n_active_entries_per_face_batch(face);
 
     for(unsigned int q = 0; q < integrator_u.n_q_points; ++q)
     {
       // Traction based on the unit *outward* normal of the fluid domain,
-      // evaluated with the numerical flux of the viscous term, where the
-      // exterior value is given by the Dirichlet data g, i.e., the velocity of
-      // the structure. For u = g, this is nu * F(u) * n. The pressure is
-      // evaluated with the interior value, as for Dirichlet boundaries of the
-      // velocity. The convective flux vanishes for u = g equal to the velocity
-      // of the moving interface and is not considered here.
+      // evaluated with the numerical fluxes of the momentum equation on the
+      // boundary, where the exterior value is given by the Dirichlet data g,
+      // i.e., the velocity of the structure: the viscous flux (nu * F(u) * n
+      // for u = g), the pressure with the interior value, the convective flux,
+      // and the boundary term of the continuity penalty. The convective flux
+      // and the continuity penalty term vanish for u = g. The divergence
+      // penalty term has no boundary term. The traction is the negative of the
+      // boundary terms of the operators on the left-hand side of the momentum
+      // equation.
       vector const normal  = integrator_u.normal_vector(q);
       vector const value_m = integrator_u.get_value(q);
       vector const value_p =
@@ -1321,8 +1346,37 @@ SpatialOperatorBase<dim, Number>::compute_interface_force(
       // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
       // pressure, hence multiply by density to get true traction in N/m^2.
       vector traction;
-      if(viscous_part)
+      if(velocity_part)
+      {
         traction += param.density * viscous_flux;
+
+        if(add_convective_flux)
+        {
+          vector const value_p_convective = calculate_exterior_value_convective<dim, Number>(
+            value_m,
+            q,
+            integrator_u,
+            OperatorType::full,
+            boundary_type,
+            convective_kernel_data.type_dirichlet_bc,
+            boundary_id,
+            std::shared_ptr<BoundaryDescriptorU<dim> const>(this->boundary_descriptor->velocity),
+            0.0 /* time, unused for DirichletCached */);
+
+          vector grid_velocity;
+          if(evaluate_grid_velocity)
+            grid_velocity = integrator_grid_velocity.get_value(q);
+
+          traction -=
+            param.density * convective_kernel->calculate_flux_nonlinear_boundary(
+                              value_m, value_p_convective, normal, grid_velocity, boundary_type);
+        }
+
+        // same exterior value as in the continuity penalty operator
+        if(add_continuity_penalty_flux)
+          traction -=
+            param.density * conti_penalty_kernel->calculate_flux(value_m, value_p, normal);
+      }
       if(pressure_part)
         traction -= param.density * integrator_p.get_value(q) * normal;
 
@@ -1338,6 +1392,9 @@ SpatialOperatorBase<dim, Number>::compute_interface_force(
       }
     }
   }
+
+  if(evaluate_grid_velocity)
+    convective_kernel->zero_out_ghost_values_grid_velocity();
 }
 
 template<int dim, typename Number>
