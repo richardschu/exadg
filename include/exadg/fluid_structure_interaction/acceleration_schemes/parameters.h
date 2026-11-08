@@ -69,10 +69,21 @@ enum class CouplingMethod
 //    the evaluation of the structure velocity in these points, which makes the
 //    transfer energy conserving and applicable to non-matching grids. The force
 //    is a dead load in the structure within a coupling iteration.
+//  - ProjectionFluidTrace: as PointEvaluation, but with the traction of
+//    Residual, projected onto the trace of the fluid velocity space (L2
+//    projection on the deformed fluid interface).
+//  - ProjectionStructureTrace: the force vector of Residual is projected onto
+//    the trace of the structure displacement space (L2 projection on the
+//    reference interface), which gives a traction applied as NeumannCached
+//    boundary condition, i.e., as follower load if the traction is pulled back.
+//    In the configuration the fluid force has been integrated in, the traction
+//    reproduces the force vector of Residual.
 enum class TractionTransfer
 {
   PointEvaluation,
-  Residual
+  Residual,
+  ProjectionFluidTrace,
+  ProjectionStructureTrace
 };
 
 // The initial guess used in the FSI coupling loop is computed using an extrapolation of suitable

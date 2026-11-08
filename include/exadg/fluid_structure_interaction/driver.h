@@ -118,6 +118,9 @@ private:
   std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> structure_to_ale;
   std::shared_ptr<InterfaceCoupling<1 /* rank */, dim, Number>> fluid_to_structure;
 
+  // displacement of the structure in the last update of the fluid mesh
+  mutable VectorType displacement_structure_ale;
+
   // Parameters for partitioned FSI schemes
   Parameters parameters;
 

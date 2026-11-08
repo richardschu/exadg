@@ -22,6 +22,7 @@
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/interpolate.h>
 #include <exadg/grid/grid_data.h>
+#include <exadg/operators/boundary_trace_projection.h>
 #include <exadg/operators/constraints.h>
 #include <exadg/operators/finite_element.h>
 #include <exadg/operators/quadrature.h>
@@ -1076,6 +1077,109 @@ Operator<dim, Number>::set_fsi_interface_force(VectorType const & force) const
 }
 
 template<int dim, typename Number>
+void
+Operator<dim, Number>::set_fsi_interface_traction_from_force(VectorType const & force,
+                                                             VectorType const & displacement) const
+{
+  AssertThrow(interface_data_neumann_cached.get(),
+              dealii::ExcMessage("NeumannCached boundary conditions are not initialized."));
+
+  bool const pull_back_traction = param.large_deformation and param.pull_back_traction;
+  AssertThrow(not(param.large_deformation and param.spatial_integration),
+              dealii::ExcMessage("Spatial integration is not implemented."));
+
+  // The degrees of freedom with Dirichlet constraints are part of the trace
+  // space as well, since the force vector is assembled without constraints.
+  unsigned int const dof_index  = get_dof_index_periodicity_and_hanging_node_constraints();
+  unsigned int const quad_index = get_quad_index();
+
+  // traction per reference area
+  VectorType traction;
+  solve_boundary_mass_system<dim, dim, Number>(traction,
+                                               force,
+                                               *matrix_free,
+                                               dof_index,
+                                               quad_index,
+                                               boundary_descriptor->neumann_cached_bc,
+                                               1.e-12);
+
+  // evaluate the traction in the quadrature points of the NeumannCached data
+  typedef FaceIntegrator<dim, dim, Number>                        IntegratorFace;
+  typedef dealii::VectorizedArray<Number>                         scalar;
+  typedef dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> vector;
+  typedef dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> tensor;
+
+  IntegratorFace integrator_traction(*matrix_free, true, dof_index, quad_index);
+  IntegratorFace integrator_displacement(*matrix_free, true, dof_index, quad_index);
+
+  auto & array_solution = interface_data_neumann_cached->get_array_solution(quad_index);
+
+  // displacement including the values of the Dirichlet degrees of freedom
+  VectorType displacement_all;
+  initialize_dof_vector_without_dirichlet_constraints(displacement_all);
+  if(pull_back_traction)
+  {
+    AssertThrow(displacement.locally_owned_size() == displacement_all.locally_owned_size(),
+                dealii::ExcMessage("Vector layout of displacement does not match."));
+    for(unsigned int i = 0; i < displacement.locally_owned_size(); ++i)
+      displacement_all.local_element(i) = displacement.local_element(i);
+    displacement_all.update_ghost_values();
+  }
+
+  traction.update_ghost_values();
+
+  for(unsigned int face = matrix_free->n_inner_face_batches();
+      face < matrix_free->n_inner_face_batches() + matrix_free->n_boundary_face_batches();
+      ++face)
+  {
+    if(boundary_descriptor->neumann_cached_bc.find(matrix_free->get_boundary_id(face)) ==
+       boundary_descriptor->neumann_cached_bc.end())
+      continue;
+
+    integrator_traction.reinit(face);
+    integrator_traction.gather_evaluate(traction, dealii::EvaluationFlags::values);
+
+    if(pull_back_traction)
+    {
+      integrator_displacement.reinit(face);
+      integrator_displacement.gather_evaluate(displacement_all, dealii::EvaluationFlags::gradients);
+    }
+
+    unsigned int const n_filled_lanes = matrix_free->n_active_entries_per_face_batch(face);
+
+    for(unsigned int q = 0; q < integrator_traction.n_q_points; ++q)
+    {
+      vector value = integrator_traction.get_value(q);
+
+      if(pull_back_traction)
+      {
+        tensor F = integrator_displacement.get_gradient(q);
+        for(unsigned int d = 0; d < dim; ++d)
+          F[d][d] += 1.0;
+
+        vector const n_star =
+          determinant(F) * (transpose(invert(F)) * integrator_displacement.normal_vector(q));
+        scalar const area_ratio = n_star.norm();
+
+        // Avoid division by zero in unfilled lanes.
+        for(unsigned int v = 0; v < n_filled_lanes; ++v)
+          for(unsigned int d = 0; d < dim; ++d)
+            value[d][v] /= area_ratio[v];
+      }
+
+      for(unsigned int v = 0; v < n_filled_lanes; ++v)
+      {
+        dealii::types::global_dof_index const index =
+          interface_data_neumann_cached->get_vector_index(quad_index, face, q, v);
+
+        for(unsigned int d = 0; d < dim; ++d)
+          array_solution[index][d] = value[d][v];
+      }
+    }
+  }
+}
+
+template<int dim, typename Number>
 std::shared_ptr<ContainerInterfaceData<1, dim, double>>
 Operator<dim, Number>::get_container_interface_data_dirichlet() const
 {
@@ -1087,6 +1191,13 @@ void
 Operator<dim, Number>::initialize_dof_vector(VectorType & src) const
 {
   matrix_free->initialize_dof_vector(src, get_dof_index());
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::initialize_dof_vector_without_dirichlet_constraints(VectorType & src) const
+{
+  matrix_free->initialize_dof_vector(src, get_dof_index_periodicity_and_hanging_node_constraints());
 }
 
 template<int dim, typename Number>

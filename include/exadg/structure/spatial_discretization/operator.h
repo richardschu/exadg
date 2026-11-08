@@ -232,6 +232,13 @@ public:
   initialize_dof_vector(VectorType & src) const final;
 
   /*
+   * Initialization of DoF vector for vector field without Dirichlet
+   * constraints, e.g., for force vectors assembled without constraints.
+   */
+  void
+  initialize_dof_vector_without_dirichlet_constraints(VectorType & src) const;
+
+  /*
    * Initialization of DoF vector for scalar postpocessing field.
    */
   void
@@ -419,6 +426,22 @@ public:
    */
   void
   set_fsi_interface_force(VectorType const & force) const;
+
+  /*
+   * Fluid--structure interaction: set the traction acting on the structure at
+   * the fluid--structure interface (NeumannCached data) from the force vector
+   * `force` assembled without constraints, see set_fsi_interface_force(), and
+   * initialized via initialize_dof_vector_without_dirichlet_constraints(). The
+   * L2 projection of the force onto the trace of the displacement space in the
+   * reference configuration gives the traction per reference area. If the
+   * traction is pulled back (`pull_back_traction`), it is divided by the area
+   * ratio |n*| = |J F^{-T} N| of the displacement `displacement`, which
+   * describes the configuration the force has been integrated in. In this
+   * configuration, the traction applied reproduces the force vector.
+   */
+  void
+  set_fsi_interface_traction_from_force(VectorType const & force,
+                                        VectorType const & displacement) const;
 
   // TODO: we currently need this function public for precice-based FSI
   unsigned int
