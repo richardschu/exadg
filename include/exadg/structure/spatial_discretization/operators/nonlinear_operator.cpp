@@ -38,35 +38,6 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::initialize_derived()
 {
-  // integrator_lin always refers to evaluation in the reference configuration.
-  integrator_lin = std::make_shared<IntegratorCell>(*this->matrix_free,
-                                                    this->operator_data.dof_index_inhomogeneous,
-                                                    this->operator_data.quad_index);
-
-  // It should not make a difference here whether we use `dof_index` or
-  // `dof_index_inhomogeneous` at this point.
-  this->matrix_free->initialize_dof_vector(displacement_lin, this->operator_data.dof_index);
-
-  // The follower loads, i.e., the tractions and the exterior pressure pulled
-  // back to the material configuration, are linearized for the residual
-  // evaluated in the material configuration. The linearized operator then needs
-  // the gradient of the increment on boundary faces. For the inverse analysis,
-  // the linearized operator is evaluated in the configuration of
-  // `matrix_free_spatial`, which is not considered here.
-  follower_load_tangent_implemented =
-    this->operator_data.pull_back_traction and (not this->operator_data.spatial_integration) and
-    this->operator_data.problem_type != ProblemType::InverseAnalysis;
-  if(follower_load_tangent_implemented)
-  {
-    integrator_lin_face =
-      std::make_shared<IntegratorFace>(*this->matrix_free,
-                                       true,
-                                       this->operator_data.dof_index_inhomogeneous,
-                                       this->operator_data.quad_index);
-
-    this->integrator_flags.face_evaluate |= dealii::EvaluationFlags::gradients;
-  }
-
   if(this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
     this->matrix_free->initialize_dof_vector(shift_vector, this->operator_data.dof_index);
@@ -85,6 +56,41 @@ NonLinearOperator<dim, Number>::initialize_derived()
     // analysis setting.
     this->mapping_spatial =
       std::make_shared<MappingDoFVector<dim, Number>>(this->operator_data.mapping_degree);
+  }
+
+  // integrator_lin always refers to evaluation in the reference configuration.
+  // In the inverse analysis, this is the (iteratively computed) reference
+  // configuration of `matrix_free_spatial`, in which the residual and the
+  // linearized operator are evaluated. The `FEEvaluation` objects read the
+  // mapping data in `reinit()`, such that they remain valid when the mapping of
+  // `matrix_free_spatial` is updated.
+  dealii::MatrixFree<dim, Number> const & matrix_free_lin =
+    this->operator_data.problem_type == ProblemType::InverseAnalysis ? this->matrix_free_spatial :
+                                                                       *this->matrix_free;
+
+  integrator_lin = std::make_shared<IntegratorCell>(matrix_free_lin,
+                                                    this->operator_data.dof_index_inhomogeneous,
+                                                    this->operator_data.quad_index);
+
+  // It should not make a difference here whether we use `dof_index` or
+  // `dof_index_inhomogeneous` at this point.
+  this->matrix_free->initialize_dof_vector(displacement_lin, this->operator_data.dof_index);
+
+  // The follower loads, i.e., the tractions and the exterior pressure pulled
+  // back to the reference configuration, are linearized for the residual
+  // evaluated in the reference configuration. The linearized operator then
+  // needs the gradient of the increment on boundary faces.
+  follower_load_tangent_implemented =
+    this->operator_data.pull_back_traction and (not this->operator_data.spatial_integration);
+  if(follower_load_tangent_implemented)
+  {
+    integrator_lin_face =
+      std::make_shared<IntegratorFace>(matrix_free_lin,
+                                       true,
+                                       this->operator_data.dof_index_inhomogeneous,
+                                       this->operator_data.quad_index);
+
+    this->integrator_flags.face_evaluate |= dealii::EvaluationFlags::gradients;
   }
 }
 

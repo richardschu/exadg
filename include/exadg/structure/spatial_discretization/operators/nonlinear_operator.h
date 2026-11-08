@@ -369,6 +369,10 @@ private:
             VectorType const &                      src,
             Range const &                           range) const override;
 
+  // Declared before `integrator_lin` and `integrator_lin_face`, which may refer
+  // to it and release their scratch data to it on destruction.
+  mutable dealii::MatrixFree<dim, Number> matrix_free_spatial;
+
   mutable std::shared_ptr<IntegratorCell> integrator_lin;
   mutable VectorType                      displacement_lin;
 
@@ -383,7 +387,6 @@ private:
 
   VectorType shift_vector;
 
-  mutable dealii::MatrixFree<dim, Number>                matrix_free_spatial;
   mutable std::shared_ptr<MappingDoFVector<dim, Number>> mapping_spatial;
   mutable std::shared_ptr<dealii::Mapping<dim> const>    mapping_undeformed;
 };
