@@ -287,17 +287,6 @@ public:
                           VectorType const &                            velocity,
                           VectorType const &                            pressure) const;
 
-  // FSI: coupling fluid -> structure
-  // L2 projection of the traction given by the numerical flux of the viscous
-  // term and the pressure (see compute_interface_force()) onto the trace of the
-  // velocity space on the fluid--structure interface, integrated in the current
-  // (deformed) configuration of the fluid mesh with the quadrature index
-  // get_quad_index_velocity_standard().
-  void
-  project_stress_bc(VectorType &       stress,
-                    VectorType const & velocity,
-                    VectorType const & pressure) const;
-
   /*
    * Time step calculation.
    */
@@ -703,17 +692,6 @@ private:
                   Range const &) const
   {
   }
-
-  // FSI: traction at the fluid--structure interface given by the numerical flux
-  // of the viscous term and the pressure. Requires the values and gradients of
-  // `integrator_u`, the values of `integrator_p` and the penalty parameter of
-  // the viscous kernel initialized for the boundary face `face`.
-  vector
-  calculate_interface_traction(FaceIntegratorU &                integrator_u,
-                               FaceIntegratorP const &          integrator_p,
-                               unsigned int const               face,
-                               unsigned int const               q,
-                               dealii::types::boundary_id const boundary_id) const;
 
   void
   local_interpolate_stress_bc_boundary_face(dealii::MatrixFree<dim, Number> const & matrix_free,

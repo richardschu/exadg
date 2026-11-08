@@ -165,11 +165,9 @@ Driver<dim, Number>::setup_interface_coupling()
     timer_tree.insert({"FSI", "Setup", "Coupling structure -> fluid"}, timer_local.wall_time());
   }
 
-  // fluid to structure: with `TractionTransfer::Residual` and
-  // `TractionTransfer::ProjectionStructureTrace`, the transpose of the coupling
-  // structure -> fluid is used instead.
-  if(parameters.traction_transfer == TractionTransfer::PointEvaluation or
-     parameters.traction_transfer == TractionTransfer::ProjectionFluidTrace)
+  // fluid to structure: with `TractionTransfer::Residual`, the transpose of the
+  // coupling structure -> fluid is used instead.
+  if(parameters.traction_transfer == TractionTransfer::PointEvaluation)
   {
     dealii::Timer timer_local;
     timer_local.restart();
@@ -256,22 +254,17 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
   VectorType const & pressure_fluid = end_of_time_step ? fluid->time_integrator->get_pressure_np() :
                                                          fluid->time_integrator->get_pressure();
 
-  if(parameters.traction_transfer == TractionTransfer::PointEvaluation or
-     parameters.traction_transfer == TractionTransfer::ProjectionFluidTrace)
+  if(parameters.traction_transfer == TractionTransfer::PointEvaluation)
   {
     VectorType stress_fluid;
     fluid->pde_operator->initialize_vector_velocity(stress_fluid);
     // calculate fluid stress at fluid-structure interface
-    if(parameters.traction_transfer == TractionTransfer::PointEvaluation)
-      fluid->pde_operator->interpolate_stress_bc(stress_fluid, velocity_fluid, pressure_fluid);
-    else
-      fluid->pde_operator->project_stress_bc(stress_fluid, velocity_fluid, pressure_fluid);
+    fluid->pde_operator->interpolate_stress_bc(stress_fluid, velocity_fluid, pressure_fluid);
 
     stress_fluid *= -1.0;
     fluid_to_structure->update_data(stress_fluid);
   }
-  else if(parameters.traction_transfer == TractionTransfer::Residual or
-          parameters.traction_transfer == TractionTransfer::ProjectionStructureTrace)
+  else if(parameters.traction_transfer == TractionTransfer::Residual)
   {
     // Force acting on the structure in the quadrature points of the fluid,
     // which are the points the structure velocity is evaluated in for the
@@ -280,36 +273,14 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
     fluid->pde_operator->compute_interface_force(force_points, velocity_fluid, pressure_fluid);
 
     VectorType force_structure;
-    if(parameters.traction_transfer == TractionTransfer::Residual)
-    {
-      structure->pde_operator->initialize_dof_vector(force_structure);
-      structure_to_fluid->integrate_transposed(
-        force_structure,
-        fluid->pde_operator->get_quad_index_velocity_standard(),
-        force_points,
-        structure->pde_operator->get_affine_constraints());
+    structure->pde_operator->initialize_dof_vector(force_structure);
+    structure_to_fluid->integrate_transposed(
+      force_structure,
+      fluid->pde_operator->get_quad_index_velocity_standard(),
+      force_points,
+      structure->pde_operator->get_affine_constraints());
 
-      structure->pde_operator->set_fsi_interface_force(force_structure);
-    }
-    else
-    {
-      // The force vector is assembled without constraints, such that the
-      // traction is also defined in the Dirichlet degrees of freedom.
-      structure->pde_operator->initialize_dof_vector_without_dirichlet_constraints(force_structure);
-      structure_to_fluid->integrate_transposed(
-        force_structure,
-        fluid->pde_operator->get_quad_index_velocity_standard(),
-        force_points,
-        dealii::AffineConstraints<Number>());
-
-      // The fluid force has been integrated in the configuration given by the
-      // displacement of the last mesh update, or by the initial displacement
-      // before the first one.
-      structure->pde_operator->set_fsi_interface_traction_from_force(
-        force_structure,
-        displacement_structure_ale.size() > 0 ? displacement_structure_ale :
-                                                structure->time_integrator->get_displacement_n());
-    }
+    structure->pde_operator->set_fsi_interface_force(force_structure);
   }
   else
   {
@@ -325,11 +296,6 @@ Driver<dim, Number>::solve_subproblem_mesh(VectorType const & displacement_struc
 {
   // update displacement condition at interface
   coupling_structure_to_ale(displacement_structure);
-
-  // displacement defining the configuration of the fluid mesh, required for
-  // `TractionTransfer::ProjectionStructureTrace`
-  if(parameters.traction_transfer == TractionTransfer::ProjectionStructureTrace)
-    displacement_structure_ale = displacement_structure;
 
   // move the fluid mesh and update dependent data structures
   fluid->solve_ale();
