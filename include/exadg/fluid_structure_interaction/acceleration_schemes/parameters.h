@@ -68,7 +68,11 @@ enum class CouplingMethod
 //    structure receives the corresponding force vector via the transpose of
 //    the evaluation of the structure velocity in these points, which makes the
 //    transfer energy conserving and applicable to non-matching grids. The force
-//    is a dead load in the structure within a coupling iteration.
+//    is a dead load in the structure within a coupling iteration. Since the
+//    force is integrated over the deformed interface, it contains the change of
+//    the interface area also for linear elasticity, whereas PointEvaluation
+//    applies the traction on the reference interface in this case.
+// The default is PointEvaluation.
 enum class TractionTransfer
 {
   PointEvaluation,
