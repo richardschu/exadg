@@ -1062,6 +1062,20 @@ Operator<dim, Number>::get_container_interface_data_neumann() const
 }
 
 template<int dim, typename Number>
+dealii::AffineConstraints<Number> const &
+Operator<dim, Number>::get_affine_constraints() const
+{
+  return affine_constraints;
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::set_fsi_interface_force(VectorType const & force) const
+{
+  force_fsi_interface = force;
+}
+
+template<int dim, typename Number>
 std::shared_ptr<ContainerInterfaceData<1, dim, double>>
 Operator<dim, Number>::get_container_interface_data_dirichlet() const
 {
@@ -1215,6 +1229,12 @@ Operator<dim, Number>::compute_initial_acceleration(VectorType &       initial_a
       apply_add_damping_operator(rhs, velocity_rhs);
       evaluate_add_boundary_mass_operator(rhs, velocity_rhs);
       evaluate_add_boundary_mass_operator_fsi_robin(rhs, initial_velocity);
+    }
+
+    // force acting on the fluid--structure interface
+    if(force_fsi_interface.size() > 0)
+    {
+      rhs.add(1.0, force_fsi_interface);
     }
 
     // Shift inhomogeneous part of mass matrix operator (i.e. mass matrix applied to a dof vector
@@ -1407,6 +1427,12 @@ Operator<dim, Number>::evaluate_nonlinear_residual(VectorType &       dst,
     body_forces.reinit(dst);
     body_force_operator.evaluate_add(body_forces, src, time);
     dst -= body_forces;
+  }
+
+  // force acting on the fluid--structure interface
+  if(force_fsi_interface.size() > 0)
+  {
+    dst.add(-1.0, force_fsi_interface);
   }
 
   // To ensure convergence of the Newton solver, the residual has to be zero
@@ -1607,6 +1633,12 @@ Operator<dim, Number>::rhs(VectorType & dst, double const time) const
   // Neumann BCs and inhomogeneous Dirichlet BCs
   elasticity_operator_linear.set_time(time);
   elasticity_operator_linear.rhs_add(dst);
+
+  // force acting on the fluid--structure interface
+  if(force_fsi_interface.size() > 0)
+  {
+    dst.add(1.0, force_fsi_interface);
+  }
 }
 
 template<int dim, typename Number>

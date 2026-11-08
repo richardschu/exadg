@@ -55,6 +55,25 @@ ContainerInterfaceData<rank, dim, number_type>::access_data_container(unsigned i
 }
 
 template<int rank, int dim, typename number_type>
+dealii::types::global_dof_index
+ContainerInterfaceData<rank, dim, number_type>::get_vector_index(unsigned int const q_index,
+                                                                 unsigned int const face,
+                                                                 unsigned int const q,
+                                                                 unsigned int const v) const
+{
+  auto const it_q_index = map_vector_index.find(q_index);
+  AssertThrow(it_q_index != map_vector_index.end(),
+              dealii::ExcMessage("Specified q_index = " + std::to_string(q_index) +
+                                 " does not exist in map_vector_index."));
+
+  auto const it_index = it_q_index->second.find(std::make_tuple(face, q, v));
+  AssertThrow(it_index != it_q_index->second.end(),
+              dealii::ExcMessage("Specified {face, q, v} does not exist in map_vector_index."));
+
+  return it_index->second;
+}
+
+template<int rank, int dim, typename number_type>
 std::vector<typename ContainerInterfaceData<rank, dim, number_type>::QuadIndex> const &
 ContainerInterfaceData<rank, dim, number_type>::get_quad_indices()
 {

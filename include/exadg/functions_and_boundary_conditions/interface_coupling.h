@@ -23,6 +23,7 @@
 #define EXADG_FUNCTIONS_AND_BOUNDARY_CONDITIONS_INTERFACE_COUPLING_H_
 
 // deal.II
+#include <deal.II/lac/affine_constraints.h>
 #include <deal.II/numerics/vector_tools.h>
 
 // ExaDG
@@ -63,6 +64,27 @@ public:
 
   void
   update_data(VectorType const & dof_vector_src);
+
+  /*
+   * Transpose of the evaluation in update_data() for the quadrature index
+   * `quad_index_dst`: the values given in the points of the dst-side are
+   * tested with the shape functions of the src-side and summed up,
+   *
+   *   dof_vector_src_i = sum_points phi_i(x_point) * values_dst(x_point) ,
+   *
+   * and distributed to `dof_vector_src` using `constraints_src`. Points found
+   * in several cells of the src-side contribute to each of these cells with the
+   * weight 1 / (number of cells), which is the transpose of the averaging in
+   * update_data(). With values_dst being point forces, i.e., tractions times
+   * the integration weights of the dst-side, `dof_vector_src` is the
+   * corresponding force vector of the src-side, which is consistent with
+   * evaluating the src-side solution in the points of the dst-side.
+   */
+  void
+  integrate_transposed(VectorType &                                           dof_vector_src,
+                       quad_index const                                       quad_index_dst,
+                       std::vector<dealii::Tensor<rank, dim, double>> const & values_dst,
+                       dealii::AffineConstraints<Number> const & constraints_src) const;
 
 private:
   /*

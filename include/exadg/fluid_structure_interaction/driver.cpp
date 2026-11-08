@@ -165,7 +165,9 @@ Driver<dim, Number>::setup_interface_coupling()
     timer_tree.insert({"FSI", "Setup", "Coupling structure -> fluid"}, timer_local.wall_time());
   }
 
-  // fluid to structure
+  // fluid to structure: with `TractionTransfer::Residual`, the transpose of the
+  // coupling structure -> fluid is used instead.
+  if(parameters.traction_transfer == TractionTransfer::PointEvaluation)
   {
     dealii::Timer timer_local;
     timer_local.restart();
@@ -247,24 +249,43 @@ Driver<dim, Number>::coupling_fluid_to_structure(bool const end_of_time_step) co
   dealii::Timer sub_timer;
   sub_timer.restart();
 
-  VectorType stress_fluid;
-  fluid->pde_operator->initialize_vector_velocity(stress_fluid);
-  // calculate fluid stress at fluid-structure interface
-  if(end_of_time_step)
+  VectorType const & velocity_fluid = end_of_time_step ? fluid->time_integrator->get_velocity_np() :
+                                                         fluid->time_integrator->get_velocity();
+  VectorType const & pressure_fluid = end_of_time_step ? fluid->time_integrator->get_pressure_np() :
+                                                         fluid->time_integrator->get_pressure();
+
+  if(parameters.traction_transfer == TractionTransfer::PointEvaluation)
   {
-    fluid->pde_operator->interpolate_stress_bc(stress_fluid,
-                                               fluid->time_integrator->get_velocity_np(),
-                                               fluid->time_integrator->get_pressure_np());
+    VectorType stress_fluid;
+    fluid->pde_operator->initialize_vector_velocity(stress_fluid);
+    // calculate fluid stress at fluid-structure interface
+    fluid->pde_operator->interpolate_stress_bc(stress_fluid, velocity_fluid, pressure_fluid);
+
+    stress_fluid *= -1.0;
+    fluid_to_structure->update_data(stress_fluid);
+  }
+  else if(parameters.traction_transfer == TractionTransfer::Residual)
+  {
+    // Force acting on the structure in the quadrature points of the fluid,
+    // which are the points the structure velocity is evaluated in for the
+    // Dirichlet boundary condition of the fluid.
+    std::vector<dealii::Tensor<1, dim, double>> force_points;
+    fluid->pde_operator->compute_interface_force(force_points, velocity_fluid, pressure_fluid);
+
+    VectorType force_structure;
+    structure->pde_operator->initialize_dof_vector(force_structure);
+    structure_to_fluid->integrate_transposed(
+      force_structure,
+      fluid->pde_operator->get_quad_index_velocity_standard(),
+      force_points,
+      structure->pde_operator->get_affine_constraints());
+
+    structure->pde_operator->set_fsi_interface_force(force_structure);
   }
   else
   {
-    fluid->pde_operator->interpolate_stress_bc(stress_fluid,
-                                               fluid->time_integrator->get_velocity(),
-                                               fluid->time_integrator->get_pressure());
+    AssertThrow(false, dealii::ExcMessage("TractionTransfer not implemented."));
   }
-
-  stress_fluid *= -1.0;
-  fluid_to_structure->update_data(stress_fluid);
 
   timer_tree.insert({"FSI", "Coupling fluid -> structure"}, sub_timer.wall_time());
 }
@@ -397,6 +418,11 @@ Driver<dim, Number>::solve() const
   // compute initial acceleration for structural problem
   {
     // update stress boundary condition for solid at time t_n (not t_{n+1})
+    // With `TractionTransfer::Residual`, the penalty term of the fluid flux
+    // uses the structure velocity cached in the fluid, which is still zero
+    // here, since the coupling structure -> fluid has not been called yet.
+    // This is only the case for this initial acceleration and is consistent
+    // for the typical start from a quiescent state.
     update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
     coupling_fluid_to_structure(false /* end_of_time_step */);
     structure->time_integrator->compute_initial_acceleration(

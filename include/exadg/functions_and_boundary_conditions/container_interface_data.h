@@ -140,6 +140,16 @@ public:
                         unsigned int const q,
                         unsigned int const v) const;
 
+  /*
+   * Returns the index of the point {face, q, v} in the arrays of quadrature
+   * points and solution values for the quadrature index q_index.
+   */
+  dealii::types::global_dof_index
+  get_vector_index(unsigned int const q_index,
+                   unsigned int const face,
+                   unsigned int const q,
+                   unsigned int const v) const;
+
 private:
   std::vector<QuadIndex> quad_indices;
 

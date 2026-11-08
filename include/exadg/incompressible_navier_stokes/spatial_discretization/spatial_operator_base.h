@@ -274,6 +274,19 @@ public:
                         VectorType const & velocity,
                         VectorType const & pressure) const;
 
+  // FSI: coupling fluid -> structure
+  // Computes the force acting on the structure in the quadrature points of the
+  // fluid--structure interface (`BoundaryTypeU::DirichletCached`) for the
+  // quadrature index get_quad_index_velocity_standard(). The force in a point
+  // is the traction given by the numerical flux of the viscous term and the
+  // pressure, times the integration weight JxW in the current (deformed)
+  // configuration of the fluid mesh. The ordering of the points is that of the
+  // ContainerInterfaceData of the DirichletCached boundary conditions.
+  void
+  compute_interface_force(std::vector<dealii::Tensor<1, dim, double>> & force,
+                          VectorType const &                            velocity,
+                          VectorType const &                            pressure) const;
+
   /*
    * Time step calculation.
    */

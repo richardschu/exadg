@@ -406,6 +406,20 @@ public:
   std::shared_ptr<ContainerInterfaceData<1, dim, double>>
   get_container_interface_data_dirichlet() const;
 
+  // AffineConstraints object of the displacement field with homogeneous
+  // Dirichlet constraints, e.g., to assemble force vectors.
+  dealii::AffineConstraints<Number> const &
+  get_affine_constraints() const;
+
+  /*
+   * Fluid--structure interaction: set the force vector acting on the structure
+   * at the fluid--structure interface, which is added as an external load
+   * (dead load) to the residual, the right-hand side of linear problems and the
+   * computation of the initial acceleration.
+   */
+  void
+  set_fsi_interface_force(VectorType const & force) const;
+
   // TODO: we currently need this function public for precice-based FSI
   unsigned int
   get_dof_index() const;
@@ -629,6 +643,9 @@ private:
   // TODO: The PDE operator should only have read access to interface data
   mutable std::shared_ptr<ContainerInterfaceData<1, dim, double>> interface_data_dirichlet_cached;
   mutable std::shared_ptr<ContainerInterfaceData<1, dim, double>> interface_data_neumann_cached;
+
+  // force vector acting on the fluid--structure interface, empty if unused
+  mutable VectorType force_fsi_interface;
 
   /*
    * Basic operators.

@@ -58,6 +58,23 @@ enum class CouplingMethod
   DirichletRobinAdaptiveParameter
 };
 
+// Transfer of the fluid traction to the structure:
+//  - PointEvaluation: the fluid traction sigma_f n_f is interpolated into the
+//    fluid velocity space and evaluated in the quadrature points of the
+//    structure, where it is applied as NeumannCached boundary condition.
+//  - Residual: the fluid computes the force in its quadrature points of the
+//    interface, i.e., the consistent (interior penalty) flux of the viscous
+//    term and the pressure, integrated over the deformed fluid interface. The
+//    structure receives the corresponding force vector via the transpose of
+//    the evaluation of the structure velocity in these points, which makes the
+//    transfer energy conserving and applicable to non-matching grids. The force
+//    is a dead load in the structure within a coupling iteration.
+enum class TractionTransfer
+{
+  PointEvaluation,
+  Residual
+};
+
 // The initial guess used in the FSI coupling loop is computed using an extrapolation of suitable
 // order (defined within the single-field time integrators) or the last iterate from the previous
 // time step.
@@ -81,7 +98,8 @@ struct Parameters
         InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep),
       reused_time_steps(0),
       partitioned_max_iter(100),
-      geometric_tolerance(1.e-10)
+      geometric_tolerance(1.e-10),
+      traction_transfer(TractionTransfer::PointEvaluation)
   {
   }
 
@@ -142,6 +160,11 @@ struct Parameters
                         "Tolerance used to locate points at FSI interface.",
                         dealii::Patterns::Double(0.0, 1.0),
                         false);
+      prm.add_parameter("TractionTransfer",
+                        traction_transfer,
+                        "Transfer of the fluid traction to the structure.",
+                        Patterns::Enum<TractionTransfer>(),
+                        false);
     }
     prm.leave_subsection();
   }
@@ -159,6 +182,9 @@ struct Parameters
 
   // tolerance used to locate points at the fluid-structure interface
   double geometric_tolerance;
+
+  // transfer of the fluid traction to the structure
+  TractionTransfer traction_transfer;
 };
 
 } // namespace FSI
