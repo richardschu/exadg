@@ -539,23 +539,29 @@ NonLinearOperator<dim, Number>::add_diagonal(VectorType & diagonal) const
   if(this->operator_data.spatial_integration or
      this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    dealii::MatrixFreeTools::
-      compute_diagonal<dim, -1, 0, dim /* n_components */, Number, dealii::VectorizedArray<Number>>(
-        this->matrix_free_spatial,
-        diagonal,
-        [&](auto & integrator) -> void {
-          // TODO: this is currently done for every column, but would only be
-          // necessary once per cell
-          this->reinit_cell_derived(integrator, integrator.get_current_cell_index());
-
-          integrator.evaluate(this->integrator_flags.cell_evaluate);
-
-          this->do_cell_integral(integrator);
-
-          integrator.integrate(this->integrator_flags.cell_integrate);
-        },
-        this->operator_data.dof_index,
-        this->operator_data.quad_index);
+    // Same as `OperatorBase::add_diagonal()` with `matrix_free_spatial`,
+    // including the boundary face integrals of the linearized operator.
+    OperatorBase<dim, Number, dim /* n_components */> const * const operator_base = this;
+    if(this->evaluate_face_integrals())
+    {
+      dealii::MatrixFreeTools::compute_diagonal(this->matrix_free_spatial,
+                                                diagonal,
+                                                &This::cell_compute_matrix,
+                                                &This::face_compute_matrix,
+                                                &This::boundary_face_compute_matrix,
+                                                operator_base,
+                                                this->operator_data.dof_index,
+                                                this->operator_data.quad_index);
+    }
+    else
+    {
+      dealii::MatrixFreeTools::compute_diagonal(this->matrix_free_spatial,
+                                                diagonal,
+                                                &This::cell_compute_matrix,
+                                                operator_base,
+                                                this->operator_data.dof_index,
+                                                this->operator_data.quad_index);
+    }
   }
   else
   {
@@ -1454,6 +1460,53 @@ NonLinearOperator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> const 
   }
 }
 
+template<int dim, typename Number>
+template<typename SparseMatrix>
+void
+NonLinearOperator<dim, Number>::internal_calculate_system_matrix_spatial(
+  SparseMatrix & system_matrix) const
+{
+  // Same as `OperatorBase::internal_calculate_system_matrix()` with
+  // `matrix_free_spatial`, including the boundary face integrals of the
+  // linearized operator.
+  OperatorBase<dim, Number, dim /* n_components */> const * const operator_base = this;
+  if(this->evaluate_face_integrals())
+  {
+    dealii::MatrixFreeTools::compute_matrix(this->matrix_free_spatial,
+                                            *this->constraint,
+                                            system_matrix,
+                                            &This::cell_compute_matrix,
+                                            &This::face_compute_matrix,
+                                            &This::boundary_face_compute_matrix,
+                                            operator_base,
+                                            this->operator_data.dof_index,
+                                            this->operator_data.quad_index);
+  }
+  else
+  {
+    dealii::MatrixFreeTools::compute_matrix(this->matrix_free_spatial,
+                                            *this->constraint,
+                                            system_matrix,
+                                            &This::cell_compute_matrix,
+                                            operator_base,
+                                            this->operator_data.dof_index,
+                                            this->operator_data.quad_index);
+  }
+
+  // Set diagonal entries of constrained DoFs to 1.0, which is consistent with
+  // `apply()` copying the constrained values.
+  dealii::DoFHandler<dim> const & dof_handler =
+    this->matrix_free->get_dof_handler(this->operator_data.dof_index);
+  for(auto const & line : this->constraint->get_lines())
+  {
+    if(dof_handler.locally_owned_dofs().is_element(line.index))
+    {
+      system_matrix.set(line.index, line.index, 1.0);
+    }
+  }
+  system_matrix.compress(dealii::VectorOperation::insert);
+}
+
 #ifdef DEAL_II_WITH_TRILINOS
 template<int dim, typename Number>
 void
@@ -1463,24 +1516,7 @@ NonLinearOperator<dim, Number>::calculate_system_matrix(
   if(this->operator_data.spatial_integration or
      this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    dealii::MatrixFreeTools::
-      compute_matrix<dim, -1, 0, dim /* n_components */, Number, dealii::VectorizedArray<Number>>(
-        this->matrix_free_spatial,
-        *this->constraint,
-        system_matrix,
-        [&](auto & integrator) -> void {
-          // TODO: this is currently done for every column, but would only be
-          // necessary once per cell
-          this->reinit_cell_derived(integrator, integrator.get_current_cell_index());
-
-          integrator.evaluate(this->integrator_flags.cell_evaluate);
-
-          this->do_cell_integral(integrator);
-
-          integrator.integrate(this->integrator_flags.cell_integrate);
-        },
-        this->operator_data.dof_index,
-        this->operator_data.quad_index);
+    internal_calculate_system_matrix_spatial(system_matrix);
   }
   else
   {
@@ -1499,24 +1535,7 @@ NonLinearOperator<dim, Number>::calculate_system_matrix(
   if(this->operator_data.spatial_integration or
      this->operator_data.problem_type == ProblemType::InverseAnalysis)
   {
-    dealii::MatrixFreeTools::
-      compute_matrix<dim, -1, 0, dim /* n_components */, Number, dealii::VectorizedArray<Number>>(
-        this->matrix_free_spatial,
-        *this->constraint,
-        system_matrix,
-        [&](auto & integrator) -> void {
-          // TODO: this is currently done for every column, but would only be
-          // necessary once per cell
-          this->reinit_cell_derived(integrator, integrator.get_current_cell_index());
-
-          integrator.evaluate(this->integrator_flags.cell_evaluate);
-
-          this->do_cell_integral(integrator);
-
-          integrator.integrate(this->integrator_flags.cell_integrate);
-        },
-        this->operator_data.dof_index,
-        this->operator_data.quad_index);
+    internal_calculate_system_matrix_spatial(system_matrix);
   }
   else
   {

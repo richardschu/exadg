@@ -187,6 +187,14 @@ public:
 
 private:
   /*
+   * Assemble the matrix of the linearized operator evaluated via
+   * `matrix_free_spatial` (Trilinos or PETSc matrices).
+   */
+  template<typename SparseMatrix>
+  void
+  internal_calculate_system_matrix_spatial(SparseMatrix & system_matrix) const;
+
+  /*
    * Non-linear operator.
    */
   void

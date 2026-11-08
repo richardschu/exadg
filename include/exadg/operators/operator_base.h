@@ -659,6 +659,7 @@ private:
                   VectorType const &                      src,
                   Range const &                           range) const;
 
+protected:
   /*
    * Calculate matrix and diagonal using `dealii::MatrixFreeTools`.
    */
@@ -671,6 +672,7 @@ private:
   void
   boundary_face_compute_matrix(IntegratorFace & integrator_m) const;
 
+private:
   void
   cell_based_loop_diagonal(dealii::MatrixFree<dim, Number> const & matrix_free,
                            VectorType &                            dst,
