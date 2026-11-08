@@ -31,6 +31,37 @@ namespace ExaDG
 namespace Structure
 {
 /*
+ * This function calculates the prescribed Cauchy stress sigma = -p I of the
+ * exterior pressure p on `BoundaryType::RobinSpringDashpotPressure` boundaries.
+ */
+template<int dim, typename Number>
+inline DEAL_II_ALWAYS_INLINE //
+  dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>
+  calculate_exterior_stress(dealii::types::boundary_id const               boundary_id,
+                            std::shared_ptr<BoundaryDescriptor<dim> const> boundary_descriptor,
+                            double const &                                 time)
+{
+  // Exterior pressure is scaled smoothly to improve convergence.
+  RobinParameters const & robin_parameters =
+    boundary_descriptor->robin_bc.find(boundary_id)->second;
+
+  double       exterior_pressure = robin_parameters.pressure_value;
+  double const t_ramp            = robin_parameters.pressure_ramp_time;
+  if(time < t_ramp)
+  {
+    exterior_pressure *= 0.5 * (1.0 - std::cos(time * dealii::numbers::PI / t_ramp));
+  }
+
+  dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> stress;
+  for(unsigned int d = 0; d < dim; ++d)
+  {
+    stress[d][d] = -exterior_pressure;
+  }
+
+  return stress;
+}
+
+/*
  * This function calculates the Neumann boundary value.
  */
 template<int dim, typename Number>
@@ -63,18 +94,9 @@ inline DEAL_II_ALWAYS_INLINE //
   }
   else if(boundary_type == BoundaryType::RobinSpringDashpotPressure)
   {
-    // Exterior pressure is scaled smoothly to improve convergence.
-    RobinParameters const & robin_parameters =
-      boundary_descriptor->robin_bc.find(boundary_id)->second;
-
-    double       exterior_pressure = robin_parameters.pressure_value;
-    double const t_ramp            = robin_parameters.pressure_ramp_time;
-    if(time < t_ramp)
-    {
-      exterior_pressure *= 0.5 * (1.0 - std::cos(time * dealii::numbers::PI / t_ramp));
-    }
-
-    traction = -exterior_pressure * integrator.normal_vector(q);
+    // t = sigma n = -p n
+    traction = calculate_exterior_stress<dim, Number>(boundary_id, boundary_descriptor, time) *
+               integrator.normal_vector(q);
   }
   else
   {
