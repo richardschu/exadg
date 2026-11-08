@@ -794,69 +794,55 @@ NonLinearOperator<dim, Number>::boundary_face_loop_nonlinear(
 
 template<int dim, typename Number>
 typename NonLinearOperator<dim, Number>::vector
-NonLinearOperator<dim, Number>::compute_n_star(tensor const & F, vector const & N) const
+NonLinearOperator<dim, Number>::pull_back_load(vector const & load,
+                                               tensor const & F,
+                                               vector const & N,
+                                               bool const     is_pressure) const
 {
   // da/dA * n = det F F^{-T} * N := n_star
   // -> da/dA = n_star.norm()
-  return determinant(F) * (transpose(invert(F)) * N);
+  vector const n_star = determinant(F) * (transpose(invert(F)) * N);
+
+  if(is_pressure)
+  {
+    // The exterior pressure acts on the deformed surface with normal n, i.e.,
+    // t = -p n and t_0 = -p da/dA n = -p n_star. The load is p N, so
+    // p = load * N.
+    return (load * N) * n_star;
+  }
+  else
+  {
+    // t_0 = da/dA * t
+    return n_star.norm() * load;
+  }
 }
 
 template<int dim, typename Number>
 typename NonLinearOperator<dim, Number>::vector
-NonLinearOperator<dim, Number>::compute_n_star_derivative(tensor const & F,
+NonLinearOperator<dim, Number>::pull_back_load_derivative(vector const & load,
+                                                          tensor const & F,
                                                           vector const & N,
-                                                          tensor const & grad_delta_d) const
+                                                          tensor const & grad_delta_d,
+                                                          bool const     is_pressure) const
 {
   tensor const F_inv     = invert(F);
+  scalar const J         = determinant(F);
   vector const F_inv_T_N = transpose(F_inv) * N;
 
-  return determinant(F) * (trace(F_inv * grad_delta_d) * F_inv_T_N -
-                           transpose(F_inv) * (transpose(grad_delta_d) * F_inv_T_N));
-}
+  vector const n_star   = J * F_inv_T_N;
+  vector const D_n_star = J * (trace(F_inv * grad_delta_d) * F_inv_T_N -
+                               transpose(F_inv) * (transpose(grad_delta_d) * F_inv_T_N));
 
-template<int dim, typename Number>
-typename NonLinearOperator<dim, Number>::vector
-NonLinearOperator<dim, Number>::pull_back_load(vector const & traction,
-                                               tensor const & F,
-                                               vector const & N) const
-{
-  // t_0 = da/dA * t
-  return compute_n_star(F, N).norm() * traction;
-}
-
-template<int dim, typename Number>
-typename NonLinearOperator<dim, Number>::vector
-NonLinearOperator<dim, Number>::pull_back_load(tensor const & stress,
-                                               tensor const & F,
-                                               vector const & N) const
-{
-  // The stress acts on the deformed surface with normal n, i.e., t = sigma n
-  // and t_0 = sigma da/dA n = sigma n_star.
-  return stress * compute_n_star(F, N);
-}
-
-template<int dim, typename Number>
-typename NonLinearOperator<dim, Number>::vector
-NonLinearOperator<dim, Number>::pull_back_load_derivative(vector const & traction,
-                                                          tensor const & F,
-                                                          vector const & N,
-                                                          tensor const & grad_delta_d) const
-{
-  // D t_0 = D(da/dA) t with D |n_star| = (n_star * D n_star) / |n_star|.
-  vector const n_star = compute_n_star(F, N);
-
-  return ((n_star * compute_n_star_derivative(F, N, grad_delta_d)) / n_star.norm()) * traction;
-}
-
-template<int dim, typename Number>
-typename NonLinearOperator<dim, Number>::vector
-NonLinearOperator<dim, Number>::pull_back_load_derivative(tensor const & stress,
-                                                          tensor const & F,
-                                                          vector const & N,
-                                                          tensor const & grad_delta_d) const
-{
-  // D t_0 = sigma D n_star
-  return stress * compute_n_star_derivative(F, N, grad_delta_d);
+  if(is_pressure)
+  {
+    // D t_0 = -p D n_star with the load p N.
+    return (load * N) * D_n_star;
+  }
+  else
+  {
+    // D t_0 = D(da/dA) t with D |n_star| = (n_star * D n_star) / |n_star|.
+    return ((n_star * D_n_star) / n_star.norm()) * load;
+  }
 }
 
 template<int dim, typename Number>
@@ -901,15 +887,14 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
   // The linearized operator contains the directional derivative of the
   // follower loads, which requires the point of linearization. NeumannCached
   // loads are not available in the multigrid level operators, which are only
-  // used for preconditioning. The exterior pressure is a prescribed stress
-  // sigma = -p I, the other loads are prescribed traction vectors.
-  bool const is_stress_load = boundary_type == BoundaryType::RobinSpringDashpotPressure;
+  // used for preconditioning.
+  bool const is_pressure    = boundary_type == BoundaryType::RobinSpringDashpotPressure;
   bool const linearize_load = follower_load_tangent_implemented and
                               operator_type == OperatorType::homogeneous and
                               (boundary_type == BoundaryType::Neumann or
                                (boundary_type == BoundaryType::NeumannCached and
                                 this->operator_data.neumann_cached_data_available) or
-                               is_stress_load);
+                               is_pressure);
   if(linearize_load)
   {
     integrator_lin_face->reinit(face);
@@ -966,19 +951,10 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
           {
             // Integrate in material domain, traction is given in spatial
             // domain.
-            tensor const F = compute_F(integrator.get_gradient(q));
-            vector const N = integrator.normal_vector(q);
-            if(is_stress_load)
-            {
-              traction = -pull_back_load(calculate_exterior_stress<dim, Number>(
-                                           boundary_id, this->operator_data.bc, this->time),
-                                         F,
-                                         N);
-            }
-            else
-            {
-              traction = pull_back_load(traction, F, N);
-            }
+            traction = pull_back_load(traction,
+                                      compute_F(integrator.get_gradient(q)),
+                                      integrator.normal_vector(q),
+                                      is_pressure);
           }
           else
           {
@@ -1077,26 +1053,14 @@ NonLinearOperator<dim, Number>::do_boundary_integral_continuous(
     // at the point of linearization.
     if(linearize_load)
     {
-      tensor const F_lin        = compute_F(integrator_lin_face->get_gradient(q));
-      vector const N            = integrator.normal_vector(q);
-      tensor const grad_delta_d = integrator.get_gradient(q);
-      if(is_stress_load)
-      {
-        traction -= pull_back_load_derivative(
-          calculate_exterior_stress<dim, Number>(boundary_id, this->operator_data.bc, this->time),
-          F_lin,
-          N,
-          grad_delta_d);
-      }
-      else
-      {
-        traction -= pull_back_load_derivative(
-          calculate_neumann_value<dim, Number>(
-            q, integrator, boundary_type, boundary_id, this->operator_data.bc, this->time),
-          F_lin,
-          N,
-          grad_delta_d);
-      }
+      vector const load = -calculate_neumann_value<dim, Number>(
+        q, integrator, boundary_type, boundary_id, this->operator_data.bc, this->time);
+
+      traction += pull_back_load_derivative(load,
+                                            compute_F(integrator_lin_face->get_gradient(q)),
+                                            integrator.normal_vector(q),
+                                            integrator.get_gradient(q),
+                                            is_pressure);
     }
 
     integrator.submit_value(traction, q);

@@ -301,50 +301,36 @@ private:
                                   dealii::types::boundary_id const & boundary_id) const final;
 
   /*
-   * Pull-back of the area normal, n_star = J F^{-T} N with |n_star| = da/dA,
-   * and its directional derivative
-   *
-   * D n_star[delta d] = J (tr(F^{-1} Grad(delta d)) F^{-T}
-   *                        - F^{-T} Grad(delta d)^T F^{-T}) N .
-   */
-  vector
-  compute_n_star(tensor const & F, vector const & N) const;
-
-  vector
-  compute_n_star_derivative(tensor const & F, vector const & N, tensor const & grad_delta_d) const;
-
-  /*
    * Pull-back of a load given in the spatial configuration to the material
-   * configuration. The load is either a prescribed traction vector t (Neumann
-   * boundaries) or a prescribed Cauchy stress sigma, e.g., sigma = -p I for the
-   * exterior pressure p:
+   * configuration with n_star = J F^{-T} N, |n_star| = da/dA:
    *
-   * traction t:    t_0 = |n_star| t ,
-   * stress sigma:  t_0 = sigma n_star .
+   * traction t (Neumann boundaries):  t_0 = |n_star| t ,
+   * exterior pressure p:              t_0 = -p n_star ,
+   *
+   * where `load` is the evaluated traction t, or p N for the exterior pressure.
    */
   vector
-  pull_back_load(vector const & traction, tensor const & F, vector const & N) const;
-
-  vector
-  pull_back_load(tensor const & stress, tensor const & F, vector const & N) const;
+  pull_back_load(vector const & load,
+                 tensor const & F,
+                 vector const & N,
+                 bool const     is_pressure) const;
 
   /*
-   * Directional derivative D t_0[delta d] of the loads t_0 of pull_back_load():
+   * Directional derivative D t_0[delta d] of the load t_0 of pull_back_load()
+   * for a given traction t or exterior pressure p:
    *
-   * traction t:    D t_0 = (n_star * D n_star) / |n_star| t ,
-   * stress sigma:  D t_0 = sigma D n_star .
+   * traction t:         D t_0 = (n_star * D n_star) / |n_star| t ,
+   * exterior pressure:  D t_0 = -p D n_star ,
+   *
+   * with D n_star = J (tr(F^{-1} Grad(delta d)) F^{-T}
+   *                    - F^{-T} Grad(delta d)^T F^{-T}) N .
    */
   vector
-  pull_back_load_derivative(vector const & traction,
+  pull_back_load_derivative(vector const & load,
                             tensor const & F,
                             vector const & N,
-                            tensor const & grad_delta_d) const;
-
-  vector
-  pull_back_load_derivative(tensor const & stress,
-                            tensor const & F,
-                            vector const & N,
-                            tensor const & grad_delta_d) const;
+                            tensor const & grad_delta_d,
+                            bool const     is_pressure) const;
 
   /*
    * Linearized operator.
