@@ -36,6 +36,7 @@
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/lac/la_parallel_vector.h>
+#include <deal.II/lac/vector.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/data_out_faces.h>
 #include <deal.II/particles/data_out.h>
@@ -47,6 +48,7 @@
 #include <exadg/operators/quadrature.h>
 #include <exadg/postprocessor/output_data_base.h>
 #include <exadg/postprocessor/solution_field.h>
+#include <exadg/utilities/create_directories.h>
 
 namespace ExaDG
 {
@@ -133,7 +135,8 @@ write_grid(dealii::Triangulation<dim> const & triangulation,
            std::string const &                folder,
            std::string const &                file,
            unsigned int const &               counter,
-           MPI_Comm const &                   mpi_comm)
+           MPI_Comm const &                   mpi_comm,
+           bool const                         write_subdomain = true)
 {
   std::string filename = file + "_grid";
 
@@ -150,7 +153,19 @@ write_grid(dealii::Triangulation<dim> const & triangulation,
   data_out.set_flags(flags);
 
   data_out.attach_triangulation(triangulation);
+
+  // MPI rank owning the cell (the data of the other cells are not written).
+  dealii::Vector<float> subdomain;
+  if(write_subdomain)
+  {
+    subdomain.reinit(triangulation.n_active_cells());
+    subdomain = static_cast<float>(dealii::Utilities::MPI::this_mpi_process(mpi_comm));
+    data_out.add_data_vector(subdomain, "subdomain", dealii::DataOut<dim>::type_cell_data);
+  }
+
   data_out.build_patches(mapping, n_subdivisions_patches, dealii::DataOut<dim>::curved_inner_cells);
+
+  create_directories(folder, mpi_comm);
   data_out.write_vtu_with_pvtu_record(folder, filename, counter, mpi_comm, 4);
 }
 
