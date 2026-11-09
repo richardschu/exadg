@@ -101,39 +101,6 @@ private:
                                       VectorType const & src,
                                       Range const &      face_range) const;
 
-  /**
-   * This function computes the kinematic viscosity for
-   * generalized Newtonian fluids, i.e., based on the shear rate.
-   * Such models can be found in , e.g., Galdi et al., 2008
-   * ("Hemodynamical Flows: Modeling, Analysis and Simulation").
-   * With
-   * y    = sqrt(2*sym_grad_velocity : sym_grad_velocity)
-   * e_oo = lower viscosity limit
-   * e_0  = upper viscosity limit
-   * and fitting parameters
-   * k    = kappa
-   * l    = lambda
-   * a
-   * b.
-   * we have the apparent viscosity
-   * viscosity = e_oo + (e_0 - e_oo) * [k + (l * y)^a]^[(n - 1) / a]
-   */
-  void
-  add_generalized_newtonian_viscosity(scalar & viscosity, tensor const & velocity_gradient) const;
-
-  /**
-   * Many rheological models differ in the factor scaling the margin
-   * between upper and lower viscosity limits
-   * e_0 - e_oo,
-   * which we denote here as `viscosity_margin`. This margin is multiplied
-   * with a factor [k + (l * y)^a]^[(n - 1) / a], which we denote as `viscosity_factor`.
-   */
-  scalar
-  compute_viscosity_factor(scalar const & shear_rate) const;
-
-  void
-  generalized_carreau_yasuda_model(scalar & viscosity_factor, scalar const & shear_rate) const;
-
   GeneralizedNewtonianModelData data;
 };
 

@@ -20,6 +20,7 @@
  */
 
 #include <exadg/incompressible_navier_stokes/spatial_discretization/generalized_newtonian_model.h>
+#include <exadg/incompressible_navier_stokes/spatial_discretization/viscosity_model_functions.h>
 
 namespace ExaDG
 {
@@ -103,7 +104,7 @@ GeneralizedNewtonianModel<dim, Number>::cell_loop_set_coefficients(
       // get the current viscosity
       scalar viscosity = this->viscous_kernel->get_viscosity_cell(cell, q);
 
-      add_generalized_newtonian_viscosity(viscosity, velocity_gradient);
+      ViscosityModels::add_generalized_newtonian_viscosity(viscosity, velocity_gradient, data);
 
       // set the coefficients
       this->viscous_kernel->set_coefficient_cell(cell, q, viscosity);
@@ -152,8 +153,10 @@ GeneralizedNewtonianModel<dim, Number>::face_loop_set_coefficients(
       scalar viscosity          = this->viscous_kernel->get_coefficient_face(face, q);
       scalar viscosity_neighbor = this->viscous_kernel->get_coefficient_face_neighbor(face, q);
 
-      add_generalized_newtonian_viscosity(viscosity, velocity_gradient);
-      add_generalized_newtonian_viscosity(viscosity_neighbor, velocity_gradient_neighbor);
+      ViscosityModels::add_generalized_newtonian_viscosity(viscosity, velocity_gradient, data);
+      ViscosityModels::add_generalized_newtonian_viscosity(viscosity_neighbor,
+                                                           velocity_gradient_neighbor,
+                                                           data);
 
       // set the coefficients
       this->viscous_kernel->set_coefficient_face(face, q, viscosity);
@@ -193,64 +196,12 @@ GeneralizedNewtonianModel<dim, Number>::boundary_face_loop_set_coefficients(
       // get the coefficients
       scalar viscosity = this->viscous_kernel->get_coefficient_face(face, q);
 
-      add_generalized_newtonian_viscosity(viscosity, velocity_gradient);
+      ViscosityModels::add_generalized_newtonian_viscosity(viscosity, velocity_gradient, data);
 
       // set the coefficients
       this->viscous_kernel->set_coefficient_face(face, q, viscosity);
     }
   }
-}
-
-template<int dim, typename Number>
-void
-GeneralizedNewtonianModel<dim, Number>::add_generalized_newtonian_viscosity(
-  scalar &       viscosity,
-  tensor const & velocity_gradient) const
-{
-  tensor symmetric_velocity_gradient = 0.5 * (velocity_gradient + transpose(velocity_gradient));
-
-  scalar shear_rate =
-    std::sqrt(2.0 * scalar_product(symmetric_velocity_gradient, symmetric_velocity_gradient));
-
-  scalar viscosity_factor = compute_viscosity_factor(shear_rate);
-
-  // add (eta_0 - eta_oo) * [k + (l * y)^a]^[(n-1)/a]
-  viscosity += data.viscosity_margin * viscosity_factor;
-}
-
-template<int dim, typename Number>
-dealii::VectorizedArray<Number>
-GeneralizedNewtonianModel<dim, Number>::compute_viscosity_factor(scalar const & shear_rate) const
-{
-  // compute the factor multiplying the `viscosity_margin`, i.e., (eta_0 - eta_00), in
-  // eta = eta_oo + (eta_0 - eta_oo) * [k + (l * y)^a]^[(n-1)/a]
-  scalar viscosity_factor;
-
-  switch(data.generalized_newtonian_model)
-  {
-    case GeneralizedNewtonianViscosityModel::Undefined:
-      AssertThrow(data.generalized_newtonian_model != GeneralizedNewtonianViscosityModel::Undefined,
-                  dealii::ExcMessage("parameter must be defined"));
-      break;
-    case GeneralizedNewtonianViscosityModel::GeneralizedCarreauYasuda:
-      generalized_carreau_yasuda_model(viscosity_factor, shear_rate);
-      break;
-    default:
-      AssertThrow(
-        false, dealii::ExcMessage("This GeneralizedNewtonianViscosityModel is not implemented."));
-  }
-
-  return viscosity_factor;
-}
-
-template<int dim, typename Number>
-void
-GeneralizedNewtonianModel<dim, Number>::generalized_carreau_yasuda_model(
-  scalar &       viscosity_factor,
-  scalar const & shear_rate) const
-{
-  viscosity_factor = pow(data.kappa + pow(shear_rate * data.lambda, static_cast<Number>(data.a)),
-                         static_cast<Number>((data.n - 1.0) / data.a));
 }
 
 template class GeneralizedNewtonianModel<2, float>;

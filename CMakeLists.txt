@@ -138,6 +138,7 @@ SET(TARGET_SRC
      include/exadg/incompressible_navier_stokes/spatial_discretization/viscosity_model_base.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/turbulence_model.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/generalized_newtonian_model.cpp
+     include/exadg/incompressible_navier_stokes/spatial_discretization/viscosity_model_functions.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_projection_methods.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.cpp
