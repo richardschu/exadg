@@ -169,11 +169,19 @@ Operator<dim, n_components, Number>::fill_matrix_free_data(
   matrix_free_data.insert_constraint(&affine_constraints_periodicity_and_hanging_nodes,
                                      get_dof_name_periodicity_and_hanging_node_constraints());
 
+  // dealii::MatrixFree supports dealii::QGaussSimplex with at most 4 points, see
+  // dealii::internal::MatrixFreeFunctions::get_unique_face_quadratures()
+  AssertThrow(param.grid.element_type != ElementType::Simplex or param.degree + 1 <= 4,
+              dealii::ExcMessage("The quadrature for simplex elements requires " +
+                                 std::to_string(param.degree + 1) +
+                                 " points, but dealii::MatrixFree supports dealii::QGaussSimplex "
+                                 "with at most 4 points. Use a degree of at most 3."));
   std::shared_ptr<dealii::Quadrature<dim>> quadrature =
     create_quadrature<dim>(param.grid.element_type, param.degree + 1);
   matrix_free_data.insert_quadrature(*quadrature, get_quad_name());
 
-  // Create a Gauss-Lobatto quadrature rule for DirichletCached boundary conditions.
+  // Create a quadrature rule at the support points (Gauss-Lobatto points for
+  // hypercubes) for DirichletCached boundary conditions.
   // These quadrature points coincide with the nodes of the discretization, so that
   // the values stored in the DirichletCached boundary condition can be directly
   // injected into the DoF vector. This allows to set constrained degrees of freedom
@@ -184,11 +192,10 @@ Operator<dim, n_components, Number>::fill_matrix_free_data(
   if(param.spatial_discretization == SpatialDiscretization::CG and
      not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
-    AssertThrow(this->grid->triangulation->all_reference_cells_are_hyper_cube(),
-                ExcNotImplemented());
-
-    matrix_free_data.insert_quadrature(dealii::QGaussLobatto<1>(param.degree + 1),
-                                       get_quad_gauss_lobatto_name());
+    std::shared_ptr<dealii::Quadrature<dim>> quadrature_at_support_points =
+      create_quadrature_at_support_points<dim>(param.grid.element_type, param.degree);
+    matrix_free_data.insert_quadrature(*quadrature_at_support_points,
+                                       get_quad_support_points_name());
   }
 }
 
@@ -203,7 +210,7 @@ Operator<dim, n_components, Number>::setup_coupling_boundary_conditions()
     if(param.spatial_discretization == SpatialDiscretization::DG)
       quad_indices.emplace_back(get_quad_index());
     else if(param.spatial_discretization == SpatialDiscretization::CG)
-      quad_indices.emplace_back(get_quad_index_gauss_lobatto());
+      quad_indices.emplace_back(get_quad_index_support_points());
     else
       AssertThrow(false, dealii::ExcMessage("not implemented."));
 
@@ -232,10 +239,7 @@ Operator<dim, n_components, Number>::setup_operators()
   if(param.spatial_discretization == SpatialDiscretization::CG and
      not(boundary_descriptor->dirichlet_cached_bc.empty()))
   {
-    AssertThrow(this->grid->triangulation->all_reference_cells_are_hyper_cube(),
-                ExcNotImplemented());
-
-    laplace_operator_data.quad_index_gauss_lobatto = get_quad_index_gauss_lobatto();
+    laplace_operator_data.quad_index_support_points = get_quad_index_support_points();
   }
   laplace_operator_data.bc                              = boundary_descriptor;
   laplace_operator_data.use_cell_based_loops            = param.enable_cell_based_face_loops;
@@ -530,9 +534,9 @@ Operator<dim, n_components, Number>::get_quad_name() const
 
 template<int dim, int n_components, typename Number>
 std::string
-Operator<dim, n_components, Number>::get_quad_gauss_lobatto_name() const
+Operator<dim, n_components, Number>::get_quad_support_points_name() const
 {
-  return field + "_" + quad_index_gauss_lobatto;
+  return field + "_" + quad_index_support_points;
 }
 
 template<int dim, int n_components, typename Number>
@@ -558,9 +562,9 @@ Operator<dim, n_components, Number>::get_quad_index() const
 
 template<int dim, int n_components, typename Number>
 unsigned int
-Operator<dim, n_components, Number>::get_quad_index_gauss_lobatto() const
+Operator<dim, n_components, Number>::get_quad_index_support_points() const
 {
-  return matrix_free_data->get_quad_index(get_quad_gauss_lobatto_name());
+  return matrix_free_data->get_quad_index(get_quad_support_points_name());
 }
 
 template<int dim, int n_components, typename Number>

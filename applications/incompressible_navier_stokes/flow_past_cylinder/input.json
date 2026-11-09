@@ -20,7 +20,7 @@
         "CFL": "0.35"
     },
     "Output": {
-        "OutputDirectory": "output/flow_past_cylinder/",
+        "OutputDirectory": "results/flow_past_cylinder/",
         "OutputName": "2d_3",
         "WriteOutput": "false"
     }

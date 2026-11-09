@@ -118,8 +118,13 @@ private:
   void
   momentum_step();
 
+  // With `residual_evaluation`, the inhomogeneous parts of the linearly implicit
+  // convective term and of the viscous term are omitted, since they are part of
+  // `evaluate_linearized_residual()`.
   void
-  rhs_momentum(VectorType & rhs, VectorType const & transport_velocity);
+  rhs_momentum(VectorType &       rhs,
+               VectorType const & transport_velocity,
+               bool const         residual_evaluation = false);
 
   void
   pressure_step(VectorType & pressure_increment);
@@ -164,6 +169,18 @@ private:
 
   VectorType              pressure_np;
   std::vector<VectorType> pressure;
+
+  // velocities and pressures older than `velocity` and `pressure`, stored for
+  // `InitialGuessType::Projection` only
+  std::vector<VectorType> vector_projection_velocity;
+  std::vector<VectorType> vector_projection_pressure;
+
+  // products of the momentum operator with `velocity` and
+  // `vector_projection_velocity` and of the Laplace operator with `pressure`
+  // and `vector_projection_pressure`, stored for `InitialGuessType::Projection`
+  // only
+  typename Base::ProductsProjection products_projection_velocity;
+  typename Base::ProductsProjection products_projection_pressure;
 
   // incremental formulation of pressure-correction scheme
   unsigned int order_pressure_extrapolation;

@@ -148,10 +148,10 @@ private:
   get_quad_name() const;
 
   std::string
-  get_quad_gauss_lobatto_name() const;
+  get_quad_support_points_name() const;
 
   unsigned int
-  get_quad_index_gauss_lobatto() const;
+  get_quad_index_support_points() const;
 
   void
   initialize_dof_handler_and_constraints();
@@ -215,8 +215,8 @@ private:
   std::string const dof_index_periodicity_and_handing_node_constraints =
     "dof_periodicity_hanging_nodes";
 
-  std::string const quad_index               = "quad";
-  std::string const quad_index_gauss_lobatto = "quad_gauss_lobatto";
+  std::string const quad_index                = "quad";
+  std::string const quad_index_support_points = "quad_support_points";
 
   std::shared_ptr<dealii::MatrixFree<dim, Number> const> matrix_free;
   std::shared_ptr<MatrixFreeData<dim, Number> const>     matrix_free_data;

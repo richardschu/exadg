@@ -107,6 +107,8 @@ Consistent splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
+  Initial guess type:                        Extrapolation
   Preconditioner:                            Multigrid
   Update preconditioner pressure step:       false
   Multigrid type:                            cphMG
@@ -122,6 +124,7 @@ Consistent splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
   Projection step:
@@ -129,6 +132,7 @@ Consistent splitting scheme:
   Maximum number of iterations:              1000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner projection step:            InverseMassMatrix
   Update preconditioner projection step:     false
 
@@ -143,7 +147,9 @@ Consistent splitting scheme:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
   Preconditioner:                            InverseMassMatrix
   Update of preconditioner:                  false
 
@@ -189,7 +195,7 @@ Calculate error for pressure at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 9.76562e-04
+ Time step number = 1       t = 0.00000e+00, dt = 9.76562e-04
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 1.0000e+00:

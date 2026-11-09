@@ -58,7 +58,7 @@ public:
   update() = 0;
 };
 
-template<typename Operator>
+template<int dim, typename Operator>
 class MGCoarseKrylov : public CoarseGridSolverBase<Operator>
 {
 public:
@@ -131,7 +131,7 @@ public:
           additional_data.preconditioner == MultigridCoarseGridPreconditioner::PointJacobi or
           additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi or
           additional_data.preconditioner == MultigridCoarseGridPreconditioner::AMG,
-        dealii::ExcMessage("Specified preconditioner for PCG coarse grid solver not implemented."));
+        dealii::ExcMessage("Specified preconditioner coarse grid solver not implemented."));
     }
   }
 
@@ -200,7 +200,8 @@ public:
         use_preconditioner = false;
       }
       else if(additional_data.preconditioner == MultigridCoarseGridPreconditioner::PointJacobi or
-              additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi)
+              additional_data.preconditioner == MultigridCoarseGridPreconditioner::BlockJacobi or
+              additional_data.preconditioner == MultigridCoarseGridPreconditioner::AMG)
       {
         use_preconditioner = true;
       }
@@ -324,7 +325,7 @@ private:
  * The aim of this class is to translate PreconditionerAMG to a coarse-grid solver with the function
  * operator()().
  */
-template<typename Operator>
+template<int dim, typename Operator>
 class MGCoarseAMG : public CoarseGridSolverBase<Operator>
 {
 private:

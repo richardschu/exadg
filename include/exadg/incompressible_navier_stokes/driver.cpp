@@ -125,6 +125,23 @@ Driver<dim, Number>::setup()
         "Poisson",
         mpi_comm);
     }
+    else if(application->get_parameters().mesh_movement_type == MeshMovementType::Elasticity)
+    {
+      application->setup_elasticity(grid);
+
+      ale_mapping = std::make_shared<Structure::DeformedMapping<dim, Number>>(
+        grid,
+        mapping,
+        multigrid_mappings,
+        application->get_boundary_descriptor_elasticity(),
+        application->get_field_functions_elasticity(),
+        application->get_material_descriptor_elasticity(),
+        application->get_parameters_elasticity(),
+        "elasticity",
+        false /* setup_scalar_postprocessing_field */,
+        false /* setup_vector_postprocessing_field */,
+        mpi_comm);
+    }
     else
     {
       AssertThrow(false, dealii::ExcMessage("Not implemented."));
@@ -188,7 +205,7 @@ Driver<dim, Number>::setup()
   {
     // setup postprocessor
     postprocessor = application->create_postprocessor();
-    postprocessor->setup(*pde_operator);
+    postprocessor->setup(*pde_operator, application->get_parameters().restarted_simulation);
 
     if(application->get_parameters().solver_type == SolverType::Unsteady)
     {

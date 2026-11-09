@@ -62,6 +62,31 @@ enum class PartitioningType
 };
 
 /**
+ * Infer the `TriangulationType` of a `dealii::Triangulation`.
+ */
+template<int dim>
+TriangulationType
+get_triangulation_type(dealii::Triangulation<dim> const & tria)
+{
+  TriangulationType triangulation_type = TriangulationType::Serial;
+
+  // Check if we can cast to derived classes.
+  if(auto const * ptr =
+       dynamic_cast<dealii::parallel::distributed::Triangulation<dim, dim> const *>(&tria))
+  {
+    triangulation_type = TriangulationType::Distributed;
+  }
+  else if(auto const * ptr =
+            dynamic_cast<dealii::parallel::fullydistributed::Triangulation<dim, dim> const *>(
+              &tria))
+  {
+    triangulation_type = TriangulationType::FullyDistributed;
+  }
+
+  return triangulation_type;
+}
+
+/**
  * Returns the type of elements, where we currently only allow triangulations consisting of the same
  * type of elements.
  */

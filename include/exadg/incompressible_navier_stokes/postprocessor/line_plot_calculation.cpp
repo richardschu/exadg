@@ -42,14 +42,15 @@ void
 LinePlotCalculator<dim, Number>::setup(dealii::DoFHandler<dim> const & dof_handler_velocity_in,
                                        dealii::DoFHandler<dim> const & dof_handler_pressure_in,
                                        dealii::Mapping<dim> const &    mapping_in,
-                                       LinePlotData<dim> const &       line_plot_data_in)
+                                       LinePlotData<dim> const &       line_plot_data_in,
+                                       bool const                      restarted_simulation)
 {
   dof_handler_velocity = &dof_handler_velocity_in;
   dof_handler_pressure = &dof_handler_pressure_in;
   mapping              = &mapping_in;
   data                 = line_plot_data_in;
 
-  time_control.setup(line_plot_data_in.time_control_data);
+  time_control.setup(line_plot_data_in.time_control_data, restarted_simulation);
 
   if(line_plot_data_in.time_control_data.is_active)
     create_directories(line_plot_data_in.directory, mpi_comm);

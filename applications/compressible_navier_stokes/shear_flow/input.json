@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/shear_flow/",
+        "OutputDirectory": "results/shear_flow/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

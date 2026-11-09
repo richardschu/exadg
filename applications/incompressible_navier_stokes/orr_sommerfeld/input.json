@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/orr_sommerfeld/",
+        "OutputDirectory": "results/orr_sommerfeld/",
         "OutputName": "Re7500",
         "WriteOutput": "false"
     }

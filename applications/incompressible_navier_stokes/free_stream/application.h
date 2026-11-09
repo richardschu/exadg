@@ -19,11 +19,12 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ALE_TEST_CASES_FREE_STREAM_PRESERVATION_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ALE_TEST_CASES_FREE_STREAM_PRESERVATION_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FREE_STREAM_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FREE_STREAM_APPLICATION_H_
 
 // ExaDG
 #include <exadg/grid/mesh_movement_functions.h>
+#include <exadg/structure/material/library/st_venant_kirchhoff.h>
 
 namespace ExaDG
 {
@@ -64,6 +65,19 @@ public:
     prm.enter_subsection("Application");
     {
       prm.add_parameter("ALE", ALE, "Moving mesh (ALE).", dealii::Patterns::Bool());
+      prm.add_parameter("ElementType", element_type, "Element type: Hypercube or Simplex.");
+      prm.add_parameter("MultigridTypeVelocityBlock",
+                        multigrid_type_velocity_block,
+                        "Multigrid type of the velocity block preconditioner (coupled solver).");
+      prm.add_parameter("TemporalDiscretization",
+                        temporal_discretization,
+                        "Temporal discretization.");
+      prm.add_parameter("MultigridTypeMomentum",
+                        multigrid_type_momentum,
+                        "Multigrid type of the momentum preconditioner (projection methods).");
+      prm.add_parameter("MeshMovementType",
+                        mesh_movement_type,
+                        "Mesh movement type: Function, Poisson, or Elasticity.");
     }
     prm.leave_subsection();
   }
@@ -81,7 +95,7 @@ private:
 
     // ALE
     this->param.ale_formulation    = ALE;
-    this->param.mesh_movement_type = MeshMovementType::Function;
+    this->param.mesh_movement_type = mesh_movement_type;
     this->param.neumann_with_variable_normal_vector =
       false; // no Neumann boundaries for this test case
 
@@ -92,7 +106,7 @@ private:
 
     // TEMPORAL DISCRETIZATION
     this->param.solver_type                     = SolverType::Unsteady;
-    this->param.temporal_discretization         = TemporalDiscretization::BDFCoupledSolution;
+    this->param.temporal_discretization         = temporal_discretization;
     this->param.treatment_of_convective_term    = TreatmentOfConvectiveTerm::Explicit;
     this->param.order_time_integrator           = 2;
     this->param.start_with_low_order            = false;
@@ -108,7 +122,16 @@ private:
     this->param.solver_info_data.interval_time = this->param.end_time - this->param.start_time;
 
     // SPATIAL DISCRETIZATION
-    this->param.grid.triangulation_type     = TriangulationType::Distributed;
+    this->param.grid.element_type = element_type;
+    if(this->param.grid.element_type == ElementType::Simplex)
+    {
+      this->param.grid.triangulation_type           = TriangulationType::FullyDistributed;
+      this->param.grid.create_coarse_triangulations = true;
+    }
+    else
+    {
+      this->param.grid.triangulation_type = TriangulationType::Distributed;
+    }
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
     this->param.degree_p                    = DegreePressure::MixedOrder;
@@ -142,6 +165,13 @@ private:
     this->param.implement_block_diagonal_preconditioner_matrix_free = false;
     this->param.use_cell_based_face_loops                           = false;
     this->param.quad_rule_linearization = QuadratureRuleLinearization::Overintegration32k;
+    // The matrix-free inverse mass operator on simplices requires affine cells, which is violated
+    // by the deformed mapping of the ALE formulation.
+    if(this->param.grid.element_type == ElementType::Simplex)
+    {
+      this->param.inverse_mass_operator.implementation_type       = InverseMassType::BlockMatrices;
+      this->param.inverse_mass_preconditioner.implementation_type = InverseMassType::BlockMatrices;
+    }
 
     // PROJECTION METHODS
 
@@ -178,7 +208,7 @@ private:
     {
       this->param.solver_data_momentum         = SolverData(1000, 1.e-14, 1.e-14, LinearSolver::CG);
       this->param.preconditioner_momentum      = MomentumPreconditioner::Multigrid;
-      this->param.multigrid_data_momentum.type = MultigridType::hMG;
+      this->param.multigrid_data_momentum.type = multigrid_type_momentum;
       this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
       this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
       this->param.multigrid_data_momentum.coarse_problem.solver =
@@ -204,7 +234,7 @@ private:
       this->param.solver_data_momentum = SolverData(1e4, 1.e-14, 1.e-14, LinearSolver::FGMRES, 100);
       this->param.update_preconditioner_momentum   = false;
       this->param.preconditioner_momentum          = MomentumPreconditioner::Multigrid;
-      this->param.multigrid_data_momentum.type     = MultigridType::hMG;
+      this->param.multigrid_data_momentum.type     = multigrid_type_momentum;
       this->param.multigrid_operator_type_momentum = MultigridOperatorType::ReactionDiffusion;
       this->param.multigrid_data_momentum.smoother_data.smoother = MultigridSmoother::Chebyshev;
       this->param.multigrid_data_momentum.coarse_problem.solver =
@@ -227,11 +257,14 @@ private:
     // preconditioner momentum block
     this->param.preconditioner_velocity_block          = MomentumPreconditioner::Multigrid;
     this->param.multigrid_operator_type_velocity_block = MultigridOperatorType::ReactionDiffusion;
-    this->param.multigrid_data_velocity_block.type     = MultigridType::phMG;
+    this->param.multigrid_data_velocity_block.type     = multigrid_type_velocity_block;
     this->param.multigrid_data_velocity_block.smoother_data.smoother =
       MultigridSmoother::Chebyshev; // GMRES;
+    // block Jacobi is only implemented for DG, i.e., not for the continuous levels of c-transfer
     this->param.multigrid_data_velocity_block.smoother_data.preconditioner =
-      PreconditionerSmoother::BlockJacobi;
+      this->param.multigrid_data_velocity_block.involves_c_transfer() ?
+        PreconditionerSmoother::PointJacobi :
+        PreconditionerSmoother::BlockJacobi;
     this->param.multigrid_data_velocity_block.smoother_data.iterations        = 5;
     this->param.multigrid_data_velocity_block.smoother_data.relaxation_factor = 0.7;
     // coarse grid solver
@@ -256,7 +289,10 @@ private:
           std::vector<unsigned int> const &                        vector_local_refinements) {
         (void)periodic_face_pairs;
         (void)vector_local_refinements;
-        dealii::GridGenerator::hyper_cube(tria, left, right);
+        if(this->param.grid.element_type == ElementType::Simplex)
+          dealii::GridGenerator::subdivided_hyper_cube_with_simplices(tria, 1, left, right);
+        else
+          dealii::GridGenerator::hyper_cube(tria, left, right);
 
         tria.refine_global(global_refinements);
       };
@@ -298,6 +334,111 @@ private:
   }
 
   void
+  set_parameters_poisson() final
+  {
+    // MATHEMATICAL MODEL
+    this->poisson_param.right_hand_side = false;
+
+    // SPATIAL DISCRETIZATION
+    this->poisson_param.degree                 = this->param.mapping_degree;
+    this->poisson_param.spatial_discretization = Poisson::SpatialDiscretization::CG;
+
+    // SOLVER
+    this->poisson_param.solver_data         = SolverData(1e4, 1e-20, 1e-10, LinearSolver::CG);
+    this->poisson_param.preconditioner      = Poisson::Preconditioner::Multigrid;
+    this->poisson_param.multigrid_data.type = MultigridType::phMG;
+    // MG smoother
+    this->poisson_param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
+    // MG coarse grid solver
+    this->poisson_param.multigrid_data.coarse_problem.solver = MultigridCoarseGridSolver::CG;
+    this->poisson_param.multigrid_data.coarse_problem.preconditioner =
+      MultigridCoarseGridPreconditioner::PointJacobi;
+  }
+
+  void
+  set_boundary_descriptor_poisson() final
+  {
+    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+      pair;
+
+    // the mesh displacement is prescribed on the boundary and extended into the domain
+    this->poisson_boundary_descriptor->dirichlet_bc.insert(
+      pair(0, this->create_mesh_movement_function()));
+  }
+
+  void
+  set_field_functions_poisson() final
+  {
+    this->poisson_field_functions->initial_solution.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->poisson_field_functions->right_hand_side.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+  }
+
+  void
+  set_parameters_elasticity() final
+  {
+    this->elasticity_param.problem_type         = Structure::ProblemType::Steady;
+    this->elasticity_param.body_force           = false;
+    this->elasticity_param.pull_back_body_force = false;
+    this->elasticity_param.large_deformation    = false;
+    this->elasticity_param.pull_back_traction   = false;
+
+    this->elasticity_param.degree                      = this->param.mapping_degree;
+    this->elasticity_param.mapping_degree              = this->param.mapping_degree;
+    this->elasticity_param.mapping_degree_coarse_grids = this->param.mapping_degree_coarse_grids;
+
+    this->elasticity_param.solver_data         = SolverData(1e4, 1e-20, 1e-10, LinearSolver::CG);
+    this->elasticity_param.preconditioner      = Structure::Preconditioner::Multigrid;
+    this->elasticity_param.multigrid_data.type = MultigridType::phMG;
+    this->elasticity_param.multigrid_data.smoother_data.smoother = MultigridSmoother::Chebyshev;
+    this->elasticity_param.multigrid_data.coarse_problem.solver  = MultigridCoarseGridSolver::CG;
+    this->elasticity_param.multigrid_data.coarse_problem.preconditioner =
+      MultigridCoarseGridPreconditioner::PointJacobi;
+    this->elasticity_param.update_preconditioner = false;
+  }
+
+  void
+  set_boundary_descriptor_elasticity() final
+  {
+    typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
+                                                                                  pair;
+    typedef typename std::pair<dealii::types::boundary_id, dealii::ComponentMask> pair_mask;
+
+    // the mesh displacement is prescribed on the boundary and extended into the domain
+    this->elasticity_boundary_descriptor->dirichlet_bc.insert(
+      pair(0, this->create_mesh_movement_function()));
+    this->elasticity_boundary_descriptor->dirichlet_bc_initial_acceleration.insert(
+      pair(0, new dealii::Functions::ZeroFunction<dim>(dim)));
+    this->elasticity_boundary_descriptor->dirichlet_bc_component_mask.insert(
+      pair_mask(0, dealii::ComponentMask()));
+  }
+
+  void
+  set_material_descriptor_elasticity() final
+  {
+    typedef std::pair<dealii::types::material_id, std::shared_ptr<Structure::MaterialData>> Pair;
+
+    this->elasticity_material_descriptor->insert(
+      Pair(0,
+           new Structure::StVenantKirchhoffData<dim>(Structure::MaterialType::StVenantKirchhoff,
+                                                     1.0 /* Young's modulus */,
+                                                     0.3 /* Poisson's ratio */,
+                                                     Structure::Type2D::PlaneStress)));
+  }
+
+  void
+  set_field_functions_elasticity() final
+  {
+    this->elasticity_field_functions->right_hand_side.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->elasticity_field_functions->initial_displacement.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+    this->elasticity_field_functions->initial_velocity.reset(
+      new dealii::Functions::ZeroFunction<dim>(dim));
+  }
+
+  void
   set_boundary_descriptor() final
   {
     typedef typename std::pair<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>>
@@ -334,6 +475,9 @@ private:
     pp_data.output_data.filename           = this->output_parameters.filename;
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree_u;
+    // Currently, we can not use higher order output with 3D simplices.
+    if(this->param.grid.element_type == ElementType::Simplex and dim == 3)
+      pp_data.output_data.write_higher_order = false;
 
     // calculation of velocity error
     pp_data.error_data_u.time_control_data.is_active        = true;
@@ -364,6 +508,16 @@ private:
   double const end_time   = 10.0;
 
   bool ALE = true;
+
+  ElementType element_type = ElementType::Hypercube;
+
+  MultigridType multigrid_type_velocity_block = MultigridType::phMG;
+
+  TemporalDiscretization temporal_discretization = TemporalDiscretization::BDFCoupledSolution;
+
+  MultigridType multigrid_type_momentum = MultigridType::hMG;
+
+  MeshMovementType mesh_movement_type = MeshMovementType::Function;
 };
 
 } // namespace IncNS
@@ -372,4 +526,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_ALE_TEST_CASES_FREE_STREAM_PRESERVATION_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FREE_STREAM_APPLICATION_H_ */

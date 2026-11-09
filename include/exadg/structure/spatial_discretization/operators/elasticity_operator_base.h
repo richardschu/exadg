@@ -37,24 +37,52 @@ struct OperatorData : public OperatorBaseData
 {
   OperatorData()
     : OperatorBaseData(),
+      problem_type(ProblemType::Undefined),
       large_deformation(false),
       pull_back_traction(false),
+      spatial_integration(false),
+      force_material_residual(false),
+      stable_formulation(false),
+      invalid_jacobian_treatment(InvalidJacobianTreatment::None),
+      cache_level(CacheLevel::None),
+      mapping_degree(1),
       unsteady(false),
       density(1.0),
-      quad_index_gauss_lobatto(0)
+      quad_index_support_points(0),
+      neumann_cached_data_available(true)
   {
   }
 
   std::shared_ptr<BoundaryDescriptor<dim> const> bc;
   std::shared_ptr<MaterialDescriptor const>      material_descriptor;
 
+  ProblemType problem_type;
+
   // Boolean parameter differentiating between linear elasticity and finite strain theory
   bool large_deformation;
 
-  // This parameter is only relevant for nonlinear operator
+  // These two parameters are only relevant for nonlinear operator
   // with large deformations. When set to true, the traction t
   // is pulled back to the reference configuration, t_0 = da/dA t.
+  // Spatial integration of the cell integral using an updated mapping
+  // is enabled via spatial_integration, where the residual evaluation
+  // may be forced to be evalutated in the material configuration.
   bool pull_back_traction;
+  bool spatial_integration;
+  bool force_material_residual;
+
+  // Adopt numerically stable variants of the material models.
+  bool stable_formulation;
+
+  // For nonlinear material models, treatment of inadmissible deformation
+  // states with J <= 0, see InvalidJacobianTreatment.
+  InvalidJacobianTreatment invalid_jacobian_treatment;
+
+  // This variable determines how much data is being precomputed
+  // and stored in the integration points.
+  CacheLevel cache_level;
+
+  unsigned int mapping_degree;
 
   // activates mass operator in operator evaluation for unsteady problems
   bool unsteady;
@@ -64,7 +92,11 @@ struct OperatorData : public OperatorBaseData
 
   // for DirichletCached boundary conditions, another quadrature rule
   // is needed to set the constrained DoFs.
-  unsigned int quad_index_gauss_lobatto;
+  unsigned int quad_index_support_points;
+
+  // The data of NeumannCached boundary conditions is only stored for the
+  // operator on the fine level, but not for the multigrid level operators.
+  bool neumann_cached_data_available;
 };
 
 template<int dim, typename Number>
@@ -119,7 +151,20 @@ public:
   get_scaling_factor_mass_operator() const;
 
   void
+  set_scaling_factor_mass_boundary_operator(double const scaling_factor) const;
+
+  double
+  get_scaling_factor_mass_boundary_operator() const;
+
+  void
   set_inhomogeneous_constrained_values(VectorType & dst) const final;
+
+  /*
+   * Fill a DoF vector with the grid coordinates using the mapping stored in `this->matrix_free`,
+   * which always refers to the Lagrangian reference frame.
+   */
+  void
+  get_reference_coordinates(VectorType & grid_coordinates) const;
 
 protected:
   void
@@ -133,6 +178,7 @@ protected:
   mutable MaterialHandler<dim, Number> material_handler;
 
   mutable double scaling_factor_mass;
+  mutable double scaling_factor_mass_boundary;
 };
 
 } // namespace Structure

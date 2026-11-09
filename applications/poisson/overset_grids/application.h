@@ -18,8 +18,8 @@
  *  along with this program. If not, see <https://www.gnu.org/licenses/>.
  *  ______________________________________________________________________
  */
-#ifndef APPLICATIONS_POISSON_TEST_CASES_TEMPLATE_H_
-#define APPLICATIONS_POISSON_TEST_CASES_TEMPLATE_H_
+#ifndef APPLICATIONS_POISSON_OVERSET_GRIDS_APPLICATION_H_
+#define APPLICATIONS_POISSON_OVERSET_GRIDS_APPLICATION_H_
 
 namespace ExaDG
 {
@@ -299,4 +299,4 @@ public:
 
 #include <exadg/poisson/overset_grids/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_POISSON_TEST_CASES_TEMPLATE_H_ */
+#endif /* APPLICATIONS_POISSON_OVERSET_GRIDS_APPLICATION_H_ */

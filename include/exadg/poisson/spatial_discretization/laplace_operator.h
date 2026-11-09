@@ -211,7 +211,7 @@ private:
 template<int rank, int dim>
 struct LaplaceOperatorData : public OperatorBaseData
 {
-  LaplaceOperatorData() : OperatorBaseData(), quad_index_gauss_lobatto(0)
+  LaplaceOperatorData() : OperatorBaseData(), quad_index_support_points(0)
   {
   }
 
@@ -220,7 +220,7 @@ struct LaplaceOperatorData : public OperatorBaseData
   // continuous FE:
   // for DirichletCached boundary conditions, another quadrature rule
   // is needed to set the constrained DoFs.
-  unsigned int quad_index_gauss_lobatto;
+  unsigned int quad_index_support_points;
 
   std::shared_ptr<BoundaryDescriptor<rank, dim> const> bc;
 };
@@ -342,6 +342,7 @@ private:
   void
   do_boundary_integral_continuous(IntegratorFace &                   integrator_m,
                                   OperatorType const &               operator_type,
+                                  unsigned int const                 face,
                                   dealii::types::boundary_id const & boundary_id) const final;
 
   LaplaceOperatorData<rank, dim> operator_data;

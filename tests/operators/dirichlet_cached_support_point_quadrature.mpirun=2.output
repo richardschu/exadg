@@ -1,0 +1,36 @@
+  dim = 2, Hypercube, degree = 1: 20 cells, 16 of 50 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     6.66134e-16
+    max value of other DoFs:        0
+  dim = 3, Hypercube, degree = 1: 56 cells, 78 of 237 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     4.44089e-16
+    max value of other DoFs:        0
+  dim = 2, Hypercube, degree = 2: 20 cells, 32 of 178 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     6.66134e-16
+    max value of other DoFs:        0
+  dim = 3, Hypercube, degree = 2: 56 cells, 294 of 1551 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     4.44089e-16
+    max value of other DoFs:        0
+  dim = 2, Hypercube, degree = 3: 20 cells, 48 of 386 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     6.66134e-16
+    max value of other DoFs:        0
+  dim = 3, Hypercube, degree = 3: 56 cells, 654 of 4953 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     1.33227e-15
+    max value of other DoFs:        0
+  dim = 2, Simplex, degree = 1: 160 cells, 32 of 178 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     0
+    max value of other DoFs:        0
+  dim = 3, Simplex, degree = 1: 1344 cells, 150 of 777 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     1.33227e-15
+    max value of other DoFs:        0
+  dim = 2, Simplex, degree = 2: 160 cells, 64 of 674 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     0
+    max value of other DoFs:        0
+  dim = 3, Simplex, degree = 2: 1344 cells, 582 of 5727 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     1.33227e-15
+    max value of other DoFs:        0
+  dim = 2, Simplex, degree = 3: 160 cells, 96 of 1490 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     6.66134e-16
+    max value of other DoFs:        0
+  dim = 3, Simplex, degree = 3: 1344 cells, 1302 of 18885 DoFs on the boundary, 0 boundary faces in non-default orientation
+    max error on boundary DoFs:     1.33227e-15
+    max value of other DoFs:        0

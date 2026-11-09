@@ -169,6 +169,49 @@ OperatorBase<dim, Number, n_components>::vmult(VectorType & dst, VectorType cons
 
 template<int dim, typename Number, int n_components>
 void
+OperatorBase<dim, Number, n_components>::vmult(
+  VectorType &                                                        dst,
+  VectorType const &                                                  src,
+  std::function<void(const unsigned int, const unsigned int)> const & before,
+  std::function<void(const unsigned int, const unsigned int)> const & after) const
+{
+  if(is_dg and not this->data.use_matrix_based_operator_level)
+  {
+    this->apply_before_after(dst, src, before, after);
+  }
+  else
+  {
+    // Execute `before` and `after` on all locally owned indices around the
+    // standard operator evaluation. For continuous elements, the fused
+    // matrix-free loop did not give the operator of `apply()` with its special
+    // treatment of constrained degrees of freedom, and the eigenvalue
+    // estimation of the Chebyshev smoother on coarse multigrid levels broke
+    // down with NaN. Derived classes overriding `apply()` only (e.g. for
+    // structure) are evaluated correctly in this way.
+    dealii::DoFHandler<dim> const & dof_handler =
+      this->matrix_free->get_dof_handler(this->data.dof_index);
+    dealii::IndexSet const & owned_dofs =
+      is_mg ? dof_handler.locally_owned_mg_dofs(this->level) : dof_handler.locally_owned_dofs();
+    unsigned int n_elements = owned_dofs.n_elements();
+    if(n_elements > 0)
+    {
+      before(0, n_elements);
+    }
+
+    if(this->data.use_matrix_based_operator_level)
+      this->apply_matrix_based(dst, src);
+    else
+      this->apply(dst, src);
+
+    if(n_elements > 0)
+    {
+      after(0, n_elements);
+    }
+  }
+}
+
+template<int dim, typename Number, int n_components>
+void
 OperatorBase<dim, Number, n_components>::vmult_add(VectorType & dst, VectorType const & src) const
 {
   if(this->data.use_matrix_based_operator_level)
@@ -306,6 +349,33 @@ OperatorBase<dim, Number, n_components>::apply(VectorType & dst, VectorType cons
     {
       dst.local_element(constrained_index) = src.local_element(constrained_index);
     }
+  }
+}
+
+template<int dim, typename Number, int n_components>
+void
+OperatorBase<dim, Number, n_components>::apply_before_after(
+  VectorType &                                                        dst,
+  VectorType const &                                                  src,
+  std::function<void(const unsigned int, const unsigned int)> const & before,
+  std::function<void(const unsigned int, const unsigned int)> const & after) const
+{
+  AssertThrow(is_dg, dealii::ExcMessage("Fused operations are used for DG only, see vmult()."));
+
+  if(evaluate_face_integrals())
+  {
+    matrix_free->loop(&This::cell_loop,
+                      &This::face_loop,
+                      &This::boundary_face_loop_hom_operator,
+                      this,
+                      dst,
+                      src,
+                      before,
+                      after);
+  }
+  else
+  {
+    matrix_free->cell_loop(&This::cell_loop, this, dst, src, before, after);
   }
 }
 
@@ -488,6 +558,19 @@ OperatorBase<dim, Number, n_components>::apply_matrix_based(VectorType &       d
   else
   {
     AssertThrow(false, dealii::ExcMessage("not implemented."));
+  }
+
+  if(not is_dg)
+  {
+    // Constrained degree of freedom are not removed from the system of equations.
+    // Instead, we set the diagonal entries of the matrix to 1 for these constrained
+    // degrees of freedom. This means that we simply copy the constrained values to the
+    // dst vector.
+    for(unsigned int const constrained_index :
+        matrix_free->get_constrained_dofs(this->data.dof_index))
+    {
+      dst.local_element(constrained_index) = src.local_element(constrained_index);
+    }
   }
 }
 
@@ -1016,7 +1099,7 @@ OperatorBase<dim, Number, n_components>::internal_calculate_system_matrix(
   if(evaluate_face_integrals())
   {
     dealii::MatrixFreeTools::compute_matrix(*matrix_free,
-                                            matrix_free->get_affine_constraints(),
+                                            *constraint,
                                             system_matrix,
                                             &This::cell_compute_matrix,
                                             &This::face_compute_matrix,
@@ -1028,7 +1111,7 @@ OperatorBase<dim, Number, n_components>::internal_calculate_system_matrix(
   else
   {
     dealii::MatrixFreeTools::compute_matrix(*matrix_free,
-                                            matrix_free->get_affine_constraints(),
+                                            *constraint,
                                             system_matrix,
                                             &This::cell_compute_matrix,
                                             this,
@@ -1182,10 +1265,12 @@ void
 OperatorBase<dim, Number, n_components>::do_boundary_integral_continuous(
   IntegratorFace &                   integrator,
   OperatorType const &               operator_type,
+  unsigned int const                 face,
   dealii::types::boundary_id const & boundary_id) const
 {
   (void)integrator;
   (void)operator_type;
+  (void)face;
   (void)boundary_id;
 
   AssertThrow(
@@ -1425,6 +1510,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_loop_hom_operator(
       {
         do_boundary_integral_continuous(integrator_m,
                                         OperatorType::homogeneous,
+                                        face,
                                         matrix_free.get_boundary_id(face));
       }
 
@@ -1480,6 +1566,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_loop_inhom_operator(
 
       do_boundary_integral_continuous(integrator_m_inhom,
                                       OperatorType::inhomogeneous,
+                                      face,
                                       matrix_free.get_boundary_id(face));
 
       // make sure that we do not write into Dirichlet degrees of freedom
@@ -1609,7 +1696,7 @@ OperatorBase<dim, Number, n_components>::boundary_face_compute_matrix(
   }
   else
   {
-    this->do_boundary_integral_continuous(integrator_m, OperatorType::homogeneous, bid);
+    this->do_boundary_integral_continuous(integrator_m, OperatorType::homogeneous, face, bid);
   }
 
   integrator_m.integrate(integrator_flags.face_integrate);
@@ -2171,5 +2258,91 @@ template class OperatorBase<3, double, 1>;
 template class OperatorBase<3, double, 3>;
 template class OperatorBase<3, double, 4>;
 template class OperatorBase<3, double, 5>;
+
+#ifdef DEAL_II_WITH_PETSC
+typedef typename dealii::PETScWrappers::MPI::SparseMatrix PETScSparseMatrix;
+template void
+OperatorBase<2, float, 1>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<2, float, 2>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<2, float, 3>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<2, float, 4>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+
+template void
+OperatorBase<2, double, 1>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<2, double, 2>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<2, double, 3>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<2, double, 4>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+
+template void
+OperatorBase<3, float, 1>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, float, 2>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, float, 3>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, float, 4>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, float, 5>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+
+template void
+OperatorBase<3, double, 1>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, double, 2>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, double, 3>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, double, 4>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+template void
+OperatorBase<3, double, 5>::internal_calculate_system_matrix(PETScSparseMatrix &) const;
+#endif
+
+#ifdef DEAL_II_WITH_TRILINOS
+typedef typename dealii::TrilinosWrappers::SparseMatrix TrilinosSparseMatrix;
+template void
+OperatorBase<2, float, 1>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<2, float, 2>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<2, float, 3>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<2, float, 4>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+
+template void
+OperatorBase<2, double, 1>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<2, double, 2>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<2, double, 3>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<2, double, 4>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+
+template void
+OperatorBase<3, float, 1>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, float, 2>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, float, 3>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, float, 4>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, float, 5>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+
+template void
+OperatorBase<3, double, 1>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, double, 2>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, double, 3>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, double, 4>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+template void
+OperatorBase<3, double, 5>::internal_calculate_system_matrix(TrilinosSparseMatrix &) const;
+#endif
 
 } // namespace ExaDG

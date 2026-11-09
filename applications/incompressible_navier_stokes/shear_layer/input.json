@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/shear_layer/",
+        "OutputDirectory": "results/shear_layer/",
         "OutputName": "l4_k7",
         "WriteOutput": "false"
     }

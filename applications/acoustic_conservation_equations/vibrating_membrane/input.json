@@ -26,7 +26,7 @@
         "Modes": "2.0"
     },
     "Output": {
-        "OutputDirectory": "output/vibrating_membrane/",
+        "OutputDirectory": "results/vibrating_membrane/",
         "OutputName": "vibrating_membrane",
         "WriteOutput": "false"
     }

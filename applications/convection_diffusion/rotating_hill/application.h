@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_ROTATING_HILL_H_
-#define APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_ROTATING_HILL_H_
+#ifndef APPLICATIONS_CONVECTION_DIFFUSION_ROTATING_HILL_APPLICATION_H_
+#define APPLICATIONS_CONVECTION_DIFFUSION_ROTATING_HILL_APPLICATION_H_
 
 // ExaDG
 #include <exadg/grid/deformed_cube_manifold.h>
@@ -338,4 +338,4 @@ private:
 
 #include <exadg/convection_diffusion/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_ROTATING_HILL_H_ */
+#endif /* APPLICATIONS_CONVECTION_DIFFUSION_ROTATING_HILL_APPLICATION_H_ */

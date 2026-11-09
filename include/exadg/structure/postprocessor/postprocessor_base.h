@@ -52,14 +52,16 @@ public:
   /*
    * Setup function.
    */
+  // `restarted_simulation` indicates a restarted simulation, see `TimeControl::setup()`.
   virtual void
-  setup(Operator<dim, Number> const & pde_operator) = 0;
+  setup(Operator<dim, Number> const & pde_operator, bool const restarted_simulation) = 0;
 
   /*
    * Postprocessing function.
    */
   virtual void
   do_postprocessing(VectorType const &     solution,
+                    bool const             errors_only      = false,
                     double const           time             = 0.0,
                     types::time_step const time_step_number = numbers::steady_timestep) = 0;
 };

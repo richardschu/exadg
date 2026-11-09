@@ -64,7 +64,7 @@ public:
   virtual ~PostProcessor();
 
   void
-  setup(AcousticsOperator const & pde_operator) final;
+  setup(AcousticsOperator const & pde_operator, bool const restarted_simulation) final;
 
   void
   do_postprocessing(BlockVectorType const & solution,

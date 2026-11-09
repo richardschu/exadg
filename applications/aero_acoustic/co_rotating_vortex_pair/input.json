@@ -35,7 +35,7 @@
         "VortexCoreRadius": "0.1"
     },
     "Output": {
-        "OutputDirectory": "output/co_rotating_vortex_pair/",
+        "OutputDirectory": "results/co_rotating_vortex_pair/",
         "OutputName": "co_rotating_vortex_pair",
         "WriteOutput": "true"
     }

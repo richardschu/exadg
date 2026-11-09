@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_GRID_TOOLS_MESH_FLOW_PAST_CYLINDER_H_
-#define APPLICATIONS_GRID_TOOLS_MESH_FLOW_PAST_CYLINDER_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FLOW_PAST_CYLINDER_INCLUDE_GRID_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FLOW_PAST_CYLINDER_INCLUDE_GRID_H_
 
 // boost
 #include <boost/math/special_functions/sign.hpp>
@@ -1489,4 +1489,4 @@ create_coarse_grid(dealii::Triangulation<dim> &                             tria
 } // namespace FlowPastCylinder
 } // namespace ExaDG
 
-#endif /* APPLICATIONS_GRID_TOOLS_MESH_FLOW_PAST_CYLINDER_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FLOW_PAST_CYLINDER_INCLUDE_GRID_H_ */

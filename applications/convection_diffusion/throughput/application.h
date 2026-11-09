@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_TEMPLATE_H_
-#define APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_TEMPLATE_H_
+#ifndef APPLICATIONS_CONVECTION_DIFFUSION_THROUGHPUT_APPLICATION_H_
+#define APPLICATIONS_CONVECTION_DIFFUSION_THROUGHPUT_APPLICATION_H_
 
 #include <exadg/grid/periodic_box.h>
 
@@ -213,4 +213,4 @@ private:
 
 #include <exadg/convection_diffusion/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_TEMPLATE_H_ */
+#endif /* APPLICATIONS_CONVECTION_DIFFUSION_THROUGHPUT_APPLICATION_H_ */

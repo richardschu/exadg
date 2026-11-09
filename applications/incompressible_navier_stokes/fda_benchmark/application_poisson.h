@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_POISSON_TEST_CASES_NOZZLE_H_
-#define APPLICATIONS_POISSON_TEST_CASES_NOZZLE_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FDA_BENCHMARK_APPLICATION_POISSON_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FDA_BENCHMARK_APPLICATION_POISSON_H_
 
 #include "include/grid.h"
 
@@ -157,4 +157,4 @@ private:
 
 #include <exadg/poisson/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FDA_BENCHMARK_APPLICATION_POISSON_H_ */

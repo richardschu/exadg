@@ -26,6 +26,8 @@
 #include <deal.II/matrix_free/matrix_free.h>
 
 // ExaDG
+#include <exadg/structure/material/library/compressible_neo_hookean.h>
+#include <exadg/structure/material/library/incompressible_fibrous_tissue.h>
 #include <exadg/structure/material/library/incompressible_neo_hookean.h>
 #include <exadg/structure/material/library/st_venant_kirchhoff.h>
 #include <exadg/structure/material/material.h>
@@ -51,7 +53,12 @@ public:
              unsigned int const                        dof_index,
              unsigned int const                        quad_index,
              std::shared_ptr<MaterialDescriptor const> material_descriptor,
-             bool const                                large_deformation)
+             bool const                                large_deformation,
+             bool const                                spatial_integration,
+             bool const                                force_material_residual,
+             InvalidJacobianTreatment const            invalid_jacobian_treatment,
+             bool const                                stable_formulation,
+             CacheLevel const                          cache_level)
   {
     this->dof_index           = dof_index;
     this->material_descriptor = material_descriptor;
@@ -90,10 +97,378 @@ public:
 
           std::shared_ptr<IncompressibleNeoHookeanData<dim>> data_IncompressibleNeoHookean =
             std::static_pointer_cast<IncompressibleNeoHookeanData<dim>>(data);
-          material_map.insert(
-            Pair(id,
-                 new IncompressibleNeoHookean<dim, Number>(
-                   matrix_free, dof_index, quad_index, *data_IncompressibleNeoHookean)));
+
+          if(invalid_jacobian_treatment == InvalidJacobianTreatment::None)
+          {
+            if(stable_formulation)
+            {
+              if(cache_level == CacheLevel::None)
+              {
+                material_map.insert(Pair(
+                  id,
+                  new IncompressibleNeoHookean<dim,
+                                               Number,
+                                               InvalidJacobianTreatment::None,
+                                               true /* stable_formulation */,
+                                               CacheLevel::None>(matrix_free,
+                                                                 dof_index,
+                                                                 quad_index,
+                                                                 *data_IncompressibleNeoHookean,
+                                                                 spatial_integration,
+                                                                 force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::Scalars)
+              {
+                material_map.insert(Pair(
+                  id,
+                  new IncompressibleNeoHookean<dim,
+                                               Number,
+                                               InvalidJacobianTreatment::None,
+                                               true /* stable_formulation */,
+                                               CacheLevel::Scalars>(matrix_free,
+                                                                    dof_index,
+                                                                    quad_index,
+                                                                    *data_IncompressibleNeoHookean,
+                                                                    spatial_integration,
+                                                                    force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::ScalarsAndTensors)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleNeoHookean<dim,
+                                                    Number,
+                                                    InvalidJacobianTreatment::None,
+                                                    true /* stable_formulation */,
+                                                    CacheLevel::ScalarsAndTensors>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleNeoHookean,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else
+              {
+                AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
+              }
+            }
+            else
+            {
+              if(cache_level == CacheLevel::None)
+              {
+                material_map.insert(Pair(
+                  id,
+                  new IncompressibleNeoHookean<dim,
+                                               Number,
+                                               InvalidJacobianTreatment::None,
+                                               false /* stable_formulation */,
+                                               CacheLevel::None>(matrix_free,
+                                                                 dof_index,
+                                                                 quad_index,
+                                                                 *data_IncompressibleNeoHookean,
+                                                                 spatial_integration,
+                                                                 force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::Scalars)
+              {
+                material_map.insert(Pair(
+                  id,
+                  new IncompressibleNeoHookean<dim,
+                                               Number,
+                                               InvalidJacobianTreatment::None,
+                                               false /* stable_formulation */,
+                                               CacheLevel::Scalars>(matrix_free,
+                                                                    dof_index,
+                                                                    quad_index,
+                                                                    *data_IncompressibleNeoHookean,
+                                                                    spatial_integration,
+                                                                    force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::ScalarsAndTensors)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleNeoHookean<dim,
+                                                    Number,
+                                                    InvalidJacobianTreatment::None,
+                                                    false /* stable_formulation */,
+                                                    CacheLevel::ScalarsAndTensors>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleNeoHookean,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else
+              {
+                AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
+              }
+            }
+          }
+          else
+          {
+            AssertThrow(invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+                        dealii::ExcMessage(
+                          "Templates only for InvalidJacobianTreatment::None implemented."));
+          }
+          break;
+        }
+        case MaterialType::IncompressibleFibrousTissue:
+        {
+          AssertThrow(large_deformation == true,
+                      dealii::ExcMessage(
+                        "Incompressible fiber model defined for finite strain theory."));
+
+          std::shared_ptr<IncompressibleFibrousTissueData<dim>> data_IncompressibleFibrousTissue =
+            std::static_pointer_cast<IncompressibleFibrousTissueData<dim>>(data);
+
+          if(invalid_jacobian_treatment == InvalidJacobianTreatment::None)
+          {
+            if(stable_formulation)
+            {
+              if(cache_level == CacheLevel::None)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleFibrousTissue<dim,
+                                                       Number,
+                                                       InvalidJacobianTreatment::None,
+                                                       true /* stable_formulation */,
+                                                       CacheLevel::None>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleFibrousTissue,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::Scalars)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleFibrousTissue<dim,
+                                                       Number,
+                                                       InvalidJacobianTreatment::None,
+                                                       true /* stable_formulation */,
+                                                       CacheLevel::Scalars>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleFibrousTissue,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::ScalarsAndTensors)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleFibrousTissue<dim,
+                                                       Number,
+                                                       InvalidJacobianTreatment::None,
+                                                       true /* stable_formulation */,
+                                                       CacheLevel::ScalarsAndTensors>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleFibrousTissue,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else
+              {
+                AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
+              }
+            }
+            else
+            {
+              if(cache_level == CacheLevel::None)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleFibrousTissue<dim,
+                                                       Number,
+                                                       InvalidJacobianTreatment::None,
+                                                       false /* stable_formulation */,
+                                                       CacheLevel::None>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleFibrousTissue,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::Scalars)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleFibrousTissue<dim,
+                                                       Number,
+                                                       InvalidJacobianTreatment::None,
+                                                       false /* stable_formulation */,
+                                                       CacheLevel::Scalars>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleFibrousTissue,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::ScalarsAndTensors)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new IncompressibleFibrousTissue<dim,
+                                                       Number,
+                                                       InvalidJacobianTreatment::None,
+                                                       false /* stable_formulation */,
+                                                       CacheLevel::ScalarsAndTensors>(
+                         matrix_free,
+                         dof_index,
+                         quad_index,
+                         *data_IncompressibleFibrousTissue,
+                         spatial_integration,
+                         force_material_residual)));
+              }
+              else
+              {
+                AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
+              }
+            }
+          }
+          else
+          {
+            AssertThrow(invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+                        dealii::ExcMessage(
+                          "Templates only for InvalidJacobianTreatment::None implemented."));
+          }
+
+          break;
+        }
+        case MaterialType::CompressibleNeoHookean:
+        {
+          AssertThrow(
+            large_deformation == true,
+            dealii::ExcMessage(
+              "Compressible Neo-Hookean material model defined for finite strain theory."));
+
+          std::shared_ptr<CompressibleNeoHookeanData<dim>> data_CompressibleNeoHookean =
+            std::static_pointer_cast<CompressibleNeoHookeanData<dim>>(data);
+
+          if(invalid_jacobian_treatment == InvalidJacobianTreatment::None)
+          {
+            if(stable_formulation)
+            {
+              if(cache_level == CacheLevel::None)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new CompressibleNeoHookean<dim,
+                                                  Number,
+                                                  InvalidJacobianTreatment::None,
+                                                  true /* stable_formulation */,
+                                                  CacheLevel::None>(matrix_free,
+                                                                    dof_index,
+                                                                    quad_index,
+                                                                    *data_CompressibleNeoHookean,
+                                                                    spatial_integration,
+                                                                    force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::Scalars)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new CompressibleNeoHookean<dim,
+                                                  Number,
+                                                  InvalidJacobianTreatment::None,
+                                                  true /* stable_formulation */,
+                                                  CacheLevel::Scalars>(matrix_free,
+                                                                       dof_index,
+                                                                       quad_index,
+                                                                       *data_CompressibleNeoHookean,
+                                                                       spatial_integration,
+                                                                       force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::ScalarsAndTensors)
+              {
+                material_map.insert(Pair(id,
+                                         new CompressibleNeoHookean<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    true /* stable_formulation */,
+                                                                    CacheLevel::ScalarsAndTensors>(
+                                           matrix_free,
+                                           dof_index,
+                                           quad_index,
+                                           *data_CompressibleNeoHookean,
+                                           spatial_integration,
+                                           force_material_residual)));
+              }
+              else
+              {
+                AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
+              }
+            }
+            else
+            {
+              if(cache_level == CacheLevel::None)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new CompressibleNeoHookean<dim,
+                                                  Number,
+                                                  InvalidJacobianTreatment::None,
+                                                  false /* stable_formulation */,
+                                                  CacheLevel::None>(matrix_free,
+                                                                    dof_index,
+                                                                    quad_index,
+                                                                    *data_CompressibleNeoHookean,
+                                                                    spatial_integration,
+                                                                    force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::Scalars)
+              {
+                material_map.insert(
+                  Pair(id,
+                       new CompressibleNeoHookean<dim,
+                                                  Number,
+                                                  InvalidJacobianTreatment::None,
+                                                  false /* stable_formulation */,
+                                                  CacheLevel::Scalars>(matrix_free,
+                                                                       dof_index,
+                                                                       quad_index,
+                                                                       *data_CompressibleNeoHookean,
+                                                                       spatial_integration,
+                                                                       force_material_residual)));
+              }
+              else if(cache_level == CacheLevel::ScalarsAndTensors)
+              {
+                material_map.insert(Pair(id,
+                                         new CompressibleNeoHookean<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    false /* stable_formulation */,
+                                                                    CacheLevel::ScalarsAndTensors>(
+                                           matrix_free,
+                                           dof_index,
+                                           quad_index,
+                                           *data_CompressibleNeoHookean,
+                                           spatial_integration,
+                                           force_material_residual)));
+              }
+              else
+              {
+                AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
+              }
+            }
+          }
+          else
+          {
+            AssertThrow(invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+                        dealii::ExcMessage(
+                          "Templates only for InvalidJacobianTreatment::None implemented."));
+          }
           break;
         }
         default:
@@ -111,7 +486,7 @@ public:
     auto mid = matrix_free.get_cell_iterator(cell, 0, dof_index)->material_id();
 
 #ifdef DEBUG
-    for(unsigned int v = 1; v < matrix_free.n_active_entries_per_cell_batch(cell); v++)
+    for(unsigned int v = 1; v < matrix_free.n_active_entries_per_cell_batch(cell); ++v)
       AssertThrow(mid == matrix_free.get_cell_iterator(cell, v)->material_id(),
                   dealii::ExcMessage("You have to categorize cells according to their materials!"));
 #endif

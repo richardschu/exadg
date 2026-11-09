@@ -27,7 +27,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -66,6 +66,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -80,6 +81,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -112,7 +114,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.00000e+00
+ Time step number = 1       t = 0.00000e+00, dt = 1.00000e+00
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -146,7 +148,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -185,6 +187,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -199,6 +202,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -231,7 +235,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 5.00000e-01
+ Time step number = 1       t = 0.00000e+00, dt = 5.00000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -265,7 +269,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -304,6 +308,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -318,6 +323,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -350,7 +356,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 2.50000e-01
+ Time step number = 1       t = 0.00000e+00, dt = 2.50000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -384,7 +390,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -423,6 +429,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -437,6 +444,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -469,7 +477,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.25000e-01
+ Time step number = 1       t = 0.00000e+00, dt = 1.25000e-01
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -503,7 +511,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -542,6 +550,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -556,6 +565,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -588,7 +598,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 6.25000e-02
+ Time step number = 1       t = 0.00000e+00, dt = 6.25000e-02
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -622,7 +632,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -661,6 +671,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -675,6 +686,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -707,7 +719,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.12500e-02
+ Time step number = 1       t = 0.00000e+00, dt = 3.12500e-02
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -741,7 +753,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -780,6 +792,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -794,6 +807,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -826,7 +840,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 1.56250e-02
+ Time step number = 1       t = 0.00000e+00, dt = 1.56250e-02
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -860,7 +874,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -899,6 +913,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -913,6 +928,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -945,7 +961,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 7.81250e-03
+ Time step number = 1       t = 0.00000e+00, dt = 7.81250e-03
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:
@@ -979,7 +995,7 @@ Mathematical model:
   Large deformation:                         true
   Pull back body force:                      false
   Pull back traction:                        false
-  Material type:                             StVenantKirchhoff
+  Perform cell integral in spatial configuration:false
 
 Physical quantities:
   Density:                                   1.0000e+00
@@ -1018,6 +1034,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-06
+  Relative tolerance reference:              InitialResidual
   Preconditioner:                            Multigrid
   Multigrid type:                            phMG
   p-sequence:                                Bisect
@@ -1032,6 +1049,7 @@ Linear solver:
   Maximum number of iterations:              10000
   Absolute solver tolerance:                 1.0000e-12
   Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
   Maximum size of Krylov space:              30
 
 Generating grid for 3-dimensional problem:
@@ -1064,7 +1082,7 @@ Calculate error for all fields at time t = 0.0000e+00:
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00 -> t + dt = 3.90625e-03
+ Time step number = 1       t = 0.00000e+00, dt = 3.90625e-03
 ________________________________________________________________________________
 
 Calculate error for all fields at time t = 1.0000e+00:

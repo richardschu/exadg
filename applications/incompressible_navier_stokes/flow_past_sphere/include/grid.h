@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_GRID_TOOLS_MESH_FLOW_PAST_CYLINDER_H_
-#define APPLICATIONS_GRID_TOOLS_MESH_FLOW_PAST_CYLINDER_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FLOW_PAST_SPHERE_INCLUDE_GRID_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FLOW_PAST_SPHERE_INCLUDE_GRID_H_
 
 namespace ExaDG
 {
@@ -284,4 +284,4 @@ create_sphere_grid(dealii::Triangulation<dim> & tria,
 } // namespace FlowPastSphere
 } // namespace ExaDG
 
-#endif /* APPLICATIONS_GRID_TOOLS_MESH_FLOW_PAST_CYLINDER_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_FLOW_PAST_SPHERE_INCLUDE_GRID_H_ */

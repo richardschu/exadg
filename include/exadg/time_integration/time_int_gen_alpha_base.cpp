@@ -114,6 +114,13 @@ TimeIntGenAlphaBase<Number>::get_mid_time() const
 }
 
 template<typename Number>
+double
+TimeIntGenAlphaBase<Number>::get_alpha_f() const
+{
+  return alpha_f;
+}
+
+template<typename Number>
 void
 TimeIntGenAlphaBase<Number>::compute_const_vector_acceleration_remainder(
   VectorType &       const_vector,

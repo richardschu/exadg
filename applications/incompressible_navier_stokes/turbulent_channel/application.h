@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TURBULENT_CHANNEL_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TURBULENT_CHANNEL_APPLICATION_H_
 
 // ExaDG
 #include <exadg/grid/boundary_layer_manifold.h>
@@ -131,16 +131,16 @@ public:
   }
 
   void
-  setup(Operator const & pde_operator) final
+  setup(Operator const & pde_operator, bool const restarted_simulation) final
   {
     // call setup function of base class
-    Base::setup(pde_operator);
+    Base::setup(pde_operator, restarted_simulation);
 
     // perform setup of turbulent channel related things
     statistics_turb_ch.reset(new StatisticsManager<dim, Number>(pde_operator.get_dof_handler_u(),
                                                                 *pde_operator.get_mapping()));
 
-    statistics_turb_ch->setup(&grid_transform_y, turb_ch_data);
+    statistics_turb_ch->setup(&grid_transform_y, turb_ch_data, restarted_simulation);
   }
 
   void
@@ -510,4 +510,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TURBULENT_CHANNEL_APPLICATION_H_ */

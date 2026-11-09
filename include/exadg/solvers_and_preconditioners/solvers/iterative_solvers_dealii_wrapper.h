@@ -138,9 +138,11 @@ public:
   {
     dealii::Timer timer;
 
-    dealii::ReductionControl solver_control(solver_data.max_iter,
-                                            solver_data.abs_tol,
-                                            solver_data.rel_tol);
+    dealii::ReductionControl solver_control = create_solver_control(solver_data.max_iter,
+                                                                    solver_data.abs_tol,
+                                                                    solver_data.rel_tol,
+                                                                    solver_data.rel_tol_reference,
+                                                                    rhs);
 
     dealii::SolverSelector<VectorType> solver(solver_name, solver_control);
 

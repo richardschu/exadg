@@ -22,6 +22,9 @@
 #include <exadg/time_integration/time_int_base.h>
 #include <iostream>
 
+#include <boost/archive/archive_exception.hpp>
+#include <boost/serialization/string.hpp>
+
 namespace ExaDG
 {
 TimeIntBase::TimeIntBase(double const &      start_time_,
@@ -36,6 +39,7 @@ TimeIntBase::TimeIntBase(double const &      start_time_,
     eps(1.e-10),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm_) == 0),
     time_step_number(1),
+    n_time_steps_before_restart(0),
     max_number_of_time_steps(max_number_of_time_steps_),
     restart_data(restart_data_),
     mpi_comm(mpi_comm_),
@@ -175,6 +179,12 @@ TimeIntBase::get_number_of_time_steps() const
   return this->get_time_step_number() - 1;
 }
 
+types::time_step
+TimeIntBase::get_total_number_of_time_steps() const
+{
+  return this->get_total_time_step_number() - 1;
+}
+
 std::shared_ptr<TimerTree>
 TimeIntBase::get_timings() const
 {
@@ -195,6 +205,64 @@ unsigned int
 TimeIntBase::get_time_step_number() const
 {
   return time_step_number;
+}
+
+types::time_step
+TimeIntBase::get_total_time_step_number() const
+{
+  return n_time_steps_before_restart + time_step_number;
+}
+
+void
+TimeIntBase::write_restart_header_extension(BoostOutputArchiveType & oa) const
+{
+  // The restart is written after `time_step_number` has been incremented, and the restarted
+  // simulation continues with `time_step_number = 1` at the restart time.
+  types::time_step const n_time_steps = n_time_steps_before_restart + time_step_number - 1;
+  oa &                   n_time_steps;
+
+  std::string const state = get_postprocessor_restart_state();
+  oa &              state;
+}
+
+void
+TimeIntBase::read_restart_header_extension(BoostInputArchiveType & ia)
+{
+  try
+  {
+    ia & n_time_steps_before_restart;
+    ia & postprocessor_restart_state;
+  }
+  catch(boost::archive::archive_exception const &)
+  {
+    // Restart file written before these entries were added.
+    n_time_steps_before_restart = 0;
+    postprocessor_restart_state.clear();
+  }
+}
+
+void
+TimeIntBase::broadcast_restart_header_extension()
+{
+  n_time_steps_before_restart =
+    dealii::Utilities::MPI::broadcast(mpi_comm, n_time_steps_before_restart, 0);
+  postprocessor_restart_state =
+    dealii::Utilities::MPI::broadcast(mpi_comm, postprocessor_restart_state, 0);
+
+  set_postprocessor_restart_state(postprocessor_restart_state);
+  postprocessor_restart_state.clear();
+}
+
+std::string
+TimeIntBase::get_postprocessor_restart_state() const
+{
+  return std::string();
+}
+
+void
+TimeIntBase::set_postprocessor_restart_state(std::string const & state)
+{
+  (void)state;
 }
 
 void
@@ -248,9 +316,9 @@ TimeIntBase::output_solver_info_header() const
   pcout << std::endl
         << print_horizontal_line() << std::endl
         << std::endl
-        << " Time step number = " << std::left << std::setw(8) << time_step_number
+        << " Time step number = " << std::left << std::setw(8) << get_total_time_step_number()
         << "t = " << std::scientific << std::setprecision(5) << time
-        << " -> t + dt = " << time + get_time_step_size() << std::endl
+        << ", dt = " << get_time_step_size() << std::endl
         << print_horizontal_line() << std::endl;
 }
 

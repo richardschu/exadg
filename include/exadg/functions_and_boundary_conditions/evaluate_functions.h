@@ -190,7 +190,7 @@ struct FunctionEvaluator<0, dim, Number>
     dealii::VectorizedArray<Number> value = dealii::make_vectorized_array<Number>(0.0);
 
     for(unsigned int v = 0; v < dealii::VectorizedArray<Number>::size(); ++v)
-      value[v] = function.get_data(quad_index, face, q, v);
+      value[v] = function.access_data_container(quad_index, face, q, v);
 
     return value;
   }
@@ -244,7 +244,7 @@ struct FunctionEvaluator<1, dim, Number>
       tensor_array;
 
     for(unsigned int v = 0; v < dealii::VectorizedArray<Number>::size(); ++v)
-      tensor_array[v] = function.get_data(quad_index, face, q, v);
+      tensor_array[v] = function.access_data_container(quad_index, face, q, v);
 
     for(unsigned int d = 0; d < dim; ++d)
     {
@@ -349,7 +349,7 @@ struct FunctionEvaluator<2, dim, Number>
       tensor_array;
 
     for(unsigned int v = 0; v < dealii::VectorizedArray<Number>::size(); ++v)
-      tensor_array[v] = function.get_data(quad_index, face, q, v);
+      tensor_array[v] = function.access_data_container(quad_index, face, q, v);
 
     for(unsigned int d1 = 0; d1 < dim; ++d1)
     {
@@ -415,7 +415,7 @@ struct FunctionEvaluator<2, dim, Number>
       tensor_array;
 
     for(unsigned int v = 0; v < dealii::VectorizedArray<Number>::size(); ++v)
-      tensor_array[v] = function.get_data(quad_index, face, q, v);
+      tensor_array[v] = function.access_data_container(quad_index, face, q, v);
 
     for(unsigned int d1 = 0; d1 < dim; ++d1)
     {

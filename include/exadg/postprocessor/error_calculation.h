@@ -45,7 +45,7 @@ struct ErrorCalculationData
       spatially_weight_error(false),
       weight(nullptr),
       additional_quadrature_points(3),
-      directory("output/"),
+      directory("results/"),
       name("all fields")
   {
   }
@@ -109,7 +109,8 @@ public:
   void
   setup(dealii::DoFHandler<dim> const &   dof_handler,
         dealii::Mapping<dim> const &      mapping,
-        ErrorCalculationData<dim> const & error_data);
+        ErrorCalculationData<dim> const & error_data,
+        bool const                        restarted_simulation);
 
   void
   evaluate(VectorType const & solution, double const time, bool const unsteady);

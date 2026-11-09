@@ -29,6 +29,7 @@
 #include <exadg/postprocessor/output_data_base.h>
 #include <exadg/postprocessor/solution_field.h>
 #include <exadg/postprocessor/time_control.h>
+#include <exadg/time_integration/restart_data.h>
 
 namespace ExaDG
 {
@@ -39,7 +40,18 @@ struct OutputData : public OutputDataBase
   OutputData()
     : write_displacement_magnitude(false),
       write_displacement_jacobian(false),
-      write_max_principal_stress(false)
+      write_max_principal_stress(false),
+      write_max_fiber_stretch(false),
+      write_E1_orientation(false),
+      write_E2_orientation(false),
+      write_traction_local_full(false),
+      write_traction_local_normal(false),
+      write_traction_local_inplane(false),
+      write_inverse_analysis_vtu(false),
+      write_inverse_analysis_binary(false),
+      deserialization_parameters(),
+      restart_data(),
+      deserialize_stress_qois(false)
   {
   }
 
@@ -51,6 +63,14 @@ struct OutputData : public OutputDataBase
     print_parameter(pcout, "Write displacement magnitude", write_displacement_magnitude);
     print_parameter(pcout, "Write displacement Jacobian", write_displacement_jacobian);
     print_parameter(pcout, "Write maximum principal stress", write_max_principal_stress);
+    print_parameter(pcout, "Write maximum fiber stretch", write_max_fiber_stretch);
+    print_parameter(pcout, "Write E1 orientation", write_E1_orientation);
+    print_parameter(pcout, "Write E2 orientation", write_E2_orientation);
+    print_parameter(pcout, "Write traction: full", write_traction_local_full);
+    print_parameter(pcout, "Write traction: normal", write_traction_local_normal);
+    print_parameter(pcout, "Write traction: in-plane", write_traction_local_inplane);
+    print_parameter(pcout, "Write inverse analysis vtu", write_inverse_analysis_vtu);
+    print_parameter(pcout, "Write inverse analysis binary", write_inverse_analysis_binary);
   }
 
   // write displacement magnitude
@@ -61,6 +81,31 @@ struct OutputData : public OutputDataBase
 
   // write maximum principal stress
   bool write_max_principal_stress;
+
+  // write maximum fiber stretch
+  bool write_max_fiber_stretch;
+
+  // write the material orientation vector
+  bool write_E1_orientation;
+  bool write_E2_orientation;
+
+  // write traction vector components relative to the material coordinates:
+  // full vector, normal or in-plane components.
+  bool write_traction_local_full;
+  bool write_traction_local_normal;
+  bool write_traction_local_inplane;
+
+  // Write the result of the inverse analysis to vtu and/or binary.
+  bool write_inverse_analysis_vtu;
+  bool write_inverse_analysis_binary;
+
+  // `RestartData` and `DeserializationParameters` controlling the writing of
+  // snapshot data to file.
+  DeserializationParameters deserialization_parameters;
+  RestartData               restart_data;
+
+  // Add the stress QoIs to the deserialized data as well.
+  bool deserialize_stress_qois;
 };
 
 template<int dim, typename Number>
@@ -68,20 +113,22 @@ class OutputGenerator
 {
 public:
   typedef dealii::LinearAlgebra::distributed::Vector<Number> VectorType;
+  typedef boost::archive::binary_oarchive                    BoostOutputArchiveType;
 
   OutputGenerator(MPI_Comm const & comm);
 
   void
   setup(dealii::DoFHandler<dim> const & dof_handler,
         dealii::Mapping<dim> const &    mapping,
-        OutputData const &              output_data);
+        OutputData const &              output_data,
+        bool const                      restarted_simulation);
 
   void
   evaluate(
     VectorType const &                                                       solution,
     std::vector<dealii::ObserverPointer<SolutionField<dim, Number>>> const & additional_fields,
     double const                                                             time,
-    bool const                                                               unsteady);
+    unsigned int const                                                       time_step_number);
 
   TimeControl time_control;
 
@@ -92,6 +139,10 @@ private:
 
   dealii::ObserverPointer<dealii::DoFHandler<dim> const> dof_handler;
   dealii::ObserverPointer<dealii::Mapping<dim> const>    mapping;
+
+  // Accumulates (time, filename) pairs written so far, used to keep the `.pvd` record
+  // (ParaView's source of the actual simulation time for a vtu/pvtu file series) up to date.
+  std::vector<std::pair<double, std::string>> times_and_names;
 };
 
 } // namespace Structure

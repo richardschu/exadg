@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_NAVIER_STOKES_MANUFACTURED_H_
-#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_NAVIER_STOKES_MANUFACTURED_H_
+#ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_NAVIER_STOKES_MANUFACTURED_APPLICATION_H_
+#define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_NAVIER_STOKES_MANUFACTURED_APPLICATION_H_
 
 // ExaDG
 #include <exadg/grid/mesh_movement_functions.h>
@@ -366,6 +366,19 @@ public:
       prm.add_parameter("GeneralizedNewtonianLambda",          generalized_newtonian_model_data.lambda,           "Generalized Newtonian models: lambda.",           dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianA",               generalized_newtonian_model_data.a,                "Generalized Newtonian models: a.",                dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianN",               generalized_newtonian_model_data.n,                "Generalized Newtonian models: n.",                dealii::Patterns::Double());
+      prm.add_parameter("TimeStepSize",                        time_step_size,                                    "Time step size, values <= 0 use (EndTime - StartTime) / 20.", dealii::Patterns::Double());
+      prm.add_parameter("OrderTimeIntegrator",                 order_time_integrator,                             "Order of the BDF time integrator.",               dealii::Patterns::Integer(1, 3));
+      prm.add_parameter("ComputeConvergenceTable",             compute_convergence_table,                         "Compute a convergence table from all runs in the output directory.", dealii::Patterns::Bool());
+      prm.add_parameter("InitialGuessTypePressurePoisson",     initial_guess_type_pressure_poisson,               "Initial guess of the pressure Poisson solver.");
+      prm.add_parameter("InitialGuessTypeMomentum",            initial_guess_type_momentum,                       "Initial guess of the momentum solver.");
+      prm.add_parameter("InitialGuessTypeCoupled",             initial_guess_type_coupled,                        "Initial guess of the coupled solver.");
+      prm.add_parameter("RelTolReference",                     rel_tol_reference,                                 "Reference of the relative tolerances of the linear solvers.");
+      prm.add_parameter("NVectorsProjectionPressurePoisson",   n_vectors_projection_pressure_poisson,             "Number of previous pressures used by the projection initial guess.", dealii::Patterns::Integer(0));
+      prm.add_parameter("NVectorsProjectionMomentum",          n_vectors_projection_momentum,                     "Number of previous velocities used by the projection initial guess.", dealii::Patterns::Integer(0));
+      prm.add_parameter("EpsProjectionPressurePoisson",        eps_projection_pressure_poisson,                   "Relative tolerance dropping linearly dependent pressures from the projection.", dealii::Patterns::Double(0.0));
+      prm.add_parameter("EpsProjectionMomentum",               eps_projection_momentum,                           "Relative tolerance dropping linearly dependent velocities from the projection.", dealii::Patterns::Double(0.0));
+      prm.add_parameter("StoreProductsProjectionPressurePoisson", store_products_projection_pressure_poisson,       "Store the operator products of the projection initial guess.", dealii::Patterns::Bool());
+      prm.add_parameter("StoreProductsProjectionMomentum",     store_products_projection_momentum,                "Store the operator products of the projection initial guess.", dealii::Patterns::Bool());
       // clang-format off
     }
     prm.leave_subsection();
@@ -401,8 +414,8 @@ private:
     this->param.solver_type                   = SolverType::Unsteady;
     this->param.temporal_discretization       = temporal_discretization;
     this->param.calculation_of_time_step_size = TimeStepCalculation::UserSpecified;
-    this->param.time_step_size                = std::abs(end_time - start_time) / 20;
-    this->param.order_time_integrator         = 2;     // 1; // 2; // 3;
+    this->param.time_step_size                = time_step_size > 0.0 ? time_step_size : std::abs(end_time - start_time) / 20;
+    this->param.order_time_integrator         = order_time_integrator;
     this->param.start_with_low_order          = false; // true;
 
     // output of solver information
@@ -513,10 +526,14 @@ private:
     {
       LinearSolver const linear_solver = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
           LinearSolver::CG : LinearSolver::FGMRES;
-      this->param.solver_data_momentum = SolverData(1000, 1e-12, 1e-8, linear_solver);
+      this->param.solver_data_momentum = SolverData(1e4, 1e-12, 1e-8, linear_solver, 100);
+      // nonlinear tolerances above the residual reachable with the linear solver
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-10, 1.e-6);
       this->param.preconditioner_momentum = spatial_discretization == SpatialDiscretization::L2 ?
                                              MomentumPreconditioner::Multigrid :
                                              MomentumPreconditioner::PointJacobi;
+      // as for the pressure-correction scheme, the viscosity changes in time
+      this->param.update_preconditioner_momentum = true;
     }
 
 
@@ -530,7 +547,7 @@ private:
     if(this->param.temporal_discretization == TemporalDiscretization::BDFPressureCorrection)
     {
       // Newton solver
-      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-14, 1.e-6);
+      this->param.newton_solver_data_momentum = Newton::SolverData(100, 1.e-10, 1.e-6);
 
       // linear solver
       this->param.solver_data_momentum           = SolverData(1e4, 1.e-12, 1.e-8, LinearSolver::GMRES, 100);
@@ -549,7 +566,8 @@ private:
       this->param.multigrid_data_momentum.smoother_data.smoother          = MultigridSmoother::Chebyshev; // MultigridSmoother::Jacobi
       this->param.multigrid_data_momentum.smoother_data.relaxation_factor = 0.8; // Jacobi,    default: 0.8
       this->param.multigrid_data_momentum.smoother_data.smoothing_range   = 20;  // Chebyshev, default: 20
-      this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 60; // Chebyshev, default: 20
+      // more iterations break down (NaN) on the small continuous `cphMG` levels in float
+      this->param.multigrid_data_momentum.smoother_data.iterations_eigenvalue_estimation = 20; // Chebyshev, default: 20
 
       this->param.multigrid_data_momentum.coarse_problem.solver         = this->param.non_explicit_convective_problem() ? MultigridCoarseGridSolver::GMRES : MultigridCoarseGridSolver::CG; // MultigridCoarseGridSolver::AMG
       this->param.multigrid_data_momentum.coarse_problem.solver_data    = SolverData(1000, 1e-12, 1e-8, LinearSolver::Undefined, 30);
@@ -570,7 +588,8 @@ private:
     this->param.newton_solver_data_coupled = Newton::SolverData(100, 1.e-10, 1.e-6);
 
     // linear solver
-    this->param.solver_data_coupled = SolverData(1e4, 1.e-12, 1.e-8, LinearSolver::FGMRES, 100);
+    // abs_tol 1e-12 limits the pressure accuracy for a (linearly) implicit convective term
+    this->param.solver_data_coupled = SolverData(1e4, 1.e-14, 1.e-8, LinearSolver::FGMRES, 100);
 
     // preconditioning linear solver
     this->param.preconditioner_coupled        = PreconditionerCoupled::BlockTriangular;
@@ -619,6 +638,25 @@ private:
     this->param.multigrid_data_pressure_block.smoother_data.relaxation_factor = 0.7;
     this->param.multigrid_data_pressure_block.coarse_problem.solver =
       MultigridCoarseGridSolver::GMRES;
+
+    // INITIAL GUESSES AND RELATIVE TOLERANCES
+
+    // after all `SolverData` above, since assigning a new `SolverData` resets
+    // `rel_tol_reference`
+    this->param.initial_guess_type_pressure_poisson   = initial_guess_type_pressure_poisson;
+    this->param.initial_guess_type_momentum           = initial_guess_type_momentum;
+    this->param.initial_guess_type_coupled            = initial_guess_type_coupled;
+    this->param.n_vectors_projection_pressure_poisson = n_vectors_projection_pressure_poisson;
+    this->param.n_vectors_projection_momentum         = n_vectors_projection_momentum;
+    this->param.eps_projection_pressure_poisson       = eps_projection_pressure_poisson;
+    this->param.eps_projection_momentum               = eps_projection_momentum;
+    this->param.store_products_projection_pressure_poisson =
+      store_products_projection_pressure_poisson;
+    this->param.store_products_projection_momentum             = store_products_projection_momentum;
+    this->param.solver_data_pressure_poisson.rel_tol_reference = rel_tol_reference;
+    this->param.solver_data_projection.rel_tol_reference       = rel_tol_reference;
+    this->param.solver_data_momentum.rel_tol_reference         = rel_tol_reference;
+    this->param.solver_data_coupled.rel_tol_reference          = rel_tol_reference;
   }
 
   void
@@ -789,7 +827,7 @@ private:
     pp_data.output_data.write_higher_order = true;
 
     // calculation of velocity error
-    pp_data.error_data_u.compute_convergence_table          = false;
+    pp_data.error_data_u.compute_convergence_table          = compute_convergence_table;
     pp_data.error_data_u.write_errors_to_file               = true;
     pp_data.error_data_u.time_control_data.is_active        = true;
     pp_data.error_data_u.time_control_data.start_time       = start_time;
@@ -830,12 +868,36 @@ private:
   double            kinematic_viscosity     = 5e-6;
   bool              use_turbulence_model    = false;
 
+  // time step size, values <= 0 use (end_time - start_time) / 20
+  double       time_step_size        = -1.0;
+  unsigned int order_time_integrator = 2;
+
+  // compute a convergence table from the error files of all runs (`run_<id>_*`)
+  // in the output directory, which hence has to be empty before the first run
+  bool compute_convergence_table = false;
+
   FormulationViscousTerm formulation_viscous_term = FormulationViscousTerm::DivergenceFormulation;
   TemporalDiscretization temporal_discretization  = TemporalDiscretization::Undefined;
   TreatmentOfConvectiveTerm treatment_of_convective_term =
     TreatmentOfConvectiveTerm::LinearlyImplicit;
   TreatmentOfVariableViscosity treatment_of_variable_viscosity =
     TreatmentOfVariableViscosity::Explicit;
+
+  // initial guesses of the solvers and reference of the relative tolerances of
+  // the linear solvers
+  InitialGuessType initial_guess_type_pressure_poisson = InitialGuessType::Extrapolation;
+  InitialGuessType initial_guess_type_momentum         = InitialGuessType::Extrapolation;
+  InitialGuessType initial_guess_type_coupled          = InitialGuessType::Extrapolation;
+  RelTolReference  rel_tol_reference                   = RelTolReference::InitialResidual;
+
+  // projection initial guess: number of previous solutions used, relative
+  // tolerance for dropping linearly dependent ones and storing the products
+  unsigned int n_vectors_projection_pressure_poisson      = 6;
+  unsigned int n_vectors_projection_momentum              = 6;
+  double       eps_projection_pressure_poisson            = 1e-6;
+  double       eps_projection_momentum                    = 1e-6;
+  bool         store_products_projection_pressure_poisson = false;
+  bool         store_products_projection_momentum         = false;
 
   GeneralizedNewtonianModelData generalized_newtonian_model_data;
   double                        interval_start = 0.0;
@@ -848,4 +910,4 @@ private:
 
 #include <exadg/incompressible_navier_stokes/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_NAVIER_STOKES_MANUFACTURED_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_NAVIER_STOKES_MANUFACTURED_APPLICATION_H_ */

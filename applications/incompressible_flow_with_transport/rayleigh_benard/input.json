@@ -10,7 +10,7 @@
             "RefineSpace": "4"
         },
         "Output": {
-            "OutputDirectory": "output/rayleigh_benard/",
+            "OutputDirectory": "results/rayleigh_benard/",
             "OutputName": "fluid",
             "WriteOutput": "false"
         }
@@ -20,7 +20,7 @@
             "Degree": "3"
         },
         "Output": {
-            "OutputDirectory": "output/rayleigh_benard/",
+            "OutputDirectory": "results/rayleigh_benard/",
             "OutputName": "scalar0",
             "WriteOutput": "false"
         }

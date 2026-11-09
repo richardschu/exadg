@@ -16,7 +16,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/poisson/nozzle/",
+        "OutputDirectory": "results/poisson/nozzle/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

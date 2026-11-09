@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_POISSON_TEST_CASES_SINE_H_
-#define APPLICATIONS_POISSON_TEST_CASES_SINE_H_
+#ifndef APPLICATIONS_POISSON_SINE_APPLICATION_H_
+#define APPLICATIONS_POISSON_SINE_APPLICATION_H_
 
 #include <exadg/grid/boundary_layer_manifold.h>
 #include <exadg/grid/deformed_cube_manifold.h>
@@ -171,6 +171,7 @@ private:
     this->param.multigrid_data.smoother_data.smoother        = MultigridSmoother::Chebyshev;
     this->param.multigrid_data.smoother_data.iterations      = 5;
     this->param.multigrid_data.smoother_data.smoothing_range = 20;
+
     // MG coarse grid solver
     this->param.multigrid_data.coarse_problem.solver         = MultigridCoarseGridSolver::CG;
     this->param.multigrid_data.coarse_problem.preconditioner = multigrid_coarse_grid_preconditioner;
@@ -393,4 +394,4 @@ private:
 
 #include <exadg/poisson/user_interface/implement_get_application.h>
 
-#endif
+#endif /* APPLICATIONS_POISSON_SINE_APPLICATION_H_ */

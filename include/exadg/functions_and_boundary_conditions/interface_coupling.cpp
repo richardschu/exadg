@@ -19,6 +19,10 @@
  *  ______________________________________________________________________
  */
 
+// deal.II
+#include <deal.II/base/mpi_remote_point_evaluation.h>
+#include <deal.II/matrix_free/fe_point_evaluation.h>
+
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/interface_coupling.h>
 #include <exadg/postprocessor/write_output.h>
@@ -55,11 +59,14 @@ InterfaceCoupling<rank, dim, Number>::setup(
   for(auto quad_index : interface_data_dst->get_quad_indices())
   {
     // exchange quadrature points with their owners
+    typename dealii::Utilities::MPI::RemotePointEvaluation<dim>::AdditionalData rpe_data;
+    rpe_data.tolerance              = tolerance_;
+    rpe_data.enforce_unique_mapping = false;
+    rpe_data.rtree_level            = 0;
+    rpe_data.marked_vertices        = [marked_vertices_src_]() { return marked_vertices_src_; };
+
     map_evaluator.emplace(
-      quad_index,
-      std::make_unique<dealii::Utilities::MPI::RemotePointEvaluation<dim>>(
-        typename dealii::Utilities::MPI::RemotePointEvaluation<dim>::AdditionalData(
-          tolerance_, false, 0, [marked_vertices_src_]() { return marked_vertices_src_; })));
+      quad_index, std::make_unique<dealii::Utilities::MPI::RemotePointEvaluation<dim>>(rpe_data));
 
     auto const * points = &interface_data_dst->get_array_q_points(quad_index);
 
@@ -79,8 +86,8 @@ InterfaceCoupling<rank, dim, Number>::setup(
           points_not_found.push_back((*points)[i]);
         }
       }
-      n_points_not_found =
-        dealii::Utilities::MPI::sum(n_points_not_found, dof_handler_src->get_mpi_communicator());
+      MPI_Comm const mpi_comm = dof_handler_src->get_mpi_communicator();
+      n_points_not_found      = dealii::Utilities::MPI::sum(n_points_not_found, mpi_comm);
 
       std::string const file_name =
         "interface_coupling_quad_index_" + dealii::Utilities::to_string(quad_index);
@@ -90,11 +97,11 @@ InterfaceCoupling<rank, dim, Number>::setup(
                  4,
                  "./",
                  file_name,
-                 0,
-                 dof_handler_src->get_mpi_communicator());
+                 0 /* counter */,
+                 mpi_comm);
 
       write_points_in_dummy_triangulation(
-        points_not_found, "./", file_name, 0, dof_handler_src->get_mpi_communicator());
+        points_not_found, "./", file_name, 0 /* counter */, mpi_comm);
 
       AssertThrow(map_evaluator[quad_index]->all_points_found(),
                   dealii::ExcMessage(std::string("Setup of InterfaceCoupling was not successful: " +
@@ -110,22 +117,94 @@ InterfaceCoupling<rank, dim, Number>::update_data(VectorType const & dof_vector_
 {
   dof_vector_src.update_ghost_values();
 
-  for(auto quadrature : interface_data_dst->get_quad_indices())
+  for(auto quadrature_index : interface_data_dst->get_quad_indices())
   {
-    auto const result =
-      dealii::VectorTools::point_values<n_components>(*map_evaluator[quadrature],
-                                                      *dof_handler_src,
-                                                      dof_vector_src,
-                                                      dealii::VectorTools::EvaluationFlags::avg);
+    std::vector<
+      typename dealii::FEPointEvaluation<n_components, dim, dim, Number>::value_type> const
+      solution_src =
+        dealii::VectorTools::point_values<n_components>(*map_evaluator[quadrature_index],
+                                                        *dof_handler_src,
+                                                        dof_vector_src,
+                                                        dealii::VectorTools::EvaluationFlags::avg);
 
-    auto & array_solution = interface_data_dst->get_array_solution(quadrature);
+    auto & array_solution_dst = interface_data_dst->get_array_solution(quadrature_index);
 
-    Assert(result.size() == array_solution.size(),
-           dealii::ExcMessage("Vectors must have the same length."));
+    AssertThrow(solution_src.size() == array_solution_dst.size(),
+                dealii::ExcMessage("Vectors must have the same length."));
 
-    for(unsigned int i = 0; i < result.size(); ++i)
-      array_solution[i] = result[i];
+    for(unsigned int i = 0; i < solution_src.size(); ++i)
+      array_solution_dst[i] = solution_src[i];
   }
+}
+
+template<int rank, int dim, typename Number>
+void
+InterfaceCoupling<rank, dim, Number>::integrate_transposed(
+  VectorType &                                           dof_vector_src,
+  quad_index const                                       quad_index_dst,
+  std::vector<dealii::Tensor<rank, dim, double>> const & values_dst,
+  dealii::AffineConstraints<Number> const &              constraints_src) const
+{
+  using PointEvaluation = dealii::FEPointEvaluation<n_components, dim, dim, Number>;
+  using value_type      = typename PointEvaluation::value_type;
+
+  auto const it = map_evaluator.find(quad_index_dst);
+  AssertThrow(it != map_evaluator.end(),
+              dealii::ExcMessage("Specified quad_index_dst = " + std::to_string(quad_index_dst) +
+                                 " does not exist in map_evaluator."));
+  dealii::Utilities::MPI::RemotePointEvaluation<dim> const & evaluator = *it->second;
+
+  // Points found in several cells are evaluated as the average over these
+  // cells in update_data(). The transpose distributes the value of such a point
+  // equally to these cells.
+  std::vector<unsigned int> const & point_ptrs = evaluator.get_point_ptrs();
+  AssertThrow(values_dst.size() + 1 == point_ptrs.size(),
+              dealii::ExcMessage("Vectors must have the same length."));
+
+  std::vector<value_type> values(values_dst.size());
+  for(unsigned int i = 0; i < values_dst.size(); ++i)
+  {
+    unsigned int const n_cells = point_ptrs[i + 1] - point_ptrs[i];
+    if(n_cells > 0)
+      values[i] = value_type(values_dst[i]) / static_cast<Number>(n_cells);
+  }
+
+  dof_vector_src = 0.0;
+  dof_vector_src.zero_out_ghost_values();
+
+  dealii::FiniteElement<dim> const & fe = dof_handler_src->get_fe();
+  PointEvaluation point_evaluation(evaluator.get_mapping(), fe, dealii::update_values);
+
+  dealii::Vector<Number>                       cell_vector(fe.n_dofs_per_cell());
+  std::vector<dealii::types::global_dof_index> dof_indices(fe.n_dofs_per_cell());
+
+  auto const integrate_function =
+    [&](dealii::ArrayView<value_type const> const &                                   values_cells,
+        typename dealii::Utilities::MPI::RemotePointEvaluation<dim>::CellData const & cell_data) {
+      for(auto const cell_index : cell_data.cell_indices())
+      {
+        auto const cell =
+          cell_data.get_active_cell_iterator(cell_index)->as_dof_handler_iterator(*dof_handler_src);
+
+        auto const unit_points = cell_data.get_unit_points(cell_index);
+        auto const values_cell = cell_data.get_data_view(cell_index, values_cells);
+
+        point_evaluation.reinit(cell, unit_points);
+        for(unsigned int q = 0; q < unit_points.size(); ++q)
+          point_evaluation.submit_value(values_cell[q], q);
+
+        point_evaluation.test_and_sum(dealii::make_array_view(cell_vector),
+                                      dealii::EvaluationFlags::values);
+
+        cell->get_dof_indices(dof_indices);
+        constraints_src.distribute_local_to_global(cell_vector, dof_indices, dof_vector_src);
+      }
+    };
+
+  std::vector<value_type> buffer;
+  evaluator.template process_and_evaluate<value_type>(values, buffer, integrate_function);
+
+  dof_vector_src.compress(dealii::VectorOperation::add);
 }
 
 template class InterfaceCoupling<0, 2, float>;

@@ -10,7 +10,7 @@
             "RefineSpace": "0"
         },
         "Output": {
-            "OutputDirectory": "output/fda/",
+            "OutputDirectory": "results/fda/",
             "OutputName": "main",
             "WriteOutput": "false"
         }
@@ -21,7 +21,7 @@
             "RefineSpace": "1"
         },
         "Output": {
-            "OutputDirectory": "output/fda/",
+            "OutputDirectory": "results/fda/",
             "OutputName": "precursor",
             "WriteOutput": "false"
         }

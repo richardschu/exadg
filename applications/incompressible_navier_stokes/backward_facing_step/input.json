@@ -10,7 +10,7 @@
             "RefineSpace": "0"
         },
         "Output": {
-            "OutputDirectory": "output/bfs/",
+            "OutputDirectory": "results/bfs/",
             "OutputName": "main",
             "WriteOutput": "false"
         }
@@ -21,7 +21,7 @@
             "RefineSpace": "0"
         },
         "Output": {
-            "OutputDirectory": "output/bfs/",
+            "OutputDirectory": "results/bfs/",
             "OutputName": "precursor",
             "WriteOutput": "false"
         }

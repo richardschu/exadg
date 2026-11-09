@@ -39,14 +39,15 @@ void
 KineticEnergyCalculator<dim, Number>::setup(dealii::MatrixFree<dim, Number> const & matrix_free_in,
                                             unsigned int const                      dof_index_in,
                                             unsigned int const                      quad_index_in,
-                                            KineticEnergyData const & kinetic_energy_data_in)
+                                            KineticEnergyData const & kinetic_energy_data_in,
+                                            bool const                restarted_simulation)
 {
   matrix_free = &matrix_free_in;
   dof_index   = dof_index_in;
   quad_index  = quad_index_in;
   data        = kinetic_energy_data_in;
 
-  time_control.setup(kinetic_energy_data_in.time_control_data);
+  time_control.setup(kinetic_energy_data_in.time_control_data, restarted_simulation);
 
   clear_files = data.clear_file;
 
@@ -68,6 +69,19 @@ KineticEnergyCalculator<dim, Number>::evaluate(VectorType const & velocity,
               dealii::ExcMessage("Not implemented in this class."));
 
   calculate_basic(velocity, time);
+}
+
+template<int dim, typename Number>
+Number
+KineticEnergyCalculator<dim, Number>::calculate(VectorType const & velocity,
+                                                Number &           energy,
+                                                Number &           enstrophy,
+                                                Number &           dissipation,
+                                                Number &           max_vorticity)
+{
+  AssertThrow(matrix_free != nullptr, dealii::ExcMessage("Call setup() first."));
+
+  return integrate(*matrix_free, velocity, energy, enstrophy, dissipation, max_vorticity);
 }
 
 template<int dim, typename Number>

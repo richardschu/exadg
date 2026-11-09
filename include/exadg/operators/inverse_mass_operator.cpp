@@ -92,16 +92,7 @@ InverseMassOperator<dim, n_components, Number>::initialize(
     }
     else if(fe.reference_cell().is_simplex())
     {
-      const bool cartesian_or_affine_mapping =
-        std::all_of(matrix_free->get_mapping_info().cell_type.begin(),
-                    matrix_free->get_mapping_info().cell_type.end(),
-                    [](auto g) {
-                      return g <= dealii::internal::MatrixFreeFunctions::GeometryType::affine;
-                    });
-      AssertThrow(cartesian_or_affine_mapping,
-                  dealii::ExcMessage(
-                    "The matrix-free cell-wise inverse mass operator can only be applied "
-                    "with affine mapping on non-hypercube elements."));
+      check_affine_mapping();
 
       AssertThrow(
         !coefficient_is_variable,
@@ -256,12 +247,33 @@ InverseMassOperator<dim, n_components, Number>::initialize(
 
 template<int dim, int n_components, typename Number>
 void
+InverseMassOperator<dim, n_components, Number>::check_affine_mapping() const
+{
+  const bool cartesian_or_affine_mapping =
+    std::all_of(matrix_free->get_mapping_info().cell_type.begin(),
+                matrix_free->get_mapping_info().cell_type.end(),
+                [](auto g) {
+                  return g <= dealii::internal::MatrixFreeFunctions::GeometryType::affine;
+                });
+  AssertThrow(cartesian_or_affine_mapping,
+              dealii::ExcMessage("The matrix-free cell-wise inverse mass operator can only be "
+                                 "applied with affine mapping on non-hypercube elements, which "
+                                 "might be violated after a deformation of the grid. Use "
+                                 "InverseMassType::BlockMatrices or "
+                                 "InverseMassType::ElementwiseKrylovSolver instead."));
+}
+
+template<int dim, int n_components, typename Number>
+void
 InverseMassOperator<dim, n_components, Number>::update()
 {
   if(data.implementation_type == InverseMassType::MatrixfreeOperator)
   {
     // no updates needed as long as the MatrixFree object is up-to-date (which is not the
-    // responsibility of the present class).
+    // responsibility of the present class). On non-hypercube elements, a deformation of the grid
+    // might violate the assumption of affine cells.
+    if(not is_hypercube_element)
+      check_affine_mapping();
   }
   else if(data.implementation_type == InverseMassType::ElementwiseKrylovSolver or
           data.implementation_type == InverseMassType::BlockMatrices)

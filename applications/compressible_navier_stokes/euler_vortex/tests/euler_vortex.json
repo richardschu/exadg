@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/euler_vortex/",
+        "OutputDirectory": "results/euler_vortex/",
         "OutputName": "test",
         "WriteOutput": "false"
     }

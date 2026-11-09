@@ -20,12 +20,14 @@
  */
 
 // deal.II
+#include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_simplex_p.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <deal.II/numerics/vector_tools_constraints.h>
 
 // ExaDG
 #include <exadg/grid/grid_utilities.h>
@@ -338,6 +340,16 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::get_mapping(
 }
 
 template<int dim, typename Number, typename MultigridNumber>
+std::shared_ptr<dealii::Mapping<dim> const>
+MultigridPreconditionerBase<dim, Number, MultigridNumber>::get_mapping_ptr(
+  unsigned int const level) const
+{
+  auto const         h_level    = level_info[level].h_level();
+  unsigned int const n_h_levels = level_info.back().h_level() - level_info.front().h_level() + 1;
+  return multigrid_mappings->get_mapping_ptr(h_level, n_h_levels);
+}
+
+template<int dim, typename Number, typename MultigridNumber>
 unsigned int
 MultigridPreconditionerBase<dim, Number, MultigridNumber>::get_number_of_levels() const
 {
@@ -428,8 +440,6 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
 
       auto affine_constraints_own = new dealii::AffineConstraints<MultigridNumber>();
 
-      AssertThrow(is_singular == false, dealii::ExcNotImplemented());
-
       dealii::IndexSet const locally_relevant_dofs =
         dealii::DoFTools::extract_locally_relevant_dofs(*dof_handler);
       affine_constraints_own->reinit(dof_handler->locally_owned_dofs(), locally_relevant_dofs);
@@ -450,10 +460,9 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
         }
         else
         {
-          AssertThrow(
-            grid->coarse_periodic_face_pairs.size() == grid->coarse_triangulations.size(),
-            dealii::ExcMessage(
-              "The size of coarse_periodic_face_pairs differs from the size of coarse_triangulations."));
+          AssertThrow(grid->coarse_periodic_face_pairs.size() == grid->coarse_triangulations.size(),
+                      dealii::ExcMessage("The size of coarse_periodic_face_pairs differs from the "
+                                         "size of coarse_triangulations."));
 
           AssertThrow(level.h_level() < grid->coarse_periodic_face_pairs.size(),
                       dealii::ExcMessage(
@@ -492,6 +501,24 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
           mapping_dummy, *dof_handler, it.first, zero_function, *affine_constraints_own, mask);
       }
 
+      // Zero normal component after the Dirichlet constraints, which deal.II
+      // does not overwrite. The normal vectors are those of the level mapping.
+      if(not(dirichlet_normal_bc.empty()))
+      {
+        AssertThrow(not(level.is_dg()),
+                    dealii::ExcMessage("Zero normal constraints require continuous elements."));
+
+        dealii::VectorTools::compute_no_normal_flux_constraints(*dof_handler,
+                                                                0 /* first_vector_component */,
+                                                                dirichlet_normal_bc,
+                                                                *affine_constraints_own,
+                                                                get_mapping(level.h_level()));
+      }
+
+      // constrain one dof in the continuous case, see ConstraintUtil::add_constraints()
+      if(is_singular and not(level.is_dg()) and affine_constraints_own->can_store_line(0))
+        ConstraintUtil::constrain_dof_of_singular_operator(*affine_constraints_own);
+
       affine_constraints_own->close();
 
       constraints[l].reset(affine_constraints_own);
@@ -502,6 +529,12 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
     AssertThrow(is_hypercube_mesh_without_hanging_nodes,
                 dealii::ExcMessage(
                   "This implementation only allows globally refined hypercube meshes."));
+
+    // dealii::MGConstrainedDoFs::make_no_normal_flux_constraints() only
+    // supports boundaries normal to a coordinate axis.
+    AssertThrow(dirichlet_normal_bc.empty(),
+                dealii::ExcMessage("Zero normal constraints require the global-coarsening "
+                                   "branch, i.e., Grid::coarse_triangulations."));
 
     // temporal storage for new DoFHandlers and constraints on each p-level
     std::map<MGDoFHandlerIdentifier, std::shared_ptr<dealii::DoFHandler<dim> const>>
@@ -558,6 +591,85 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
       dof_handlers[level]     = map_dofhandlers[p_level];
       constrained_dofs[level] = map_constrained_dofs[p_level];
     });
+
+    // enable reordering of MG levels to optimize for data locality.
+    bool constexpr reorder_data_locality = false;
+    if(reorder_data_locality)
+    {
+      for_all_levels([&](unsigned int const level) {
+        dealii::AffineConstraints<MultigridNumber> affine_constraints_own;
+
+        ConstraintUtil::add_constraints<dim>(level_info[level].is_dg(),
+                                             is_singular,
+                                             *dof_handlers[level],
+                                             affine_constraints_own,
+                                             *constrained_dofs[level],
+                                             grid->periodic_face_pairs,
+                                             level_info[level].h_level());
+
+        typename dealii::MatrixFree<dim, MultigridNumber>::AdditionalData additional_data;
+        additional_data.tasks_parallel_scheme =
+          dealii::MatrixFree<dim, MultigridNumber>::AdditionalData::none;
+        additional_data.mg_level = level_info[level].dealii_tria_level();
+        dealii::DoFRenumbering::matrix_free_data_locality(const_cast<dealii::DoFHandler<dim> &>(
+                                                            *dof_handlers[level]),
+                                                          affine_constraints_own,
+                                                          additional_data);
+      });
+
+      for(auto level : p_levels)
+      {
+        if(not(level.is_dg))
+        {
+          map_constrained_dofs[level]->clear();
+          map_constrained_dofs[level]->initialize(*map_dofhandlers[level]);
+          for(auto it : dirichlet_bc)
+          {
+            std::set<dealii::types::boundary_id> dirichlet_boundary;
+            dirichlet_boundary.insert(it.first);
+
+            dealii::ComponentMask mask    = dealii::ComponentMask();
+            auto                  it_mask = dirichlet_bc_component_mask.find(it.first);
+            if(it_mask != dirichlet_bc_component_mask.end())
+            {
+              mask = it_mask->second;
+            }
+
+            map_constrained_dofs[level]->make_zero_boundary_constraints(*map_dofhandlers[level],
+                                                                        dirichlet_boundary,
+                                                                        mask);
+          }
+        }
+      }
+
+      const dealii::DoFHandler<dim> & dof_handler = *dof_handlers.back();
+      dof_renumbering.clear();
+      dof_renumbering.resize(dof_handler.locally_owned_dofs().n_elements(),
+                             dealii::numbers::invalid_unsigned_int);
+      std::vector<dealii::types::global_dof_index> dof_indices(dof_handler.get_fe().dofs_per_cell);
+      std::vector<dealii::types::global_dof_index> mg_dof_indices(
+        dof_handler.get_fe().dofs_per_cell);
+      const dealii::IndexSet & active = dof_handler.locally_owned_dofs();
+      const dealii::IndexSet & level =
+        dof_handler.locally_owned_mg_dofs(level_info.back().h_level());
+      for(const auto & cell : dof_handler.active_cell_iterators())
+      {
+        if(cell->is_locally_owned())
+        {
+          cell->get_dof_indices(dof_indices);
+          cell->get_mg_dof_indices(mg_dof_indices);
+          for(unsigned int i = 0; i < dof_indices.size(); ++i)
+          {
+            if(active.is_element(dof_indices[i]))
+            {
+              Assert(level.is_element(mg_dof_indices[i]), dealii::ExcInternalError());
+              dof_renumbering[level.index_within_set(mg_dof_indices[i])] =
+                active.index_within_set(dof_indices[i]);
+            }
+          }
+        }
+      }
+    }
 
     for_all_levels([&](unsigned int const level) {
       auto affine_constraints_own = new dealii::AffineConstraints<MultigridNumber>;
@@ -679,7 +791,7 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::vmult(VectorType &   
               dealii::ExcMessage(
                 "Multigrid preconditioner can not be applied because it needs to be updated."));
 
-  multigrid_algorithm->vmult(dst, src);
+  multigrid_algorithm->vmult(dof_renumbering, dst, src);
 }
 
 template<int dim, typename Number, typename MultigridNumber>
@@ -714,6 +826,15 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_smoother(
               dealii::ExcMessage(
                 "Multigrid level is invalid when initializing multigrid smoother!"));
 
+  AssertThrow(level_info[level].is_dg() or
+                data.smoother_data.preconditioner != PreconditionerSmoother::BlockJacobi,
+              dealii::ExcMessage("PreconditionerSmoother::BlockJacobi is only implemented for DG, "
+                                 "but multigrid level " +
+                                 std::to_string(level) +
+                                 " uses continuous elements, e.g., due to a multigrid type with "
+                                 "c-transfer (MultigridType::cphMG). Use "
+                                 "PreconditionerSmoother::PointJacobi instead."));
+
   switch(data.smoother_data.smoother)
   {
     case MultigridSmoother::Chebyshev:
@@ -727,6 +848,8 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_smoother(
       smoother_data.degree          = data.smoother_data.iterations;
       smoother_data.iterations_eigenvalue_estimation =
         data.smoother_data.iterations_eigenvalue_estimation;
+      // fused vector operations only for DG, see ChebyshevSmoother
+      smoother_data.use_fused_operations = level_info[level].is_dg();
 
       std::shared_ptr<Chebyshev> smoother = std::dynamic_pointer_cast<Chebyshev>(smoothers[level]);
       smoother->setup(mg_operator, initialize_preconditioner, smoother_data);
@@ -816,7 +939,7 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_coarse_sol
     case MultigridCoarseGridSolver::CG:
     case MultigridCoarseGridSolver::GMRES:
     {
-      typename MGCoarseKrylov<Operator>::AdditionalData additional_data;
+      typename MGCoarseKrylov<dim, Operator>::AdditionalData additional_data;
 
       additional_data.solver_type = data.coarse_problem.solver;
 
@@ -825,10 +948,9 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_coarse_sol
       additional_data.preconditioner       = data.coarse_problem.preconditioner;
       additional_data.amg_data             = data.coarse_problem.amg_data;
 
-      coarse_grid_solver = std::make_shared<MGCoarseKrylov<Operator>>(coarse_operator,
-                                                                      initialize_preconditioners,
-                                                                      additional_data,
-                                                                      mpi_comm);
+      coarse_grid_solver = std::make_shared<MGCoarseKrylov<dim, Operator>>(
+        coarse_operator, initialize_preconditioners, additional_data, mpi_comm);
+
       break;
     }
     case MultigridCoarseGridSolver::AMG:
@@ -836,9 +958,10 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::initialize_coarse_sol
       if(data.coarse_problem.amg_data.amg_type == AMGType::ML or
          data.coarse_problem.amg_data.amg_type == AMGType::BoomerAMG)
       {
-        coarse_grid_solver = std::make_shared<MGCoarseAMG<Operator>>(coarse_operator,
-                                                                     initialize_preconditioners,
-                                                                     data.coarse_problem.amg_data);
+        coarse_grid_solver =
+          std::make_shared<MGCoarseAMG<dim, Operator>>(coarse_operator,
+                                                       initialize_preconditioners,
+                                                       data.coarse_problem.amg_data);
       }
       else
       {

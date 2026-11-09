@@ -19,8 +19,8 @@
  *  ______________________________________________________________________
  */
 
-#ifndef APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_CONST_RHS_CONST_AND_CIRCULAR_WIND_H_
-#define APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_CONST_RHS_CONST_AND_CIRCULAR_WIND_H_
+#ifndef APPLICATIONS_CONVECTION_DIFFUSION_CONST_RHS_APPLICATION_H_
+#define APPLICATIONS_CONVECTION_DIFFUSION_CONST_RHS_APPLICATION_H_
 
 // constant source term inside rectangular domain
 // pure Dirichlet boundary conditions (homogeneous)
@@ -263,4 +263,4 @@ private:
 
 #include <exadg/convection_diffusion/user_interface/implement_get_application.h>
 
-#endif /* APPLICATIONS_CONVECTION_DIFFUSION_TEST_CASES_CONST_RHS_CONST_AND_CIRCULAR_WIND_H_ */
+#endif /* APPLICATIONS_CONVECTION_DIFFUSION_CONST_RHS_APPLICATION_H_ */

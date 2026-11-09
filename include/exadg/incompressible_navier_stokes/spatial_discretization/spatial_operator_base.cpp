@@ -303,7 +303,7 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
 
   if(param.convective_problem())
     matrix_free_data.append_mapping_flags(
-      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags());
+      Operators::ConvectiveKernel<dim, Number>::get_mapping_flags(true, true));
 
   if(param.viscous_problem())
     matrix_free_data.append_mapping_flags(
@@ -342,8 +342,16 @@ SpatialOperatorBase<dim, Number>::fill_matrix_free_data(
   std::shared_ptr<dealii::Quadrature<dim>> quadrature_p =
     create_quadrature<dim>(param.grid.element_type, param.get_degree_p(param.degree_u) + 1);
   matrix_free_data.insert_quadrature(*quadrature_p, field + quad_index_p);
+  unsigned int const n_q_points_1d_overintegration = param.degree_u + (param.degree_u + 2) / 2;
+  // dealii::MatrixFree supports dealii::QGaussSimplex with at most 4 points, see
+  // dealii::internal::MatrixFreeFunctions::get_unique_face_quadratures()
+  AssertThrow(param.grid.element_type != ElementType::Simplex or n_q_points_1d_overintegration <= 4,
+              dealii::ExcMessage("The over-integration quadrature for simplex elements requires " +
+                                 std::to_string(n_q_points_1d_overintegration) +
+                                 " points, but dealii::MatrixFree supports dealii::QGaussSimplex "
+                                 "with at most 4 points. Use a velocity degree of at most 2."));
   std::shared_ptr<dealii::Quadrature<dim>> quadrature_u_overintegration =
-    create_quadrature<dim>(param.grid.element_type, param.degree_u + (param.degree_u + 2) / 2);
+    create_quadrature<dim>(param.grid.element_type, n_q_points_1d_overintegration);
   matrix_free_data.insert_quadrature(*quadrature_u_overintegration,
                                      field + quad_index_u_overintegration);
 
@@ -426,10 +434,11 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
                 [](auto g) {
                   return g <= dealii::internal::MatrixFreeFunctions::GeometryType::affine;
                 });
+  // the mapping does not remain affine in case of a moving mesh
   inverse_mass_operator_data_velocity_scalar.parameters.implementation_type =
     inverse_mass_operator_data_velocity_scalar.get_optimal_inverse_mass_type(
       matrix_free->get_dof_handler(get_dof_index_velocity_scalar()).get_fe(),
-      cartesian_or_affine_mapping);
+      cartesian_or_affine_mapping and not(param.ale_formulation));
   inverse_mass_velocity_scalar.initialize(*matrix_free, inverse_mass_operator_data_velocity_scalar);
 
   // body force operator
@@ -1218,6 +1227,174 @@ SpatialOperatorBase<dim, Number>::interpolate_stress_bc(VectorType &       stres
 
   velocity_ptr = nullptr;
   pressure_ptr = nullptr;
+}
+
+template<int dim, typename Number>
+void
+SpatialOperatorBase<dim, Number>::compute_interface_force(
+  std::vector<dealii::Tensor<1, dim, double>> & force,
+  VectorType const &                            velocity,
+  VectorType const &                            pressure,
+  bool const                                    velocity_part,
+  bool const                                    pressure_part) const
+{
+  AssertThrow(interface_data_dirichlet_cached.get(),
+              dealii::ExcMessage("DirichletCached boundary conditions are not initialized."));
+  AssertThrow(viscous_kernel.get(), dealii::ExcMessage("Viscous kernel is not initialized."));
+
+  unsigned int const dof_index_u = this->get_dof_index_velocity();
+  unsigned int const dof_index_p = this->get_dof_index_pressure();
+  unsigned int const quad_index  = this->get_quad_index_velocity_standard();
+
+  force.assign(interface_data_dirichlet_cached->get_array_q_points(quad_index).size(),
+               dealii::Tensor<1, dim, double>());
+
+  velocity.update_ghost_values();
+  pressure.update_ghost_values();
+
+  FaceIntegratorU integrator_u(*matrix_free, true, dof_index_u, quad_index);
+  FaceIntegratorP integrator_p(*matrix_free, true, dof_index_p, quad_index);
+
+  // terms of the velocity part in addition to the viscous term
+  bool const add_convective_flux = param.convective_problem();
+  bool const add_continuity_penalty_flux =
+    param.use_continuity_penalty and param.continuity_penalty_use_boundary_data;
+  bool const evaluate_grid_velocity = add_convective_flux and param.ale_formulation;
+
+  FaceIntegratorU integrator_grid_velocity(*matrix_free, true, dof_index_u, quad_index);
+  if(evaluate_grid_velocity)
+    convective_kernel->update_ghost_values_grid_velocity();
+
+  for(unsigned int face = matrix_free->n_inner_face_batches();
+      face < matrix_free->n_inner_face_batches() + matrix_free->n_boundary_face_batches();
+      ++face)
+  {
+    dealii::types::boundary_id const boundary_id = matrix_free->get_boundary_id(face);
+
+    BoundaryTypeU const boundary_type =
+      this->boundary_descriptor->velocity->get_boundary_type(boundary_id);
+
+    if(boundary_type != BoundaryTypeU::DirichletCached)
+      continue;
+
+    integrator_u.reinit(face);
+    integrator_u.gather_evaluate(velocity,
+                                 dealii::EvaluationFlags::values |
+                                   dealii::EvaluationFlags::gradients);
+
+    integrator_p.reinit(face);
+    integrator_p.gather_evaluate(pressure, dealii::EvaluationFlags::values);
+
+    // penalty parameter of the interior penalty method
+    viscous_kernel->reinit_boundary_face(integrator_u, dof_index_u);
+
+    if(evaluate_grid_velocity)
+    {
+      integrator_grid_velocity.reinit(face);
+      integrator_grid_velocity.gather_evaluate(convective_kernel->get_grid_velocity(),
+                                               dealii::EvaluationFlags::values);
+    }
+
+    // penalty parameter of the continuity penalty term, computed in the last
+    // update of the penalty operators
+    if(add_continuity_penalty_flux)
+      conti_penalty_kernel->reinit_boundary_face(integrator_u);
+
+    unsigned int const n_filled_lanes = matrix_free->n_active_entries_per_face_batch(face);
+
+    for(unsigned int q = 0; q < integrator_u.n_q_points; ++q)
+    {
+      // Traction based on the unit *outward* normal of the fluid domain,
+      // evaluated with the numerical fluxes of the momentum equation on the
+      // boundary, where the exterior value is given by the Dirichlet data g,
+      // i.e., the velocity of the structure: the viscous flux (nu * F(u) * n
+      // for u = g), the pressure with the interior value, the convective flux,
+      // and the boundary term of the continuity penalty. The convective flux
+      // and the continuity penalty term vanish for u = g. The divergence
+      // penalty term has no boundary term. The traction is the negative of the
+      // boundary terms of the operators on the left-hand side of the momentum
+      // equation.
+      vector const normal  = integrator_u.normal_vector(q);
+      vector const value_m = integrator_u.get_value(q);
+      vector const value_p =
+        calculate_exterior_value<dim, Number>(value_m,
+                                              q,
+                                              integrator_u,
+                                              OperatorType::full,
+                                              boundary_type,
+                                              boundary_id,
+                                              this->boundary_descriptor->velocity,
+                                              0.0 /* time, unused for DirichletCached */);
+
+      vector const normal_gradient_m = viscous_kernel->calculate_normal_gradient(q, integrator_u);
+      vector const normal_gradient_p = calculate_exterior_normal_gradient<dim, Number>(
+        normal_gradient_m,
+        q,
+        integrator_u,
+        OperatorType::full,
+        boundary_type,
+        boundary_id,
+        this->boundary_descriptor->velocity,
+        0.0 /* time, unused for DirichletCached */,
+        viscous_kernel->get_data().variable_normal_vector);
+
+      scalar const viscosity = get_viscosity_boundary_face(face, q);
+
+      vector const viscous_flux = viscous_kernel->calculate_value_flux(
+        normal_gradient_m, normal_gradient_p, value_m, value_p, normal, viscosity);
+
+      // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
+      // pressure, hence multiply by density to get true traction in N/m^2.
+      vector traction;
+      if(velocity_part)
+      {
+        traction += param.density * viscous_flux;
+
+        if(add_convective_flux)
+        {
+          vector const value_p_convective = calculate_exterior_value_convective<dim, Number>(
+            value_m,
+            q,
+            integrator_u,
+            OperatorType::full,
+            boundary_type,
+            convective_kernel_data.type_dirichlet_bc,
+            boundary_id,
+            std::shared_ptr<BoundaryDescriptorU<dim> const>(this->boundary_descriptor->velocity),
+            0.0 /* time, unused for DirichletCached */);
+
+          vector grid_velocity;
+          if(evaluate_grid_velocity)
+            grid_velocity = integrator_grid_velocity.get_value(q);
+
+          traction -=
+            param.density * convective_kernel->calculate_flux_nonlinear_boundary(
+                              value_m, value_p_convective, normal, grid_velocity, boundary_type);
+        }
+
+        // same exterior value as in the continuity penalty operator
+        if(add_continuity_penalty_flux)
+          traction -=
+            param.density * conti_penalty_kernel->calculate_flux(value_m, value_p, normal);
+      }
+      if(pressure_part)
+        traction -= param.density * integrator_p.get_value(q) * normal;
+
+      // The force acting on the structure has the opposite sign.
+      scalar const JxW = integrator_u.JxW(q);
+      for(unsigned int v = 0; v < n_filled_lanes; ++v)
+      {
+        dealii::types::global_dof_index const index =
+          interface_data_dirichlet_cached->get_vector_index(quad_index, face, q, v);
+
+        for(unsigned int d = 0; d < dim; ++d)
+          force[index][d] = -traction[d][v] * JxW[v];
+      }
+    }
+  }
+
+  if(evaluate_grid_velocity)
+    convective_kernel->zero_out_ghost_values_grid_velocity();
 }
 
 template<int dim, typename Number>
@@ -2056,19 +2233,17 @@ SpatialOperatorBase<dim, Number>::local_interpolate_stress_bc_boundary_face(
         unsigned int const index = matrix_free.get_shape_info(dof_index_u, quad_index)
                                      .face_to_cell_index_nodal[local_face_number][q];
 
-        // compute traction acting on structure with normal vector in opposite direction
-        // as compared to the fluid domain
-        vector normal = integrator_u.normal_vector(q);
-        tensor grad_u = integrator_u.get_gradient(q);
-        scalar p      = integrator_p.get_value(q);
+        // Compute traction vector based on unit *outward* normal.
+        vector const normal = integrator_u.normal_vector(q);
+        tensor const grad_u = integrator_u.get_gradient(q);
+        scalar const p      = integrator_p.get_value(q);
 
-        scalar viscosity = get_viscosity_boundary_face(face, q);
+        scalar const viscosity = get_viscosity_boundary_face(face, q);
 
-        // incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
-        // pressure
-        // -> multiply by density to get true traction in N/m^2.
-        vector traction =
-          param.density * (viscosity * (grad_u + transpose(grad_u)) * normal - p * normal);
+        // Incompressible flow solver is formulated in terms of kinematic viscosity and kinematic
+        // pressure, hence multiply by density to get true traction in N/m^2.
+        vector const traction =
+          param.density * (viscosity * ((grad_u + transpose(grad_u)) * normal) - p * normal);
 
         integrator_u.submit_dof_value(traction, index);
       }

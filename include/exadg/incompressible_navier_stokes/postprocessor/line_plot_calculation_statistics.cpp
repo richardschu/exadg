@@ -50,7 +50,8 @@ LinePlotCalculatorStatistics<dim, Number>::LinePlotCalculatorStatistics(
 
 template<int dim, typename Number>
 void
-LinePlotCalculatorStatistics<dim, Number>::setup(LinePlotDataStatistics<dim> const & data_in)
+LinePlotCalculatorStatistics<dim, Number>::setup(LinePlotDataStatistics<dim> const & data_in,
+                                                 bool const restarted_simulation)
 {
   // initialize data
   data = data_in;
@@ -58,7 +59,7 @@ LinePlotCalculatorStatistics<dim, Number>::setup(LinePlotDataStatistics<dim> con
   AssertThrow(Utilities::is_valid_timestep(
                 data_in.time_control_data_statistics.write_preliminary_results_every_nth_time_step),
               dealii::ExcMessage("write_preliminary_results_every_nth_time_step has to be set."));
-  time_control_statistics.setup(data_in.time_control_data_statistics);
+  time_control_statistics.setup(data_in.time_control_data_statistics, restarted_simulation);
 
   if(data_in.time_control_data_statistics.time_control_data.is_active)
   {

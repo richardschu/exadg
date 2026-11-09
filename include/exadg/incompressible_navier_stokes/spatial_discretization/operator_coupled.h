@@ -25,7 +25,7 @@
 // ExaDG
 #include <exadg/convection_diffusion/spatial_discretization/operators/combined_operator.h>
 #include <exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.h>
-#include <exadg/solvers_and_preconditioners/newton/newton_solver.h>
+#include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver.h>
 
 namespace ExaDG
 {

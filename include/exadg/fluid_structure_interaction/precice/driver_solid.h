@@ -54,7 +54,10 @@ public:
     dealii::Timer timer_local;
     timer_local.restart();
 
-    structure->setup(this->application->structure, this->mpi_comm, this->is_test);
+    structure->setup(this->application->structure,
+                     this->mpi_comm,
+                     this->is_test,
+                     0.0 /* robin_parameter */);
 
     this->timer_tree.insert({"FSI", "Setup", "Structure"}, timer_local.wall_time());
   }
@@ -128,7 +131,7 @@ public:
       this->precice->save_current_state_if_required([&]() {});
 
       // update stress boundary condition for solid
-      coupling_fluid_to_structure();
+      coupling_fluid_to_structure(is_new_time_window);
 
       // solve structural problem
       // store_solution needs to be true for compatibility
@@ -227,14 +230,52 @@ private:
   }
 
   void
-  coupling_fluid_to_structure() const
+  coupling_fluid_to_structure(bool const first_coupling_iteration) const
   {
     this->precice->read_block_data(this->precice_parameters.read_mesh_name,
                                    this->precice_parameters.stress_data_name);
+
+    // The structure solves the balance of momentum at t_{n+1-alpha_f} of the
+    // generalized-alpha method, where the fluid traction is
+    // (1 - alpha_f) * traction_{n+1} + alpha_f * traction_n, see
+    // FSI::Driver::coupling_fluid_to_structure(). The traction read in the
+    // quadrature points of the structure is blended in place.
+    // `traction_fluid_np` holds the traction read last. In the first coupling
+    // iteration of a time window, this is the traction of the converged
+    // coupling iteration of the last time window. The traction at t_0 is not
+    // available, since the initial acceleration is not computed here, so the
+    // traction read is applied without blending in the first time window.
+    std::shared_ptr<ContainerInterfaceData<1, dim, double>> interface_data =
+      structure->pde_operator->get_container_interface_data_neumann();
+    double const alpha_f = structure->time_integrator->get_alpha_f();
+
+    for(auto const quad_index : interface_data->get_quad_indices())
+    {
+      std::vector<dealii::Tensor<1, dim, double>> & traction =
+        interface_data->get_array_solution(quad_index);
+      std::vector<dealii::Tensor<1, dim, double>> & traction_n  = traction_fluid_n[quad_index];
+      std::vector<dealii::Tensor<1, dim, double>> & traction_np = traction_fluid_np[quad_index];
+
+      if(first_coupling_iteration)
+        traction_n.swap(traction_np);
+      traction_np = traction;
+
+      // first time window
+      if(traction_n.empty())
+        continue;
+
+      for(unsigned int i = 0; i < traction.size(); ++i)
+        traction[i] = (1.0 - alpha_f) * traction_np[i] + alpha_f * traction_n[i];
+    }
   }
 
   // the solver
   std::shared_ptr<SolverStructure<dim, Number>> structure;
+
+  // fluid traction in the quadrature points of the structure at t_n and t_{n+1}
+  // for each quadrature index, see coupling_fluid_to_structure()
+  mutable std::map<unsigned int, std::vector<dealii::Tensor<1, dim, double>>> traction_fluid_n;
+  mutable std::map<unsigned int, std::vector<dealii::Tensor<1, dim, double>>> traction_fluid_np;
 };
 
 } // namespace preCICE

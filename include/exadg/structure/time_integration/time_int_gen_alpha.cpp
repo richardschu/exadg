@@ -50,7 +50,7 @@ TimeIntGenAlpha<dim, Number>::TimeIntGenAlpha(
     param(param_in),
     mpi_comm(mpi_comm_in),
     pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_comm) == 0),
-    use_extrapolation(true),
+    first_coupling_iteration(true),
     store_solution(false),
     iterations({0, {0, 0}})
 {
@@ -97,16 +97,20 @@ TimeIntGenAlpha<dim, Number>::compute_initial_acceleration(bool const do_restart
   if(not(do_restart))
   {
     // solve momentum equation to obtain initial acceleration
-    pde_operator->compute_initial_acceleration(acceleration_n, displacement_n, this->get_time());
+    pde_operator->compute_initial_acceleration(acceleration_n,
+                                               displacement_n,
+                                               velocity_n,
+                                               this->get_time());
   }
 }
 
 template<int dim, typename Number>
 void
-TimeIntGenAlpha<dim, Number>::advance_one_timestep_partitioned_solve(bool const use_extrapolation)
+TimeIntGenAlpha<dim, Number>::advance_one_timestep_partitioned_solve(
+  bool const first_coupling_iteration)
 {
-  this->use_extrapolation = use_extrapolation;
-  this->store_solution    = true;
+  this->first_coupling_iteration = first_coupling_iteration;
+  this->store_solution           = true;
 
   this->advance_one_timestep_solve();
 }
@@ -134,6 +138,22 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   this->compute_const_vector_velocity_remainder(rhs, displacement_n, velocity_n, acceleration_n);
   pde_operator->apply_add_damping_operator(const_vector, rhs);
 
+  // add contribution from velocity term in Robin boundary conditions
+  // (rhs still holds const_vector_velocity_remainder)
+  pde_operator->evaluate_add_boundary_mass_operator(const_vector, rhs);
+
+  // add contribution from the velocity g given to the fluid in the Robin
+  // coupling condition sigma_s * n_s + alpha * v_s = sigma_f * n_s + alpha * g.
+  // The structure velocity is evaluated at t_{n+1-alpha_f}, so is g, such that
+  // the velocity terms cancel exactly at convergence of the partitioned scheme.
+  // The sign is negative, since const_vector is on the left-hand side.
+  if(velocity_fsi_interface.size() > 0)
+  {
+    rhs.equ(-(1.0 - this->get_alpha_f()), velocity_fsi_interface);
+    rhs.add(-this->get_alpha_f(), velocity_n);
+    pde_operator->evaluate_add_boundary_mass_operator_fsi_robin(const_vector, rhs);
+  }
+
   if(param.large_deformation == false) // linear case
   {
     // calculate right-hand side vector
@@ -148,7 +168,7 @@ TimeIntGenAlpha<dim, Number>::do_timestep_solve()
   timer.restart();
 
   // initial guess
-  if(use_extrapolation)
+  if(first_coupling_iteration)
     displacement_np = displacement_n;
   else
     displacement_np = displacement_last_iter;
@@ -272,6 +292,13 @@ TimeIntGenAlpha<dim, Number>::set_displacement(VectorType const & displacement)
 
 template<int dim, typename Number>
 void
+TimeIntGenAlpha<dim, Number>::set_velocity_fsi_interface(VectorType const & velocity)
+{
+  velocity_fsi_interface = velocity;
+}
+
+template<int dim, typename Number>
+void
 TimeIntGenAlpha<dim, Number>::prepare_vectors_for_next_timestep()
 {
   displacement_n.swap(displacement_np);
@@ -302,7 +329,10 @@ TimeIntGenAlpha<dim, Number>::postprocessing() const
   dealii::Timer timer;
   timer.restart();
 
-  postprocessor->do_postprocessing(displacement_n, this->get_time(), this->get_time_step_number());
+  postprocessor->do_postprocessing(displacement_n,
+                                   false /* errors_only */,
+                                   this->get_time(),
+                                   this->get_total_time_step_number());
 
   this->timer_tree->insert({"Timeloop", "Postprocessing"}, timer.wall_time());
 }
@@ -313,7 +343,7 @@ TimeIntGenAlpha<dim, Number>::print_solver_info() const
 {
   return param.solver_info_data.write(this->global_timer.wall_time(),
                                       this->time - this->start_time,
-                                      this->time_step_number);
+                                      this->get_total_time_step_number());
 }
 
 template<int dim, typename Number>

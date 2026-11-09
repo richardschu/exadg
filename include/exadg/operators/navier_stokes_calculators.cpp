@@ -49,7 +49,8 @@ DivergenceCalculator<dim, Number>::compute_projection_rhs(
   VectorType &       dst_scalar_valued,
   VectorType const & src_vector_valued) const
 {
-  matrix_free->cell_loop(&This::cell_loop, this, dst_scalar_valued, src_vector_valued, true);
+  matrix_free->cell_loop(
+    &This::cell_loop, this, dst_scalar_valued, src_vector_valued, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -222,7 +223,8 @@ void
 VorticityCalculator<dim, Number>::compute_projection_rhs(VectorType &       dst_vector_valued,
                                                          VectorType const & src_vector_valued) const
 {
-  matrix_free->cell_loop(&This::cell_loop, this, dst_vector_valued, src_vector_valued, true);
+  matrix_free->cell_loop(
+    &This::cell_loop, this, dst_vector_valued, src_vector_valued, true /* zero_dst_vector */);
 }
 
 template<int dim, typename Number>
@@ -307,8 +309,10 @@ MagnitudeCalculator<dim, Number>::cell_loop(dealii::MatrixFree<dim, Number> cons
   for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
   {
     integrator_vector.reinit(cell);
-    // Do not enforce constraints on the source vector, as constraints are already applied and
-    // the.`dealii::MatrixFree` object might store different constraints.
+    // Do not enforce constraints on the `src` vector, as constraints are already applied and
+    // `dealii::MatrixFree` object stores constraints relevant in linear systemes, not necessarily
+    // constraints suitable for a DoF vector corresponding to the solution (e.g., in Newton's
+    // method).
     integrator_vector.read_dof_values_plain(src_vector_valued);
     integrator_vector.evaluate(dealii::EvaluationFlags::values);
 

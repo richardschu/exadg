@@ -17,7 +17,7 @@
     "Application": {
     },
     "Output": {
-        "OutputDirectory": "output/",
+        "OutputDirectory": "results/",
         "OutputName": "beltrami",
         "WriteOutput": "false"
     }
