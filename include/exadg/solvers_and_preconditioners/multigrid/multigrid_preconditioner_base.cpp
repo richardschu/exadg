@@ -27,6 +27,7 @@
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <deal.II/numerics/vector_tools_constraints.h>
 
 // ExaDG
 #include <exadg/grid/grid_utilities.h>
@@ -500,6 +501,20 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
           mapping_dummy, *dof_handler, it.first, zero_function, *affine_constraints_own, mask);
       }
 
+      // Zero normal component after the Dirichlet constraints, which deal.II
+      // does not overwrite. The normal vectors are those of the level mapping.
+      if(not(dirichlet_normal_bc.empty()))
+      {
+        AssertThrow(not(level.is_dg()),
+                    dealii::ExcMessage("Zero normal constraints require continuous elements."));
+
+        dealii::VectorTools::compute_no_normal_flux_constraints(*dof_handler,
+                                                                0 /* first_vector_component */,
+                                                                dirichlet_normal_bc,
+                                                                *affine_constraints_own,
+                                                                get_mapping(level.h_level()));
+      }
+
       // constrain one dof in the continuous case, see ConstraintUtil::add_constraints()
       if(is_singular and not(level.is_dg()) and affine_constraints_own->can_store_line(0))
         ConstraintUtil::constrain_dof_of_singular_operator(*affine_constraints_own);
@@ -514,6 +529,12 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
     AssertThrow(is_hypercube_mesh_without_hanging_nodes,
                 dealii::ExcMessage(
                   "This implementation only allows globally refined hypercube meshes."));
+
+    // dealii::MGConstrainedDoFs::make_no_normal_flux_constraints() only
+    // supports boundaries normal to a coordinate axis.
+    AssertThrow(dirichlet_normal_bc.empty(),
+                dealii::ExcMessage("Zero normal constraints require the global-coarsening "
+                                   "branch, i.e., Grid::coarse_triangulations."));
 
     // temporal storage for new DoFHandlers and constraints on each p-level
     std::map<MGDoFHandlerIdentifier, std::shared_ptr<dealii::DoFHandler<dim> const>>

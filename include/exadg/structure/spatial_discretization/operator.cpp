@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+// deal.II
+#include <deal.II/numerics/vector_tools_constraints.h>
+
 // ExaDG
 #include <exadg/functions_and_boundary_conditions/interpolate.h>
 #include <exadg/grid/grid_data.h>
@@ -113,6 +116,34 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
 
   // call deal.II utility function to add Dirichlet constraints
   add_homogeneous_dirichlet_constraints(affine_constraints, dof_handler, map_bid_to_mask);
+
+  // Zero normal displacement: deal.II skips degrees of freedom constrained
+  // already, i.e., Dirichlet values win where both boundaries meet. The
+  // constraints are homogeneous and couple the components of a support point
+  // like hanging nodes, so we also add them to the constraints without
+  // Dirichlet degrees of freedom used for the inhomogeneous evaluation.
+  if(not(boundary_descriptor->dirichlet_normal_bc.empty()))
+  {
+    dealii::AffineConstraints<Number> affine_constraints_normal;
+    affine_constraints_normal.copy_from(affine_constraints);
+    dealii::VectorTools::compute_no_normal_flux_constraints(
+      dof_handler,
+      0 /* first_vector_component */,
+      boundary_descriptor->dirichlet_normal_bc,
+      affine_constraints_normal,
+      *mapping);
+
+    for(auto const & line : affine_constraints_normal.get_lines())
+    {
+      if(not(affine_constraints.is_constrained(line.index)))
+      {
+        affine_constraints.add_constraint(line.index, line.entries, line.inhomogeneity);
+        affine_constraints_periodicity_and_hanging_nodes.add_constraint(line.index,
+                                                                        line.entries,
+                                                                        line.inhomogeneity);
+      }
+    }
+  }
 
   // compress constraints *once after* complete setup, since affine constraints to copy from need to
   // be non-closed to add further constraints

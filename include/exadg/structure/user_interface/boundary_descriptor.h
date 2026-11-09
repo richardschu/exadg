@@ -39,6 +39,7 @@ enum class BoundaryType
   Undefined,
   Dirichlet,
   DirichletCached,
+  DirichletNormal,
   Neumann,
   NeumannCached,
   RobinSpringDashpotPressure
@@ -117,6 +118,11 @@ struct BoundaryDescriptor
   // ComponentMask is not implemented/available for this type of boundary condition.
   std::set<dealii::types::boundary_id> dirichlet_cached_bc;
 
+  // Zero normal displacement imposed strongly via constraints (continuous
+  // Galerkin only), while the tangential traction vanishes. Requires the
+  // global-coarsening branch of multigrid, see MultigridPreconditionerBase.
+  std::set<dealii::types::boundary_id> dirichlet_normal_bc;
+
   // Neumann
   std::map<dealii::types::boundary_id, std::shared_ptr<dealii::Function<dim>>> neumann_bc;
 
@@ -137,6 +143,8 @@ struct BoundaryDescriptor
       return BoundaryType::Dirichlet;
     else if(this->dirichlet_cached_bc.find(boundary_id) != this->dirichlet_cached_bc.end())
       return BoundaryType::DirichletCached;
+    else if(this->dirichlet_normal_bc.find(boundary_id) != this->dirichlet_normal_bc.end())
+      return BoundaryType::DirichletNormal;
     else if(this->neumann_bc.find(boundary_id) != this->neumann_bc.end())
       return BoundaryType::Neumann;
     else if(this->neumann_cached_bc.find(boundary_id) != this->neumann_cached_bc.end())
@@ -186,6 +194,9 @@ struct BoundaryDescriptor
     }
 
     if(dirichlet_cached_bc.find(boundary_id) != dirichlet_cached_bc.end())
+      counter++;
+
+    if(dirichlet_normal_bc.find(boundary_id) != dirichlet_normal_bc.end())
       counter++;
 
     if(neumann_bc.find(boundary_id) != neumann_bc.end())

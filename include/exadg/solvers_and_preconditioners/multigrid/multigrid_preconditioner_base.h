@@ -260,6 +260,12 @@ protected:
   // Pointer to grid class.
   std::shared_ptr<Grid<dim> const> grid;
 
+  // Boundary IDs with zero normal component of a vector-valued solution
+  // (continuous Galerkin only), to be set by derived classes before
+  // initialize(). Only the global-coarsening branch supports these
+  // constraints, see do_initialize_dof_handler_and_constraints().
+  std::set<dealii::types::boundary_id> dirichlet_normal_bc;
+
   std::shared_ptr<MultigridMappings<dim, Number>> multigrid_mappings;
 
   dealii::MGLevelObject<std::shared_ptr<dealii::DoFHandler<dim> const>>              dof_handlers;

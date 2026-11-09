@@ -273,6 +273,7 @@ ElasticityOperatorBase<dim, Number>::set_inhomogeneous_constrained_values(Vector
       else
       {
         AssertThrow(boundary_type == BoundaryType::Dirichlet or
+                      boundary_type == BoundaryType::DirichletNormal or
                       boundary_type == BoundaryType::Neumann or
                       boundary_type == BoundaryType::NeumannCached or
                       boundary_type == BoundaryType::RobinSpringDashpotPressure,

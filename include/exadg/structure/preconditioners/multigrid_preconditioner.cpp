@@ -52,6 +52,8 @@ MultigridPreconditioner<dim, Number>::initialize(
 
   nonlinear = nonlinear_in;
 
+  this->dirichlet_normal_bc = data.bc->dirichlet_normal_bc;
+
   Base::initialize(mg_data,
                    grid,
                    multigrid_mappings,
