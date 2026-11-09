@@ -43,8 +43,8 @@ struct OperatorData : public OperatorBaseData
       spatial_integration(false),
       force_material_residual(false),
       stable_formulation(false),
-      check_type(0),
-      cache_level(0),
+      invalid_jacobian_treatment(InvalidJacobianTreatment::None),
+      cache_level(CacheLevel::None),
       mapping_degree(1),
       unsteady(false),
       density(1.0),
@@ -74,13 +74,13 @@ struct OperatorData : public OperatorBaseData
   // Adopt numerically stable variants of the material models.
   bool stable_formulation;
 
-  // For nonlinear mateiral models, check the determinant of the Jacobian
-  // and potentially modify it for J <= 0 and check_type > 0.
-  int check_type;
+  // For nonlinear material models, treatment of inadmissible deformation
+  // states with J <= 0, see InvalidJacobianTreatment.
+  InvalidJacobianTreatment invalid_jacobian_treatment;
 
   // This variable determines how much data is being precomputed
   // and stored in the integration points.
-  unsigned int cache_level;
+  CacheLevel cache_level;
 
   unsigned int mapping_degree;
 

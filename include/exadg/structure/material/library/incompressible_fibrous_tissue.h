@@ -106,9 +106,9 @@ struct IncompressibleFibrousTissueData : public MaterialData
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 class IncompressibleFibrousTissue : public Material<dim, Number>
 {
 public:

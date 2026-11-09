@@ -134,13 +134,13 @@ public:
   // Adopt numerically stable variants of the material models.
   bool stable_formulation;
 
-  // For nonlinear mateiral models, check the determinant of the Jacobian
-  // and potentially modify it for J <= 0 and check_type > 0.
-  unsigned int check_type;
+  // For nonlinear material models, treatment of inadmissible deformation
+  // states with J <= 0, see InvalidJacobianTreatment.
+  InvalidJacobianTreatment invalid_jacobian_treatment;
 
-  // For nonlinear problems, precompute some data in the integration points
-  // if cache_level > 0. The implementation depends on the material model.
-  unsigned int cache_level;
+  // For nonlinear problems, data precomputed and stored in the integration
+  // points, see CacheLevel. The implementation depends on the material model.
+  CacheLevel cache_level;
 
   /****************************************************************************/
   /*                                                                          */

@@ -26,8 +26,8 @@
         "SpatialIntegration": "true",
         "ForceMaterialResidual": "false",
         "StableFormulation": "true",
-        "CacheLevel": "2",
-        "CheckType": "0",
+        "CacheLevel": "ScalarsAndTensors",
+        "InvalidJacobianTreatment": "None",
         "MappingStrength": "0.0"
     },
     "Output": {

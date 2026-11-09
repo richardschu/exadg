@@ -47,8 +47,8 @@ public:
     {
       prm.add_parameter("SpatialIntegration",    spatial_integration,      "Use spatial integration.");
       prm.add_parameter("ForceMaterialResidual", force_material_residual,  "Use undeformed configuration to evaluate the residual.");
-      prm.add_parameter("CacheLevel",            cache_level,              "Cache level: 0 none, 1 scalars, 2 tensors.");
-      prm.add_parameter("CheckType",             check_type,               "Check type for deformation gradient.");
+      prm.add_parameter("CacheLevel",               cache_level,                "Data stored in the integration points.");
+      prm.add_parameter("InvalidJacobianTreatment", invalid_jacobian_treatment, "Treatment of inadmissible deformation states with J <= 0.");
       prm.add_parameter("MappingStrength",       mapping_strength,         "Strength of the mapping applied.");
       prm.add_parameter("ProblemType",           problem_type,             "Problem type considered, QuasiStatic vs Unsteady vs. Steady");
       prm.add_parameter("MaterialType",          material_type,            "StVenantKirchhoff vs. IncompressibleNeoHookean");
@@ -62,15 +62,15 @@ private:
   void
   set_parameters() final
   {
-    this->param.problem_type            = problem_type;
-    this->param.body_force              = true;
-    this->param.large_deformation       = true;
-    this->param.pull_back_body_force    = false;
-    this->param.pull_back_traction      = false;
-    this->param.spatial_integration     = spatial_integration;
-    this->param.cache_level             = cache_level;
-    this->param.check_type              = check_type;
-    this->param.force_material_residual = force_material_residual;
+    this->param.problem_type               = problem_type;
+    this->param.body_force                 = true;
+    this->param.large_deformation          = true;
+    this->param.pull_back_body_force       = false;
+    this->param.pull_back_traction         = false;
+    this->param.spatial_integration        = spatial_integration;
+    this->param.cache_level                = cache_level;
+    this->param.invalid_jacobian_treatment = invalid_jacobian_treatment;
+    this->param.force_material_residual    = force_material_residual;
 
     this->param.density = density;
     if(this->param.problem_type == ProblemType::Unsteady and weak_damping_coefficient > 0.0)
@@ -142,13 +142,14 @@ private:
       material_type_str = "StVenantKirchhoff";
     }
 
-    this->pcout << "ProblemType           = " << problem_type_str << "\n"
-                << "SpatialIntegration    = " << spatial_integration << "\n"
-                << "ForceMaterialResidual = " << force_material_residual << "\n"
-                << "CacheLevel            = " << cache_level << "\n"
-                << "CheckType             = " << check_type << "\n"
-                << "MappingStrength       = " << mapping_strength << "\n"
-                << "MaterialType          = " << material_type_str << "\n";
+    this->pcout << "ProblemType              = " << problem_type_str << "\n"
+                << "SpatialIntegration       = " << spatial_integration << "\n"
+                << "ForceMaterialResidual    = " << force_material_residual << "\n"
+                << "CacheLevel               = " << Utilities::enum_to_string(cache_level) << "\n"
+                << "InvalidJacobianTreatment = "
+                << Utilities::enum_to_string(invalid_jacobian_treatment) << "\n"
+                << "MappingStrength          = " << mapping_strength << "\n"
+                << "MaterialType             = " << material_type_str << "\n";
   }
 
   void
@@ -328,8 +329,8 @@ private:
   bool spatial_integration     = false;
   bool force_material_residual = false;
 
-  unsigned int check_type  = 0;
-  unsigned int cache_level = 0;
+  InvalidJacobianTreatment invalid_jacobian_treatment = InvalidJacobianTreatment::None;
+  CacheLevel               cache_level                = CacheLevel::None;
 
   ProblemType problem_type = ProblemType::Unsteady;
 

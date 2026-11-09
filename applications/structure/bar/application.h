@@ -214,8 +214,8 @@ public:
       prm.add_parameter("ForceMaterialResidual", force_material_residual,                    "Use undeformed configuration to evaluate the residual.");
       prm.add_parameter("StableFormulation",     stable_formulation,                         "Use a stable formulation.");
       prm.add_parameter("LoadIncrement",         load_increment,                             "Load increment used in QuasiStatic solver.");
-      prm.add_parameter("CacheLevel",            cache_level,                                "Cache level: 0 none, 1 scalars, 2 tensors.");
-      prm.add_parameter("CheckType",             check_type,                                 "Check type for deformation gradient.");
+      prm.add_parameter("CacheLevel",            cache_level,                                "Data stored in the integration points.");
+      prm.add_parameter("InvalidJacobianTreatment", invalid_jacobian_treatment,                  "Treatment of inadmissible deformation states with J <= 0.");
       prm.add_parameter("MappingStrength",       mapping_strength,                           "Strength of the mapping applied.");
       prm.add_parameter("VolumeForce",           volume_force,                               "Volume force.");
       prm.add_parameter("BoundaryType",          boundary_type,                              "Type of boundary condition, Dirichlet vs Neumann.");
@@ -251,11 +251,11 @@ private:
     this->param.pull_back_body_force = problem_type == ProblemType::InverseAnalysis;
     this->param.pull_back_traction =
       problem_type == ProblemType::InverseAnalysis or pull_back_traction;
-    this->param.spatial_integration     = spatial_integration;
-    this->param.cache_level             = cache_level;
-    this->param.check_type              = check_type;
-    this->param.force_material_residual = force_material_residual;
-    this->param.stable_formulation      = stable_formulation;
+    this->param.spatial_integration        = spatial_integration;
+    this->param.cache_level                = cache_level;
+    this->param.invalid_jacobian_treatment = invalid_jacobian_treatment;
+    this->param.force_material_residual    = force_material_residual;
+    this->param.stable_formulation         = stable_formulation;
 
     this->param.density = density;
     if(this->param.problem_type == ProblemType::Unsteady and weak_damping_coefficient > 0.0)
@@ -816,8 +816,8 @@ private:
   bool force_material_residual = false;
   bool stable_formulation      = true;
 
-  unsigned int check_type  = 0;
-  unsigned int cache_level = 0;
+  InvalidJacobianTreatment invalid_jacobian_treatment = InvalidJacobianTreatment::None;
+  CacheLevel               cache_level                = CacheLevel::None;
 
   bool const clamp_at_right_boundary = false;
   bool const clamp_at_left_boundary  = false;

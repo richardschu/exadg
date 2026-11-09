@@ -41,8 +41,8 @@ Parameters::Parameters()
 
     force_material_residual(false),
     stable_formulation(false),
-    check_type(0),
-    cache_level(0),
+    invalid_jacobian_treatment(InvalidJacobianTreatment::None),
+    cache_level(CacheLevel::None),
 
     // PHYSICAL QUANTITIES
     density(1.0),

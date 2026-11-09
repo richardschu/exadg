@@ -40,6 +40,9 @@
 #include <deal.II/base/symmetric_tensor.h>
 #include <deal.II/physics/transformations.h>
 
+// ExaDG
+#include <exadg/structure/user_interface/enum_types.h>
+
 namespace ExaDG
 {
 namespace Structure
@@ -1168,23 +1171,25 @@ inline DEAL_II_ALWAYS_INLINE //
   return 0.001;
 }
 
-// Reconstruction of admissible deformation gradient F and Jacobian.
-// check_type 0   : Do not modify.
-// check_type 1   : Global quasi-Newton, update linearization vector only if the complete field is
-//                  valid everywhere (see nonlinear_operator: set_solution_linearization).
-// check_type 2   : Local quasi-Newton, update use old F and J if the current one is invalid.
-// check_type >2  : In-place modification, see `compute_modified_F_Jm1()` below.
-template<int dim, typename Number, unsigned int check_type, bool stable_formulation>
+// Reconstruction of admissible deformation gradient F and Jacobian in place
+// in the integration points, i.e., for the InvalidJacobianTreatment variants
+// with modify_F_and_J_in_place(), see InvalidJacobianTreatment for all
+// variants.
+template<int dim,
+         typename Number,
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation>
 inline DEAL_II_ALWAYS_INLINE //
   void
   reconstruct_admissible_F_Jm1(dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> & F,
                                dealii::VectorizedArray<Number> &                         Jm1)
 {
-  if constexpr(check_type < 3)
+  if constexpr(not modify_F_and_J_in_place(invalid_jacobian_treatment))
   {
-    AssertThrow(check_type > 2,
-                dealii::ExcMessage("Reconstruction of F and J at quadrature point "
-                                   "level not intended for `check_type` in [0, 1]."));
+    AssertThrow(modify_F_and_J_in_place(invalid_jacobian_treatment),
+                dealii::ExcMessage("Reconstruction of F and J at quadrature point level only "
+                                   "intended for InvalidJacobianTreatment variants modifying "
+                                   "F and J in place."));
   }
 
   Number tol = get_J_tol<Number>();
@@ -1194,15 +1199,15 @@ inline DEAL_II_ALWAYS_INLINE //
   {
     if(Jm1[n] + 1.0 <= tol)
     {
-      if constexpr(check_type == 3)
+      if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::ClampJacobian)
       {
-        // check_type 3 : Only return J = tol, while F is not modified.
+        // invalid_jacobian_treatment 3 : Only return J = tol, while F is not modified.
         Jm1[n] = tol - 1.0;
       }
-      else if constexpr(check_type == 4)
+      else if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftExact)
       {
-        // check_type 4 : Always update, but enforce J = tol by adding a scaled unit matrix.
-        // Scale factor determined by solving for the positive root of the quadratic/cubic
+        // invalid_jacobian_treatment 4 : Always update, but enforce J = tol by adding a scaled unit
+        // matrix. Scale factor determined by solving for the positive root of the quadratic/cubic
         // polynomial via an exact formula.
         Number fac;
         if constexpr(dim == 2)
@@ -1275,10 +1280,10 @@ inline DEAL_II_ALWAYS_INLINE //
         // J = tol follows by construction.
         Jm1[n] = tol - 1.0;
       }
-      else if constexpr(check_type == 5)
+      else if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftNewton)
       {
-        // check_type 5 : Always update, but enforce J = tol by adding a scaled unit matrix.
-        // Scale factor determined by solving for the positive root of the quadratic/cubic
+        // invalid_jacobian_treatment 5 : Always update, but enforce J = tol by adding a scaled unit
+        // matrix. Scale factor determined by solving for the positive root of the quadratic/cubic
         // polynomial via a Newton solver.
         Number fac;
         bool   converged;
@@ -1325,14 +1330,10 @@ inline DEAL_II_ALWAYS_INLINE //
         // J = tol follows by construction.
         Jm1[n] = tol - 1.0;
       }
-      else if(check_type == 6)
-      {
-        // check_type 6 : always update, but enforce J = tol by eigenvalue decomposition.
-        AssertThrow(false, dealii::ExcNotImplemented());
-      }
       else
       {
-        AssertThrow(false, dealii::ExcMessage("This check_type is not defined."));
+        AssertThrow(false,
+                    dealii::ExcMessage("This InvalidJacobianTreatment is not implemented here."));
       }
     }
   }
@@ -1342,12 +1343,16 @@ inline DEAL_II_ALWAYS_INLINE //
 // and can be seen as utility functions. Note that in order to check
 // the admissibility of the deformation gradient F, we need to compute
 // the Jacobian J, regardless of possible return value. Therefore,
-// several versions are implemented below, where the `check_type` is
-// templated, such that no additional work/initialization is done within
-// these functions for check_type < 3.
+// several versions are implemented below, where the
+// `invalid_jacobian_treatment` is templated, such that no additional
+// work/initialization is done within these functions if F and J are not
+// modified in place, see modify_F_and_J_in_place().
 
 // This version always returns F and Jm1 after potential modification.
-template<int dim, typename Number, unsigned int check_type, bool stable_formulation>
+template<int dim,
+         typename Number,
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation>
 inline DEAL_II_ALWAYS_INLINE //
   std::tuple<dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>,
              dealii::VectorizedArray<Number>>
@@ -1358,22 +1363,26 @@ inline DEAL_II_ALWAYS_INLINE //
   dealii::VectorizedArray<Number>                         Jm1 =
     compute_Jm1<dim, Number, stable_formulation>(gradient_displacement);
 
-  if constexpr(check_type > 2)
+  if constexpr(modify_F_and_J_in_place(invalid_jacobian_treatment))
   {
-    reconstruct_admissible_F_Jm1<dim, Number, check_type, stable_formulation>(F, Jm1);
+    reconstruct_admissible_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(F,
+                                                                                              Jm1);
   }
 
   return {F, Jm1};
 }
 
 // This version returns only F after potential modification.
-template<int dim, typename Number, unsigned int check_type, bool stable_formulation>
+template<int dim,
+         typename Number,
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation>
 inline DEAL_II_ALWAYS_INLINE //
   dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>
   compute_modified_F(
     dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> const & gradient_displacement)
 {
-  if constexpr(check_type < 3)
+  if constexpr(not modify_F_and_J_in_place(invalid_jacobian_treatment))
   {
     return compute_F(gradient_displacement);
   }
@@ -1384,20 +1393,24 @@ inline DEAL_II_ALWAYS_INLINE //
     dealii::VectorizedArray<Number> Jm1 =
       compute_Jm1<dim, Number, stable_formulation>(gradient_displacement);
 
-    reconstruct_admissible_F_Jm1<dim, Number, check_type, stable_formulation>(F, Jm1);
+    reconstruct_admissible_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(F,
+                                                                                              Jm1);
 
     return F;
   }
 }
 
 // This version returns only Jm1 = max(J - 1, tol - 1) as by construction.
-template<int dim, typename Number, unsigned int check_type, bool stable_formulation>
+template<int dim,
+         typename Number,
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation>
 inline DEAL_II_ALWAYS_INLINE //
   dealii::VectorizedArray<Number>
   compute_modified_Jm1(
     dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> const & gradient_displacement)
 {
-  if constexpr(check_type < 3)
+  if constexpr(not modify_F_and_J_in_place(invalid_jacobian_treatment))
   {
     return compute_Jm1<dim, Number, stable_formulation>(gradient_displacement);
   }
@@ -1407,16 +1420,8 @@ inline DEAL_II_ALWAYS_INLINE //
       compute_Jm1<dim, Number, stable_formulation>(gradient_displacement);
     Number tol = get_J_tol<Number>();
 
-    if constexpr(check_type < 6)
-    {
-      return std::max(Jm1, dealii::make_vectorized_array(static_cast<Number>(tol - 1.0)));
-    }
-    else
-    {
-      AssertThrow(check_type < 6,
-                  dealii::ExcMessage("Correction of Jm1 not implemented this `check_type`."));
-      return dealii::make_vectorized_array(std::numeric_limits<Number>::quiet_NaN());
-    }
+    // All in-place variants enforce J >= tol.
+    return std::max(Jm1, dealii::make_vectorized_array(static_cast<Number>(tol - 1.0)));
   }
 }
 

@@ -365,11 +365,11 @@ Operator<dim, Number>::setup_operators()
   operator_data.problem_type        = param.problem_type;
   if(param.large_deformation)
   {
-    operator_data.pull_back_traction      = param.pull_back_traction;
-    operator_data.spatial_integration     = param.spatial_integration;
-    operator_data.force_material_residual = param.force_material_residual;
-    operator_data.cache_level             = param.cache_level;
-    operator_data.check_type              = param.check_type;
+    operator_data.pull_back_traction         = param.pull_back_traction;
+    operator_data.spatial_integration        = param.spatial_integration;
+    operator_data.force_material_residual    = param.force_material_residual;
+    operator_data.cache_level                = param.cache_level;
+    operator_data.invalid_jacobian_treatment = param.invalid_jacobian_treatment;
   }
   else
   {

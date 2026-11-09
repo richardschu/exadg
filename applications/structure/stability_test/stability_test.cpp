@@ -59,16 +59,16 @@ setup_material(MaterialType                            material_type,
                bool const                              spatial_integration,
                bool const                              stable_formulation,
                dealii::MatrixFree<dim, Number> const & matrix_free,
-               unsigned int const                      cache_level)
+               CacheLevel const                        cache_level)
 {
   // Construct Material objects.
   std::shared_ptr<Material<dim, Number>> material;
 
   // Dummy objects for initialization.
-  unsigned int constexpr dof_index  = 0;
-  unsigned int constexpr quad_index = 0;
-  bool constexpr large_deformation  = true;
-  unsigned int constexpr check_type = 0;
+  unsigned int constexpr dof_index                              = 0;
+  unsigned int constexpr quad_index                             = 0;
+  bool constexpr large_deformation                              = true;
+  InvalidJacobianTreatment constexpr invalid_jacobian_treatment = InvalidJacobianTreatment::None;
 
   if(material_type == MaterialType::StVenantKirchhoff)
   {
@@ -105,13 +105,31 @@ setup_material(MaterialType                            material_type,
                                                  lambda,
                                                  two_dim_type);
 
-      if(check_type == 0)
+      if(invalid_jacobian_treatment == InvalidJacobianTreatment::None)
       {
         if(stable_formulation)
         {
-          if(cache_level == 0)
+          if(cache_level == CacheLevel::None)
           {
-            material = std::make_shared<CompressibleNeoHookean<dim, Number, 0, true, 0>>(
+            material =
+              std::make_shared<CompressibleNeoHookean<dim,
+                                                      Number,
+                                                      InvalidJacobianTreatment::None,
+                                                      true /* stable_formulation */,
+                                                      CacheLevel::None>>(matrix_free,
+                                                                         dof_index,
+                                                                         quad_index,
+                                                                         data,
+                                                                         spatial_integration,
+                                                                         force_material_residual);
+          }
+          else if(cache_level == CacheLevel::Scalars)
+          {
+            material = std::make_shared<CompressibleNeoHookean<dim,
+                                                               Number,
+                                                               InvalidJacobianTreatment::None,
+                                                               true /* stable_formulation */,
+                                                               CacheLevel::Scalars>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -119,19 +137,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 1)
+          else if(cache_level == CacheLevel::ScalarsAndTensors)
           {
-            material = std::make_shared<CompressibleNeoHookean<dim, Number, 0, true, 1>>(
-              matrix_free,
-              dof_index,
-              quad_index,
-              data,
-              spatial_integration,
-              force_material_residual);
-          }
-          else if(cache_level == 2)
-          {
-            material = std::make_shared<CompressibleNeoHookean<dim, Number, 0, true, 2>>(
+            material = std::make_shared<CompressibleNeoHookean<dim,
+                                                               Number,
+                                                               InvalidJacobianTreatment::None,
+                                                               true /* stable_formulation */,
+                                                               CacheLevel::ScalarsAndTensors>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -141,14 +153,32 @@ setup_material(MaterialType                            material_type,
           }
           else
           {
-            AssertThrow(cache_level < 3, dealii::ExcMessage("Cache levels 0 1 and 2 implemented."));
+            AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
           }
         }
         else
         {
-          if(cache_level == 0)
+          if(cache_level == CacheLevel::None)
           {
-            material = std::make_shared<CompressibleNeoHookean<dim, Number, 0, false, 0>>(
+            material =
+              std::make_shared<CompressibleNeoHookean<dim,
+                                                      Number,
+                                                      InvalidJacobianTreatment::None,
+                                                      false /* stable_formulation */,
+                                                      CacheLevel::None>>(matrix_free,
+                                                                         dof_index,
+                                                                         quad_index,
+                                                                         data,
+                                                                         spatial_integration,
+                                                                         force_material_residual);
+          }
+          else if(cache_level == CacheLevel::Scalars)
+          {
+            material = std::make_shared<CompressibleNeoHookean<dim,
+                                                               Number,
+                                                               InvalidJacobianTreatment::None,
+                                                               false /* stable_formulation */,
+                                                               CacheLevel::Scalars>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -156,19 +186,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 1)
+          else if(cache_level == CacheLevel::ScalarsAndTensors)
           {
-            material = std::make_shared<CompressibleNeoHookean<dim, Number, 0, false, 1>>(
-              matrix_free,
-              dof_index,
-              quad_index,
-              data,
-              spatial_integration,
-              force_material_residual);
-          }
-          else if(cache_level == 2)
-          {
-            material = std::make_shared<CompressibleNeoHookean<dim, Number, 0, false, 2>>(
+            material = std::make_shared<CompressibleNeoHookean<dim,
+                                                               Number,
+                                                               InvalidJacobianTreatment::None,
+                                                               false /* stable_formulation */,
+                                                               CacheLevel::ScalarsAndTensors>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -178,14 +202,15 @@ setup_material(MaterialType                            material_type,
           }
           else
           {
-            AssertThrow(cache_level < 3, dealii::ExcMessage("Cache levels 0 1 and 2 implemented."));
+            AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
           }
         }
       }
       else
       {
-        AssertThrow(check_type == 0,
-                    dealii::ExcMessage("Templates only for check_type == 0 implemented."));
+        AssertThrow(invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+                    dealii::ExcMessage(
+                      "Templates only for InvalidJacobianTreatment::None implemented."));
       }
     }
     else if(material_type == MaterialType::IncompressibleNeoHookean)
@@ -200,13 +225,31 @@ setup_material(MaterialType                            material_type,
                                                    bulk_modulus,
                                                    two_dim_type);
 
-      if(check_type == 0)
+      if(invalid_jacobian_treatment == InvalidJacobianTreatment::None)
       {
         if(stable_formulation)
         {
-          if(cache_level == 0)
+          if(cache_level == CacheLevel::None)
           {
-            material = std::make_shared<IncompressibleNeoHookean<dim, Number, 0, true, 0>>(
+            material =
+              std::make_shared<IncompressibleNeoHookean<dim,
+                                                        Number,
+                                                        InvalidJacobianTreatment::None,
+                                                        true /* stable_formulation */,
+                                                        CacheLevel::None>>(matrix_free,
+                                                                           dof_index,
+                                                                           quad_index,
+                                                                           data,
+                                                                           spatial_integration,
+                                                                           force_material_residual);
+          }
+          else if(cache_level == CacheLevel::Scalars)
+          {
+            material = std::make_shared<IncompressibleNeoHookean<dim,
+                                                                 Number,
+                                                                 InvalidJacobianTreatment::None,
+                                                                 true /* stable_formulation */,
+                                                                 CacheLevel::Scalars>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -214,19 +257,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 1)
+          else if(cache_level == CacheLevel::ScalarsAndTensors)
           {
-            material = std::make_shared<IncompressibleNeoHookean<dim, Number, 0, true, 1>>(
-              matrix_free,
-              dof_index,
-              quad_index,
-              data,
-              spatial_integration,
-              force_material_residual);
-          }
-          else if(cache_level == 2)
-          {
-            material = std::make_shared<IncompressibleNeoHookean<dim, Number, 0, true, 2>>(
+            material = std::make_shared<IncompressibleNeoHookean<dim,
+                                                                 Number,
+                                                                 InvalidJacobianTreatment::None,
+                                                                 true /* stable_formulation */,
+                                                                 CacheLevel::ScalarsAndTensors>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -236,14 +273,32 @@ setup_material(MaterialType                            material_type,
           }
           else
           {
-            AssertThrow(cache_level < 3, dealii::ExcMessage("Cache levels 0 1 and 2 implemented."));
+            AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
           }
         }
         else
         {
-          if(cache_level == 0)
+          if(cache_level == CacheLevel::None)
           {
-            material = std::make_shared<IncompressibleNeoHookean<dim, Number, 0, false, 0>>(
+            material =
+              std::make_shared<IncompressibleNeoHookean<dim,
+                                                        Number,
+                                                        InvalidJacobianTreatment::None,
+                                                        false /* stable_formulation */,
+                                                        CacheLevel::None>>(matrix_free,
+                                                                           dof_index,
+                                                                           quad_index,
+                                                                           data,
+                                                                           spatial_integration,
+                                                                           force_material_residual);
+          }
+          else if(cache_level == CacheLevel::Scalars)
+          {
+            material = std::make_shared<IncompressibleNeoHookean<dim,
+                                                                 Number,
+                                                                 InvalidJacobianTreatment::None,
+                                                                 false /* stable_formulation */,
+                                                                 CacheLevel::Scalars>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -251,19 +306,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 1)
+          else if(cache_level == CacheLevel::ScalarsAndTensors)
           {
-            material = std::make_shared<IncompressibleNeoHookean<dim, Number, 0, false, 1>>(
-              matrix_free,
-              dof_index,
-              quad_index,
-              data,
-              spatial_integration,
-              force_material_residual);
-          }
-          else if(cache_level == 2)
-          {
-            material = std::make_shared<IncompressibleNeoHookean<dim, Number, 0, false, 2>>(
+            material = std::make_shared<IncompressibleNeoHookean<dim,
+                                                                 Number,
+                                                                 InvalidJacobianTreatment::None,
+                                                                 false /* stable_formulation */,
+                                                                 CacheLevel::ScalarsAndTensors>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -273,14 +322,15 @@ setup_material(MaterialType                            material_type,
           }
           else
           {
-            AssertThrow(cache_level < 3, dealii::ExcMessage("Cache levels 0 1 and 2 implemented."));
+            AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
           }
         }
       }
       else
       {
-        AssertThrow(check_type == 0,
-                    dealii::ExcMessage("Templates only for check_type == 0 implemented."));
+        AssertThrow(invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+                    dealii::ExcMessage(
+                      "Templates only for InvalidJacobianTreatment::None implemented."));
       }
     }
     else if(material_type == MaterialType::IncompressibleFibrousTissue)
@@ -333,13 +383,17 @@ setup_material(MaterialType                            material_type,
                                                       0.0 /* point_match_tol */,
                                                       two_dim_type);
 
-      if(check_type == 0)
+      if(invalid_jacobian_treatment == InvalidJacobianTreatment::None)
       {
         if(stable_formulation)
         {
-          if(cache_level == 0)
+          if(cache_level == CacheLevel::None)
           {
-            material = std::make_shared<IncompressibleFibrousTissue<dim, Number, 0, true, 0>>(
+            material = std::make_shared<IncompressibleFibrousTissue<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    true /* stable_formulation */,
+                                                                    CacheLevel::None>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -347,9 +401,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 1)
+          else if(cache_level == CacheLevel::Scalars)
           {
-            material = std::make_shared<IncompressibleFibrousTissue<dim, Number, 0, true, 1>>(
+            material = std::make_shared<IncompressibleFibrousTissue<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    true /* stable_formulation */,
+                                                                    CacheLevel::Scalars>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -357,9 +415,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 2)
+          else if(cache_level == CacheLevel::ScalarsAndTensors)
           {
-            material = std::make_shared<IncompressibleFibrousTissue<dim, Number, 0, true, 2>>(
+            material = std::make_shared<IncompressibleFibrousTissue<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    true /* stable_formulation */,
+                                                                    CacheLevel::ScalarsAndTensors>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -369,14 +431,18 @@ setup_material(MaterialType                            material_type,
           }
           else
           {
-            AssertThrow(cache_level < 3, dealii::ExcMessage("Cache levels 0 1 and 2 implemented."));
+            AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
           }
         }
         else
         {
-          if(cache_level == 0)
+          if(cache_level == CacheLevel::None)
           {
-            material = std::make_shared<IncompressibleFibrousTissue<dim, Number, 0, false, 0>>(
+            material = std::make_shared<IncompressibleFibrousTissue<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    false /* stable_formulation */,
+                                                                    CacheLevel::None>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -384,9 +450,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 1)
+          else if(cache_level == CacheLevel::Scalars)
           {
-            material = std::make_shared<IncompressibleFibrousTissue<dim, Number, 0, false, 1>>(
+            material = std::make_shared<IncompressibleFibrousTissue<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    false /* stable_formulation */,
+                                                                    CacheLevel::Scalars>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -394,9 +464,13 @@ setup_material(MaterialType                            material_type,
               spatial_integration,
               force_material_residual);
           }
-          else if(cache_level == 2)
+          else if(cache_level == CacheLevel::ScalarsAndTensors)
           {
-            material = std::make_shared<IncompressibleFibrousTissue<dim, Number, 0, false, 2>>(
+            material = std::make_shared<IncompressibleFibrousTissue<dim,
+                                                                    Number,
+                                                                    InvalidJacobianTreatment::None,
+                                                                    false /* stable_formulation */,
+                                                                    CacheLevel::ScalarsAndTensors>>(
               matrix_free,
               dof_index,
               quad_index,
@@ -406,14 +480,15 @@ setup_material(MaterialType                            material_type,
           }
           else
           {
-            AssertThrow(cache_level < 3, dealii::ExcMessage("Cache levels 0 1 and 2 implemented."));
+            AssertThrow(false, dealii::ExcMessage("This CacheLevel is not implemented."));
           }
         }
       }
       else
       {
-        AssertThrow(check_type == 0,
-                    dealii::ExcMessage("Templates only for check_type == 0 implemented."));
+        AssertThrow(invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+                    dealii::ExcMessage(
+                      "Templates only for InvalidJacobianTreatment::None implemented."));
       }
     }
     else
@@ -521,7 +596,7 @@ template<int dim, typename Number>
 std::vector<dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>>
 evaluate_material(
   Material<dim, Number> const &                                   material,
-  unsigned int const                                              cache_level,
+  CacheLevel const                                                cache_level,
   dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> const & gradient_displacement,
   dealii::Tensor<2, dim, dealii::VectorizedArray<Number>> const & gradient_increment,
   unsigned int const                                              n_cell_batches,
@@ -546,7 +621,7 @@ evaluate_material(
         {
           if(spatial_integration)
           {
-            if(cache_level < 2)
+            if(not store_tensors(cache_level))
             {
               evaluation[0] = material.kirchhoff_stress(gradient_displacement, cell, q);
             }
@@ -557,7 +632,7 @@ evaluate_material(
           }
           else
           {
-            if(cache_level < 2)
+            if(not store_tensors(cache_level))
             {
               evaluation[0] =
                 material.second_piola_kirchhoff_stress(gradient_displacement, cell, q);
@@ -588,7 +663,7 @@ evaluate_material(
         {
           if(spatial_integration)
           {
-            if(cache_level < 2)
+            if(not store_tensors(cache_level))
             {
               evaluation[1] = material.contract_with_J_times_C(symmetric_gradient_increment,
                                                                gradient_displacement,
@@ -644,7 +719,8 @@ main(int argc, char ** argv)
     bool constexpr use_max_err     = true;
     bool constexpr use_random_sign = true;
 
-    unsigned int const cache_level = stab_test ? 0 : 0 /* 0, 1, 2 */;
+    CacheLevel const cache_level =
+      stab_test ? CacheLevel::None : CacheLevel::None /* None, Scalars, ScalarsAndTensors */;
 
     // Gradient and increment scale.
     unsigned int const n_points_over_log_scale = stab_test ? 1e3 : 1;
@@ -742,13 +818,14 @@ main(int argc, char ** argv)
 
           pcout << "\n\n"
                 << "  Material model : " << ExaDG::Utilities::enum_to_string(material_type) << "\n"
-                << "  cache_level         = " << cache_level << "\n"
+                << "  cache_level         = " << ExaDG::Utilities::enum_to_string(cache_level)
+                << "\n"
                 << "  spatial_integration = " << spatial_integration << "\n"
                 << "  stable_formulation  = " << stable_formulation << "\n";
 
           // Setup material objects in float and double precision for comparison.
-          // Note that the integration point storage for cache_level > 0 is filled
-          // at construction with data corresponding to zero displacement.
+          // Note that the integration point storage for store_scalars(cache_level)
+          // is filled at construction with data corresponding to zero displacement.
           std::shared_ptr<Material<dim, double>> material_double =
             setup_material<dim, double>(material_type,
                                         spatial_integration,

@@ -176,7 +176,8 @@ NonLinearOperator<dim, Number>::set_solution_linearization(
     }
   }
 
-  if(valid_deformation_field or this->operator_data.check_type != 1)
+  if(valid_deformation_field or
+     this->operator_data.invalid_jacobian_treatment != InvalidJacobianTreatment::GlobalQuasiNewton)
   {
     displacement_lin = vector;
     displacement_lin.update_ghost_values();
@@ -634,7 +635,7 @@ void
 NonLinearOperator<dim, Number>::set_cell_linearization_data(
   VectorType const & linearization_vector) const
 {
-  if(this->operator_data.cache_level > 0)
+  if(store_scalars(this->operator_data.cache_level))
   {
     VectorType dummy;
     this->matrix_free->cell_loop(&This::cell_loop_set_linearization_data,
@@ -1086,9 +1087,10 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
 {
   std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
 
-  unsigned int constexpr check_type = 0;
-  AssertThrow(this->operator_data.check_type == 0,
-              dealii::ExcMessage("A `check_type` > 0 is currently not implemented here."));
+  InvalidJacobianTreatment constexpr invalid_jacobian_treatment = InvalidJacobianTreatment::None;
+  AssertThrow(this->operator_data.invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+              dealii::ExcMessage(
+                "Only InvalidJacobianTreatment::None is currently implemented here."));
 
   if(this->operator_data.spatial_integration and (not this->operator_data.force_material_residual))
   {
@@ -1097,9 +1099,11 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     {
       for(unsigned int q = 0; q < integrator.n_q_points; ++q)
       {
-        tensor const Grad_d_lin = integrator_lin->get_gradient(q);
-        scalar const Jm1_lin =
-          compute_modified_Jm1<dim, Number, check_type, true /* stable_formulation */>(Grad_d_lin);
+        tensor const           Grad_d_lin     = integrator_lin->get_gradient(q);
+        scalar const           Jm1_lin        = compute_modified_Jm1<dim,
+                                                    Number,
+                                                    invalid_jacobian_treatment,
+                                                    true /* stable_formulation */>(Grad_d_lin);
         scalar const           one_over_J_lin = 1.0 / (Jm1_lin + 1.0);
         symmetric_tensor const tau_lin =
           material->kirchhoff_stress_eval(Grad_d_lin, integrator.get_current_cell_index(), q);
@@ -1119,9 +1123,11 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     {
       for(unsigned int q = 0; q < integrator.n_q_points; ++q)
       {
-        tensor const Grad_d_lin = integrator_lin->get_gradient(q);
-        scalar const Jm1_lin =
-          compute_modified_Jm1<dim, Number, check_type, true /* stable_formulation */>(Grad_d_lin);
+        tensor const           Grad_d_lin     = integrator_lin->get_gradient(q);
+        scalar const           Jm1_lin        = compute_modified_Jm1<dim,
+                                                    Number,
+                                                    invalid_jacobian_treatment,
+                                                    true /* stable_formulation */>(Grad_d_lin);
         scalar const           one_over_J_lin = 1.0 / (Jm1_lin + 1.0);
         symmetric_tensor const tau_lin =
           material->kirchhoff_stress_eval(Grad_d_lin, integrator.get_current_cell_index(), q);
@@ -1147,9 +1153,11 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     {
       for(unsigned int q = 0; q < integrator.n_q_points; ++q)
       {
-        tensor const Grad_d_lin = integrator.get_gradient(q);
-        tensor const F_lin =
-          compute_modified_F<dim, Number, check_type, true /* stable_formulation */>(Grad_d_lin);
+        tensor const           Grad_d_lin = integrator.get_gradient(q);
+        tensor const           F_lin      = compute_modified_F<dim,
+                                                Number,
+                                                invalid_jacobian_treatment,
+                                                true /* stable_formulation */>(Grad_d_lin);
         symmetric_tensor const S_lin =
           material->second_piola_kirchhoff_stress_eval(Grad_d_lin,
                                                        integrator.get_current_cell_index(),
@@ -1169,9 +1177,11 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     {
       for(unsigned int q = 0; q < integrator.n_q_points; ++q)
       {
-        tensor const Grad_d_lin = integrator.get_gradient(q);
-        tensor const F_lin =
-          compute_modified_F<dim, Number, check_type, false /* stable_formulation */>(Grad_d_lin);
+        tensor const           Grad_d_lin = integrator.get_gradient(q);
+        tensor const           F_lin      = compute_modified_F<dim,
+                                                Number,
+                                                invalid_jacobian_treatment,
+                                                false /* stable_formulation */>(Grad_d_lin);
         symmetric_tensor const S_lin =
           material->second_piola_kirchhoff_stress_eval(Grad_d_lin,
                                                        integrator.get_current_cell_index(),
@@ -1196,17 +1206,15 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
 {
   std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
 
-  unsigned int constexpr check_type = 0;
-  AssertThrow(this->operator_data.check_type == 0,
-              dealii::ExcMessage("A `check_type` > 0 is currently not implemented here."));
-
-  AssertThrow(this->operator_data.cache_level < 3,
-              dealii::ExcMessage("We expect a `cache_level` in [0,1,2]."));
+  InvalidJacobianTreatment constexpr invalid_jacobian_treatment = InvalidJacobianTreatment::None;
+  AssertThrow(this->operator_data.invalid_jacobian_treatment == InvalidJacobianTreatment::None,
+              dealii::ExcMessage(
+                "Only InvalidJacobianTreatment::None is currently implemented here."));
 
   if(this->operator_data.spatial_integration)
   {
     // Evaluate the linearized operator in the spatial configuration.
-    if(this->operator_data.cache_level == 0)
+    if(this->operator_data.cache_level == CacheLevel::None)
     {
       if(this->operator_data.stable_formulation)
       {
@@ -1216,9 +1224,10 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
           tensor const           grad_delta = integrator.get_gradient(q);
           symmetric_tensor const delta_tau  = material->contract_with_J_times_C(
             symmetrize(grad_delta), Grad_d_lin, integrator.get_current_cell_index(), q);
-          scalar const Jm1_lin =
-            compute_modified_Jm1<dim, Number, check_type, true /* stable_formulation */>(
-              Grad_d_lin);
+          scalar const           Jm1_lin        = compute_modified_Jm1<dim,
+                                                      Number,
+                                                      invalid_jacobian_treatment,
+                                                      true /* stable_formulation */>(Grad_d_lin);
           scalar const           one_over_J_lin = 1.0 / (Jm1_lin + 1.0);
           symmetric_tensor const tau_lin =
             material->kirchhoff_stress(Grad_d_lin, integrator.get_current_cell_index(), q);
@@ -1242,9 +1251,10 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
           tensor const           grad_delta = integrator.get_gradient(q);
           symmetric_tensor const delta_tau  = material->contract_with_J_times_C(
             symmetrize(grad_delta), Grad_d_lin, integrator.get_current_cell_index(), q);
-          scalar const Jm1_lin =
-            compute_modified_Jm1<dim, Number, check_type, false /* stable_formulation */>(
-              Grad_d_lin);
+          scalar const           Jm1_lin        = compute_modified_Jm1<dim,
+                                                      Number,
+                                                      invalid_jacobian_treatment,
+                                                      false /* stable_formulation */>(Grad_d_lin);
           scalar const           one_over_J_lin = 1.0 / (Jm1_lin + 1.0);
           symmetric_tensor const tau_lin =
             material->kirchhoff_stress(Grad_d_lin, integrator.get_current_cell_index(), q);
@@ -1261,7 +1271,7 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
         }
       }
     }
-    else if(this->operator_data.cache_level == 1)
+    else if(this->operator_data.cache_level == CacheLevel::Scalars)
     {
       for(unsigned int q = 0; q < integrator.n_q_points; ++q)
       {
@@ -1311,16 +1321,18 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
   else
   {
     // Evaluate the linearized operator in the material configuration.
-    if(this->operator_data.cache_level < 2)
+    if(not store_tensors(this->operator_data.cache_level))
     {
       if(this->operator_data.stable_formulation)
       {
         for(unsigned int q = 0; q < integrator.n_q_points; ++q)
         {
-          tensor const Grad_d_lin = integrator_lin->get_gradient(q);
-          tensor const Grad_delta = integrator.get_gradient(q);
-          tensor const F_lin =
-            compute_modified_F<dim, Number, check_type, true /* stable_formulation */>(Grad_d_lin);
+          tensor const           Grad_d_lin = integrator_lin->get_gradient(q);
+          tensor const           Grad_delta = integrator.get_gradient(q);
+          tensor const           F_lin      = compute_modified_F<dim,
+                                                  Number,
+                                                  invalid_jacobian_treatment,
+                                                  true /* stable_formulation */>(Grad_d_lin);
           symmetric_tensor const S_lin =
             material->second_piola_kirchhoff_stress(Grad_d_lin,
                                                     integrator.get_current_cell_index(),
@@ -1344,10 +1356,12 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
       {
         for(unsigned int q = 0; q < integrator.n_q_points; ++q)
         {
-          tensor const Grad_d_lin = integrator_lin->get_gradient(q);
-          tensor const Grad_delta = integrator.get_gradient(q);
-          tensor const F_lin =
-            compute_modified_F<dim, Number, check_type, false /* stable_formulation */>(Grad_d_lin);
+          tensor const           Grad_d_lin = integrator_lin->get_gradient(q);
+          tensor const           Grad_delta = integrator.get_gradient(q);
+          tensor const           F_lin      = compute_modified_F<dim,
+                                                  Number,
+                                                  invalid_jacobian_treatment,
+                                                  false /* stable_formulation */>(Grad_d_lin);
           symmetric_tensor const S_lin =
             material->second_piola_kirchhoff_stress(Grad_d_lin,
                                                     integrator.get_current_cell_index(),
@@ -1377,9 +1391,11 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
           tensor const Grad_d_lin =
             material->gradient_displacement(integrator.get_current_cell_index(), q);
 
-          tensor const Grad_delta = integrator.get_gradient(q);
-          tensor const F_lin =
-            compute_modified_F<dim, Number, check_type, true /*stable_formulation*/>(Grad_d_lin);
+          tensor const           Grad_delta = integrator.get_gradient(q);
+          tensor const           F_lin      = compute_modified_F<dim,
+                                                  Number,
+                                                  invalid_jacobian_treatment,
+                                                  true /*stable_formulation*/>(Grad_d_lin);
           symmetric_tensor const S_lin =
             material->second_piola_kirchhoff_stress(integrator.get_current_cell_index(), q);
           tensor const delta_P =
@@ -1404,9 +1420,11 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
           tensor const Grad_d_lin =
             material->gradient_displacement(integrator.get_current_cell_index(), q);
 
-          tensor const Grad_delta = integrator.get_gradient(q);
-          tensor const F_lin =
-            compute_modified_F<dim, Number, check_type, false /*stable_formulation*/>(Grad_d_lin);
+          tensor const           Grad_delta = integrator.get_gradient(q);
+          tensor const           F_lin      = compute_modified_F<dim,
+                                                  Number,
+                                                  invalid_jacobian_treatment,
+                                                  false /*stable_formulation*/>(Grad_d_lin);
           symmetric_tensor const S_lin =
             material->second_piola_kirchhoff_stress(integrator.get_current_cell_index(), q);
           tensor const delta_P =

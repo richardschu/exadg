@@ -29,10 +29,10 @@ namespace Structure
 {
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   IncompressibleNeoHookean(dealii::MatrixFree<dim, Number> const &   matrix_free,
                            unsigned int const                        dof_index,
                            unsigned int const                        quad_index,
@@ -58,17 +58,19 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     shear_modulus_coefficients.set_coefficients(shear_modulus);
 
     VectorType dummy;
-    matrix_free.cell_loop(
-      &IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
-        cell_loop_set_coefficients,
-      this,
-      dummy,
-      dummy);
+    matrix_free.cell_loop(&IncompressibleNeoHookean<dim,
+                                                    Number,
+                                                    invalid_jacobian_treatment,
+                                                    stable_formulation,
+                                                    cache_level>::cell_loop_set_coefficients,
+                          this,
+                          dummy,
+                          dummy);
   }
 
   // Initialize linearization cache and fill with values corresponding to
   // the initial linearization vector assumed to be a zero displacement vector.
-  if constexpr(cache_level > 0)
+  if constexpr(store_scalars(cache_level))
   {
     Jm1_coefficients.initialize(matrix_free, quad_index, false, false);
     Jm1_coefficients.set_coefficients(0.0);
@@ -88,7 +90,7 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
       one_over_J_coefficients.set_coefficients(1.0);
     }
 
-    if constexpr(cache_level > 1)
+    if constexpr(store_tensors(cache_level))
     {
       if(spatial_integration)
       {
@@ -129,19 +131,17 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
         second_piola_kirchhoff_stress_coefficients.set_coefficients(
           get_zero_symmetric_tensor<dim, Number>());
       }
-
-      AssertThrow(cache_level < 3, dealii::ExcMessage("Cache level > 2 not implemented."));
     }
   }
 }
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 void
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   cell_loop_set_coefficients(dealii::MatrixFree<dim, Number> const & matrix_free,
                              VectorType &,
                              VectorType const &,
@@ -170,17 +170,17 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 void
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   do_set_cell_linearization_data(
     std::shared_ptr<CellIntegrator<dim, dim /* n_components */, Number>> const integrator_lin,
     unsigned int const                                                         cell) const
 {
-  AssertThrow(cache_level > 0 and cache_level < 3,
-              dealii::ExcMessage("0 < cache level < 3 expected."));
+  AssertThrow(store_scalars(cache_level),
+              dealii::ExcMessage("CacheLevel::Scalars or CacheLevel::ScalarsAndTensors expected."));
 
   for(unsigned int q = 0; q < integrator_lin->n_q_points; ++q)
   {
@@ -190,10 +190,12 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     }
 
     tensor Grad_d_lin = integrator_lin->get_gradient(q);
-    auto [F, Jm1] = compute_modified_F_Jm1<dim, Number, check_type, stable_formulation>(Grad_d_lin);
+    auto [F, Jm1] =
+      compute_modified_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        Grad_d_lin);
 
     // Overwrite computed values with admissible stored ones
-    if constexpr(check_type == 2)
+    if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::LocalQuasiNewton)
     {
       tensor F_old = gradient_displacement_coefficients.get_coefficient_cell(cell, q);
       add_scaled_identity(F_old, static_cast<Number>(1.0));
@@ -247,7 +249,7 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     c2_coefficients.set_coefficient_cell(cell, q, c2);
 
     // Tensorial linearization data.
-    if constexpr(cache_level > 1)
+    if constexpr(store_tensors(cache_level))
     {
       tensor const           F_inv = invert(F);
       symmetric_tensor const C_inv = compute_C_inv(F_inv);
@@ -304,20 +306,20 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 template<bool force_evaluation>
 inline dealii::VectorizedArray<Number>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::get_c1(
-  scalar const &           Jm1,
-  scalar const &           J_pow,
-  symmetric_tensor const & E,
-  scalar const &           shear_modulus,
-  unsigned int const       cell,
-  unsigned int const       q) const
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
+  get_c1(scalar const &           Jm1,
+         scalar const &           J_pow,
+         symmetric_tensor const & E,
+         scalar const &           shear_modulus,
+         unsigned int const       cell,
+         unsigned int const       q) const
 {
-  if constexpr(cache_level == 0 or force_evaluation)
+  if constexpr(cache_level == CacheLevel::None or force_evaluation)
   {
     return ((0.5 * bulk_modulus) * compute_JJm1<Number, stable_formulation>(Jm1) -
             shear_modulus * ONE_THIRD * J_pow * compute_I_1<dim, Number, stable_formulation>(E));
@@ -330,20 +332,20 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 template<bool force_evaluation>
 inline dealii::VectorizedArray<Number>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::get_c2(
-  scalar const &           Jm1,
-  scalar const &           J_pow,
-  symmetric_tensor const & E,
-  scalar const &           shear_modulus,
-  unsigned int const       cell,
-  unsigned int const       q) const
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
+  get_c2(scalar const &           Jm1,
+         scalar const &           J_pow,
+         symmetric_tensor const & E,
+         scalar const &           shear_modulus,
+         unsigned int const       cell,
+         unsigned int const       q) const
 {
-  if constexpr(cache_level == 0 or force_evaluation)
+  if constexpr(cache_level == CacheLevel::None or force_evaluation)
   {
     return (bulk_modulus * (compute_JJm1<Number, stable_formulation>(Jm1) + 1.0) +
             TWO_NINTHS * shear_modulus * J_pow * compute_I_1<dim, Number, stable_formulation>(E));
@@ -356,19 +358,17 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 template<bool force_evaluation>
 inline dealii::VectorizedArray<Number>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::get_J_pow(
-  scalar const &     Jm1,
-  unsigned int const cell,
-  unsigned int const q) const
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
+  get_J_pow(scalar const & Jm1, unsigned int const cell, unsigned int const q) const
 {
-  if constexpr(cache_level == 0 or force_evaluation)
+  if constexpr(cache_level == CacheLevel::None or force_evaluation)
   {
-    if constexpr(cache_level == 0)
+    if constexpr(cache_level == CacheLevel::None)
     {
       // Compute the inverse third root of J^2 via Newton's method:
       //
@@ -383,7 +383,7 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
       // J^(-2/3) = 1 is a good initial guess, since we enforce J = 1
       // implicitly via the constitutive model. We hard-code 3 steps,
       // which were in most tests enough, but might be risky and hence
-      // not pay off enough for cache_level > 1 since we are storing
+      // not pay off enough for CacheLevel::ScalarsAndTensors since we are storing
       // related variables anyways.
 
       scalar const J_sqrd_over_three = ((Jm1 + 2.0) * Jm1 + 1.0) * ONE_THIRD;
@@ -419,20 +419,20 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   second_piola_kirchhoff_stress(tensor const &     gradient_displacement,
                                 unsigned int const cell,
                                 unsigned int const q) const
 {
-  if constexpr(cache_level == 0)
+  if constexpr(cache_level == CacheLevel::None)
   {
     return second_piola_kirchhoff_stress_eval(gradient_displacement, cell, q);
   }
-  else if constexpr(cache_level == 1)
+  else if constexpr(cache_level == CacheLevel::Scalars)
   {
     if(shear_modulus_is_variable)
     {
@@ -440,7 +440,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     }
 
     tensor const F =
-      compute_modified_F<dim, Number, check_type, stable_formulation>(gradient_displacement);
+      compute_modified_F<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     tensor const           F_inv = invert(F);
     symmetric_tensor const C_inv = compute_C_inv(F_inv);
     scalar const           J_pow = J_pow_coefficients.get_coefficient_cell(cell, q);
@@ -458,8 +459,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
   }
   else
   {
-    AssertThrow(cache_level < 2,
-                dealii::ExcMessage("This `cache_level` stores tensorial quantities, "
+    AssertThrow(not store_tensors(cache_level),
+                dealii::ExcMessage("CacheLevel::ScalarsAndTensors stores tensorial quantities, "
                                    "use the dedicated function."));
 
     return second_piola_kirchhoff_stress_coefficients.get_coefficient_cell(cell, q);
@@ -468,11 +469,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   second_piola_kirchhoff_stress_eval(tensor const &     gradient_displacement,
                                      unsigned int const cell,
                                      unsigned int const q) const
@@ -483,7 +484,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
   }
 
   auto const [F, Jm1] =
-    compute_modified_F_Jm1<dim, Number, check_type, stable_formulation>(gradient_displacement);
+    compute_modified_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+      gradient_displacement);
   tensor const           F_inv = invert(F);
   symmetric_tensor const C_inv = compute_C_inv(F_inv);
   scalar const           J_pow = get_J_pow<true /* force_evaluation */>(Jm1, cell, q);
@@ -504,16 +506,16 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   second_piola_kirchhoff_stress(unsigned int const cell, unsigned int const q) const
 {
-  if constexpr(cache_level < 2)
+  if constexpr(not store_tensors(cache_level))
   {
-    AssertThrow(cache_level > 1,
+    AssertThrow(store_tensors(cache_level),
                 dealii::ExcMessage("This function implements loading a stored stress tensor, but "
                                    "this `cache_level` does not store tensorial quantities."));
 
@@ -528,11 +530,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 inline dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   compute_S_stable(tensor const &           gradient_displacement,
                    symmetric_tensor const & C_inv,
                    scalar const &           J_pow,
@@ -551,11 +553,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 inline dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   compute_S_unstable(symmetric_tensor const & C_inv,
                      scalar const &           J_pow,
                      scalar const &           c1,
@@ -570,11 +572,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   second_piola_kirchhoff_stress_displacement_derivative(tensor const &     gradient_increment,
                                                         tensor const &     gradient_displacement,
                                                         unsigned int const cell,
@@ -585,10 +587,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     shear_modulus_stored = shear_modulus_coefficients.get_coefficient_cell(cell, q);
   }
 
-  if constexpr(cache_level == 0)
+  if constexpr(cache_level == CacheLevel::None)
   {
     auto const [F, Jm1] =
-      compute_modified_F_Jm1<dim, Number, check_type, stable_formulation>(gradient_displacement);
+      compute_modified_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     symmetric_tensor const E =
       compute_E_scaled<dim, Number, Number, stable_formulation>(gradient_displacement, 1.0);
     scalar const J_pow = get_J_pow<false /* force_evaluation */>(Jm1, cell, q);
@@ -609,10 +612,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
     return Dd_S;
   }
-  else if constexpr(cache_level == 1)
+  else if constexpr(cache_level == CacheLevel::Scalars)
   {
     tensor const F =
-      compute_modified_F<dim, Number, check_type, stable_formulation>(gradient_displacement);
+      compute_modified_F<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     scalar const J_pow = J_pow_coefficients.get_coefficient_cell(cell, q);
     scalar const c1    = c1_coefficients.get_coefficient_cell(cell, q);
     scalar const c2    = c2_coefficients.get_coefficient_cell(cell, q);
@@ -636,7 +640,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     // Note that we could load F, but F is needed in the nonlinear operator regardless,
     // so we pass it in and use it here instead of loading it twice and not passing it.
     tensor const F =
-      compute_modified_F<dim, Number, check_type, stable_formulation>(gradient_displacement);
+      compute_modified_F<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     scalar const           J_pow = J_pow_coefficients.get_coefficient_cell(cell, q);
     scalar const           c1    = c1_coefficients.get_coefficient_cell(cell, q);
     scalar const           c2    = c2_coefficients.get_coefficient_cell(cell, q);
@@ -658,20 +663,20 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   kirchhoff_stress(tensor const &     gradient_displacement,
                    unsigned int const cell,
                    unsigned int const q) const
 {
-  if constexpr(cache_level == 0)
+  if constexpr(cache_level == CacheLevel::None)
   {
     return kirchhoff_stress_eval(gradient_displacement, cell, q);
   }
-  else if constexpr(cache_level == 1)
+  else if constexpr(cache_level == CacheLevel::Scalars)
   {
     if(shear_modulus_is_variable)
     {
@@ -688,7 +693,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     else
     {
       tensor const F =
-        compute_modified_F<dim, Number, cache_level, stable_formulation>(gradient_displacement);
+        compute_modified_F<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+          gradient_displacement);
       scalar const J_pow = J_pow_coefficients.get_coefficient_cell(cell, q);
       scalar const c1    = c1_coefficients.get_coefficient_cell(cell, q);
 
@@ -697,8 +703,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
   }
   else
   {
-    AssertThrow(cache_level < 2,
-                dealii::ExcMessage("This `cache_level` stores tensorial quantities, "
+    AssertThrow(not store_tensors(cache_level),
+                dealii::ExcMessage("CacheLevel::ScalarsAndTensors stores tensorial quantities, "
                                    "use the dedicated function."));
 
     return kirchhoff_stress_coefficients.get_coefficient_cell(cell, q);
@@ -707,11 +713,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   kirchhoff_stress_eval(tensor const &     gradient_displacement,
                         unsigned int const cell,
                         unsigned int const q) const
@@ -724,7 +730,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
   if constexpr(stable_formulation)
   {
     scalar const Jm1 =
-      compute_modified_Jm1<dim, Number, check_type, stable_formulation>(gradient_displacement);
+      compute_modified_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     scalar const J_pow = get_J_pow<true /* force_evaluation */>(Jm1, cell, q);
 
     return compute_tau_stable(gradient_displacement, Jm1, J_pow, shear_modulus_stored);
@@ -732,7 +739,8 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
   else
   {
     auto const [F, Jm1] =
-      compute_modified_F_Jm1<dim, Number, check_type, stable_formulation>(gradient_displacement);
+      compute_modified_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     scalar const           J_pow = get_J_pow<true /* force_evaluation */>(Jm1, cell, q);
     symmetric_tensor const E =
       compute_E_scaled<dim, Number, Number, stable_formulation>(gradient_displacement, 1.0);
@@ -745,16 +753,16 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   kirchhoff_stress(unsigned int const cell, unsigned int const q) const
 {
-  if constexpr(cache_level < 2)
+  if constexpr(not store_tensors(cache_level))
   {
-    AssertThrow(cache_level > 1,
+    AssertThrow(store_tensors(cache_level),
                 dealii::ExcMessage("This function implements loading a stored stress tensor, but "
                                    "this `cache_level` does not store tensorial quantities."));
 
@@ -769,11 +777,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 inline dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   compute_tau_stable(tensor const & gradient_displacement,
                      scalar const & Jm1,
                      scalar const & J_pow,
@@ -792,11 +800,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 inline dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   compute_tau_unstable(tensor const & F,
                        scalar const & J_pow,
                        scalar const & c1,
@@ -811,11 +819,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   contract_with_J_times_C(symmetric_tensor const & symmetric_gradient_increment,
                           tensor const &           gradient_displacement,
                           unsigned int const       cell,
@@ -826,10 +834,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     shear_modulus_stored = shear_modulus_coefficients.get_coefficient_cell(cell, q);
   }
 
-  if constexpr(cache_level == 0)
+  if constexpr(cache_level == CacheLevel::None)
   {
     auto const [F, Jm1] =
-      compute_modified_F_Jm1<dim, Number, cache_level, stable_formulation>(gradient_displacement);
+      compute_modified_F_Jm1<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     symmetric_tensor const E =
       compute_E_scaled<dim, Number, Number, stable_formulation>(gradient_displacement, 1.0);
     scalar const J_pow = get_J_pow<false /* force_evaluation */>(Jm1, cell, q);
@@ -846,10 +855,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
     return result;
   }
-  else if constexpr(cache_level == 1)
+  else if constexpr(cache_level == CacheLevel::Scalars)
   {
     tensor const F =
-      compute_modified_F<dim, Number, cache_level, stable_formulation>(gradient_displacement);
+      compute_modified_F<dim, Number, invalid_jacobian_treatment, stable_formulation>(
+        gradient_displacement);
     scalar const J_pow = J_pow_coefficients.get_coefficient_cell(cell, q);
     scalar const c1    = c1_coefficients.get_coefficient_cell(cell, q);
     scalar const c2    = c2_coefficients.get_coefficient_cell(cell, q);
@@ -864,8 +874,9 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
   }
   else
   {
-    AssertThrow(cache_level < 2,
-                dealii::ExcMessage("This function is not the optimal choice for `cache_level` 2."));
+    AssertThrow(not store_tensors(cache_level),
+                dealii::ExcMessage(
+                  "This function is not the optimal choice for CacheLevel::ScalarsAndTensors."));
 
     return contract_with_J_times_C(symmetric_gradient_increment, cell, q);
   }
@@ -873,11 +884,11 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::SymmetricTensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   contract_with_J_times_C(symmetric_tensor const & symmetric_gradient_increment,
                           unsigned int const       cell,
                           unsigned int const       q) const
@@ -887,10 +898,10 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
     shear_modulus_stored = shear_modulus_coefficients.get_coefficient_cell(cell, q);
   }
 
-  if constexpr(cache_level < 2)
+  if constexpr(not store_tensors(cache_level))
   {
-    AssertThrow(cache_level > 1,
-                dealii::ExcMessage("This function cannot be called with `cache_level` < 2."));
+    AssertThrow(store_tensors(cache_level),
+                dealii::ExcMessage("This function requires CacheLevel::ScalarsAndTensors."));
 
     return (std::numeric_limits<Number>::quiet_NaN() *
             get_identity_symmetric_tensor<dim, Number>());
@@ -913,15 +924,14 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::VectorizedArray<Number>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::one_over_J(
-  unsigned int const cell,
-  unsigned int const q) const
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
+  one_over_J(unsigned int const cell, unsigned int const q) const
 {
-  AssertThrow(spatial_integration and cache_level > 0,
+  AssertThrow(spatial_integration and store_scalars(cache_level),
               dealii::ExcMessage("Cannot access precomputed one_over_J."));
 
   return (one_over_J_coefficients.get_coefficient_cell(cell, q));
@@ -929,16 +939,16 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 template<int dim,
          typename Number,
-         unsigned int check_type,
-         bool         stable_formulation,
-         unsigned int cache_level>
+         InvalidJacobianTreatment invalid_jacobian_treatment,
+         bool                     stable_formulation,
+         CacheLevel               cache_level>
 dealii::Tensor<2, dim, dealii::VectorizedArray<Number>>
-IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_level>::
+IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formulation, cache_level>::
   gradient_displacement(unsigned int const cell, unsigned int const q) const
 {
-  if constexpr(cache_level < 2)
+  if constexpr(not store_tensors(cache_level))
   {
-    AssertThrow(cache_level > 1,
+    AssertThrow(store_tensors(cache_level),
                 dealii::ExcMessage("Cannot access precomputed deformation gradient."));
   }
 
@@ -947,37 +957,37 @@ IncompressibleNeoHookean<dim, Number, check_type, stable_formulation, cache_leve
 
 // clang-format off
 // Note that the higher check types (third template argument) are missing.
-template class IncompressibleNeoHookean<2, float,  0, true,  0>;
-template class IncompressibleNeoHookean<2, float,  0, true,  1>;
-template class IncompressibleNeoHookean<2, float,  0, true,  2>;
+template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, true, CacheLevel::None>;
+template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<2, float,  0, false, 0>;
-template class IncompressibleNeoHookean<2, float,  0, false, 1>;
-template class IncompressibleNeoHookean<2, float,  0, false, 2>;
+template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, false, CacheLevel::None>;
+template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<2, double, 0, true,  0>;
-template class IncompressibleNeoHookean<2, double, 0, true,  1>;
-template class IncompressibleNeoHookean<2, double, 0, true,  2>;
+template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, true, CacheLevel::None>;
+template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<2, double, 0, false, 0>;
-template class IncompressibleNeoHookean<2, double, 0, false, 1>;
-template class IncompressibleNeoHookean<2, double, 0, false, 2>;
+template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, false, CacheLevel::None>;
+template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<3, float,  0, true,  0>;
-template class IncompressibleNeoHookean<3, float,  0, true,  1>;
-template class IncompressibleNeoHookean<3, float,  0, true,  2>;
+template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, true, CacheLevel::None>;
+template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<3, float,  0, false, 0>;
-template class IncompressibleNeoHookean<3, float,  0, false, 1>;
-template class IncompressibleNeoHookean<3, float,  0, false, 2>;
+template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, false, CacheLevel::None>;
+template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<3, double, 0, true,  0>;
-template class IncompressibleNeoHookean<3, double, 0, true,  1>;
-template class IncompressibleNeoHookean<3, double, 0, true,  2>;
+template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, true, CacheLevel::None>;
+template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
 
-template class IncompressibleNeoHookean<3, double, 0, false, 0>;
-template class IncompressibleNeoHookean<3, double, 0, false, 1>;
-template class IncompressibleNeoHookean<3, double, 0, false, 2>;
+template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, false, CacheLevel::None>;
+template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
+template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
 // clang-format on
 
 } // namespace Structure
