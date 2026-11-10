@@ -26,9 +26,8 @@
  * compute_modified_F() and compute_modified_Jm1() are evaluated for all
  * variants. Printed are the returned J, the determinant of the returned F and
  * the shift c if the returned F equals F + c I. The variants modifying F and J
- * in place return J = tol, the identity shift variants additionally det(F) =
- * tol up to the tolerance of the root finding, the others return F and J
- * unmodified.
+ * in place return J = tol, the identity shift variant additionally det(F) =
+ * tol up to round-off, the others return F and J unmodified.
  */
 
 // C/C++
@@ -133,8 +132,7 @@ test(std::string const & name, matrix<dim> const & F_in)
   test_variant<dim, Structure::InvalidJacobianTreatment::GlobalQuasiNewton>(F);
   test_variant<dim, Structure::InvalidJacobianTreatment::LocalQuasiNewton>(F);
   test_variant<dim, Structure::InvalidJacobianTreatment::ClampJacobian>(F);
-  test_variant<dim, Structure::InvalidJacobianTreatment::IdentityShiftExact>(F);
-  test_variant<dim, Structure::InvalidJacobianTreatment::IdentityShiftNewton>(F);
+  test_variant<dim, Structure::InvalidJacobianTreatment::IdentityShift>(F);
 }
 
 template<int dim>

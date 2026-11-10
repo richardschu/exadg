@@ -104,12 +104,10 @@ enum class MaterialType
  *     deformation, the stored F and J of the last admissible linearization
  *     are used.
  *  .) ClampJacobian: J = tol is enforced, while F is not modified.
- *  .) IdentityShiftExact: F is modified by adding a scaled identity such that
+ *  .) IdentityShift: F is modified by adding a scaled identity such that
  *     J = tol, the scaling factor is the positive root of the quadratic
  *     (dim = 2) or cubic (dim = 3) polynomial computed via a closed formula.
- *  .) IdentityShiftNewton: as IdentityShiftExact, but the root is computed via
- *     Newton's method.
- *  The last three variants modify F and J in place in the integration points,
+ *  The last two variants modify F and J in place in the integration points,
  *  see reconstruct_admissible_F_Jm1().
  *
  *  Possible extension: enforce J = tol via an eigenvalue decomposition of F.
@@ -120,8 +118,7 @@ enum class InvalidJacobianTreatment
   GlobalQuasiNewton,
   LocalQuasiNewton,
   ClampJacobian,
-  IdentityShiftExact,
-  IdentityShiftNewton
+  IdentityShift
 };
 
 /*
@@ -131,8 +128,7 @@ constexpr bool
 modify_F_and_J_in_place(InvalidJacobianTreatment const invalid_jacobian_treatment)
 {
   return invalid_jacobian_treatment == InvalidJacobianTreatment::ClampJacobian or
-         invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftExact or
-         invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftNewton;
+         invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShift;
 }
 
 /*

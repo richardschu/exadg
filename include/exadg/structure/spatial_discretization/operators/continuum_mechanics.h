@@ -1170,92 +1170,6 @@ inline DEAL_II_ALWAYS_INLINE //
 
 template<typename Number>
 inline DEAL_II_ALWAYS_INLINE //
-  std::pair<Number, bool>
-  solve_polynomial_newton(Number const &     a,
-                          Number const &     b,
-                          Number const &     c,
-                          Number const &     d,
-                          Number const &     absolute_tolerance = 1e-9,
-                          Number const &     relative_tolerance = 1e-3,
-                          unsigned int const max_iterations     = 10,
-                          Number const &     initial_guess      = 0.0)
-{
-  // Find smallest real-valued positive root of a * x^3 + b * x^2 + c * x + d = 0
-  // via Newton's method. Assumes a > 0, or a == 0 and b > 0, and
-  // f(initial_guess) < 0 with no positive root smaller than initial_guess.
-  auto const f      = [&](Number x) -> Number { return (a * x * x * x + b * x * x + c * x + d); };
-  auto const dfdx   = [&](Number x) -> Number { return (3.0 * a * x * x + 2.0 * b * x + c); };
-  auto const d2fdx2 = [&](Number x) -> Number { return (6.0 * a * x + 2.0 * b); };
-
-  Number xnp           = initial_guess;
-  Number residual_init = std::abs(f(xnp));
-
-  bool converged = false;
-  if(residual_init > absolute_tolerance)
-  {
-    // Upper bound x_max for all real roots. For x >= x_e, f is increasing and
-    // convex, where x_e is the largest critical point of f, or the inflection
-    // point if f has no two distinct critical points (the vertex for a == 0).
-    // Hence, x_max = x_e if f(x_e) >= 0. Otherwise, for h >= 0
-    // f(x_e + h) = f(x_e) + f'(x_e) h + f''(x_e) / 2 h^2 + a h^3
-    // with all terms but f(x_e) non-negative, such that f(x_e + h) >= 0 holds
-    // for h = -f(x_e) / f'(x_e), h = sqrt(-2 f(x_e) / f''(x_e)) and
-    // h = cbrt(-f(x_e) / a), the smallest one is used. For a == 0, x_max is
-    // the root.
-    Number x_e;
-    if(a > 0.0)
-    {
-      Number const discriminant = b * b - 3.0 * a * c;
-      x_e = (discriminant > 0.0) ? (-b + std::sqrt(discriminant)) / (3.0 * a) : -b / (3.0 * a);
-    }
-    else
-    {
-      x_e = -c / (2.0 * b);
-    }
-    Number const minus_f_e = std::max(-f(x_e), Number(0.0));
-
-    Number h = std::numeric_limits<Number>::max();
-    if(dfdx(x_e) > 0.0)
-    {
-      h = minus_f_e / dfdx(x_e);
-    }
-    if(d2fdx2(x_e) > 0.0)
-    {
-      h = std::min(h, Number(std::sqrt(2.0 * minus_f_e / d2fdx2(x_e))));
-    }
-    if(a > 0.0)
-    {
-      h = std::min(h, Number(std::cbrt(minus_f_e / a)));
-    }
-    Number const x_max = x_e + h;
-
-    // Execute Newton loop. Newton steps are limited by x_max, and where f is
-    // not increasing, no root is between xnp and x_e, such that we continue
-    // from x_max. Right of the root, f is increasing and convex, i.e., the
-    // iteration converges monotonically.
-    unsigned int n      = 0;
-    Number       f_eval = f(xnp);
-    do
-    {
-      Number const dfdx_eval = dfdx(xnp);
-
-      xnp       = (dfdx_eval > 0.0) ? std::min(xnp - f_eval / dfdx_eval, x_max) : x_max;
-      f_eval    = f(xnp);
-      converged = (std::abs(f_eval) < absolute_tolerance) or
-                  (std::abs(f_eval) < residual_init * relative_tolerance);
-      n++;
-    } while(n < max_iterations and not converged);
-  }
-  else
-  {
-    converged = true;
-  }
-
-  return std::make_pair(xnp, converged);
-}
-
-template<typename Number>
-inline DEAL_II_ALWAYS_INLINE //
   Number
   get_J_tol()
 {
@@ -1292,18 +1206,15 @@ inline DEAL_II_ALWAYS_INLINE //
     {
       if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::ClampJacobian)
       {
-        // invalid_jacobian_treatment 3 : Only return J = tol, while F is not modified.
+        // Only return J = tol, while F is not modified.
         Jm1[n] = tol - 1.0;
       }
-      else if constexpr(invalid_jacobian_treatment ==
-                          InvalidJacobianTreatment::IdentityShiftExact or
-                        invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftNewton)
+      else if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShift)
       {
         // Always update, but enforce J = tol by adding a scaled unit matrix,
         // i.e., F + fac I. The scale factor fac is the smallest positive root of
         // det(F + x I) - tol = a * x^3 + b * x^2 + c * x + d = 0, determined via
-        // an exact formula (IdentityShiftExact) or a Newton solver
-        // (IdentityShiftNewton).
+        // closed formulas.
         Number a, b, c, d;
         if constexpr(dim == 2)
         {
@@ -1328,28 +1239,7 @@ inline DEAL_II_ALWAYS_INLINE //
                       dealii::ExcMessage("Unexpected dim. Choose dim == 2 or dim == 3."));
         }
 
-        Number fac;
-        if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftExact)
-        {
-          fac = solve_polynomial_exact<Number>(a, b, c, d);
-        }
-        else
-        {
-          // Absolute tolerance on det(F + x I) - tol, limited by the round-off
-          // in evaluating the polynomial.
-          Number const absolute_tolerance =
-            std::max(Number(1e-8) * tol, Number(100.0) * std::numeric_limits<Number>::epsilon());
-          bool converged;
-          std::tie(fac, converged) =
-            solve_polynomial_newton<Number>(a, b, c, d, absolute_tolerance, 0.0, 20, 0.0);
-
-          // Fall back to the exact formula if Newton's method did not converge,
-          // such that F and J remain consistent.
-          if(not converged)
-          {
-            fac = solve_polynomial_exact<Number>(a, b, c, d);
-          }
-        }
+        Number const fac = solve_polynomial_exact<Number>(a, b, c, d);
 
         for(unsigned int i = 0; i < dim; ++i)
         {

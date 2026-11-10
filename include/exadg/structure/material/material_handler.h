@@ -279,14 +279,10 @@ private:
         return create_any_stable_and_level(
           std::integral_constant<InvalidJacobianTreatment,
                                  InvalidJacobianTreatment::ClampJacobian>());
-      case InvalidJacobianTreatment::IdentityShiftExact:
+      case InvalidJacobianTreatment::IdentityShift:
         return create_any_stable_and_level(
           std::integral_constant<InvalidJacobianTreatment,
-                                 InvalidJacobianTreatment::IdentityShiftExact>());
-      case InvalidJacobianTreatment::IdentityShiftNewton:
-        return create_any_stable_and_level(
-          std::integral_constant<InvalidJacobianTreatment,
-                                 InvalidJacobianTreatment::IdentityShiftNewton>());
+                                 InvalidJacobianTreatment::IdentityShift>());
     }
 
     AssertThrow(false, dealii::ExcMessage("This InvalidJacobianTreatment is not implemented."));

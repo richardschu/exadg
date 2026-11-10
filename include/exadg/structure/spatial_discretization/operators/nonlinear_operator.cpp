@@ -1097,13 +1097,8 @@ NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & inte
     case InvalidJacobianTreatment::ClampJacobian:
       do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::ClampJacobian>(integrator);
       return;
-    case InvalidJacobianTreatment::IdentityShiftExact:
-      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::IdentityShiftExact>(
-        integrator);
-      return;
-    case InvalidJacobianTreatment::IdentityShiftNewton:
-      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::IdentityShiftNewton>(
-        integrator);
+    case InvalidJacobianTreatment::IdentityShift:
+      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::IdentityShift>(integrator);
       return;
   }
 
@@ -1242,11 +1237,8 @@ NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) co
     case InvalidJacobianTreatment::ClampJacobian:
       do_cell_integral_templated<InvalidJacobianTreatment::ClampJacobian>(integrator);
       return;
-    case InvalidJacobianTreatment::IdentityShiftExact:
-      do_cell_integral_templated<InvalidJacobianTreatment::IdentityShiftExact>(integrator);
-      return;
-    case InvalidJacobianTreatment::IdentityShiftNewton:
-      do_cell_integral_templated<InvalidJacobianTreatment::IdentityShiftNewton>(integrator);
+    case InvalidJacobianTreatment::IdentityShift:
+      do_cell_integral_templated<InvalidJacobianTreatment::IdentityShift>(integrator);
       return;
   }
 
