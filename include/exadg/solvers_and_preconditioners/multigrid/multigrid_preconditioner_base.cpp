@@ -20,6 +20,7 @@
  */
 
 // deal.II
+#include <deal.II/base/timer.h>
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_q.h>
@@ -615,7 +616,7 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::
 }
 
 template<int dim, typename Number, typename MultigridNumber>
-void
+double
 MultigridPreconditionerBase<dim, Number, MultigridNumber>::fill_level_constraints(
   dealii::AffineConstraints<MultigridNumber> & affine_constraints,
   unsigned int const                           l,
@@ -690,8 +691,11 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::fill_level_constraint
 
   // Zero normal component after the Dirichlet constraints, which deal.II
   // does not overwrite.
+  double time_normal = 0.0;
   if(not(dirichlet_normal_bc.empty()))
   {
+    dealii::Timer timer;
+
     AssertThrow(not(level.is_dg()),
                 dealii::ExcMessage("Zero normal constraints require continuous elements."));
 
@@ -700,6 +704,8 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::fill_level_constraint
                                                             dirichlet_normal_bc,
                                                             affine_constraints,
                                                             mapping_normal);
+
+    time_normal = timer.wall_time();
   }
 
   // constrain one dof in the continuous case, see ConstraintUtil::add_constraints()
@@ -707,6 +713,8 @@ MultigridPreconditionerBase<dim, Number, MultigridNumber>::fill_level_constraint
     ConstraintUtil::constrain_dof_of_singular_operator(affine_constraints);
 
   affine_constraints.close();
+
+  return time_normal;
 }
 
 template<int dim, typename Number, typename MultigridNumber>

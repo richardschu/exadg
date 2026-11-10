@@ -482,9 +482,10 @@ private:
 
   /*
    * Initializes the constraints of the displacement field. The zero normal
-   * constraints use the normal vectors of `mapping_normal`.
+   * constraints use the normal vectors of `mapping_normal`. Returns the wall
+   * time spent on the zero normal constraints.
    */
-  void
+  double
   initialize_affine_constraints(dealii::Mapping<dim> const & mapping_normal);
 
   std::string

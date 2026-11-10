@@ -24,6 +24,7 @@
 
 // ExaDG
 #include <exadg/grid/mapping_dof_vector.h>
+#include <exadg/matrix_free/matrix_free_data.h>
 #include <exadg/structure/postprocessor/output_generator.h>
 #include <exadg/structure/spatial_discretization/operators/elasticity_operator_base.h>
 #ifdef DEAL_II_WITH_TRILINOS
@@ -106,6 +107,23 @@ public:
   shift_reference_configuration(VectorType const &              vector,
                                 dealii::DoFHandler<dim> const * dof_handler = nullptr,
                                 unsigned int const level = dealii::numbers::invalid_unsigned_int);
+
+  /**
+   * Returns the mapping of the current reference configuration set by
+   * shift_reference_configuration().
+   */
+  dealii::Mapping<dim> const &
+  get_mapping_reference_configuration() const;
+
+  /**
+   * Re-initializes the `MatrixFree` object of the current reference
+   * configuration from `matrix_free_data`, whose constraints might have been
+   * rebuilt for the current reference configuration. Call
+   * shift_reference_configuration() first.
+   */
+  void
+  reinit_matrix_free_reference_configuration(
+    MatrixFreeData<dim, Number> const & matrix_free_data) const;
 
   /**
    * Export the current configuration the operator is defined in. For the spatial integration

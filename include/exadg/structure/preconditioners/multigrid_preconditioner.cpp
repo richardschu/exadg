@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+// deal.II
+#include <deal.II/base/timer.h>
+
 // ExaDG
 #include <exadg/grid/grid_data.h>
 #include <exadg/operators/quadrature.h>
@@ -53,6 +56,9 @@ MultigridPreconditioner<dim, Number>::initialize(
   nonlinear = nonlinear_in;
 
   this->dirichlet_normal_bc = data.bc->dirichlet_normal_bc;
+
+  this->dirichlet_bc                = dirichlet_bc;
+  this->dirichlet_bc_component_mask = dirichlet_bc_component_mask;
 
   Base::initialize(mg_data,
                    grid,
@@ -295,6 +301,39 @@ MultigridPreconditioner<dim, Number>::shift_reference_configuration(VectorType c
           ->shift_reference_configuration(vector_coarse_level);
       }
     });
+
+    // The zero normal constraints depend on the normal vectors of the reference
+    // configuration, so we rebuild the constraints of all levels with the
+    // shifted level mappings. The level operators and transfer operators refer
+    // to the constraint objects, which we refill in place.
+    if(not(this->dirichlet_normal_bc.empty()) and std::getenv("ZN_STUDY_SKIP_UPDATE") == nullptr)
+    {
+      timings_constraint_update = {};
+      dealii::Timer timer;
+      this->for_all_levels([&](unsigned int const level) {
+        timer.restart();
+        timings_constraint_update[1] += this->fill_level_constraints(
+          *this->constraints[level],
+          level,
+          *this->dof_handlers[level],
+          false /* is_singular */,
+          dirichlet_bc,
+          dirichlet_bc_component_mask,
+          this->get_operator_nonlinear(level)->get_mapping_reference_configuration());
+        timings_constraint_update[0] += timer.wall_time();
+
+        timer.restart();
+        this->get_operator_nonlinear(level)->reinit_matrix_free_reference_configuration(
+          *this->matrix_free_data_objects[level]);
+        timings_constraint_update[2] += timer.wall_time();
+      });
+
+      // The multigrid algorithm refers to the transfer object, so we
+      // re-initialize it in place.
+      timer.restart();
+      this->transfers->reinit(this->matrix_free_objects, 0 /* dof_index */, this->level_info);
+      timings_constraint_update[3] = timer.wall_time();
+    }
   }
   else // linear problems
   {

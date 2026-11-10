@@ -193,9 +193,10 @@ protected:
   /*
    * Fills the constraints of level `l` in the global-coarsening branch:
    * hanging nodes, periodicity, Dirichlet and zero normal constraints, the
-   * latter with the normal vectors of `mapping_normal`.
+   * latter with the normal vectors of `mapping_normal`. Returns the wall time
+   * spent on the zero normal constraints.
    */
-  void
+  double
   fill_level_constraints(dealii::AffineConstraints<MultigridNumber> & affine_constraints,
                          unsigned int const                           l,
                          dealii::DoFHandler<dim> const &              dof_handler,

@@ -421,6 +421,82 @@ NonLinearOperator<dim, Number>::shift_reference_configuration(
 }
 
 template<int dim, typename Number>
+dealii::Mapping<dim> const &
+NonLinearOperator<dim, Number>::get_mapping_reference_configuration() const
+{
+  AssertThrow(this->mapping_spatial != nullptr,
+              dealii::ExcMessage("Mapping defining current reference "
+                                 "configuration is not initialized."));
+
+  return *mapping_spatial->get_mapping();
+}
+
+template<int dim, typename Number>
+void
+NonLinearOperator<dim, Number>::reinit_matrix_free_reference_configuration(
+  MatrixFreeData<dim, Number> const & matrix_free_data) const
+{
+  AssertThrow(this->operator_data.problem_type == ProblemType::InverseAnalysis,
+              dealii::ExcMessage("Only implemented for the inverse analysis."));
+
+  // The integrators refer to `matrix_free_spatial` and release their scratch
+  // data to it on destruction, so we destroy them before the re-initialization
+  // and create them again afterwards, see initialize_derived().
+  integrator_lin.reset();
+  integrator_lin_face.reset();
+
+  // STUDY: keep the partitioners of `matrix_free`, which all vectors use.
+  std::vector<std::shared_ptr<dealii::Utilities::MPI::Partitioner const>> partitioners;
+  for(unsigned int c = 0; c < this->matrix_free->n_components(); ++c)
+    partitioners.push_back(this->matrix_free->get_dof_info(c).vector_partitioner);
+
+  this->matrix_free_spatial.reinit(get_mapping_reference_configuration(),
+                                   matrix_free_data.get_dof_handler_vector(),
+                                   matrix_free_data.get_constraint_vector(),
+                                   matrix_free_data.get_quadrature_vector(),
+                                   matrix_free_data.data);
+
+  if(std::getenv("ZN_STUDY_KEEP_PARTITIONER") != nullptr) // STUDY
+  {
+    for(unsigned int c = 0; c < this->matrix_free_spatial.n_components(); ++c)
+    {
+      auto & dof_info = const_cast<dealii::internal::MatrixFreeFunctions::DoFInfo &>(
+        this->matrix_free_spatial.get_dof_info(c));
+      AssertThrow(dof_info.vector_partitioner->is_globally_compatible(*partitioners[c]),
+                  dealii::ExcMessage("Partitioners differ."));
+      dof_info.vector_partitioner = partitioners[c];
+    }
+  }
+
+  // Cell data, e.g., of the material, is stored per cell batch of
+  // `matrix_free`, so both objects have to contain the same cell batches.
+  bool same_cells =
+    this->matrix_free_spatial.n_cell_batches() == this->matrix_free->n_cell_batches();
+  for(unsigned int cell = 0; same_cells and cell < this->matrix_free->n_cell_batches(); ++cell)
+  {
+    unsigned int const n_lanes = this->matrix_free->n_active_entries_per_cell_batch(cell);
+    same_cells = n_lanes == this->matrix_free_spatial.n_active_entries_per_cell_batch(cell);
+    for(unsigned int v = 0; same_cells and v < n_lanes; ++v)
+      same_cells = this->matrix_free->get_cell_iterator(cell, v)->id() ==
+                   this->matrix_free_spatial.get_cell_iterator(cell, v)->id();
+  }
+  AssertThrow(same_cells, dealii::ExcMessage("The cell batches changed in the re-initialization."));
+
+  integrator_lin = std::make_shared<IntegratorCell>(this->matrix_free_spatial,
+                                                    this->operator_data.dof_index_inhomogeneous,
+                                                    this->operator_data.quad_index);
+
+  if(follower_load_tangent_implemented)
+  {
+    integrator_lin_face =
+      std::make_shared<IntegratorFace>(this->matrix_free_spatial,
+                                       true,
+                                       this->operator_data.dof_index_inhomogeneous,
+                                       this->operator_data.quad_index);
+  }
+}
+
+template<int dim, typename Number>
 typename NonLinearOperator<dim, Number>::VectorType const &
 NonLinearOperator<dim, Number>::get_solution_linearization() const
 {
