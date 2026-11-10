@@ -20,7 +20,6 @@
  */
 
 // deal.II
-#include <deal.II/base/timer.h>
 #include <deal.II/numerics/vector_tools_constraints.h>
 
 // ExaDG
@@ -164,7 +163,7 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
 }
 
 template<int dim, typename Number>
-double
+void
 Operator<dim, Number>::initialize_affine_constraints(dealii::Mapping<dim> const & mapping_normal)
 {
   // affine constraints
@@ -204,11 +203,8 @@ Operator<dim, Number>::initialize_affine_constraints(dealii::Mapping<dim> const 
   // constraints are homogeneous and couple the components of a support point
   // like hanging nodes, so we also add them to the constraints without
   // Dirichlet degrees of freedom used for the inhomogeneous evaluation.
-  double time_normal = 0.0;
   if(not(boundary_descriptor->dirichlet_normal_bc.empty()))
   {
-    dealii::Timer timer;
-
     dealii::AffineConstraints<Number> affine_constraints_normal;
     affine_constraints_normal.copy_from(affine_constraints);
     dealii::VectorTools::compute_no_normal_flux_constraints(
@@ -228,16 +224,12 @@ Operator<dim, Number>::initialize_affine_constraints(dealii::Mapping<dim> const 
                                                                         line.inhomogeneity);
       }
     }
-
-    time_normal = timer.wall_time();
   }
 
   // compress constraints *once after* complete setup, since affine constraints to copy from need to
   // be non-closed to add further constraints
   affine_constraints_periodicity_and_hanging_nodes.close();
   affine_constraints.close();
-
-  return time_normal;
 }
 
 template<int dim, typename Number>
@@ -1520,65 +1512,25 @@ template<int dim, typename Number>
 void
 Operator<dim, Number>::shift_reference_configuration(VectorType const & vector)
 {
-  dealii::Timer timer;
-
   // Update the mapping of the matrix-free object in the fine level operator.
   elasticity_operator_nonlinear.shift_reference_configuration(vector);
-
-  double const time_shift = timer.wall_time();
 
   // The zero normal constraints depend on the normal vectors of the reference
   // configuration, so we rebuild the constraints with the shifted mapping and
   // re-initialize the matrix-free object of the reference configuration.
-  bool const update_constraints = not(boundary_descriptor->dirichlet_normal_bc.empty()) and
-                                  std::getenv("ZN_STUDY_SKIP_UPDATE") == nullptr;
-  double time_constraints = 0.0, time_normal = 0.0, time_matrix_free = 0.0;
-  if(update_constraints)
+  if(not(boundary_descriptor->dirichlet_normal_bc.empty()))
   {
-    timer.restart();
-    time_normal = initialize_affine_constraints(
+    initialize_affine_constraints(
       elasticity_operator_nonlinear.get_mapping_reference_configuration());
-    time_constraints = timer.wall_time();
-
-    timer.restart();
     elasticity_operator_nonlinear.reinit_matrix_free_reference_configuration(*matrix_free_data);
-    time_matrix_free = timer.wall_time();
   }
 
   // Update the matrix-free objects' mappings on coarse multigrid levels.
-  timer.restart();
   if(param.preconditioner == Preconditioner::Multigrid)
   {
     std::shared_ptr<MultigridPreconditioner<dim, Number>> mg_preconditioner =
       std::dynamic_pointer_cast<MultigridPreconditioner<dim, Number>>(preconditioner);
     mg_preconditioner->shift_reference_configuration(vector);
-  }
-  double const time_multigrid = timer.wall_time();
-
-  // Study of the cost of the constraint update: maximum wall times over all
-  // processes.
-  if(update_constraints)
-  {
-    auto const max = [&](double const t) { return dealii::Utilities::MPI::max(t, mpi_comm); };
-
-    pcout << std::endl
-          << "  Shift reference configuration, wall times [s]:" << std::endl
-          << "    fine level mapping:               " << max(time_shift) << std::endl
-          << "    fine level constraints (all):     " << max(time_constraints) << std::endl
-          << "    fine level constraints (normal):  " << max(time_normal) << std::endl
-          << "    fine level MatrixFree reinit:     " << max(time_matrix_free) << std::endl
-          << "    multigrid levels (total):         " << max(time_multigrid) << std::endl;
-
-    if(param.preconditioner == Preconditioner::Multigrid)
-    {
-      std::shared_ptr<MultigridPreconditioner<dim, Number>> mg_preconditioner =
-        std::dynamic_pointer_cast<MultigridPreconditioner<dim, Number>>(preconditioner);
-      auto const & t = mg_preconditioner->timings_constraint_update;
-      pcout << "    multigrid constraints (all):      " << max(t[0]) << std::endl
-            << "    multigrid constraints (normal):   " << max(t[1]) << std::endl
-            << "    multigrid MatrixFree reinit:      " << max(t[2]) << std::endl
-            << "    multigrid transfer reinit:        " << max(t[3]) << std::endl;
-    }
   }
 }
 

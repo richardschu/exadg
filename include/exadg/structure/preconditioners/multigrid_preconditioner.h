@@ -22,9 +22,6 @@
 #ifndef EXADG_STRUCTURE_PRECONDITIONERS_MULTIGRID_PRECONDITIONER_H_
 #define EXADG_STRUCTURE_PRECONDITIONERS_MULTIGRID_PRECONDITIONER_H_
 
-// C/C++
-#include <array>
-
 // ExaDG
 #include <exadg/operators/multigrid_operator.h>
 #include <exadg/solvers_and_preconditioners/multigrid/multigrid_preconditioner_base.h>
@@ -87,11 +84,6 @@ public:
    */
   void
   shift_reference_configuration(VectorType const & vector);
-
-  // Wall times [s] of the last constraint update in
-  // shift_reference_configuration(), summed over all levels: all constraints,
-  // zero normal constraints only, MatrixFree objects, transfer operators.
-  std::array<double, 4> timings_constraint_update = {};
 
 private:
   void

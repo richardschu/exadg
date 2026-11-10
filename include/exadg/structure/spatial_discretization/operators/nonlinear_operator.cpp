@@ -445,7 +445,11 @@ NonLinearOperator<dim, Number>::reinit_matrix_free_reference_configuration(
   integrator_lin.reset();
   integrator_lin_face.reset();
 
-  // STUDY: keep the partitioners of `matrix_free`, which all vectors use.
+  // All vectors are initialized with the partitioners of `matrix_free`, while
+  // `dealii::MatrixFree::reinit()` creates new partitioners with the same
+  // layout. For vectors whose partitioner is not the one of the `MatrixFree`
+  // object, deal.II checks the compatibility with a global communication in
+  // every loop, so we keep the partitioners of `matrix_free`.
   std::vector<std::shared_ptr<dealii::Utilities::MPI::Partitioner const>> partitioners;
   for(unsigned int c = 0; c < this->matrix_free->n_components(); ++c)
     partitioners.push_back(this->matrix_free->get_dof_info(c).vector_partitioner);
@@ -456,16 +460,13 @@ NonLinearOperator<dim, Number>::reinit_matrix_free_reference_configuration(
                                    matrix_free_data.get_quadrature_vector(),
                                    matrix_free_data.data);
 
-  if(std::getenv("ZN_STUDY_KEEP_PARTITIONER") != nullptr) // STUDY
+  for(unsigned int c = 0; c < this->matrix_free_spatial.n_components(); ++c)
   {
-    for(unsigned int c = 0; c < this->matrix_free_spatial.n_components(); ++c)
-    {
-      auto & dof_info = const_cast<dealii::internal::MatrixFreeFunctions::DoFInfo &>(
-        this->matrix_free_spatial.get_dof_info(c));
-      AssertThrow(dof_info.vector_partitioner->is_globally_compatible(*partitioners[c]),
-                  dealii::ExcMessage("Partitioners differ."));
-      dof_info.vector_partitioner = partitioners[c];
-    }
+    auto & dof_info = const_cast<dealii::internal::MatrixFreeFunctions::DoFInfo &>(
+      this->matrix_free_spatial.get_dof_info(c));
+    AssertThrow(dof_info.vector_partitioner->is_globally_compatible(*partitioners[c]),
+                dealii::ExcMessage("The partitioners changed in the re-initialization."));
+    dof_info.vector_partitioner = partitioners[c];
   }
 
   // Cell data, e.g., of the material, is stored per cell batch of
