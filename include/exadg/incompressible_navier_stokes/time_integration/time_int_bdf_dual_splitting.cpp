@@ -682,13 +682,18 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
     pde_operator->initialize_vector_velocity(vorticity_extrapolated_ppe);
     pde_operator->compute_vorticity(vorticity_extrapolated_ppe, velocity_extrapolated_ppe);
 
+    // The viscous term uses the viscosity of the extrapolated velocity, i.e.,
+    // at the same time as the vorticity, and not the one of the previous time
+    // step, which is not restored at a restart.
+    if(this->param.viscosity_is_variable())
+      pde_operator->update_viscosity(velocity_extrapolated_ppe);
+
     pde_operator->rhs_ppe_nbc_viscous_add(rhs, vorticity_extrapolated_ppe);
 
     // Add viscosity gradient term
     if(this->param.viscosity_is_variable())
     {
       VectorType viscosity_extrapolated_ppe;
-      pde_operator->update_viscosity(velocity_extrapolated_ppe);
       pde_operator->initialize_vector_velocity_scalar(viscosity_extrapolated_ppe);
       pde_operator->access_viscosity(viscosity_extrapolated_ppe);
 
