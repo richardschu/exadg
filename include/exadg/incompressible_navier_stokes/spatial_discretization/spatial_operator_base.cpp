@@ -1027,6 +1027,8 @@ SpatialOperatorBase<dim, Number>::serialize_vectors(
   deserialization_parameters.consider_mapping_write = param.restart_data.consider_mapping_write;
   deserialization_parameters.triangulation_type     = param.grid.triangulation_type;
   deserialization_parameters.spatial_discretization = param.spatial_discretization;
+  deserialization_parameters.n_vectors_u            = vectors_velocity.size();
+  deserialization_parameters.n_vectors_p            = vectors_pressure.size();
   write_deserialization_parameters(mpi_comm, param.restart_data, deserialization_parameters);
 
   // Attach vectors to triangulation and serialize.
@@ -1062,6 +1064,24 @@ SpatialOperatorBase<dim, Number>::deserialize_vectors(std::vector<VectorType *> 
   // Load the deserialization parameters.
   DeserializationParameters const deserialization_parameters =
     read_deserialization_parameters(mpi_comm, param.restart_data);
+
+  // The vectors are attached to the triangulation and deal.II checks their
+  // number in debug mode only. Not available for older restart files.
+  if(deserialization_parameters.n_vectors_u != dealii::numbers::invalid_unsigned_int)
+  {
+    AssertThrow(deserialization_parameters.n_vectors_u == vectors_velocity.size() and
+                  deserialization_parameters.n_vectors_p == vectors_pressure.size(),
+                dealii::ExcMessage(
+                  "Number of serialized velocity/pressure vectors (" +
+                  std::to_string(deserialization_parameters.n_vectors_u) + "/" +
+                  std::to_string(deserialization_parameters.n_vectors_p) +
+                  ") does not match the number of vectors to deserialize (" +
+                  std::to_string(vectors_velocity.size()) + "/" +
+                  std::to_string(vectors_pressure.size()) +
+                  "). Parameters defining the serialized vectors, e.g., the order of the time "
+                  "integrator, the number of vectors for the projection of the initial guess "
+                  "or the postprocessor, may not change at restart."));
+  }
 
   // Load potentially unfitting checkpoint triangulation of TriangulationType.
   std::shared_ptr<dealii::Triangulation<dim>> checkpoint_triangulation =

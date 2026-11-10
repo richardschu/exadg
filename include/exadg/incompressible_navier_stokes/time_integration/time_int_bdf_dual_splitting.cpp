@@ -99,11 +99,19 @@ TimeIntBDFDualSplitting<dim, Number>::get_vectors_serialization(
   std::vector<VectorType const *> & vectors_velocity,
   std::vector<VectorType const *> & vectors_pressure) const
 {
-  (void)vectors_pressure;
-
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
     vectors_velocity.push_back(&velocity_dbc[i]);
+  }
+
+  // Older solutions for the projection of the initial guess.
+  for(unsigned int i = 0; i < vector_projection_velocity.size(); i++)
+  {
+    vectors_velocity.push_back(&vector_projection_velocity[i]);
+  }
+  for(unsigned int i = 0; i < vector_projection_pressure.size(); i++)
+  {
+    vectors_pressure.push_back(&vector_projection_pressure[i]);
   }
 }
 
@@ -113,11 +121,19 @@ TimeIntBDFDualSplitting<dim, Number>::set_vectors_deserialization(
   std::vector<VectorType> const & vectors_velocity,
   std::vector<VectorType> const & vectors_pressure)
 {
-  (void)vectors_pressure;
-
   for(unsigned int i = 0; i < velocity_dbc.size(); i++)
   {
     velocity_dbc[i] = vectors_velocity[i];
+  }
+
+  // Sequence as in `get_vectors_serialization()`.
+  for(unsigned int i = 0; i < vector_projection_velocity.size(); i++)
+  {
+    vector_projection_velocity[i] = vectors_velocity[velocity_dbc.size() + i];
+  }
+  for(unsigned int i = 0; i < vector_projection_pressure.size(); i++)
+  {
+    vector_projection_pressure[i] = vectors_pressure[i];
   }
 }
 
@@ -126,7 +142,8 @@ void
 TimeIntBDFDualSplitting<dim, Number>::update_after_deserialization()
 {
   // Update the stored viscosity parameter.
-  pde_operator->update_viscosity(velocity[0]);
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+    pde_operator->update_viscosity(velocity[0]);
 }
 
 template<int dim, typename Number>

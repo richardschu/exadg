@@ -45,7 +45,9 @@ struct DeserializationParameters
       mapping_degree(dealii::numbers::invalid_unsigned_int),
       consider_mapping_write(false),
       triangulation_type(TriangulationType::Serial),
-      spatial_discretization(IncNS::SpatialDiscretization::Undefined)
+      spatial_discretization(IncNS::SpatialDiscretization::Undefined),
+      n_vectors_u(dealii::numbers::invalid_unsigned_int),
+      n_vectors_p(dealii::numbers::invalid_unsigned_int)
   {
   }
 
@@ -60,6 +62,8 @@ struct DeserializationParameters
     print_parameter(pcout, "Consider mapping", consider_mapping_write);
     print_parameter(pcout, "Triangulation type", triangulation_type);
     print_parameter(pcout, "Spatial discretization", spatial_discretization);
+    print_parameter(pcout, "Number of vectors `n_vectors_u`", n_vectors_u);
+    print_parameter(pcout, "Number of vectors `n_vectors_p`", n_vectors_p);
   }
 
   // Polynomial degrees of the finite elements used at serialization.
@@ -78,6 +82,11 @@ struct DeserializationParameters
 
   // Spatial discretization used at serialization. Relevant for incompressible Navier-Stokes only.
   IncNS::SpatialDiscretization spatial_discretization;
+
+  // Number of vectors serialized for the velocity and the pressure. Relevant for incompressible
+  // Navier-Stokes only.
+  unsigned int n_vectors_u;
+  unsigned int n_vectors_p;
 };
 
 struct RestartData

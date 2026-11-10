@@ -225,6 +225,8 @@ write_deserialization_parameters(MPI_Comm const &                  mpi_comm,
     output_archive & parameters.consider_mapping_write;
     output_archive & parameters.triangulation_type;
     output_archive & parameters.spatial_discretization;
+    output_archive & parameters.n_vectors_u;
+    output_archive & parameters.n_vectors_p;
   }
 }
 
@@ -260,6 +262,17 @@ read_deserialization_parameters(MPI_Comm const & mpi_comm, RestartData const & r
     input_archive & parameters.consider_mapping_write;
     input_archive & parameters.triangulation_type;
     input_archive & parameters.spatial_discretization;
+    try
+    {
+      input_archive & parameters.n_vectors_u;
+      input_archive & parameters.n_vectors_p;
+    }
+    catch(boost::archive::archive_exception const &)
+    {
+      // Restart files written before these entries were added.
+      parameters.n_vectors_u = dealii::numbers::invalid_unsigned_int;
+      parameters.n_vectors_p = dealii::numbers::invalid_unsigned_int;
+    }
   }
 
   // Broadcast parameters to all processes.
@@ -550,6 +563,30 @@ deserialize_triangulation(RestartData const &     restart_data,
   {
     // Note that the number of MPI processes the triangulation was
     // saved with cannot change and hence autopartitioning is disabled.
+    // deal.II checks this in debug mode only, hence read the number of
+    // processes from the .info file written by
+    // `dealii::parallel::fullydistributed::Triangulation::save()`.
+    unsigned int n_mpi_processes_saved = 0;
+    if(dealii::Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
+    {
+      std::ifstream stream(filename + ".triangulation.info");
+      AssertThrow(stream, dealii::ExcMessage("Could not read " + filename + ".triangulation.info"));
+      std::string header;
+      std::getline(stream, header);
+      unsigned int version;
+      stream >> version >> n_mpi_processes_saved;
+    }
+    n_mpi_processes_saved =
+      dealii::Utilities::MPI::broadcast(mpi_communicator, n_mpi_processes_saved, 0);
+
+    unsigned int const n_mpi_processes = dealii::Utilities::MPI::n_mpi_processes(mpi_communicator);
+    AssertThrow(n_mpi_processes_saved == n_mpi_processes,
+                dealii::ExcMessage(
+                  "The fully distributed triangulation was serialized with " +
+                  std::to_string(n_mpi_processes_saved) +
+                  " MPI processes, but is deserialized with " + std::to_string(n_mpi_processes) +
+                  ". TriangulationType::FullyDistributed requires the same number."));
+
     std::shared_ptr<dealii::parallel::fullydistributed::Triangulation<dim>> tmp =
       std::make_shared<dealii::parallel::fullydistributed::Triangulation<dim>>(mpi_communicator);
     tmp->load(filename + ".triangulation");

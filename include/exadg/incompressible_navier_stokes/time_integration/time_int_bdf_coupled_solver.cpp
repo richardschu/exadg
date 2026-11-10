@@ -83,7 +83,8 @@ void
 TimeIntBDFCoupled<dim, Number>::update_after_deserialization()
 {
   // Update the stored viscosity parameter.
-  pde_operator->update_viscosity(solution[0].block(0));
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+    pde_operator->update_viscosity(solution[0].block(0));
 }
 
 template<int dim, typename Number>

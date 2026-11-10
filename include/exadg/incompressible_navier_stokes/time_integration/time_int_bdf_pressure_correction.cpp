@@ -108,11 +108,19 @@ TimeIntBDFPressureCorrection<dim, Number>::get_vectors_serialization(
   std::vector<VectorType const *> & vectors_velocity,
   std::vector<VectorType const *> & vectors_pressure) const
 {
-  (void)vectors_velocity;
-
   for(unsigned int i = 0; i < pressure_dbc.size(); i++)
   {
     vectors_pressure.push_back(&pressure_dbc[i]);
+  }
+
+  // Older solutions for the projection of the initial guess.
+  for(unsigned int i = 0; i < vector_projection_velocity.size(); i++)
+  {
+    vectors_velocity.push_back(&vector_projection_velocity[i]);
+  }
+  for(unsigned int i = 0; i < vector_projection_pressure.size(); i++)
+  {
+    vectors_pressure.push_back(&vector_projection_pressure[i]);
   }
 }
 
@@ -122,11 +130,19 @@ TimeIntBDFPressureCorrection<dim, Number>::set_vectors_deserialization(
   std::vector<VectorType> const & vectors_velocity,
   std::vector<VectorType> const & vectors_pressure)
 {
-  (void)vectors_velocity;
-
   for(unsigned int i = 0; i < pressure_dbc.size(); i++)
   {
     pressure_dbc[i] = vectors_pressure[i];
+  }
+
+  // Sequence as in `get_vectors_serialization()`.
+  for(unsigned int i = 0; i < vector_projection_velocity.size(); i++)
+  {
+    vector_projection_velocity[i] = vectors_velocity[i];
+  }
+  for(unsigned int i = 0; i < vector_projection_pressure.size(); i++)
+  {
+    vector_projection_pressure[i] = vectors_pressure[pressure_dbc.size() + i];
   }
 }
 
@@ -135,7 +151,8 @@ void
 TimeIntBDFPressureCorrection<dim, Number>::update_after_deserialization()
 {
   // Update the stored viscosity parameter.
-  pde_operator->update_viscosity(velocity[0]);
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+    pde_operator->update_viscosity(velocity[0]);
 }
 
 template<int dim, typename Number>
