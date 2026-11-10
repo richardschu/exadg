@@ -32,6 +32,11 @@
 // clang-format on
 
 // C++
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstring>
+#include <limits>
 #include <tuple>
 
 // deal.II
@@ -1102,6 +1107,69 @@ compute_squared_fiber_stretch(
 
 template<typename Number>
 inline DEAL_II_ALWAYS_INLINE //
+  Number
+  solve_polynomial_exact(Number const & a, Number const & b, Number const & c, Number const & d)
+{
+  // Find smallest real-valued positive root of a * x^3 + b * x^2 + c * x + d = 0
+  // via closed formulas. Assumes a > 0, or a == 0 and b > 0, and d < 0, i.e.,
+  // a positive root exists.
+  if(a == 0.0)
+  {
+    // Find positive root of x^2 + p * x + q = 0.
+    // The other root is negative due to q < 0, related to complete
+    // self-penetration of the deformation state, which we are not interested
+    // in.
+    Number const p = c / b;
+    Number const q = d / b;
+    return -p * 0.5 + std::sqrt(p * p * 0.25 - q);
+  }
+  else
+  {
+    // Find smallest real-valued positive root of x^3 + r * x^2 + s * x + t = 0.
+    Number const r = b / a;
+    Number const s = c / a;
+    Number const t = d / a;
+
+    Number const Q      = (r * r - 3.0 * s) * ONE_NINTH;
+    Number const R      = (2.0 * r * r * r - 9.0 * r * s + 27.0 * t) * 0.5 * ONE_NINTH * ONE_THIRD;
+    Number const Qcubed = Q * Q * Q;
+    Number const a4     = Qcubed - R * R;
+
+    if(a4 > 0)
+    {
+      // Three real roots, return smallest positive one.
+      Number const theta = std::acos(R / std::sqrt(Qcubed));
+      Number const sqrtQ = std::sqrt(Q);
+
+      std::array<Number, 3> tmp;
+      tmp[0] = -2.0 * sqrtQ * std::cos(theta * ONE_THIRD) - r * ONE_THIRD;
+      tmp[1] =
+        -2.0 * sqrtQ * std::cos((theta + 2.0 * dealii::numbers::PI) * ONE_THIRD) - r * ONE_THIRD;
+      tmp[2] =
+        -2.0 * sqrtQ * std::cos((theta + 4.0 * dealii::numbers::PI) * ONE_THIRD) - r * ONE_THIRD;
+
+      Number x = std::numeric_limits<Number>::max();
+      for(unsigned int i = 0; i < 3; ++i)
+      {
+        if(tmp[i] > 0 and tmp[i] < x)
+        {
+          x = tmp[i];
+        }
+      }
+      return x;
+    }
+    else
+    {
+      // Single real root.
+      Number e = std::exp(ONE_THIRD * std::log(std::sqrt(-a4) + std::abs(R)));
+      e        = R > 0 ? -e : e;
+      return (e + Q / e) - r * ONE_THIRD;
+    }
+  }
+}
+
+template<typename Number>
+inline DEAL_II_ALWAYS_INLINE //
   std::pair<Number, bool>
   solve_polynomial_newton(Number const &     a,
                           Number const &     b,
@@ -1112,9 +1180,12 @@ inline DEAL_II_ALWAYS_INLINE //
                           unsigned int const max_iterations     = 10,
                           Number const &     initial_guess      = 0.0)
 {
-  // Find smallest real-valued positive root of a * x^3 + b * x^2 + c * x + d = 0.
-  auto const f    = [&](Number x) -> Number { return (a * x * x * x + b * x * x + c * x + d); };
-  auto const dfdx = [&](Number x) -> Number { return (3.0 * a * x * x + 2.0 * b * x + c); };
+  // Find smallest real-valued positive root of a * x^3 + b * x^2 + c * x + d = 0
+  // via Newton's method. Assumes a > 0, or a == 0 and b > 0, and
+  // f(initial_guess) < 0 with no positive root smaller than initial_guess.
+  auto const f      = [&](Number x) -> Number { return (a * x * x * x + b * x * x + c * x + d); };
+  auto const dfdx   = [&](Number x) -> Number { return (3.0 * a * x * x + 2.0 * b * x + c); };
+  auto const d2fdx2 = [&](Number x) -> Number { return (6.0 * a * x + 2.0 * b); };
 
   Number xnp           = initial_guess;
   Number residual_init = std::abs(f(xnp));
@@ -1122,33 +1193,53 @@ inline DEAL_II_ALWAYS_INLINE //
   bool converged = false;
   if(residual_init > absolute_tolerance)
   {
-    // Compute admissible quasi-Newton starting tangent.
-    Number dfdx_eval_old = dfdx(xnp);
-    if(dfdx_eval_old < absolute_tolerance * absolute_tolerance)
+    // Upper bound x_max for all real roots. For x >= x_e, f is increasing and
+    // convex, where x_e is the largest critical point of f, or the inflection
+    // point if f has no two distinct critical points (the vertex for a == 0).
+    // Hence, x_max = x_e if f(x_e) >= 0. Otherwise, for h >= 0
+    // f(x_e + h) = f(x_e) + f'(x_e) h + f''(x_e) / 2 h^2 + a h^3
+    // with all terms but f(x_e) non-negative, such that f(x_e + h) >= 0 holds
+    // for h = -f(x_e) / f'(x_e), h = sqrt(-2 f(x_e) / f''(x_e)) and
+    // h = cbrt(-f(x_e) / a), the smallest one is used. For a == 0, x_max is
+    // the root.
+    Number x_e;
+    if(a > 0.0)
     {
-      // Shift by absolute tolerance.
-      dfdx_eval_old = residual_init * absolute_tolerance;
+      Number const discriminant = b * b - 3.0 * a * c;
+      x_e = (discriminant > 0.0) ? (-b + std::sqrt(discriminant)) / (3.0 * a) : -b / (3.0 * a);
     }
+    else
+    {
+      x_e = -c / (2.0 * b);
+    }
+    Number const minus_f_e = std::max(-f(x_e), Number(0.0));
 
-    // Execute (quasi-)Newton loop.
+    Number h = std::numeric_limits<Number>::max();
+    if(dfdx(x_e) > 0.0)
+    {
+      h = minus_f_e / dfdx(x_e);
+    }
+    if(d2fdx2(x_e) > 0.0)
+    {
+      h = std::min(h, Number(std::sqrt(2.0 * minus_f_e / d2fdx2(x_e))));
+    }
+    if(a > 0.0)
+    {
+      h = std::min(h, Number(std::cbrt(minus_f_e / a)));
+    }
+    Number const x_max = x_e + h;
+
+    // Execute Newton loop. Newton steps are limited by x_max, and where f is
+    // not increasing, no root is between xnp and x_e, such that we continue
+    // from x_max. Right of the root, f is increasing and convex, i.e., the
+    // iteration converges monotonically.
     unsigned int n      = 0;
     Number       f_eval = f(xnp);
     do
     {
-      Number dfdx_eval = dfdx(xnp);
+      Number const dfdx_eval = dfdx(xnp);
 
-      if(dfdx_eval > absolute_tolerance * absolute_tolerance)
-      {
-        // Newton step.
-        xnp           = xnp - f_eval / dfdx_eval;
-        dfdx_eval_old = dfdx_eval;
-      }
-      else
-      {
-        // Quasi-Newton step.
-        xnp = xnp - f_eval / dfdx_eval_old;
-      }
-
+      xnp       = (dfdx_eval > 0.0) ? std::min(xnp - f_eval / dfdx_eval, x_max) : x_max;
       f_eval    = f(xnp);
       converged = (std::abs(f_eval) < absolute_tolerance) or
                   (std::abs(f_eval) < residual_init * relative_tolerance);
@@ -1204,67 +1295,32 @@ inline DEAL_II_ALWAYS_INLINE //
         // invalid_jacobian_treatment 3 : Only return J = tol, while F is not modified.
         Jm1[n] = tol - 1.0;
       }
-      else if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftExact)
+      else if constexpr(invalid_jacobian_treatment ==
+                          InvalidJacobianTreatment::IdentityShiftExact or
+                        invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftNewton)
       {
-        // invalid_jacobian_treatment 4 : Always update, but enforce J = tol by adding a scaled unit
-        // matrix. Scale factor determined by solving for the positive root of the quadratic/cubic
-        // polynomial via an exact formula.
-        Number fac;
+        // Always update, but enforce J = tol by adding a scaled unit matrix,
+        // i.e., F + fac I. The scale factor fac is the smallest positive root of
+        // det(F + x I) - tol = a * x^3 + b * x^2 + c * x + d = 0, determined via
+        // an exact formula (IdentityShiftExact) or a Newton solver
+        // (IdentityShiftNewton).
+        Number a, b, c, d;
         if constexpr(dim == 2)
         {
-          // Find positive root of x^2 + p * x + q = 0.
-          // The smaller root will always be negative related to complete self-penetration of the
-          // deformation state, which we are not interested in.
-          Number const p = F[0][0][n] + F[1][1][n];
-          Number const q = F[0][0][n] * F[1][1][n] - F[0][1][n] * F[1][0][n] - tol;
-          fac            = -p * 0.5 + sqrt(p * p * 0.25 - q);
+          a = 0.0;
+          b = 1.0;
+          c = F[0][0][n] + F[1][1][n];
+          d = F[0][0][n] * F[1][1][n] - F[0][1][n] * F[1][0][n] - tol;
         }
         else if constexpr(dim == 3)
         {
-          // Find smallest real-valued positive root of x^3 + b * x^2 + c * x + d = 0.
-          Number const b = F[0][0][n] + F[1][1][n] + F[2][2][n];
-          Number const c = F[0][0][n] * F[1][1][n] - F[0][1][n] * F[1][0][n] +
-                           F[0][0][n] * F[2][2][n] - F[0][2][n] * F[2][0][n] +
-                           F[1][1][n] * F[2][2][n] - F[1][2][n] * F[2][1][n];
-          Number const d =
-            F[0][0][n] * F[1][1][n] * F[2][2][n] - F[0][0][n] * F[1][2][n] * F[2][1][n] -
-            F[0][1][n] * F[1][0][n] * F[2][2][n] + F[0][1][n] * F[1][2][n] * F[2][0][n] +
-            F[0][2][n] * F[1][0][n] * F[2][1][n] - F[0][2][n] * F[1][1][n] * F[2][0][n] - tol;
-
-          Number const Q = (b * b - 3.0 * c) * ONE_NINTH;
-          Number const R = (2.0 * b * b * b - 9.0 * b * c + 27.0 * d) * 0.5 * ONE_NINTH * ONE_THIRD;
-          Number const Qcubed = Q * Q * Q;
-          Number const a4     = Qcubed - R * R;
-
-          if(a4 > 0)
-          {
-            // Three real roots, return smallest positive one.
-            Number const theta = std::acos(R / std::sqrt(Qcubed));
-            Number const sqrtQ = std::sqrt(Q);
-
-            std::vector<Number> tmp(3);
-            tmp[0] = -2.0 * sqrtQ * std::cos(theta * ONE_THIRD) - b * ONE_THIRD;
-            tmp[1] = -2.0 * sqrtQ * std::cos((theta + 2.0 * dealii::numbers::PI) * ONE_THIRD) -
-                     b * ONE_THIRD;
-            tmp[2] = -2.0 * sqrtQ * std::cos((theta + 4.0 * dealii::numbers::PI) * ONE_THIRD) -
-                     b * ONE_THIRD;
-
-            fac = std::numeric_limits<Number>::max();
-            for(unsigned int i = 0; i < 3; ++i)
-            {
-              if(tmp[i] > 0 and tmp[i] < fac)
-              {
-                fac = tmp[i];
-              }
-            }
-          }
-          else
-          {
-            // Single real root.
-            Number e = std::exp(ONE_THIRD * std::log(std::sqrt(-a4) + std::abs(R)));
-            e        = R > 0 ? -e : e;
-            fac      = (e + Q / e) - b * ONE_THIRD;
-          }
+          a = 1.0;
+          b = F[0][0][n] + F[1][1][n] + F[2][2][n];
+          c = F[0][0][n] * F[1][1][n] - F[0][1][n] * F[1][0][n] + F[0][0][n] * F[2][2][n] -
+              F[0][2][n] * F[2][0][n] + F[1][1][n] * F[2][2][n] - F[1][2][n] * F[2][1][n];
+          d = F[0][0][n] * F[1][1][n] * F[2][2][n] - F[0][0][n] * F[1][2][n] * F[2][1][n] -
+              F[0][1][n] * F[1][0][n] * F[2][2][n] + F[0][1][n] * F[1][2][n] * F[2][0][n] +
+              F[0][2][n] * F[1][0][n] * F[2][1][n] - F[0][2][n] * F[1][1][n] * F[2][0][n] - tol;
         }
         else
         {
@@ -1272,59 +1328,32 @@ inline DEAL_II_ALWAYS_INLINE //
                       dealii::ExcMessage("Unexpected dim. Choose dim == 2 or dim == 3."));
         }
 
-        for(unsigned int d = 0; d < dim; ++d)
-        {
-          F[d][d][n] += fac;
-        }
-
-        // J = tol follows by construction.
-        Jm1[n] = tol - 1.0;
-      }
-      else if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftNewton)
-      {
-        // invalid_jacobian_treatment 5 : Always update, but enforce J = tol by adding a scaled unit
-        // matrix. Scale factor determined by solving for the positive root of the quadratic/cubic
-        // polynomial via a Newton solver.
         Number fac;
-        bool   converged;
-        if constexpr(dim == 2)
+        if constexpr(invalid_jacobian_treatment == InvalidJacobianTreatment::IdentityShiftExact)
         {
-          // Find positive root of x^2 + p * x + q = 0.
-          Number const p = F[0][0][n] + F[1][1][n];
-          Number const q = F[0][0][n] * F[1][1][n] - F[0][1][n] * F[1][0][n] - tol;
-          std::tie(fac, converged) =
-            solve_polynomial_newton<Number>(0, 1.0, p, q, tol * tol, tol, 5, 0.0);
-        }
-        else if constexpr(dim == 3)
-        {
-          // Find smallest real-valued positive root of x^3 + b * x^2 + c * x + d = 0.
-          Number const b = F[0][0][n] + F[1][1][n] + F[2][2][n];
-          Number const c = F[0][0][n] * F[1][1][n] - F[0][1][n] * F[1][0][n] +
-                           F[0][0][n] * F[2][2][n] - F[0][2][n] * F[2][0][n] +
-                           F[1][1][n] * F[2][2][n] - F[1][2][n] * F[2][1][n];
-          Number const d =
-            F[0][0][n] * F[1][1][n] * F[2][2][n] - F[0][0][n] * F[1][2][n] * F[2][1][n] -
-            F[0][1][n] * F[1][0][n] * F[2][2][n] + F[0][1][n] * F[1][2][n] * F[2][0][n] +
-            F[0][2][n] * F[1][0][n] * F[2][1][n] - F[0][2][n] * F[1][1][n] * F[2][0][n] - tol;
-          std::tie(fac, converged) =
-            solve_polynomial_newton<Number>(1.0, b, c, d, tol * tol, tol, 5, 0.0);
+          fac = solve_polynomial_exact<Number>(a, b, c, d);
         }
         else
         {
-          AssertThrow(dim != 2 and dim != 3,
-                      dealii::ExcMessage("Unexpected dim. Choose dim == 2 or dim == 3."));
-        }
+          // Absolute tolerance on det(F + x I) - tol, limited by the round-off
+          // in evaluating the polynomial.
+          Number const absolute_tolerance =
+            std::max(Number(1e-8) * tol, Number(100.0) * std::numeric_limits<Number>::epsilon());
+          bool converged;
+          std::tie(fac, converged) =
+            solve_polynomial_newton<Number>(a, b, c, d, absolute_tolerance, 0.0, 20, 0.0);
 
-        if(converged)
-        {
-          for(unsigned int d = 0; d < dim; ++d)
+          // Fall back to the exact formula if Newton's method did not converge,
+          // such that F and J remain consistent.
+          if(not converged)
           {
-            F[d][d][n] += fac;
+            fac = solve_polynomial_exact<Number>(a, b, c, d);
           }
         }
-        else
+
+        for(unsigned int i = 0; i < dim; ++i)
         {
-          std::cout << "Newton algorithm did not converge.\n";
+          F[i][i][n] += fac;
         }
 
         // J = tol follows by construction.

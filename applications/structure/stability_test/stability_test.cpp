@@ -719,8 +719,8 @@ main(int argc, char ** argv)
     bool constexpr use_max_err     = true;
     bool constexpr use_random_sign = true;
 
-    CacheLevel const cache_level =
-      stab_test ? CacheLevel::None : CacheLevel::None /* None, Scalars, ScalarsAndTensors */;
+    // CacheLevel::None, CacheLevel::Scalars or CacheLevel::ScalarsAndTensors.
+    CacheLevel const cache_level = CacheLevel::None;
 
     // Gradient and increment scale.
     unsigned int const n_points_over_log_scale = stab_test ? 1e3 : 1;

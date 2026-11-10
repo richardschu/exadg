@@ -1085,12 +1085,38 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::do_cell_integral_nonlinear(IntegratorCell & integrator) const
 {
-  std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
+  // Only the variants modifying F and J in place change the evaluation in the
+  // integration points.
+  switch(this->operator_data.invalid_jacobian_treatment)
+  {
+    case InvalidJacobianTreatment::None:
+    case InvalidJacobianTreatment::GlobalQuasiNewton:
+    case InvalidJacobianTreatment::LocalQuasiNewton:
+      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::None>(integrator);
+      return;
+    case InvalidJacobianTreatment::ClampJacobian:
+      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::ClampJacobian>(integrator);
+      return;
+    case InvalidJacobianTreatment::IdentityShiftExact:
+      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::IdentityShiftExact>(
+        integrator);
+      return;
+    case InvalidJacobianTreatment::IdentityShiftNewton:
+      do_cell_integral_nonlinear_templated<InvalidJacobianTreatment::IdentityShiftNewton>(
+        integrator);
+      return;
+  }
 
-  InvalidJacobianTreatment constexpr invalid_jacobian_treatment = InvalidJacobianTreatment::None;
-  AssertThrow(this->operator_data.invalid_jacobian_treatment == InvalidJacobianTreatment::None,
-              dealii::ExcMessage(
-                "Only InvalidJacobianTreatment::None is currently implemented here."));
+  AssertThrow(false, dealii::ExcMessage("This InvalidJacobianTreatment is not implemented."));
+}
+
+template<int dim, typename Number>
+template<InvalidJacobianTreatment invalid_jacobian_treatment>
+void
+NonLinearOperator<dim, Number>::do_cell_integral_nonlinear_templated(
+  IntegratorCell & integrator) const
+{
+  std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
 
   if(this->operator_data.spatial_integration and (not this->operator_data.force_material_residual))
   {
@@ -1204,12 +1230,35 @@ template<int dim, typename Number>
 void
 NonLinearOperator<dim, Number>::do_cell_integral(IntegratorCell & integrator) const
 {
-  std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
+  // Only the variants modifying F and J in place change the evaluation in the
+  // integration points.
+  switch(this->operator_data.invalid_jacobian_treatment)
+  {
+    case InvalidJacobianTreatment::None:
+    case InvalidJacobianTreatment::GlobalQuasiNewton:
+    case InvalidJacobianTreatment::LocalQuasiNewton:
+      do_cell_integral_templated<InvalidJacobianTreatment::None>(integrator);
+      return;
+    case InvalidJacobianTreatment::ClampJacobian:
+      do_cell_integral_templated<InvalidJacobianTreatment::ClampJacobian>(integrator);
+      return;
+    case InvalidJacobianTreatment::IdentityShiftExact:
+      do_cell_integral_templated<InvalidJacobianTreatment::IdentityShiftExact>(integrator);
+      return;
+    case InvalidJacobianTreatment::IdentityShiftNewton:
+      do_cell_integral_templated<InvalidJacobianTreatment::IdentityShiftNewton>(integrator);
+      return;
+  }
 
-  InvalidJacobianTreatment constexpr invalid_jacobian_treatment = InvalidJacobianTreatment::None;
-  AssertThrow(this->operator_data.invalid_jacobian_treatment == InvalidJacobianTreatment::None,
-              dealii::ExcMessage(
-                "Only InvalidJacobianTreatment::None is currently implemented here."));
+  AssertThrow(false, dealii::ExcMessage("This InvalidJacobianTreatment is not implemented."));
+}
+
+template<int dim, typename Number>
+template<InvalidJacobianTreatment invalid_jacobian_treatment>
+void
+NonLinearOperator<dim, Number>::do_cell_integral_templated(IntegratorCell & integrator) const
+{
+  std::shared_ptr<Material<dim, Number>> material = this->material_handler.get_material();
 
   if(this->operator_data.spatial_integration)
   {

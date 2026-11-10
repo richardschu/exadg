@@ -267,6 +267,15 @@ private:
   do_cell_integral_nonlinear(IntegratorCell & integrator) const;
 
   /*
+   * Implementation of do_cell_integral_nonlinear() for the treatment of
+   * inadmissible deformation states in the integration points, see
+   * InvalidJacobianTreatment.
+   */
+  template<InvalidJacobianTreatment invalid_jacobian_treatment>
+  void
+  do_cell_integral_nonlinear_templated(IntegratorCell & integrator) const;
+
+  /*
    * Computes boundary integrals
    *
    * inhomogeneous operator:
@@ -365,6 +374,14 @@ private:
    */
   void
   do_cell_integral(IntegratorCell & integrator) const override;
+
+  /*
+   * Implementation of do_cell_integral() for the treatment of inadmissible
+   * deformation states in the integration points, see InvalidJacobianTreatment.
+   */
+  template<InvalidJacobianTreatment invalid_jacobian_treatment>
+  void
+  do_cell_integral_templated(IntegratorCell & integrator) const;
 
   /**
    * Overwrite members in OperatorBase to optionally use spatial integration via

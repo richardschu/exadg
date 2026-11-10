@@ -1,0 +1,74 @@
+dim = 2, tol = 1.0000e-03:
+  admissible, J = 1.0600e+00:
+    None                 J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    IdentityShiftNewton  J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+  0 < J < tol, diagonal, J = 5.0000e-04:
+    None                 J =  5.0000e-04, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J =  5.0000e-04, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J =  5.0000e-04, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  4.9950e-04, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  4.9950e-04, consistent: yes
+  J < 0, diagonal, J = -5.0000e-01:
+    None                 J = -5.0000e-01, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J = -5.0000e-01, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J = -5.0000e-01, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0067e-01, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0067e-01, consistent: yes
+  J < 0, with shear, J = -4.3000e-01:
+    None                 J = -4.3000e-01, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J = -4.3000e-01, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J = -4.3000e-01, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.2342e-01, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.2342e-01, consistent: yes
+  J < 0, decreasing det(F + x I), J = -1.0000e-01:
+    None                 J = -1.0000e-01, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J = -1.0000e-01, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J = -1.0000e-01, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0143e-01, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0143e-01, consistent: yes
+
+dim = 3, tol = 1.0000e-03:
+  admissible, J = 1.0600e+00:
+    None                 J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+    IdentityShiftNewton  J =  1.0600e+00, det(F) =  1.0600e+00, c =  0.0000e+00, consistent: yes
+  0 < J < tol, diagonal, J = 5.0000e-04:
+    None                 J =  5.0000e-04, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J =  5.0000e-04, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J =  5.0000e-04, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) =  5.0000e-04, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  4.9900e-04, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  4.9900e-04, consistent: yes
+  J < 0, diagonal, J = -5.0000e-01:
+    None                 J = -5.0000e-01, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J = -5.0000e-01, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J = -5.0000e-01, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) = -5.0000e-01, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0044e-01, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0044e-01, consistent: yes
+  J < 0, with shear, J = -4.3000e-01:
+    None                 J = -4.3000e-01, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J = -4.3000e-01, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J = -4.3000e-01, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) = -4.3000e-01, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.2317e-01, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.2317e-01, consistent: yes
+  J < 0, decreasing det(F + x I), J = -1.0000e-01:
+    None                 J = -1.0000e-01, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    GlobalQuasiNewton    J = -1.0000e-01, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    LocalQuasiNewton     J = -1.0000e-01, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    ClampJacobian        J =  1.0000e-03, det(F) = -1.0000e-01, c =  0.0000e+00, consistent: yes
+    IdentityShiftExact   J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0095e-01, consistent: yes
+    IdentityShiftNewton  J =  1.0000e-03, det(F) =  1.0000e-03, c =  5.0095e-01, consistent: yes
+

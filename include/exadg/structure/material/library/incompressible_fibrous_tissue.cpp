@@ -2208,11 +2208,14 @@ IncompressibleFibrousTissue<dim,
 }
 
 // clang-format off
-// Note that the higher check types (third template argument) are missing.
+// InvalidJacobianTreatment::GlobalQuasiNewton uses the instances with
+// InvalidJacobianTreatment::None, since the integration points are treated
+// identically. InvalidJacobianTreatment::LocalQuasiNewton requires
+// stable_formulation == false and CacheLevel::ScalarsAndTensors.
+
 template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::None, true, CacheLevel::None>;
 template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-
 template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::None, false, CacheLevel::None>;
 template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
@@ -2220,7 +2223,6 @@ template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::N
 template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::None, true, CacheLevel::None>;
 template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-
 template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::None, false, CacheLevel::None>;
 template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
@@ -2228,7 +2230,6 @@ template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::
 template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::None, true, CacheLevel::None>;
 template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-
 template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::None, false, CacheLevel::None>;
 template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
@@ -2236,10 +2237,98 @@ template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::N
 template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::None, true, CacheLevel::None>;
 template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-
 template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::None, false, CacheLevel::None>;
 template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
 template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftExact, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftExact, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftNewton, true, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::None>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::Scalars>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::IdentityShiftNewton, false, CacheLevel::ScalarsAndTensors>;
+
+template class IncompressibleFibrousTissue<2, float, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<2, double, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, float, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
+template class IncompressibleFibrousTissue<3, double, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
 // clang-format on
 
 } // namespace Structure
