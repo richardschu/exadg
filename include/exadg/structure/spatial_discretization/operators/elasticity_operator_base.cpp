@@ -189,15 +189,6 @@ template<int dim, typename Number>
 void
 ElasticityOperatorBase<dim, Number>::set_inhomogeneous_constrained_values(VectorType & dst) const
 {
-  // periodicity and hanging node constraints are enforced strongly for continuous spaces
-  if(not this->is_dg)
-  {
-    unsigned int const dof_index_inhomogeneous = this->get_dof_index_inhomogeneous();
-    dealii::AffineConstraints<Number> const & constraints =
-      this->matrix_free->get_affine_constraints(dof_index_inhomogeneous);
-    constraints.distribute(dst);
-  }
-
   // standard Dirichlet boundary conditions
   std::map<dealii::types::global_dof_index, double> boundary_values;
   for(auto dbc : operator_data.bc->dirichlet_bc)
@@ -284,6 +275,17 @@ ElasticityOperatorBase<dim, Number>::set_inhomogeneous_constrained_values(Vector
 
   // zero out ghost values to return to default state
   dst.zero_out_ghost_values();
+
+  // Periodicity, hanging node and zero normal constraints are enforced strongly
+  // for continuous spaces. They may refer to Dirichlet degrees of freedom, so
+  // we resolve them after setting the Dirichlet values.
+  if(not this->is_dg)
+  {
+    unsigned int const dof_index_inhomogeneous = this->get_dof_index_inhomogeneous();
+    dealii::AffineConstraints<Number> const & constraints =
+      this->matrix_free->get_affine_constraints(dof_index_inhomogeneous);
+    constraints.distribute(dst);
+  }
 }
 
 template<int dim, typename Number>

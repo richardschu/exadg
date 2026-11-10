@@ -1660,6 +1660,13 @@ Operator<dim, Number>::solve_nonlinear(VectorType &       sol,
   // solve nonlinear problem
   auto const iter = newton_solver->solve(sol, update);
 
+  // The Newton solver does not update constrained degrees of freedom with
+  // entries, e.g., hanging nodes or zero normal displacement on curved
+  // boundaries, since `dealii::MatrixFree` resolves them when reading. Users of
+  // the solution outside `dealii::MatrixFree`, e.g., mappings, output or point
+  // evaluation, read all values, so we resolve the constraints here.
+  elasticity_operator_nonlinear.set_inhomogeneous_constrained_values(sol);
+
   return iter;
 }
 
