@@ -22,6 +22,7 @@
 // deal.II
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/lac/full_matrix.h>
 
 // C/C++
 #include <numeric>
@@ -272,6 +273,25 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
     displacement_vector_ghosted.update_ghost_values();
   }
 
+  // If the degree of the finite element of `dof_handler` differs from the
+  // degree of the mapping, e.g., on p-multigrid levels, we evaluate the
+  // displacement field in the support points of the mapping, i.e., the
+  // Gauss-Lobatto points in hierarchic order.
+  bool const interpolate_displacement =
+    vector_initialized and
+    dof_handler.get_fe().base_element(0).degree != mapping_q_cache->get_degree();
+  dealii::FullMatrix<double> shape_values;
+  if(interpolate_displacement)
+  {
+    dealii::FiniteElement<dim> const & fe = dof_handler.get_fe();
+    dealii::QGaussLobatto<dim> const   quadrature(mapping_q_cache->get_degree() + 1);
+    shape_values.reinit(fe.n_dofs_per_cell(), quadrature.size());
+    for(unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+      for(unsigned int q = 0; q < quadrature.size(); ++q)
+        shape_values(i, q) =
+          fe.shape_value(i, quadrature.point(this->hierarchic_to_lexicographic_numbering[q]));
+  }
+
   // Set up `dealii::FEValues` with `dealii::FE_Nothing` and the Gauss-Lobatto
   // quadrature to reduce setup cost, as we only use the geometry information
   // (this means we need to call `fe_values.reinit(cell)` with
@@ -351,7 +371,13 @@ MappingDoFVector<dim, Number>::initialize_mapping_from_dof_vector(
           {
             std::pair<unsigned int, unsigned int> const id = fe.system_to_component_index(i);
 
-            if(fe.dofs_per_vertex > 0) // dealii::FE_Q
+            if(interpolate_displacement)
+            {
+              Number const displacement = displacement_vector_ghosted(dof_indices[i]);
+              for(unsigned int q = 0; q < scalar_dofs_per_cell; ++q)
+                grid_coordinates[q][id.first] += shape_values(i, q) * displacement;
+            }
+            else if(fe.dofs_per_vertex > 0) // dealii::FE_Q
             {
               grid_coordinates[id.second][id.first] += displacement_vector_ghosted(dof_indices[i]);
             }
