@@ -480,6 +480,13 @@ private:
   void
   initialize_dof_handler_and_constraints();
 
+  /*
+   * Initializes the constraints of the displacement field. The zero normal
+   * constraints use the normal vectors of `mapping_normal`.
+   */
+  void
+  initialize_affine_constraints(dealii::Mapping<dim> const & mapping_normal);
+
   std::string
   get_dof_name() const;
 

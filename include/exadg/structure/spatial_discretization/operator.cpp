@@ -85,70 +85,7 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
   // enumerate degrees of freedom
   dof_handler.distribute_dofs(*fe);
 
-  // affine constraints
-  affine_constraints_periodicity_and_hanging_nodes.clear();
-
-  add_hanging_node_and_periodicity_constraints(affine_constraints_periodicity_and_hanging_nodes,
-                                               *this->grid,
-                                               dof_handler);
-
-  // copy periodicity and hanging node constraints, and add further constraints stemming from
-  // Dirichlet boundary conditions
-  affine_constraints.copy_from(affine_constraints_periodicity_and_hanging_nodes);
-
-  // use all the component masks defined by the user
-  std::map<dealii::types::boundary_id, dealii::ComponentMask> map_bid_to_mask =
-    boundary_descriptor->dirichlet_bc_component_mask;
-
-  // Dirichlet constraints
-  std::map<dealii::types::boundary_id, dealii::ComponentMask> map_boundary_id_to_component_mask;
-
-  // collect all Dirichlet boundary IDs in a set:
-  // DirichletCached boundary IDs are already provided as a set
-  std::set<dealii::types::boundary_id> all_dirichlet_bids =
-    boundary_descriptor->dirichlet_cached_bc;
-
-  // standard Dirichlet boundaries: extract keys from map
-  fill_keys_of_map_into_set(all_dirichlet_bids, boundary_descriptor->dirichlet_bc);
-
-  // fill with default mask if no mask has been defined
-  fill_map_bid_to_mask_with_default_mask(map_bid_to_mask, all_dirichlet_bids);
-
-  // call deal.II utility function to add Dirichlet constraints
-  add_homogeneous_dirichlet_constraints(affine_constraints, dof_handler, map_bid_to_mask);
-
-  // Zero normal displacement: deal.II skips degrees of freedom constrained
-  // already, i.e., Dirichlet values win where both boundaries meet. The
-  // constraints are homogeneous and couple the components of a support point
-  // like hanging nodes, so we also add them to the constraints without
-  // Dirichlet degrees of freedom used for the inhomogeneous evaluation.
-  if(not(boundary_descriptor->dirichlet_normal_bc.empty()))
-  {
-    dealii::AffineConstraints<Number> affine_constraints_normal;
-    affine_constraints_normal.copy_from(affine_constraints);
-    dealii::VectorTools::compute_no_normal_flux_constraints(
-      dof_handler,
-      0 /* first_vector_component */,
-      boundary_descriptor->dirichlet_normal_bc,
-      affine_constraints_normal,
-      *mapping);
-
-    for(auto const & line : affine_constraints_normal.get_lines())
-    {
-      if(not(affine_constraints.is_constrained(line.index)))
-      {
-        affine_constraints.add_constraint(line.index, line.entries, line.inhomogeneity);
-        affine_constraints_periodicity_and_hanging_nodes.add_constraint(line.index,
-                                                                        line.entries,
-                                                                        line.inhomogeneity);
-      }
-    }
-  }
-
-  // compress constraints *once after* complete setup, since affine constraints to copy from need to
-  // be non-closed to add further constraints
-  affine_constraints_periodicity_and_hanging_nodes.close();
-  affine_constraints.close();
+  initialize_affine_constraints(*mapping);
 
   pcout << std::endl
         << "Continuous Galerkin finite element discretization:" << std::endl
@@ -223,6 +160,76 @@ Operator<dim, Number>::initialize_dof_handler_and_constraints()
     print_parameter(pcout, "number of dofs per cell", fe_vector_postprocessing->n_dofs_per_cell());
     print_parameter(pcout, "number of dofs (total)", dof_handler_vector_postprocessing->n_dofs());
   }
+}
+
+template<int dim, typename Number>
+void
+Operator<dim, Number>::initialize_affine_constraints(dealii::Mapping<dim> const & mapping_normal)
+{
+  // affine constraints
+  affine_constraints_periodicity_and_hanging_nodes.clear();
+
+  add_hanging_node_and_periodicity_constraints(affine_constraints_periodicity_and_hanging_nodes,
+                                               *this->grid,
+                                               dof_handler);
+
+  // copy periodicity and hanging node constraints, and add further constraints stemming from
+  // Dirichlet boundary conditions
+  affine_constraints.copy_from(affine_constraints_periodicity_and_hanging_nodes);
+
+  // use all the component masks defined by the user
+  std::map<dealii::types::boundary_id, dealii::ComponentMask> map_bid_to_mask =
+    boundary_descriptor->dirichlet_bc_component_mask;
+
+  // Dirichlet constraints
+  std::map<dealii::types::boundary_id, dealii::ComponentMask> map_boundary_id_to_component_mask;
+
+  // collect all Dirichlet boundary IDs in a set:
+  // DirichletCached boundary IDs are already provided as a set
+  std::set<dealii::types::boundary_id> all_dirichlet_bids =
+    boundary_descriptor->dirichlet_cached_bc;
+
+  // standard Dirichlet boundaries: extract keys from map
+  fill_keys_of_map_into_set(all_dirichlet_bids, boundary_descriptor->dirichlet_bc);
+
+  // fill with default mask if no mask has been defined
+  fill_map_bid_to_mask_with_default_mask(map_bid_to_mask, all_dirichlet_bids);
+
+  // call deal.II utility function to add Dirichlet constraints
+  add_homogeneous_dirichlet_constraints(affine_constraints, dof_handler, map_bid_to_mask);
+
+  // Zero normal displacement: deal.II skips degrees of freedom constrained
+  // already, i.e., Dirichlet values win where both boundaries meet. The
+  // constraints are homogeneous and couple the components of a support point
+  // like hanging nodes, so we also add them to the constraints without
+  // Dirichlet degrees of freedom used for the inhomogeneous evaluation.
+  if(not(boundary_descriptor->dirichlet_normal_bc.empty()))
+  {
+    dealii::AffineConstraints<Number> affine_constraints_normal;
+    affine_constraints_normal.copy_from(affine_constraints);
+    dealii::VectorTools::compute_no_normal_flux_constraints(
+      dof_handler,
+      0 /* first_vector_component */,
+      boundary_descriptor->dirichlet_normal_bc,
+      affine_constraints_normal,
+      mapping_normal);
+
+    for(auto const & line : affine_constraints_normal.get_lines())
+    {
+      if(not(affine_constraints.is_constrained(line.index)))
+      {
+        affine_constraints.add_constraint(line.index, line.entries, line.inhomogeneity);
+        affine_constraints_periodicity_and_hanging_nodes.add_constraint(line.index,
+                                                                        line.entries,
+                                                                        line.inhomogeneity);
+      }
+    }
+  }
+
+  // compress constraints *once after* complete setup, since affine constraints to copy from need to
+  // be non-closed to add further constraints
+  affine_constraints_periodicity_and_hanging_nodes.close();
+  affine_constraints.close();
 }
 
 template<int dim, typename Number>

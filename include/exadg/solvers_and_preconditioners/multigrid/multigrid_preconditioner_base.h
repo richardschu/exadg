@@ -191,6 +191,20 @@ protected:
       constraints);
 
   /*
+   * Fills the constraints of level `l` in the global-coarsening branch:
+   * hanging nodes, periodicity, Dirichlet and zero normal constraints, the
+   * latter with the normal vectors of `mapping_normal`.
+   */
+  void
+  fill_level_constraints(dealii::AffineConstraints<MultigridNumber> & affine_constraints,
+                         unsigned int const                           l,
+                         dealii::DoFHandler<dim> const &              dof_handler,
+                         bool const                                   is_singular,
+                         Map_DBC const &                              dirichlet_bc,
+                         Map_DBC_ComponentMask const &                dirichlet_bc_component_mask,
+                         dealii::Mapping<dim> const &                 mapping_normal) const;
+
+  /*
    * Transfer operators.
    */
   virtual void
