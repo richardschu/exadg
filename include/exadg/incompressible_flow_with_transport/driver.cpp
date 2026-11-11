@@ -121,6 +121,7 @@ Driver<dim, Number>::setup()
       ale_mapping->update(time,
                           false /* print_solver_info */,
                           this->fluid_time_integrator->get_number_of_time_steps());
+      application->fluid->update_after_grid_motion(time);
     };
 
     helpers_ale->update_pde_operator_after_grid_motion = [&]() {

@@ -163,10 +163,11 @@ SolverFluid<dim, Number>::setup(std::shared_ptr<FluidFSI::ApplicationBase<dim, N
   helpers_ale = std::make_shared<HelpersALE<dim, Number>>();
 
   // The solver info contains wall times, which are not printed in tests.
-  helpers_ale->move_grid = [&, is_test](double const & time) {
+  helpers_ale->move_grid = [&, is_test, application](double const & time) {
     ale_mapping->update(time,
                         time_integrator->print_solver_info() and not(is_test),
                         this->time_integrator->get_number_of_time_steps());
+    application->update_after_grid_motion(time);
   };
 
   helpers_ale->update_pde_operator_after_grid_motion = [&]() {

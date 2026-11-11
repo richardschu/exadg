@@ -351,6 +351,18 @@ public:
   virtual std::shared_ptr<IncNS::PostProcessorBase<dim, Number>>
   create_postprocessor() = 0;
 
+  /*
+   * Called after each motion of the grid, i.e., after the ALE mapping has been
+   * updated to `time`, and before the dependent data structures are updated.
+   * Applications may update data depending on the mapping here, e.g., boundary
+   * data on moving boundaries. The default implementation does nothing.
+   */
+  virtual void
+  update_after_grid_motion(double const time)
+  {
+    (void)time;
+  }
+
   Poisson::Parameters const &
   get_parameters_ale_poisson() const
   {

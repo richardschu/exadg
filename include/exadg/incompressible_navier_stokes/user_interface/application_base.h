@@ -149,6 +149,18 @@ public:
     return mesh_motion;
   }
 
+  /*
+   * Called after each motion of the grid, i.e., after the ALE mapping has been
+   * updated to `time`, and before the dependent data structures are updated.
+   * Applications may update data depending on the mapping here, e.g., boundary
+   * data on moving boundaries. The default implementation does nothing.
+   */
+  virtual void
+  update_after_grid_motion(double const time)
+  {
+    (void)time;
+  }
+
   // Poisson-type mesh motion (solve PDE problem)
   void
   setup_poisson(std::shared_ptr<Grid<dim> const> const & grid)
