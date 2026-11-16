@@ -243,10 +243,12 @@ public:
   /*
    * Fill a DoF vector with velocity Dirichlet values on Dirichlet boundaries.
    *
-   * Note that this function only works as long as one uses a nodal dealii::FE_DGQ element with
-   * Gauss-Lobatto points. Otherwise, the quadrature formula used in this function does not match
-   * the nodes of the element, and the values injected by this function into the DoF vector are not
-   * the degrees of freedom of the underlying finite element space.
+   * Note that this function only works for nodal elements whose nodes match
+   * the quadrature formula used in this function: a dealii::FE_DGQ element
+   * with Gauss-Lobatto points on hypercubes, and a dealii::FE_SimplexDGP
+   * element with its support points on simplices. Otherwise, the values
+   * injected by this function into the DoF vector are not the degrees of
+   * freedom of the underlying finite element space.
    */
   void
   interpolate_velocity_dirichlet_bc(VectorType & dst, double const & time) const;
