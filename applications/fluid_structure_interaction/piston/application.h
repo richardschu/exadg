@@ -175,7 +175,7 @@ struct Data
   double amplitude         = 0.005;
   double omega             = dealii::numbers::PI;
 
-  double abs_tol = 1.e-14;
+  double abs_tol = 1.e-11;
   double rel_tol = 1.e-10;
 };
 
