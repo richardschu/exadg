@@ -28,8 +28,8 @@
  * Serino, Banks, Henshaw and Schwendeman, J. Comput. Phys. 399 (2019) 108923.
  *
  * The structure occupies (0,L) x (-H,0) in its reference configuration, the
- * fluid (0,L) x (d(t),H) with the interface at y = d(t). All motion is vertical:
- * the linear elastic structure (plane strain) is a standing wave
+ * fluid (0,L) x (d(t),H) with the interface at y = d(t). All motion is
+ * vertical: the linear elastic structure (plane strain) is a standing wave
  *   d_s(Y,t) = 2 alpha sin(omega t) sin(k (Y + H)),  k = omega / c_p,
  *   c_p = sqrt((lambda + 2 mu) / rho_s),
  * clamped at Y = -H, with the interface displacement d(t) = a sin(omega t),
