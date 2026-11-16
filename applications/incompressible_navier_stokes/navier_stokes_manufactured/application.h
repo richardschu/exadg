@@ -522,7 +522,12 @@ private:
     this->param.order_extrapolation_pressure_nbc =
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
+    // CONSISTENT SPLITTING SCHEME
+    this->param.order_extrapolation_pressure_rhs = this->param.order_extrapolation_pressure_nbc;
+
+    // momentum step of the consistent splitting scheme as the viscous step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+       this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
     {
       LinearSolver const linear_solver = treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit ?
           LinearSolver::CG : LinearSolver::FGMRES;

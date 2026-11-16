@@ -320,14 +320,6 @@ TimeIntBDF<dim, Number>::advance_one_timestep_partitioned_solve(bool const first
                 dealii::ExcMessage("TemporalDiscretization::BDFCoupledSolution cannot "
                                    "recover velocity and pressure independently."));
   }
-  else if(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
-  {
-    AssertThrow(
-      not(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting and
-          this->store_solution),
-      dealii::ExcMessage("Storing the previous solution in a partitioned scheme is not"
-                         "supported for TemporalDiscretization::BDFConsistentSplitting."));
-  }
 
   if(update_velocity or update_pressure)
   {

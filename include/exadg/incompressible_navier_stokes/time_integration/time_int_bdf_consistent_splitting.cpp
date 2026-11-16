@@ -117,12 +117,20 @@ template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplitting<dim, Number>::initialize_current_solution()
 {
+  if(this->param.ale_formulation)
+    this->helpers_ale->move_grid(this->get_time());
+
   pde_operator->prescribe_initial_conditions(velocity[0], pressure[0], this->get_time());
 
-  // Now compute divergence of velocity and convective term
-  pde_operator->apply_velocity_divergence_term(velocity_divergence[0], velocity[0]);
+  // Now compute divergence of velocity and convective term. On a moving mesh,
+  // they are computed in every time step on the current mesh, see
+  // pressure_step().
+  if(not this->param.ale_formulation)
+  {
+    pde_operator->apply_velocity_divergence_term(velocity_divergence[0], velocity[0]);
 
-  pde_operator->apply_convective_divergence_term(vec_convective_term_div[0], velocity[0]);
+    pde_operator->apply_convective_divergence_term(vec_convective_term_div[0], velocity[0]);
+  }
 }
 
 template<int dim, typename Number>
@@ -132,14 +140,20 @@ TimeIntBDFConsistentSplitting<dim, Number>::initialize_former_multistep_dof_vect
   // Note that the loop begins with i=1.
   for(unsigned int i = 1; i < velocity.size(); ++i)
   {
+    if(this->param.ale_formulation)
+      this->helpers_ale->move_grid(this->get_previous_time(i));
+
     pde_operator->prescribe_initial_conditions(velocity[i],
                                                pressure[i],
                                                this->get_previous_time(i));
 
-    pde_operator->apply_velocity_divergence_term(velocity_divergence[i], velocity[i]);
+    // We need to compute this, see initialize_current_solution() for ALE.
+    if(not this->param.ale_formulation)
+    {
+      pde_operator->apply_velocity_divergence_term(velocity_divergence[i], velocity[i]);
 
-    // We need to compute this
-    pde_operator->apply_convective_divergence_term(vec_convective_term_div[i], velocity[i]);
+      pde_operator->apply_convective_divergence_term(vec_convective_term_div[i], velocity[i]);
+    }
   }
 }
 
@@ -268,18 +282,26 @@ template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplitting<dim, Number>::do_timestep_solve()
 {
-  pressure_step();
+  // In a partitioned scheme (FSI), a field that is not updated keeps its
+  // solution of the previous coupling iteration in pressure_np or velocity_np.
+  if(this->update_pressure)
+    pressure_step();
 
-  momentum_step();
+  if(this->update_velocity)
+  {
+    momentum_step();
 
-  if(this->param.apply_penalty_terms_in_postprocessing_step)
-    penalty_step();
+    if(this->param.apply_penalty_terms_in_postprocessing_step)
+      penalty_step();
 
-  // evaluate convective term once the final solution at time
-  // t_{n+1} is known in the explicit case
-  if(this->param.convective_problem() and
-     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
-    evaluate_convective_term();
+    // evaluate convective term once the final solution at time
+    // t_{n+1} is known in the explicit case (Eulerian case only, see
+    // momentum_step() for ALE)
+    if(this->param.convective_problem() and
+       this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit and
+       not this->param.ale_formulation)
+      evaluate_convective_term();
+  }
 }
 
 template<int dim, typename Number>
@@ -303,6 +325,20 @@ TimeIntBDFConsistentSplitting<dim, Number>::pressure_step()
   dealii::Timer timer;
   timer.restart();
 
+  // On a moving mesh, the divergence of the velocity and of the convective
+  // term of the previous time steps are computed on the current mesh, see
+  // prepare_vectors_for_next_timestep() for the Eulerian case.
+  if(this->param.ale_formulation)
+  {
+    if(this->param.apply_leray_projection)
+      for(unsigned int i = 0; i < velocity_divergence.size(); ++i)
+        pde_operator->apply_velocity_divergence_term(velocity_divergence[i], velocity[i]);
+
+    if(this->param.convective_problem())
+      for(unsigned int i = 0; i < extra_pressure_rhs.get_order(); ++i)
+        pde_operator->apply_convective_divergence_term(vec_convective_term_div[i], velocity[i]);
+  }
+
   // compute right-hand-side vector
   VectorType rhs;
   rhs.reinit(pressure_np, true);
@@ -319,7 +355,7 @@ TimeIntBDFConsistentSplitting<dim, Number>::pressure_step()
   }
   else
   {
-    pressure_np = 0;
+    pressure_np = pressure_last_iter;
   }
 
   // solve linear system of equations
@@ -340,6 +376,9 @@ TimeIntBDFConsistentSplitting<dim, Number>::pressure_step()
   // This is necessary because otherwise the pressure solution moves away from the exact solution.
   pde_operator->adjust_pressure_level_if_undefined(pressure_np, this->get_next_time());
 
+  if(this->store_solution)
+    pressure_last_iter = pressure_np;
+
   // write output
   if(this->print_solver_info() and not(this->is_test))
   {
@@ -357,9 +396,10 @@ TimeIntBDFConsistentSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   /*
    *  I. convective extrapolation
    */
-  rhs.equ(extra_pressure_rhs.get_beta(0), this->vec_convective_term_div[0]);
-  for(unsigned int i = 1; i < extra_pressure_rhs.get_order(); ++i)
-    rhs.add(extra_pressure_rhs.get_beta(i), this->vec_convective_term_div[i]);
+  rhs = 0.0;
+  if(this->param.convective_problem())
+    for(unsigned int i = 0; i < extra_pressure_rhs.get_order(); ++i)
+      rhs.add(extra_pressure_rhs.get_beta(i), this->vec_convective_term_div[i]);
 
   /*
    *  II. forcing term
@@ -434,14 +474,37 @@ TimeIntBDFConsistentSplitting<dim, Number>::momentum_step()
   dealii::Timer timer;
   timer.restart();
 
+  // On a moving mesh, the explicit convective term of the previous time steps
+  // is evaluated on the current mesh, see do_timestep_solve() for the Eulerian
+  // case.
+  if(this->param.ale_formulation and this->param.convective_problem() and
+     this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::Explicit)
+  {
+    for(unsigned int i = 0; i < this->vec_convective_term.size(); ++i)
+    {
+      // in a general setting, we only know the boundary conditions at time
+      // t_{n+1}
+      pde_operator->evaluate_convective_term(this->vec_convective_term[i],
+                                             velocity[i],
+                                             this->get_next_time());
+    }
+  }
+
   // in case we need to iteratively solve a linear or nonlinear system of equations
   if(this->param.viscous_problem() or this->param.non_explicit_convective_problem())
   {
     // Extrapolate old solutions to get a good initial estimate for the solver.
-    velocity_np.equ(this->extra.get_beta(0), velocity[0]);
-    for(unsigned int i = 1; i < velocity.size(); ++i)
+    if(this->first_coupling_iteration)
     {
-      velocity_np.add(this->extra.get_beta(i), velocity[i]);
+      velocity_np.equ(this->extra.get_beta(0), velocity[0]);
+      for(unsigned int i = 1; i < velocity.size(); ++i)
+      {
+        velocity_np.add(this->extra.get_beta(i), velocity[i]);
+      }
+    }
+    else
+    {
+      velocity_np = velocity_momentum_last_iter;
     }
 
     bool const update_preconditioner =
@@ -516,6 +579,9 @@ TimeIntBDFConsistentSplitting<dim, Number>::momentum_step()
         print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
       }
     }
+
+    if(this->store_solution)
+      velocity_momentum_last_iter = velocity_np;
   }
   else // no viscous term and no (linearly) implicit convective term, i.e. we only need to invert
        // the mass matrix
@@ -643,13 +709,16 @@ TimeIntBDFConsistentSplitting<dim, Number>::penalty_step()
        0);
 
     if(not this->first_coupling_iteration)
-      velocity_np = 0;
+      velocity_np = velocity_penalty_last_iter;
 
     unsigned int const n_iter =
       pde_operator->solve_projection(velocity_np, rhs, update_preconditioner);
 
     iterations_penalty.first += 1;
     iterations_penalty.second += n_iter;
+
+    if(this->store_solution)
+      velocity_penalty_last_iter = velocity_np;
 
     // write output
     if(this->print_solver_info() and not(this->is_test))
@@ -674,16 +743,24 @@ TimeIntBDFConsistentSplitting<dim, Number>::prepare_vectors_for_next_timestep()
   swap_back_one_step(pressure);
   pressure[0].swap(pressure_np);
 
-  // Compute the divergence of the velocity for the next timestep
-  if(this->param.apply_leray_projection)
+  // On a moving mesh, the divergence terms are computed on the current mesh in
+  // pressure_step().
+  if(not this->param.ale_formulation)
   {
-    swap_back_one_step(velocity_divergence);
-    pde_operator->apply_velocity_divergence_term(velocity_divergence[0], velocity[0]);
-  }
+    // Compute the divergence of the velocity for the next timestep
+    if(this->param.apply_leray_projection)
+    {
+      swap_back_one_step(velocity_divergence);
+      pde_operator->apply_velocity_divergence_term(velocity_divergence[0], velocity[0]);
+    }
 
-  // Compute divergence of convective term
-  swap_back_one_step(vec_convective_term_div);
-  pde_operator->apply_convective_divergence_term(vec_convective_term_div[0], velocity[0]);
+    // Compute divergence of convective term
+    if(this->param.convective_problem())
+    {
+      swap_back_one_step(vec_convective_term_div);
+      pde_operator->apply_convective_divergence_term(vec_convective_term_div[0], velocity[0]);
+    }
+  }
 }
 
 template<int dim, typename Number>

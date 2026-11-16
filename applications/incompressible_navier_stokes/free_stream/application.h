@@ -145,6 +145,9 @@ private:
     // velocity pressure coupling terms
     this->param.gradp_formulation = FormulationPressureGradientTerm::Strong;   // TODO //Weak;
     this->param.divu_formulation  = FormulationVelocityDivergenceTerm::Strong; // TODO //Weak;
+    // the consistent splitting scheme supports the weak formulation only
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
+      this->param.divu_formulation = FormulationVelocityDivergenceTerm::Weak;
 
     // pressure level is undefined
     this->param.adjust_pressure_level = AdjustPressureLevel::ApplyAnalyticalSolutionInPoint;
@@ -204,7 +207,12 @@ private:
       this->param.order_time_integrator <= 2 ? this->param.order_time_integrator : 2;
     this->param.formulation_convective_term_bc = FormulationConvectiveTerm::ConvectiveFormulation;
 
-    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting)
+    // CONSISTENT SPLITTING SCHEME
+    this->param.order_extrapolation_pressure_rhs = this->param.order_extrapolation_pressure_nbc;
+
+    // momentum step of the consistent splitting scheme as the viscous step
+    if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
+       this->param.temporal_discretization == TemporalDiscretization::BDFConsistentSplitting)
     {
       this->param.solver_data_momentum         = SolverData(1000, 1.e-14, 1.e-14, LinearSolver::CG);
       this->param.preconditioner_momentum      = MomentumPreconditioner::Multigrid;

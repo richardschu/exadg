@@ -74,6 +74,10 @@ OperatorConsistentSplitting<dim, Number>::apply_convective_divergence_term(
   VectorType &       dst,
   VectorType const & src) const
 {
+  // The inner faces also read the grid velocity of the neighbor.
+  if(this->param.ale_formulation)
+    this->convective_kernel->update_ghost_values_grid_velocity();
+
   this->get_matrix_free().loop(&This::local_rhs_ppe_div_term_convective_cell,
                                &This::local_rhs_ppe_div_term_convective_inner_face,
                                &This::local_rhs_ppe_div_term_convective_boundary_face,
@@ -81,6 +85,9 @@ OperatorConsistentSplitting<dim, Number>::apply_convective_divergence_term(
                                dst,
                                src,
                                true /* zero_dst_vector */);
+
+  if(this->param.ale_formulation)
+    this->convective_kernel->zero_out_ghost_values_grid_velocity();
 }
 
 
@@ -103,6 +110,9 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_cell
   CellIntegrator<dim, dim, Number> velocity(matrix_free,
                                             dof_index_velocity,
                                             quad_index_overintegration);
+  CellIntegrator<dim, dim, Number> grid_velocity(matrix_free,
+                                                 dof_index_velocity,
+                                                 quad_index_overintegration);
 
   for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
   {
@@ -112,9 +122,24 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_cell
     velocity.gather_evaluate(src,
                              dealii::EvaluationFlags::values | dealii::EvaluationFlags::gradients);
 
+    if(this->param.ale_formulation)
+    {
+      grid_velocity.reinit(cell);
+      grid_velocity.gather_evaluate(this->convective_kernel->get_grid_velocity(),
+                                    dealii::EvaluationFlags::values);
+    }
+
     for(const unsigned int q : pressure.quadrature_point_indices())
     {
-      vector const convective_flux = -velocity.get_gradient(q) * velocity.get_value(q);
+      // On a moving mesh, the Leray projection term in the pressure Poisson
+      // equation contains the time derivative at fixed mesh points, such that
+      // the convective term is transported by the velocity relative to the
+      // grid, as in the momentum equation.
+      vector transport_velocity = velocity.get_value(q);
+      if(this->param.ale_formulation)
+        transport_velocity -= grid_velocity.get_value(q);
+
+      vector const convective_flux = -velocity.get_gradient(q) * transport_velocity;
       pressure.submit_gradient(convective_flux, q);
     }
 
@@ -140,6 +165,14 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_inne
   FaceIntegratorP pressure_plus(matrix_free, false, dof_index_pressure, quad_index_overintegration);
   FaceIntegratorU velocity_minus(matrix_free, true, dof_index_velocity, quad_index_overintegration);
   FaceIntegratorU velocity_plus(matrix_free, false, dof_index_velocity, quad_index_overintegration);
+  FaceIntegratorU grid_velocity_minus(matrix_free,
+                                      true,
+                                      dof_index_velocity,
+                                      quad_index_overintegration);
+  FaceIntegratorU grid_velocity_plus(matrix_free,
+                                     false,
+                                     dof_index_velocity,
+                                     quad_index_overintegration);
 
   for(unsigned int face = face_range.first; face < face_range.second; face++)
   {
@@ -155,12 +188,31 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_inne
                                   dealii::EvaluationFlags::values |
                                     dealii::EvaluationFlags::gradients);
 
+    if(this->param.ale_formulation)
+    {
+      grid_velocity_minus.reinit(face);
+      grid_velocity_minus.gather_evaluate(this->convective_kernel->get_grid_velocity(),
+                                          dealii::EvaluationFlags::values);
+      grid_velocity_plus.reinit(face);
+      grid_velocity_plus.gather_evaluate(this->convective_kernel->get_grid_velocity(),
+                                         dealii::EvaluationFlags::values);
+    }
+
     for(const unsigned int q : pressure_minus.quadrature_point_indices())
     {
       vector const normal = pressure_minus.normal_vector(q);
 
-      vector const gradu_u_minus   = velocity_minus.get_gradient(q) * velocity_minus.get_value(q);
-      vector const gradu_u_plus    = velocity_plus.get_gradient(q) * velocity_plus.get_value(q);
+      // velocity relative to the grid, see the cell integral
+      vector transport_velocity_minus = velocity_minus.get_value(q);
+      vector transport_velocity_plus  = velocity_plus.get_value(q);
+      if(this->param.ale_formulation)
+      {
+        transport_velocity_minus -= grid_velocity_minus.get_value(q);
+        transport_velocity_plus -= grid_velocity_plus.get_value(q);
+      }
+
+      vector const gradu_u_minus   = velocity_minus.get_gradient(q) * transport_velocity_minus;
+      vector const gradu_u_plus    = velocity_plus.get_gradient(q) * transport_velocity_plus;
       scalar const convective_flux = Number(0.5) * (gradu_u_minus + gradu_u_plus) * normal;
 
       pressure_minus.submit_value(convective_flux, q);
@@ -187,6 +239,7 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_boun
 
   FaceIntegratorP pressure_minus(matrix_free, true, dof_index_pressure, quad_index_overintegration);
   FaceIntegratorU velocity_minus(matrix_free, true, dof_index_velocity, quad_index_overintegration);
+  FaceIntegratorU grid_velocity(matrix_free, true, dof_index_velocity, quad_index_overintegration);
 
   for(unsigned int face = face_range.first; face < face_range.second; face++)
   {
@@ -210,14 +263,24 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_boun
                                      dealii::EvaluationFlags::values |
                                        dealii::EvaluationFlags::gradients);
 
+      if(this->param.ale_formulation)
+      {
+        grid_velocity.reinit(face);
+        grid_velocity.gather_evaluate(this->convective_kernel->get_grid_velocity(),
+                                      dealii::EvaluationFlags::values);
+      }
+
       for(const unsigned int q : pressure_minus.quadrature_point_indices())
       {
         const auto normal = pressure_minus.normal_vector(q);
 
         // On here we do not know the gradient of the velocity so use the value of the gradient from
         // the inside instead
-        tensor const grad_u          = velocity_minus.get_gradient(q);
-        vector const u_minus         = velocity_minus.get_value(q);
+        tensor const grad_u  = velocity_minus.get_gradient(q);
+        vector       u_minus = velocity_minus.get_value(q);
+        // velocity relative to the grid, see the cell integral
+        if(this->param.ale_formulation)
+          u_minus -= grid_velocity.get_value(q);
         scalar const convective_flux = (grad_u * u_minus) * normal;
 
         pressure_minus.submit_value(convective_flux, q);

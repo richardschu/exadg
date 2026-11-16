@@ -153,6 +153,11 @@ private:
   std::vector<VectorType> velocity_dbc;
   VectorType              velocity_dbc_np;
 
+  // solutions of the previous coupling iteration in a partitioned scheme (FSI)
+  VectorType pressure_last_iter;
+  VectorType velocity_momentum_last_iter;
+  VectorType velocity_penalty_last_iter;
+
   // iteration counts
   std::pair<unsigned int /* calls */, unsigned long long /* iteration counts */>
     iterations_pressure;
