@@ -250,17 +250,19 @@ template<int dim, typename Number>
 void
 TimeIntGenAlpha<dim, Number>::extrapolate_displacement_to_np(VectorType & displacement)
 {
-  // D_np = D_n + dt * V_n
-  displacement = displacement_n;
-  displacement.add(this->get_time_step_size(), velocity_n);
+  // D_np = D_n + dt * V_n + dt^2 / 2 * A_n
+  double const dt = this->get_time_step_size();
+  displacement    = displacement_n;
+  displacement.add(dt, velocity_n, 0.5 * dt * dt, acceleration_n);
 }
 
 template<int dim, typename Number>
 void
 TimeIntGenAlpha<dim, Number>::extrapolate_velocity_to_np(VectorType & velocity)
 {
-  // use old velocity solution as guess for velocity_np
+  // V_np = V_n + dt * A_n
   velocity = velocity_n;
+  velocity.add(this->get_time_step_size(), acceleration_n);
 }
 
 template<int dim, typename Number>
