@@ -189,6 +189,9 @@ private:
 
   // required for strongly-coupled partitioned FSI
   VectorType pressure_last_iter;
+  // intermediate velocity of the convective step, the input of the pressure
+  // step in coupling iterations without an update of the velocity
+  VectorType velocity_convective_last_iter;
   VectorType velocity_projection_last_iter;
   VectorType velocity_viscous_last_iter;
 

@@ -482,6 +482,9 @@ TimeIntBDFDualSplitting<dim, Number>::convective_step()
                    this->bdf.get_alpha(velocity.size() - 1) / this->bdf.get_gamma0(),
                    velocity.back());
 
+  if(this->store_solution)
+    velocity_convective_last_iter = velocity_np;
+
   if(this->print_solver_info() and not(this->is_test))
   {
     if(this->param.spatial_discretization == SpatialDiscretization::HDIV)
@@ -595,8 +598,13 @@ TimeIntBDFDualSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   /*
    *  I. calculate divergence term
    */
-  // homogeneous part of velocity divergence operator
-  pde_operator->apply_velocity_divergence_term(rhs, velocity_np);
+  // homogeneous part of velocity divergence operator, applied to the
+  // intermediate velocity of the convective step. In coupling iterations
+  // without an update of the velocity, velocity_np holds the final velocity of
+  // an earlier coupling iteration.
+  VectorType const & velocity_intermediate =
+    this->update_velocity ? velocity_np : velocity_convective_last_iter;
+  pde_operator->apply_velocity_divergence_term(rhs, velocity_intermediate);
 
   rhs *= -this->bdf.get_gamma0() / this->get_time_step_size();
 
