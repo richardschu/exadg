@@ -122,6 +122,10 @@ TimeIntBDFConsistentSplitting<dim, Number>::initialize_current_solution()
 
   pde_operator->prescribe_initial_conditions(velocity[0], pressure[0], this->get_time());
 
+  // Update the variable viscosity.
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+    pde_operator->update_viscosity(velocity[0]);
+
   // Now compute divergence of velocity and convective term. On a moving mesh,
   // they are computed in every time step on the current mesh, see
   // pressure_step().
@@ -130,6 +134,30 @@ TimeIntBDFConsistentSplitting<dim, Number>::initialize_current_solution()
     pde_operator->apply_velocity_divergence_term(velocity_divergence[0], velocity[0]);
 
     pde_operator->apply_convective_divergence_term(vec_convective_term_div[0], velocity[0]);
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFConsistentSplitting<dim, Number>::update_after_deserialization()
+{
+  // Update the stored viscosity parameter.
+  if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+    pde_operator->update_viscosity(velocity[0]);
+
+  // The divergence terms are not serialized, but recomputed from the velocities
+  // as in prepare_vectors_for_next_timestep(). On a moving mesh, they are
+  // computed in every time step anyway.
+  if(not this->param.ale_formulation)
+  {
+    for(unsigned int i = 0; i < velocity.size(); ++i)
+    {
+      if(this->param.apply_leray_projection)
+        pde_operator->apply_velocity_divergence_term(velocity_divergence[i], velocity[i]);
+
+      if(this->param.convective_problem())
+        pde_operator->apply_convective_divergence_term(vec_convective_term_div[i], velocity[i]);
+    }
   }
 }
 
@@ -432,6 +460,13 @@ TimeIntBDFConsistentSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   vorticity.reinit(velocity_extra);
   pde_operator->compute_vorticity(vorticity, velocity_extra);
 
+  // The viscous terms use the viscosity of the extrapolated velocity, i.e., at
+  // the same time as the vorticity.
+  bool const variable_viscosity =
+    this->param.viscous_problem() and this->param.viscosity_is_variable();
+  if(variable_viscosity)
+    pde_operator->update_viscosity(velocity_extra);
+
   // Now actually add the curl-curl term and the time derivative to the rhs
   pde_operator->rhs_ppe_nbc_add(rhs,
                                 vorticity,
@@ -452,7 +487,17 @@ TimeIntBDFConsistentSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
     }
   }
 
-  // IV.2. pressure Dirichlet boundary conditions
+  // IV.2. terms of a variable viscosity, using the viscosity gradient of the
+  // viscosity projected onto the velocity scalar field
+  if(variable_viscosity)
+  {
+    VectorType viscosity;
+    pde_operator->initialize_vector_velocity_scalar(viscosity);
+    pde_operator->access_viscosity(viscosity);
+    pde_operator->rhs_ppe_variable_viscosity_add(rhs, velocity_extra, viscosity);
+  }
+
+  // IV.3. pressure Dirichlet boundary conditions
   pde_operator->do_rhs_ppe_laplace_add(rhs, this->get_next_time());
 
 
@@ -507,12 +552,27 @@ TimeIntBDFConsistentSplitting<dim, Number>::momentum_step()
       velocity_np = velocity_momentum_last_iter;
     }
 
+    // explicit viscosity update or initial guess for viscosity
+    if(this->param.viscous_problem() and this->param.viscosity_is_variable())
+    {
+      dealii::Timer timer_viscosity_update;
+      timer_viscosity_update.restart();
+
+      pde_operator->update_viscosity(velocity_np);
+
+      if(this->print_solver_info() and not(this->is_test))
+      {
+        this->pcout << std::endl << "Update of variable viscosity:";
+        print_wall_time(this->pcout, timer_viscosity_update.wall_time());
+      }
+    }
+
     bool const update_preconditioner =
       this->param.update_preconditioner_momentum and
       ((this->time_step_number - 1) % this->param.update_preconditioner_momentum_every_time_steps ==
        0);
 
-    if(this->param.nonlinear_problem_has_to_be_solved())
+    if(this->param.implicit_nonlinear_convective_problem())
     {
       /*
        *  Calculate the vector that is constant when solving the nonlinear momentum equation
@@ -545,7 +605,7 @@ TimeIntBDFConsistentSplitting<dim, Number>::momentum_step()
                                     timer.wall_time());
       }
     }
-    else // linear problem
+    else // convective term is linear, viscous term might not be.
     {
       // linearly implicit convective term: use extrapolated/stored velocity as transport velocity
       VectorType transport_velocity;
@@ -555,28 +615,127 @@ TimeIntBDFConsistentSplitting<dim, Number>::momentum_step()
         transport_velocity = velocity_np;
       }
 
-      /*
-       *  Calculate the right-hand side of the linear system of equations.
-       */
-      VectorType rhs;
-      rhs.reinit(velocity_np, true /* omit_zeroing_entries */);
-      rhs_momentum(rhs, transport_velocity);
+      // Picard iteration to converge the nonlinear viscous term, as in the dual
+      // splitting and pressure-correction schemes.
+      bool constexpr apply_aitken_relaxation = true;
+      unsigned int picard_iterations         = 0;
+      unsigned int linear_iterations         = 0;
+      bool         converged                 = false;
+      double       norm_0                    = 1.0;
+      double       relaxation                = 1.0;
+      double       relaxation_old            = 1.0;
 
-      // solve linear system of equations
-      unsigned int n_iter = pde_operator->solve_linear_momentum_equation(
-        velocity_np,
-        rhs,
-        transport_velocity,
-        update_preconditioner,
-        this->get_scaling_factor_time_derivative_term());
+      VectorType rhs, residual, residual_old, delta_residual, velocity_np_old;
+      rhs.reinit(velocity_np, true /* omit_zeroing_entries */);
+
+      // Compute the initial residual.
+      if(this->param.nonlinear_viscous_problem())
+      {
+        residual.reinit(velocity_np, false /* omit_zeroing_entries */);
+        if constexpr(apply_aitken_relaxation)
+        {
+          residual_old.reinit(velocity_np, false /* omit_zeroing_entries */);
+          delta_residual.reinit(velocity_np, false /* omit_zeroing_entries */);
+          velocity_np_old = velocity_np;
+        }
+
+        rhs_momentum(rhs, transport_velocity, true /* residual_evaluation */);
+        pde_operator->evaluate_linearized_residual(residual,
+                                                   velocity_np,
+                                                   transport_velocity,
+                                                   &rhs,
+                                                   this->get_next_time(),
+                                                   this->get_scaling_factor_time_derivative_term());
+
+        norm_0 = residual.l2_norm();
+
+        residual_old = residual;
+      }
+
+      while(not converged)
+      {
+        // Calculate the right-hand side of the linear system of equations.
+        rhs_momentum(rhs, transport_velocity);
+
+        // solve linear system of equations
+        linear_iterations += pde_operator->solve_linear_momentum_equation(
+          velocity_np,
+          rhs,
+          transport_velocity,
+          update_preconditioner,
+          this->get_scaling_factor_time_derivative_term());
+
+        if(this->param.nonlinear_viscous_problem())
+        {
+          // Update the viscosity and compute the residual.
+          rhs_momentum(rhs, transport_velocity, true /* residual_evaluation */);
+          pde_operator->evaluate_linearized_residual(
+            residual,
+            velocity_np,
+            transport_velocity,
+            &rhs,
+            this->get_next_time(),
+            this->get_scaling_factor_time_derivative_term());
+
+          // Compute convergence criteria.
+          double norm_abs = residual.l2_norm();
+          double norm_rel = norm_abs / (std::abs(norm_0) > 1e-16 ? norm_0 : 1.0e-16);
+
+          picard_iterations += 1;
+          if(norm_rel < this->param.newton_solver_data_momentum.rel_tol or
+             norm_abs < this->param.newton_solver_data_momentum.abs_tol)
+          {
+            converged = true;
+          }
+          else
+          {
+            AssertThrow(picard_iterations <= this->param.newton_solver_data_momentum.max_iter,
+                        dealii::ExcMessage(
+                          "Picard solver to resolve nonlinear viscous term did not converge."));
+
+            // Apply relaxation
+            if constexpr(apply_aitken_relaxation)
+            {
+              delta_residual = residual;
+              delta_residual -= residual_old;
+              relaxation =
+                -relaxation_old * (residual_old * delta_residual) / delta_residual.norm_sqr();
+
+              velocity_np.sadd(relaxation, 1.0 - relaxation, velocity_np_old);
+
+              // Update old values for next iteration.
+              velocity_np_old = velocity_np;
+              residual_old    = residual;
+              relaxation_old  = relaxation;
+            }
+          }
+        }
+        else
+        {
+          converged = true;
+        }
+      }
 
       iterations_viscous.first += 1;
-      std::get<1>(iterations_viscous.second) += n_iter;
+      std::get<0>(iterations_viscous.second) +=
+        this->param.nonlinear_viscous_problem() ? picard_iterations : 0;
+      std::get<1>(iterations_viscous.second) += linear_iterations;
 
       if(this->print_solver_info() and not(this->is_test))
       {
-        this->pcout << std::endl << "Solve momentum step:";
-        print_solver_info_linear(this->pcout, n_iter, timer.wall_time());
+        if(this->param.nonlinear_viscous_problem())
+        {
+          this->pcout << std::endl << "Solve momentum step (Picard):";
+          print_solver_info_nonlinear(this->pcout,
+                                      picard_iterations,
+                                      linear_iterations,
+                                      timer.wall_time());
+        }
+        else
+        {
+          this->pcout << std::endl << "Solve momentum step:";
+          print_solver_info_linear(this->pcout, linear_iterations, timer.wall_time());
+        }
       }
     }
 
@@ -609,9 +768,9 @@ TimeIntBDFConsistentSplitting<dim, Number>::momentum_step()
 
 template<int dim, typename Number>
 void
-TimeIntBDFConsistentSplitting<dim, Number>::rhs_momentum(
-  VectorType &       rhs,
-  VectorType const & transport_velocity) const
+TimeIntBDFConsistentSplitting<dim, Number>::rhs_momentum(VectorType &       rhs,
+                                                         VectorType const & transport_velocity,
+                                                         bool const residual_evaluation) const
 {
   /*
    *  Pressure gradient term
@@ -640,7 +799,8 @@ TimeIntBDFConsistentSplitting<dim, Number>::rhs_momentum(
         rhs.add(-this->extra.get_beta(i), this->vec_convective_term[i]);
     }
 
-    if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    if(this->param.treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit and
+       not(residual_evaluation))
     {
       pde_operator->rhs_add_convective_term(rhs, transport_velocity, this->get_next_time());
     }
@@ -666,7 +826,8 @@ TimeIntBDFConsistentSplitting<dim, Number>::rhs_momentum(
    *  inhomogeneous parts of boundary face integrals of the viscous operator
    *  have to be shifted to the right-hand side of the equation.
    */
-  if(this->param.viscous_problem() and not(this->param.nonlinear_problem_has_to_be_solved()))
+  if(this->param.viscous_problem() and not(this->param.implicit_nonlinear_convective_problem()) and
+     not(residual_evaluation))
   {
     pde_operator->rhs_add_viscous_term(rhs, this->get_next_time());
   }

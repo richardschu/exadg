@@ -528,6 +528,196 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_nbc_add_boundary_face(
   }
 }
 
+/*
+ * With a variable viscosity nu and div(u) = 0, the viscous term in the pressure
+ * Poisson equation reads
+ *
+ *   div(2 nu sym_grad(u)) = - curl(nu curl(u)) + 2 grad(u)^T grad(nu),
+ *
+ * see Pacheco, Schussnig, Fries, Comput. Methods Appl. Mech. Engrg. 382 (2021)
+ * 113888. The first term is divergence-free and enters via the Neumann
+ * boundary condition on Gamma_D only, where
+ *
+ *   - curl(nu curl(u)) = - nu curl(curl(u)) + (grad(u) - grad(u)^T) grad(nu)
+ *
+ * with the first part in rhs_ppe_nbc_add(). This function adds the second
+ * part on Gamma_D and the second term G = 2 grad(u)^T grad(nu), like the
+ * convective term: (G, grad(q)) in the cells and the central flux on inner
+ * faces and velocity Neumann boundaries. On Gamma_D, the boundary flux of G
+ * cancels with the Neumann boundary condition. All terms vanish for a constant
+ * viscosity.
+ */
+template<int dim, typename Number>
+void
+OperatorConsistentSplitting<dim, Number>::rhs_ppe_variable_viscosity_add(
+  VectorType &       dst,
+  VectorType const & velocity,
+  VectorType const & viscosity_in)
+{
+  // The inner faces also read the viscosity of the neighbor.
+  viscosity_in.update_ghost_values();
+  this->viscosity = &viscosity_in;
+
+  this->get_matrix_free().loop(&This::local_rhs_ppe_variable_viscosity_cell,
+                               &This::local_rhs_ppe_variable_viscosity_inner_face,
+                               &This::local_rhs_ppe_variable_viscosity_boundary_face,
+                               this,
+                               dst,
+                               velocity);
+
+  this->viscosity = nullptr;
+  viscosity_in.zero_out_ghost_values();
+}
+
+template<int dim, typename Number>
+void
+OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_variable_viscosity_cell(
+  dealii::MatrixFree<dim, Number> const & matrix_free,
+  VectorType &                            dst,
+  VectorType const &                      src,
+  Range const &                           cell_range) const
+{
+  unsigned int const dof_index_velocity        = this->get_dof_index_velocity();
+  unsigned int const dof_index_velocity_scalar = this->get_dof_index_velocity_scalar();
+  unsigned int const dof_index_pressure        = this->get_dof_index_pressure();
+  unsigned int const quad_index                = this->get_quad_index_velocity_standard();
+
+  CellIntegrator<dim, 1, Number>   pressure(matrix_free, dof_index_pressure, quad_index);
+  CellIntegrator<dim, dim, Number> velocity(matrix_free, dof_index_velocity, quad_index);
+  CellIntegrator<dim, 1, Number>   viscosity_integrator(matrix_free,
+                                                      dof_index_velocity_scalar,
+                                                      quad_index);
+
+  for(unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+  {
+    pressure.reinit(cell);
+    velocity.reinit(cell);
+    velocity.gather_evaluate(src, dealii::EvaluationFlags::gradients);
+    viscosity_integrator.reinit(cell);
+    viscosity_integrator.gather_evaluate(*this->viscosity, dealii::EvaluationFlags::gradients);
+
+    for(unsigned int const q : pressure.quadrature_point_indices())
+    {
+      vector const flux =
+        Number(2.0) * (transpose(velocity.get_gradient(q)) * viscosity_integrator.get_gradient(q));
+      pressure.submit_gradient(flux, q);
+    }
+
+    pressure.integrate_scatter(dealii::EvaluationFlags::gradients, dst);
+  }
+}
+
+template<int dim, typename Number>
+void
+OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_variable_viscosity_inner_face(
+  dealii::MatrixFree<dim, Number> const & matrix_free,
+  VectorType &                            dst,
+  VectorType const &                      src,
+  Range const &                           face_range) const
+{
+  unsigned int const dof_index_velocity        = this->get_dof_index_velocity();
+  unsigned int const dof_index_velocity_scalar = this->get_dof_index_velocity_scalar();
+  unsigned int const dof_index_pressure        = this->get_dof_index_pressure();
+  unsigned int const quad_index                = this->get_quad_index_velocity_standard();
+
+  FaceIntegratorP pressure_minus(matrix_free, true, dof_index_pressure, quad_index);
+  FaceIntegratorP pressure_plus(matrix_free, false, dof_index_pressure, quad_index);
+  FaceIntegratorU velocity_minus(matrix_free, true, dof_index_velocity, quad_index);
+  FaceIntegratorU velocity_plus(matrix_free, false, dof_index_velocity, quad_index);
+  FaceIntegratorP viscosity_minus(matrix_free, true, dof_index_velocity_scalar, quad_index);
+  FaceIntegratorP viscosity_plus(matrix_free, false, dof_index_velocity_scalar, quad_index);
+
+  for(unsigned int face = face_range.first; face < face_range.second; face++)
+  {
+    pressure_minus.reinit(face);
+    pressure_plus.reinit(face);
+    velocity_minus.reinit(face);
+    velocity_minus.gather_evaluate(src, dealii::EvaluationFlags::gradients);
+    velocity_plus.reinit(face);
+    velocity_plus.gather_evaluate(src, dealii::EvaluationFlags::gradients);
+    viscosity_minus.reinit(face);
+    viscosity_minus.gather_evaluate(*this->viscosity, dealii::EvaluationFlags::gradients);
+    viscosity_plus.reinit(face);
+    viscosity_plus.gather_evaluate(*this->viscosity, dealii::EvaluationFlags::gradients);
+
+    for(unsigned int const q : pressure_minus.quadrature_point_indices())
+    {
+      vector const normal = pressure_minus.normal_vector(q);
+
+      vector const flux_minus =
+        Number(2.0) * (transpose(velocity_minus.get_gradient(q)) * viscosity_minus.get_gradient(q));
+      vector const flux_plus =
+        Number(2.0) * (transpose(velocity_plus.get_gradient(q)) * viscosity_plus.get_gradient(q));
+      scalar const flux = Number(0.5) * (flux_minus + flux_plus) * normal;
+
+      pressure_minus.submit_value(-flux, q);
+      pressure_plus.submit_value(flux, q);
+    }
+
+    pressure_minus.integrate_scatter(dealii::EvaluationFlags::values, dst);
+    pressure_plus.integrate_scatter(dealii::EvaluationFlags::values, dst);
+  }
+}
+
+template<int dim, typename Number>
+void
+OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_variable_viscosity_boundary_face(
+  dealii::MatrixFree<dim, Number> const & matrix_free,
+  VectorType &                            dst,
+  VectorType const &                      src,
+  Range const &                           face_range) const
+{
+  unsigned int const dof_index_velocity        = this->get_dof_index_velocity();
+  unsigned int const dof_index_velocity_scalar = this->get_dof_index_velocity_scalar();
+  unsigned int const dof_index_pressure        = this->get_dof_index_pressure();
+  unsigned int const quad_index                = this->get_quad_index_velocity_standard();
+
+  FaceIntegratorP pressure(matrix_free, true, dof_index_pressure, quad_index);
+  FaceIntegratorU velocity(matrix_free, true, dof_index_velocity, quad_index);
+  FaceIntegratorP viscosity_integrator(matrix_free, true, dof_index_velocity_scalar, quad_index);
+
+  for(unsigned int face = face_range.first; face < face_range.second; face++)
+  {
+    BoundaryTypeU const boundary_type =
+      this->boundary_descriptor->velocity->get_boundary_type(matrix_free.get_boundary_id(face));
+
+    bool const dirichlet_boundary =
+      boundary_type == BoundaryTypeU::Dirichlet or boundary_type == BoundaryTypeU::DirichletCached;
+
+    AssertThrow(dirichlet_boundary or boundary_type == BoundaryTypeU::Neumann,
+                dealii::ExcMessage("Boundary type of face is invalid or not implemented."));
+
+    pressure.reinit(face);
+    velocity.reinit(face);
+    velocity.gather_evaluate(src, dealii::EvaluationFlags::gradients);
+    viscosity_integrator.reinit(face);
+    viscosity_integrator.gather_evaluate(*this->viscosity, dealii::EvaluationFlags::gradients);
+
+    for(unsigned int const q : pressure.quadrature_point_indices())
+    {
+      vector const normal  = pressure.normal_vector(q);
+      tensor const grad_u  = velocity.get_gradient(q);
+      vector const grad_nu = viscosity_integrator.get_gradient(q);
+
+      scalar flux;
+      if(dirichlet_boundary)
+      {
+        // (grad(u) - grad(u)^T) grad(nu) of the Neumann boundary condition
+        flux = ((grad_u - transpose(grad_u)) * grad_nu) * normal;
+      }
+      else
+      {
+        // boundary flux of G from the interior
+        flux = -(Number(2.0) * (transpose(grad_u) * grad_nu)) * normal;
+      }
+
+      pressure.submit_value(flux, q);
+    }
+
+    pressure.integrate_scatter(dealii::EvaluationFlags::values, dst);
+  }
+}
+
 template<int dim, typename Number>
 void
 OperatorConsistentSplitting<dim, Number>::apply_helmholtz_operator(VectorType &       dst,

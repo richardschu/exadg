@@ -1,0 +1,64 @@
+Spatial convergence of navier_stokes_manufactured (generalized Newtonian, Carreau-Yasuda with the
+blood parameters kappa 1, lambda 1.556335, a 2, n 0.462495, nu_0 / nu_oo = 8.45 at nu_oo = 1e-2),
+inputs input_spatial_*.json: Navier-Stokes, explicit convective term, refinements 0..4, T = 0.1,
+dt = 1e-5, BDF2.
+Tables printed by `python3 ../../summarize.py .` (from convergence_studies/: `python3 summarize.py <folder>`):
+relative L2 errors at T on the first and last level and the rates (log2) of all refinements;
+time = sum of the wall times of all runs of a study (serial runs, 6 studies at a time).
+
+==== degree k = 2 (expected rates: velocity 3, pressure 2)
+scheme / convective term / viscosity                         r=0       r=4   rates
+coupled / explicit / explicit                        u  1.14e-02  5.10e-06   2.71  2.74  2.78  2.88    127s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+coupled / explicit / implicit                        u  1.14e-02  5.10e-06   2.71  2.74  2.78  2.88    258s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / explicit / explicit                 u  1.14e-02  5.10e-06   2.72  2.74  2.78  2.88     74s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+dual_splitting / explicit / implicit                 u  1.14e-02  5.10e-06   2.72  2.74  2.78  2.88    119s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / explicit / explicit           u  1.14e-02  5.10e-06   2.71  2.74  2.78  2.88     76s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / explicit / implicit           u  1.14e-02  5.10e-06   2.71  2.74  2.78  2.88    143s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / explicit / explicit            u  1.14e-02  5.10e-06   2.71  2.74  2.78  2.88     80s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+pressure_correction / explicit / implicit            u  1.14e-02  5.10e-06   2.71  2.74  2.78  2.88    149s
+                                                     p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+
+==== degree k = 3 (expected rates: velocity 4, pressure 3)
+scheme / convective term / viscosity                         r=0       r=4   rates
+coupled / explicit / explicit                        u  4.90e-04  7.28e-09   3.96  4.02  4.04  4.02    182s
+                                                     p  2.71e-03  6.66e-07   2.99  3.00  3.00  3.00
+coupled / explicit / implicit                        u  4.90e-04  7.28e-09   3.96  4.02  4.04  4.02    275s
+                                                     p  2.71e-03  6.66e-07   2.99  3.00  3.00  3.00
+dual_splitting / explicit / explicit                 u  4.88e-04  7.29e-08   3.92  4.03  3.82  0.93    108s
+                                                     p  2.71e-03  6.69e-07   2.99  3.00  3.00  2.99
+dual_splitting / explicit / implicit                 u  4.88e-04  7.29e-08   3.92  4.03  3.82  0.93    140s
+                                                     p  2.71e-03  6.69e-07   2.99  3.00  3.00  2.99
+consistent_splitting / explicit / explicit           u  4.90e-04  7.70e-09   3.96  4.02  4.03  3.95    111s
+                                                     p  2.71e-03  6.66e-07   2.99  3.00  3.00  3.00
+consistent_splitting / explicit / implicit           u  4.90e-04  7.70e-09   3.96  4.02  4.03  3.95    168s
+                                                     p  2.71e-03  6.66e-07   2.99  3.00  3.00  3.00
+pressure_correction / explicit / explicit            u  4.90e-04  7.28e-09   3.96  4.02  4.04  4.02    111s
+                                                     p  2.71e-03  6.66e-07   2.99  3.00  3.00  3.00
+pressure_correction / explicit / implicit            u  4.90e-04  7.28e-09   3.96  4.02  4.04  4.02    169s
+                                                     p  2.71e-03  6.66e-07   2.99  3.00  3.00  3.00
+
+==== degree k = 4 (expected rates: velocity 5, pressure 4)
+scheme / convective term / viscosity                         r=0       r=4   rates
+coupled / explicit / explicit                        u  3.10e-05  4.20e-11   4.86  4.81  4.88  4.94    255s
+                                                     p  5.15e-04  8.38e-09   3.97  3.95  4.00  4.00
+coupled / explicit / implicit                        u  3.10e-05  4.20e-11   4.86  4.81  4.88  4.94    318s
+                                                     p  5.15e-04  8.38e-09   3.97  3.95  4.00  4.00
+dual_splitting / explicit / explicit                 u  3.10e-05  7.25e-08   4.85  3.71  0.18  0.00    164s
+                                                     p  5.16e-04  5.59e-08   3.97  3.95  3.89  1.37
+dual_splitting / explicit / implicit                 u  3.10e-05  7.25e-08   4.85  3.71  0.18  0.00    181s
+                                                     p  5.16e-04  5.59e-08   3.97  3.95  3.89  1.37
+consistent_splitting / explicit / explicit           u  3.10e-05  4.54e-11   4.86  4.80  4.86  4.86    172s
+                                                     p  5.15e-04  8.33e-09   3.97  3.95  4.00  4.01
+consistent_splitting / explicit / implicit           u  3.10e-05  4.54e-11   4.86  4.80  4.86  4.86    222s
+                                                     p  5.15e-04  8.33e-09   3.97  3.95  4.00  4.01
+pressure_correction / explicit / explicit            u  3.10e-05  4.20e-11   4.86  4.81  4.88  4.94    167s
+                                                     p  5.15e-04  8.39e-09   3.97  3.95  4.00  4.00
+pressure_correction / explicit / implicit            u  3.10e-05  4.20e-11   4.86  4.81  4.88  4.94    214s
+                                                     p  5.15e-04  8.39e-09   3.97  3.95  4.00  4.00

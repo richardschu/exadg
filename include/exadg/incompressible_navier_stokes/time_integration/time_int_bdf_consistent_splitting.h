@@ -101,6 +101,9 @@ private:
   initialize_former_multistep_dof_vectors() final;
 
   void
+  update_after_deserialization() final;
+
+  void
   initialize_velocity_dbc();
 
   void
@@ -112,8 +115,13 @@ private:
   void
   momentum_step();
 
+  // With `residual_evaluation`, the inhomogeneous parts of the linearly
+  // implicit convective term and of the viscous term are omitted, since they
+  // are part of `evaluate_linearized_residual()`.
   void
-  rhs_momentum(VectorType & rhs, VectorType const & transport_velocity) const;
+  rhs_momentum(VectorType &       rhs,
+               VectorType const & transport_velocity,
+               bool const         residual_evaluation = false) const;
 
   void
   penalty_step();

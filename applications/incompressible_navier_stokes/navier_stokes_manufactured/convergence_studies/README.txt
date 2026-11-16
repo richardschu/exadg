@@ -55,3 +55,21 @@ temporal/low_viscosity/ (summary_temporal_convergence.txt)
     levels (AdditionalData::use_fused_operations = is_dg), DG levels keep the
     fused vector operations.
 
+
+consistent_splitting/{temporal,spatial}/ (summary_*_convergence.txt)
+  Consistent splitting with a variable viscosity compared to the other schemes,
+  Carreau-Yasuda with the blood parameters kappa 1, lambda 1.556335, a 2,
+  n 0.462495 and nu_0 / nu_oo = 8.45 at nu_oo = 1e-2 (the viscosity varies by
+  a factor of about 1.7, and neglecting it increases the error by 100x), all 4
+  schemes, explicit convective term, explicit and implicit viscosity.
+  temporal: degree 8, refinement 3, T = 1, dt = 1/512 ... 1/4096, BDF1/2/3.
+  spatial: T = 0.1, dt = 1e-5, BDF2, degree 2, 3, 4, refinements 0..4.
+  - consistent_splitting: rates 1, 2, 3 for velocity and pressure, BDF1/2
+    errors equal to coupled to 3 digits; full spatial rates as coupled and
+    pressure_correction.
+  - dual_splitting: rate 1 for BDF1/2/3, spatially limited by it.
+  - pressure_correction: velocity rates 1, 2, 3, pressure 0.74 and 1.75; BDF3
+    with explicit viscosity unstable at dt = 1/4096.
+  - Without the variable viscosity terms in its pressure Poisson equation,
+    consistent_splitting is first order (BDF2, velocity 6.0e-5 ... 7.5e-6,
+    pressure rate 0.77) and spatially limited (k = 3: velocity 3.5e-7).

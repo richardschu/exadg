@@ -17,7 +17,7 @@ import os
 import re
 import sys
 
-SCHEMES = ['coupled', 'dual_splitting', 'pressure_correction']
+SCHEMES = ['coupled', 'dual_splitting', 'consistent_splitting', 'pressure_correction']
 TREATMENTS = ['explicit', 'linearly_implicit', 'implicit']
 
 NAME = re.compile(r'(spatial|temporal)_(?:stokes_)?(\w+?)(?:_conv_(\w+?))?_visc_(\w+?)_(k|bdf)(\d+)$')

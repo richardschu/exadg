@@ -90,6 +90,13 @@ public:
                   double const &     time,
                   Number const       gamma_dt) const;
 
+  // rhs pressure Poisson equation: terms of a variable viscosity, where
+  // `viscosity` is the viscosity in the velocity scalar field
+  void
+  rhs_ppe_variable_viscosity_add(VectorType &       dst,
+                                 VectorType const & velocity,
+                                 VectorType const & viscosity);
+
   /*
    * Viscous step.
    */
@@ -173,6 +180,31 @@ private:
                                       VectorType &                            dst,
                                       VectorType const &                      src,
                                       Range const &                           face_range) const;
+
+  /*
+   * Variable viscosity terms
+   */
+  void
+  local_rhs_ppe_variable_viscosity_cell(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                        VectorType &                            dst,
+                                        VectorType const &                      src,
+                                        Range const &                           cell_range) const;
+
+  void
+  local_rhs_ppe_variable_viscosity_inner_face(dealii::MatrixFree<dim, Number> const & matrix_free,
+                                              VectorType &                            dst,
+                                              VectorType const &                      src,
+                                              Range const & face_range) const;
+
+  void
+  local_rhs_ppe_variable_viscosity_boundary_face(
+    dealii::MatrixFree<dim, Number> const & matrix_free,
+    VectorType &                            dst,
+    VectorType const &                      src,
+    Range const &                           face_range) const;
+
+  // Pointer to vector holding the viscosity in the velocity scalar field.
+  VectorType const * viscosity = nullptr;
 };
 
 } // namespace IncNS
