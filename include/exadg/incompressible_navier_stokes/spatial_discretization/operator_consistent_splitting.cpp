@@ -122,7 +122,7 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_cell
     velocity.gather_evaluate(src,
                              dealii::EvaluationFlags::values | dealii::EvaluationFlags::gradients);
 
-    if(this->param.ale_formulation)
+    if(use_ale_form_convective_term())
     {
       grid_velocity.reinit(cell);
       grid_velocity.gather_evaluate(this->convective_kernel->get_grid_velocity(),
@@ -131,12 +131,9 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_cell
 
     for(const unsigned int q : pressure.quadrature_point_indices())
     {
-      // On a moving mesh, the Leray projection term in the pressure Poisson
-      // equation contains the time derivative at fixed mesh points, such that
-      // the convective term is transported by the velocity relative to the
-      // grid, as in the momentum equation.
+      // see use_ale_form_convective_term()
       vector transport_velocity = velocity.get_value(q);
-      if(this->param.ale_formulation)
+      if(use_ale_form_convective_term())
         transport_velocity -= grid_velocity.get_value(q);
 
       vector const convective_flux = -velocity.get_gradient(q) * transport_velocity;
@@ -188,7 +185,7 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_inne
                                   dealii::EvaluationFlags::values |
                                     dealii::EvaluationFlags::gradients);
 
-    if(this->param.ale_formulation)
+    if(use_ale_form_convective_term())
     {
       grid_velocity_minus.reinit(face);
       grid_velocity_minus.gather_evaluate(this->convective_kernel->get_grid_velocity(),
@@ -202,10 +199,10 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_inne
     {
       vector const normal = pressure_minus.normal_vector(q);
 
-      // velocity relative to the grid, see the cell integral
+      // see use_ale_form_convective_term()
       vector transport_velocity_minus = velocity_minus.get_value(q);
       vector transport_velocity_plus  = velocity_plus.get_value(q);
-      if(this->param.ale_formulation)
+      if(use_ale_form_convective_term())
       {
         transport_velocity_minus -= grid_velocity_minus.get_value(q);
         transport_velocity_plus -= grid_velocity_plus.get_value(q);
@@ -252,7 +249,32 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_boun
 
     if(boundary_type == BoundaryTypeU::Dirichlet or boundary_type == BoundaryTypeU::DirichletCached)
     {
-      // Cancels with consistent boundary condition
+      // The convective term cancels with the consistent boundary condition.
+      // In the Eulerian form on a moving mesh, the time derivative at fixed
+      // points in space in the boundary condition is the time derivative at
+      // fixed mesh points minus grad(u) * w, where the former is evaluated
+      // from the Dirichlet data, see
+      // rhs_ppe_nbc_numerical_time_derivative_add().
+      if(this->param.ale_formulation and not use_ale_form_convective_term())
+      {
+        pressure_minus.reinit(face);
+        velocity_minus.reinit(face);
+        velocity_minus.gather_evaluate(src, dealii::EvaluationFlags::gradients);
+        grid_velocity.reinit(face);
+        grid_velocity.gather_evaluate(this->convective_kernel->get_grid_velocity(),
+                                      dealii::EvaluationFlags::values);
+
+        for(const unsigned int q : pressure_minus.quadrature_point_indices())
+        {
+          vector const normal = pressure_minus.normal_vector(q);
+          scalar const flux =
+            (velocity_minus.get_gradient(q) * grid_velocity.get_value(q)) * normal;
+
+          pressure_minus.submit_value(flux, q);
+        }
+
+        pressure_minus.integrate_scatter(dealii::EvaluationFlags::values, dst);
+      }
     }
     else
     {
@@ -263,7 +285,7 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_boun
                                      dealii::EvaluationFlags::values |
                                        dealii::EvaluationFlags::gradients);
 
-      if(this->param.ale_formulation)
+      if(use_ale_form_convective_term())
       {
         grid_velocity.reinit(face);
         grid_velocity.gather_evaluate(this->convective_kernel->get_grid_velocity(),
@@ -278,8 +300,8 @@ OperatorConsistentSplitting<dim, Number>::local_rhs_ppe_div_term_convective_boun
         // the inside instead
         tensor const grad_u  = velocity_minus.get_gradient(q);
         vector       u_minus = velocity_minus.get_value(q);
-        // velocity relative to the grid, see the cell integral
-        if(this->param.ale_formulation)
+        // see use_ale_form_convective_term()
+        if(use_ale_form_convective_term())
           u_minus -= grid_velocity.get_value(q);
         scalar const convective_flux = (grad_u * u_minus) * normal;
 

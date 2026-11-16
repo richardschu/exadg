@@ -83,6 +83,14 @@ private:
   setup_derived() final;
 
   void
+  get_vectors_serialization(std::vector<VectorType const *> & vectors_velocity,
+                            std::vector<VectorType const *> & vectors_pressure) const final;
+
+  void
+  set_vectors_deserialization(std::vector<VectorType> const & vectors_velocity,
+                              std::vector<VectorType> const & vectors_pressure) final;
+
+  void
   do_timestep_solve() final;
 
   void
@@ -158,6 +166,7 @@ private:
 
   std::vector<VectorType> vec_convective_term_div;
 
+  // Dirichlet data of the velocity, only used without the Leray projection
   std::vector<VectorType> velocity_dbc;
   VectorType              velocity_dbc_np;
 

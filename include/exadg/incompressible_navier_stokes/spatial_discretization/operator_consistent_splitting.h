@@ -127,6 +127,22 @@ private:
   /*
    * Right-hand side of the PPE
    */
+  // On a moving mesh with the Leray projection, the Leray projection term
+  // contains the time derivative at fixed mesh points. Then, the convective
+  // term is transported by the velocity relative to the grid, as in the
+  // momentum equation (ALE form). Without the Leray projection, the volume
+  // terms of the time derivative are not considered, which is only consistent
+  // for the time derivative at fixed points in space. Then, the convective term
+  // is transported by the velocity (Eulerian form), and the boundary condition
+  // on Gamma_D is corrected by grad(u) * w. Note that the temporal order of
+  // accuracy is reduced in the latter case, such that the Leray projection is
+  // recommended on a moving mesh.
+  bool
+  use_ale_form_convective_term() const
+  {
+    return this->param.ale_formulation and this->param.apply_leray_projection;
+  }
+
   // The bdf constant for the time derivative divded by the timestep size
   mutable Number gamma0_dt;
 

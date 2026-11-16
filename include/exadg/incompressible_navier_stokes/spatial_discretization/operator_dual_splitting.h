@@ -91,10 +91,6 @@ public:
   void
   rhs_ppe_nbc_body_force_term_add(VectorType & dst, double const & time) const;
 
-  // rhs pressure Poisson equation: Neumann BC numerical time derivative term
-  void
-  rhs_ppe_nbc_numerical_time_derivative_add(VectorType & dst, VectorType const & src) const;
-
   // rhs pressure Poisson equation: Neumann BC convective term
   void
   rhs_ppe_nbc_convective_add(VectorType & dst, VectorType const & src) const;
@@ -121,18 +117,6 @@ public:
 
   void
   apply_helmholtz_operator(VectorType & dst, VectorType const & src) const;
-
-
-  /*
-   * Fill a DoF vector with velocity Dirichlet values on Dirichlet boundaries.
-   *
-   * Note that this function only works as long as one uses a nodal dealii::FE_DGQ element with
-   * Gauss-Lobatto points. Otherwise, the quadrature formula used in this function does not match
-   * the nodes of the element, and the values injected by this function into the DoF vector are not
-   * the degrees of freedom of the underlying finite element space.
-   */
-  void
-  interpolate_velocity_dirichlet_bc(VectorType & dst, double const & time) const;
 
 private:
   /*
@@ -175,14 +159,6 @@ private:
 
   // Neumann boundary condition term
 
-  // dg_u/dt with numerical time derivative
-  void
-  local_rhs_ppe_nbc_numerical_time_derivative_add_boundary_face(
-    dealii::MatrixFree<dim, Number> const & matrix_free,
-    VectorType &                            dst,
-    VectorType const &                      src,
-    Range const &                           face_range) const;
-
   // body force term
   void
   local_rhs_ppe_nbc_body_force_term_add_boundary_face(
@@ -209,13 +185,6 @@ private:
   // viscous term from variable viscosity
   void
   local_rhs_ppe_nbc_variable_viscosity_add_boundary_face(
-    dealii::MatrixFree<dim, Number> const & matrix_free,
-    VectorType &                            dst,
-    VectorType const &                      src,
-    Range const &                           face_range) const;
-
-  void
-  local_interpolate_velocity_dirichlet_bc_boundary_face(
     dealii::MatrixFree<dim, Number> const & matrix_free,
     VectorType &                            dst,
     VectorType const &                      src,

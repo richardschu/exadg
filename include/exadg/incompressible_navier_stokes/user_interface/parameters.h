@@ -654,7 +654,8 @@ public:
   // order of extrapolation of viscous term and convective term in the pressure righthandside
   unsigned int order_extrapolation_pressure_rhs;
 
-  // use of Leray projection
+  // use of Leray projection (recommended): without the Leray projection, the
+  // temporal order of accuracy is reduced on a moving mesh (ALE).
   bool apply_leray_projection;
 
   /**************************************************************************************/

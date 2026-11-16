@@ -47,6 +47,7 @@ TimeIntBDFConsistentSplitting<dim, Number>::TimeIntBDFConsistentSplitting(
     pressure(this->order),
     velocity_divergence(this->order),
     vec_convective_term_div(this->order),
+    velocity_dbc(param_in.apply_leray_projection ? 0 : this->order),
     iterations_pressure({0, 0}),
     iterations_projection({0, 0}),
     iterations_viscous({0, {0, 0}}),
@@ -85,6 +86,41 @@ void
 TimeIntBDFConsistentSplitting<dim, Number>::setup_derived()
 {
   Base::setup_derived();
+
+  // velocity_dbc vectors do not have to be initialized in case of a restart,
+  // where the vectors are read from restart files.
+  if(this->param.restarted_simulation == false)
+  {
+    initialize_velocity_dbc();
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFConsistentSplitting<dim, Number>::get_vectors_serialization(
+  std::vector<VectorType const *> & vectors_velocity,
+  std::vector<VectorType const *> & vectors_pressure) const
+{
+  (void)vectors_pressure;
+
+  for(unsigned int i = 0; i < velocity_dbc.size(); i++)
+  {
+    vectors_velocity.push_back(&velocity_dbc[i]);
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFConsistentSplitting<dim, Number>::set_vectors_deserialization(
+  std::vector<VectorType> const & vectors_velocity,
+  std::vector<VectorType> const & vectors_pressure)
+{
+  (void)vectors_pressure;
+
+  for(unsigned int i = 0; i < velocity_dbc.size(); i++)
+  {
+    velocity_dbc[i] = vectors_velocity[i];
+  }
 }
 
 template<int dim, typename Number>
@@ -110,6 +146,50 @@ TimeIntBDFConsistentSplitting<dim, Number>::allocate_vectors()
   // convective term divergence
   for(unsigned int i = 0; i < vec_convective_term_div.size(); ++i)
     pde_operator->initialize_vector_pressure(vec_convective_term_div[i]);
+
+  // velocity_dbc
+  if(not this->param.apply_leray_projection)
+  {
+    for(unsigned int i = 0; i < velocity_dbc.size(); ++i)
+      pde_operator->initialize_vector_velocity(velocity_dbc[i]);
+    pde_operator->initialize_vector_velocity(velocity_dbc_np);
+  }
+}
+
+template<int dim, typename Number>
+void
+TimeIntBDFConsistentSplitting<dim, Number>::initialize_velocity_dbc()
+{
+  // Without the Leray projection, the time derivative in the pressure Poisson
+  // equation is evaluated from the Dirichlet data of the current and previous
+  // time steps. The data is stored at the nodes of the mesh of the respective
+  // time, i.e., at fixed mesh points on a moving mesh.
+  if(this->param.apply_leray_projection)
+    return;
+
+  // fill vector velocity_dbc: The first entry [0] is already needed if
+  // start_with_low_order == true
+  if(this->param.ale_formulation)
+  {
+    this->helpers_ale->move_grid(this->get_time());
+    this->helpers_ale->update_pde_operator_after_grid_motion();
+  }
+  pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[0], this->get_time());
+
+  // ... and previous times if start_with_low_order == false
+  if(this->start_with_low_order == false)
+  {
+    for(unsigned int i = 1; i < velocity_dbc.size(); ++i)
+    {
+      double const time = this->get_time() - double(i) * this->get_time_step_size();
+      if(this->param.ale_formulation)
+      {
+        this->helpers_ale->move_grid(time);
+        this->helpers_ale->update_pde_operator_after_grid_motion();
+      }
+      pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc[i], time);
+    }
+  }
 }
 
 
@@ -310,6 +390,10 @@ template<int dim, typename Number>
 void
 TimeIntBDFConsistentSplitting<dim, Number>::do_timestep_solve()
 {
+  // update the vector holding the time derivative of Dirichlet data
+  if(not this->param.apply_leray_projection)
+    pde_operator->interpolate_velocity_dirichlet_bc(velocity_dbc_np, this->get_next_time());
+
   // In a partitioned scheme (FSI), a field that is not updated keeps its
   // solution of the previous coupling iteration in pressure_np or velocity_np.
   if(this->update_pressure)
@@ -467,24 +551,29 @@ TimeIntBDFConsistentSplitting<dim, Number>::rhs_pressure(VectorType & rhs) const
   if(variable_viscosity)
     pde_operator->update_viscosity(velocity_extra);
 
-  // Now actually add the curl-curl term and the time derivative to the rhs
-  pde_operator->rhs_ppe_nbc_add(rhs,
-                                vorticity,
-                                this->get_next_time(),
-                                this->bdf.get_gamma0() / this->get_time_step_size());
-  // If Leray projection is not applied then the contributions from the old time derivative do not
-  // cancel, so they have to be added
-  if(!this->param.apply_leray_projection)
+  // Now actually add the curl-curl term and the time derivative to the rhs.
+  // With the Leray projection, the contributions of the previous time steps
+  // are part of the Leray projection term, such that only the Dirichlet data
+  // at t_{n+1} enters here.
+  if(this->param.apply_leray_projection)
   {
-    // Set curl to 0 as it was already added
-    vorticity = 0.0;
-    for(unsigned int i = 0; i < this->bdf.get_order(); ++i)
-    {
-      pde_operator->rhs_ppe_nbc_add(rhs,
-                                    vorticity,
-                                    this->get_previous_time(i),
-                                    -this->bdf.get_alpha(i) / this->get_time_step_size());
-    }
+    pde_operator->rhs_ppe_nbc_add(rhs,
+                                  vorticity,
+                                  this->get_next_time(),
+                                  this->bdf.get_gamma0() / this->get_time_step_size());
+  }
+  else
+  {
+    pde_operator->rhs_ppe_nbc_add(rhs, vorticity, this->get_next_time(), 0.0 /* gamma0_dt */);
+
+    // Without the Leray projection, the full BDF time derivative of the
+    // Dirichlet data is used. On a moving mesh, this is the time derivative at
+    // fixed mesh points, and the temporal order of accuracy is reduced, see
+    // OperatorConsistentSplitting::use_ale_form_convective_term().
+    VectorType acceleration(velocity_dbc_np);
+    compute_bdf_time_derivative(
+      acceleration, velocity_dbc_np, velocity_dbc, this->bdf, this->get_time_step_size());
+    pde_operator->rhs_ppe_nbc_numerical_time_derivative_add(rhs, acceleration);
   }
 
   // IV.2. terms of a variable viscosity, using the viscosity gradient of the
@@ -903,6 +992,13 @@ TimeIntBDFConsistentSplitting<dim, Number>::prepare_vectors_for_next_timestep()
 
   swap_back_one_step(pressure);
   pressure[0].swap(pressure_np);
+
+  // Note that velocity_dbc_np has already been updated.
+  if(not this->param.apply_leray_projection)
+  {
+    swap_back_one_step(velocity_dbc);
+    velocity_dbc[0].swap(velocity_dbc_np);
+  }
 
   // On a moving mesh, the divergence terms are computed on the current mesh in
   // pressure_step().

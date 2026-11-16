@@ -361,6 +361,7 @@ public:
       prm.add_parameter("TemporalDiscretization",              temporal_discretization,                           "Temporal discretization.");
       prm.add_parameter("TreatmentOfConvectiveTerm",           treatment_of_convective_term,                      "Treatment of the convective term.");
       prm.add_parameter("TreatmentOfVariableViscosity",        treatment_of_variable_viscosity,                   "Treatment of the variable viscosity.");
+      prm.add_parameter("ApplyLerayProjection",                apply_leray_projection,                            "Consistent splitting: apply the Leray projection.", dealii::Patterns::Bool());
       prm.add_parameter("GeneralizedNewtonianViscosityMargin", generalized_newtonian_model_data.viscosity_margin, "Generalized Newtonian models: viscosity margin.", dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianKappa",           generalized_newtonian_model_data.kappa,            "Generalized Newtonian models: kappa.",            dealii::Patterns::Double());
       prm.add_parameter("GeneralizedNewtonianLambda",          generalized_newtonian_model_data.lambda,           "Generalized Newtonian models: lambda.",           dealii::Patterns::Double());
@@ -524,6 +525,7 @@ private:
 
     // CONSISTENT SPLITTING SCHEME
     this->param.order_extrapolation_pressure_rhs = this->param.order_extrapolation_pressure_nbc;
+    this->param.apply_leray_projection           = apply_leray_projection;
 
     // momentum step of the consistent splitting scheme as the viscous step
     if(this->param.temporal_discretization == TemporalDiscretization::BDFDualSplitting or
@@ -861,6 +863,8 @@ private:
   bool read_restart  = false;
   bool write_restart = false;
   bool move_grid     = false;
+
+  bool apply_leray_projection = true;
 
   TriangulationType     triangulation_type     = TriangulationType::Distributed;
   SpatialDiscretization spatial_discretization = SpatialDiscretization::L2;

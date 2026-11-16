@@ -573,18 +573,6 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
     AssertThrow(order_extrapolation_pressure_nbc <= order_time_integrator,
                 dealii::ExcMessage("Invalid parameter order_extrapolation_pressure_nbc!"));
 
-    // On a moving mesh, the time derivative in the pressure Poisson equation is
-    // taken at fixed mesh points via the Leray projection term, which matches
-    // the convective term relative to the grid. Without the Leray projection,
-    // the time derivative of the Dirichlet data at fixed points in space would
-    // be needed, which is not available for `BoundaryTypeU::DirichletCached`.
-    if(ale_formulation)
-    {
-      AssertThrow(apply_leray_projection,
-                  dealii::ExcMessage("The ALE formulation requires `apply_leray_projection` for "
-                                     "`TemporalDiscretization::BDFConsistentSplitting`."));
-    }
-
     AssertThrow(initial_guess_type_pressure_poisson == InitialGuessType::Extrapolation and
                   initial_guess_type_momentum == InitialGuessType::Extrapolation,
                 dealii::ExcMessage("Only `InitialGuessType::Extrapolation` is implemented for "

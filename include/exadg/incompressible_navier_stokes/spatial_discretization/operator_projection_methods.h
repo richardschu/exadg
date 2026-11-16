@@ -97,6 +97,16 @@ protected:
   typedef typename Base::VectorType       VectorType;
   typedef typename Base::MultigridPoisson MultigridPoisson;
 
+  typedef OperatorProjectionMethods<dim, Number> This;
+
+  typedef typename Base::scalar scalar;
+  typedef typename Base::vector vector;
+
+  typedef typename Base::Range Range;
+
+  typedef typename Base::FaceIntegratorU FaceIntegratorU;
+  typedef typename Base::FaceIntegratorP FaceIntegratorP;
+
 public:
   /*
    * Constructor.
@@ -230,6 +240,21 @@ public:
                               double const &     time,
                               double const &     scaling_factor_mass) const;
 
+  /*
+   * Fill a DoF vector with velocity Dirichlet values on Dirichlet boundaries.
+   *
+   * Note that this function only works as long as one uses a nodal dealii::FE_DGQ element with
+   * Gauss-Lobatto points. Otherwise, the quadrature formula used in this function does not match
+   * the nodes of the element, and the values injected by this function into the DoF vector are not
+   * the degrees of freedom of the underlying finite element space.
+   */
+  void
+  interpolate_velocity_dirichlet_bc(VectorType & dst, double const & time) const;
+
+  // rhs pressure Poisson equation: Neumann BC numerical time derivative term
+  void
+  rhs_ppe_nbc_numerical_time_derivative_add(VectorType & dst, VectorType const & src) const;
+
 protected:
   // Pressure Poisson equation (operator, preconditioner, solver).
   Poisson::LaplaceOperator<dim, Number, 1> laplace_operator;
@@ -264,6 +289,37 @@ protected:
 private:
   void
   initialize_laplace_operator();
+
+  void
+  cell_loop_empty(dealii::MatrixFree<dim, Number> const &,
+                  VectorType &,
+                  VectorType const &,
+                  Range const &) const
+  {
+  }
+
+  void
+  face_loop_empty(dealii::MatrixFree<dim, Number> const &,
+                  VectorType &,
+                  VectorType const &,
+                  Range const &) const
+  {
+  }
+
+  void
+  local_interpolate_velocity_dirichlet_bc_boundary_face(
+    dealii::MatrixFree<dim, Number> const & matrix_free,
+    VectorType &                            dst,
+    VectorType const &                      src,
+    Range const &                           face_range) const;
+
+  // dg_u/dt with numerical time derivative
+  void
+  local_rhs_ppe_nbc_numerical_time_derivative_add_boundary_face(
+    dealii::MatrixFree<dim, Number> const & matrix_free,
+    VectorType &                            dst,
+    VectorType const &                      src,
+    Range const &                           face_range) const;
 
   /*
    * Setup functions called during setup of pressure Poisson solver.
