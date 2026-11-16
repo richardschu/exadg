@@ -508,6 +508,23 @@ Driver<dim, Number>::solve() const
       };
     partitioned_solver->solve(lambda_dirichlet_robin);
 
+    // With `UpdateMethod::ImplicitPressureStructure`, the fluid velocity is
+    // only computed in the first coupling iteration, with the structure
+    // velocity extrapolated to t_{n+1} as Dirichlet data. Update the fluid
+    // velocity with the converged structure velocity and fluid pressure, such
+    // that the velocity at t_{n+1} is consistent with the Dirichlet data used
+    // in the next time steps. Otherwise, the scheme is inconsistent (first
+    // order in the velocity or worse) and unstable for a strong added-mass
+    // effect.
+    if(parameters.update_method == UpdateMethod::ImplicitPressureStructure)
+    {
+      coupling_structure_to_fluid(1 /* structure velocity at t_{n+1} */);
+      fluid->time_integrator->advance_one_timestep_partitioned_solve(
+        false /* first_coupling_iteration */,
+        true /* update_velocity */,
+        false /* update_pressure */);
+    }
+
     // post-solve
     fluid->time_integrator->advance_one_timestep_post_solve();
     structure->time_integrator->advance_one_timestep_post_solve();

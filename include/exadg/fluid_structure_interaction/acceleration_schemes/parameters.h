@@ -34,6 +34,13 @@ namespace ExaDG
 {
 namespace FSI
 {
+// Fields updated in the coupling iterations of a time step after the first one:
+//  - Implicit: mesh, fluid velocity and pressure, and structure.
+//  - GeometricExplicit: fluid velocity and pressure, and structure.
+//  - ImplicitPressureStructure: fluid pressure and structure. The fluid
+//    velocity is updated once more after the coupling iterations.
+//  - ImplicitVelocityStructure: fluid velocity and structure.
+// All fields are updated in the first coupling iteration.
 enum class UpdateMethod
 {
   Undefined,
