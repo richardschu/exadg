@@ -481,12 +481,11 @@ Driver<dim, Number>::solve() const
   // compute initial acceleration for structural problem
   {
     // update stress boundary condition for solid at time t_n (not t_{n+1})
-    // With `TractionTransfer::Residual`, the penalty term of the fluid flux
-    // uses the structure velocity cached in the fluid, which is still zero
-    // here, since the coupling structure -> fluid has not been called yet.
-    // This is only the case for this initial acceleration and is consistent
-    // for the typical start from a quiescent state.
+    // With `TractionTransfer::Residual`, the fluxes of the fluid depend on the
+    // Dirichlet data of the fluid, i.e., the structure velocity at t_n, which
+    // is given to the fluid first.
     update_robin_parameters(0.0 /* Dirichlet-Neumann scheme */);
+    structure_to_fluid->update_data(structure->time_integrator->get_velocity_n());
     coupling_fluid_to_structure(false /* end_of_time_step */, false /* first_coupling_iteration */);
     structure->time_integrator->compute_initial_acceleration(
       application->structure->get_parameters().restarted_simulation);
