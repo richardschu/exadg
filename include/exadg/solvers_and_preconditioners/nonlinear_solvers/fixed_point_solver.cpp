@@ -51,14 +51,14 @@ FixedPointSolver<Number, VectorType>::solve(
   bool const                                      force_relaxation)
 {
   unsigned int iteration_counter = 0;
+  bool         converged         = false;
   if(parameters.acceleration_method == AccelerationMethod::FixedRelaxation)
   {
     // Fixed point iteration with fixed relaxation parameter `omega_init`.
     VectorType x;
     lambda_set_up_vector(x);
 
-    bool         converged = false;
-    double const omega     = parameters.omega_init;
+    double const omega = parameters.omega_init;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
@@ -73,8 +73,12 @@ FixedPointSolver<Number, VectorType>::solve(
       residual.add(-1.0, x);
       converged = lambda_check_convergence(residual);
 
+      // A new iterate would not be evaluated after the last iteration, such
+      // that the last iterate evaluated is kept.
+      bool const last_iteration = iteration_counter + 1 == parameters.max_iter;
+
       // relaxation
-      if(not(converged) or force_relaxation)
+      if((not(converged) and not(last_iteration)) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -97,8 +101,7 @@ FixedPointSolver<Number, VectorType>::solve(
     lambda_set_up_vector(residual_old);
     lambda_set_up_vector(x);
 
-    bool   converged = false;
-    double omega     = parameters.omega_init;
+    double omega = parameters.omega_init;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
@@ -113,8 +116,12 @@ FixedPointSolver<Number, VectorType>::solve(
       residual.add(-1.0, x);
       converged = lambda_check_convergence(residual);
 
+      // A new iterate would not be evaluated after the last iteration, such
+      // that the last iterate evaluated is kept.
+      bool const last_iteration = iteration_counter + 1 == parameters.max_iter;
+
       // relaxation
-      if(not(converged) or force_relaxation)
+      if((not(converged) and not(last_iteration)) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -150,8 +157,7 @@ FixedPointSolver<Number, VectorType>::solve(
     lambda_set_up_vector(x);
     lambda_set_up_vector(residual_old);
 
-    bool   converged = false;
-    double omega     = parameters.omega_init;
+    double omega = parameters.omega_init;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
@@ -168,8 +174,12 @@ FixedPointSolver<Number, VectorType>::solve(
       residual.add(-1.0, x);
       converged = lambda_check_convergence(residual);
 
+      // A new iterate would not be evaluated after the last iteration, such
+      // that the last iterate evaluated is kept.
+      bool const last_iteration = iteration_counter + 1 == parameters.max_iter;
+
       // Relaxation and globalization
-      if(not(converged) or force_relaxation)
+      if((not(converged) and not(last_iteration)) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -257,7 +267,6 @@ FixedPointSolver<Number, VectorType>::solve(
     lambda_set_up_vector(residual);
     lambda_set_up_vector(residual_old);
 
-    bool converged = false;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
@@ -269,8 +278,12 @@ FixedPointSolver<Number, VectorType>::solve(
       residual.add(-1.0, x);
       converged = lambda_check_convergence(residual);
 
+      // A new iterate would not be evaluated after the last iteration, such
+      // that the last iterate evaluated is kept.
+      bool const last_iteration = iteration_counter + 1 == parameters.max_iter;
+
       // relaxation
-      if(not(converged) or force_relaxation)
+      if((not(converged) and not(last_iteration)) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -395,7 +408,6 @@ FixedPointSolver<Number, VectorType>::solve(
     std::shared_ptr<LinearAlgebra::Matrix<Number>> U;
     std::vector<VectorType>                        Q;
 
-    bool converged = false;
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
       print_solver_info_header(iteration_counter);
@@ -409,8 +421,12 @@ FixedPointSolver<Number, VectorType>::solve(
       residual.add(-1.0, x);
       converged = lambda_check_convergence(residual);
 
+      // A new iterate would not be evaluated after the last iteration, such
+      // that the last iterate evaluated is kept.
+      bool const last_iteration = iteration_counter + 1 == parameters.max_iter;
+
       // relaxation
-      if(not(converged) or force_relaxation)
+      if((not(converged) and not(last_iteration)) or force_relaxation)
       {
         dealii::Timer timer;
         timer.restart();
@@ -518,7 +534,16 @@ FixedPointSolver<Number, VectorType>::solve(
     AssertThrow(false, dealii::ExcMessage("This AccelerationMethod is not implemented."));
   }
 
-  print_solver_info_converged(iteration_counter);
+  if(converged)
+  {
+    print_solver_info_converged(iteration_counter);
+  }
+  else
+  {
+    pcout << std::endl
+          << "WARNING: Fixed-point iteration did not converge in " << iteration_counter
+          << " iterations, continuing with the last iterate." << std::endl;
+  }
 
   return iteration_counter;
 }
