@@ -519,16 +519,17 @@ private:
     pp_data.output_data.write_higher_order = true;
     pp_data.output_data.degree             = this->param.degree_u;
 
-    // errors in the absolute L2 norm, since the solution vanishes at t = 0
+    // errors in the absolute L2 norm, since the solution vanishes at t = 0,
+    // where the error is zero
     pp_data.error_data_u.time_control_data.is_active        = true;
-    pp_data.error_data_u.time_control_data.start_time       = 0.0;
+    pp_data.error_data_u.time_control_data.start_time       = data.error_interval;
     pp_data.error_data_u.time_control_data.trigger_interval = data.error_interval;
     pp_data.error_data_u.analytical_solution.reset(new Piston::VelocityFluid<dim>(data));
     pp_data.error_data_u.calculate_relative_errors = false;
     pp_data.error_data_u.name                      = "fluid velocity";
 
     pp_data.error_data_p.time_control_data.is_active        = true;
-    pp_data.error_data_p.time_control_data.start_time       = 0.0;
+    pp_data.error_data_p.time_control_data.start_time       = data.error_interval;
     pp_data.error_data_p.time_control_data.trigger_interval = data.error_interval;
     pp_data.error_data_p.analytical_solution.reset(new Piston::KinematicPressureFluid<dim>(data));
     pp_data.error_data_p.calculate_relative_errors = false;
@@ -859,7 +860,7 @@ private:
     pp_data.output_data.degree             = this->param.degree;
 
     pp_data.error_data.time_control_data.is_active        = true;
-    pp_data.error_data.time_control_data.start_time       = 0.0;
+    pp_data.error_data.time_control_data.start_time       = data.error_interval;
     pp_data.error_data.time_control_data.trigger_interval = data.error_interval;
     pp_data.error_data.analytical_solution.reset(new Piston::DisplacementStructure<dim>(data));
     pp_data.error_data.calculate_relative_errors = false;

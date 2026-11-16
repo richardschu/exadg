@@ -1,0 +1,47 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "2",
+        "IsTest": "true"
+    },
+    "SpatialResolutionFluid": {
+        "Degree": "2",
+        "RefineSpace": "1"
+    },
+    "SpatialResolutionStructure": {
+        "Degree": "4",
+        "RefineSpace": "1"
+    },
+    "Application": {
+        "EndTime": "0.1",
+        "TimeStepSize": "0.0125",
+        "ErrorInterval": "0.1"
+    },
+    "Fluid": {
+        "TemporalDiscretization": "BDFCoupledSolution",
+        "TreatmentOfConvectiveTerm": "Explicit",
+        "OrderTimeIntegrator": "2",
+        "MeshMovementType": "Poisson"
+    },
+    "Structure": {
+        "GenAlphaType": "GenAlpha",
+        "SpectralRadius": "0.0"
+    },
+    "FSI": {
+        "AccelerationMethod": "IQN_ILS",
+        "UpdateMethod": "Implicit",
+        "CouplingMethod": "DirichletNeumann",
+        "AbsTol": "1.e-20",
+        "RelTol": "1.e-10",
+        "OmegaInit": "0.5",
+        "InitialGuessCouplingScheme": "SolutionExtrapolatedToEndOfTimeStep",
+        "PartitionedMaxIter": "100",
+        "ReusedTimeSteps": "0",
+        "GeometricTolerance": "1.e-10"
+    },
+    "Output": {
+        "OutputDirectory": "output/piston/",
+        "OutputName": "piston",
+        "WriteOutput": "false"
+    }
+}

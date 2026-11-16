@@ -1,0 +1,559 @@
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       2
+
+Setting up fluid-structure interaction solver:
+
+List of parameters for incompressible flow solver:
+
+Mathematical model:
+  Problem type:                              Unsteady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            ConvectiveFormulation
+  Outflow BC for convective term:            true
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       true
+  Mesh movement type:                        Poisson
+  NBC with variable normal vector:           false
+
+Physical quantities:
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e-01
+  Viscosity:                                 1.0000e-01
+  Density:                                   1.0000e+00
+
+Temporal discretization:
+  Temporal discretization method:            BDFCoupledSolution
+  Calculation of time step size:             UserSpecified
+  Adaptive time stepping:                    false
+  Maximum number of time steps:              4294967295
+  Temporal refinements:                      0
+  Order of time integration scheme:          2
+  Start with low order method:               true
+  Treatment of convective term:              Explicit
+  Solver information:
+  Interval physical time:                    1.0000e-02
+  Interval wall time:                        1.7977e+308
+  Interval time steps:                       4294967295
+  Restarted simulation:                      false
+  Restart:
+  Write restart:                             false
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            1
+  Mapping degree coarse grids:               1
+  FE space:                                  L2
+  Polynomial degree velocity:                2
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Weak
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Weak
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyZeroMeanValue
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:true
+  Use boundary data:                         true
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+Coupled Navier-Stokes solver:
+  Use scaling of continuity equation:        false
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-11
+  Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            BlockTriangular
+  Update preconditioner:                     false
+
+  Velocity/momentum block:
+  Preconditioner:                            InverseMassMatrix
+
+  Pressure/Schur-complement block:
+  Preconditioner:                            CahouetChabard
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of Laplace operator:       false
+
+Postprocessing of velocity (penalty terms):
+  Solver:                                    CG
+  Maximum number of iterations:              1000
+  Absolute solver tolerance:                 1.0000e-11
+  Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
+  Preconditioner projection step:            InverseMassMatrix
+  Update preconditioner projection step:     false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                1
+  Number of cells:                           8
+
+List of parameters for ALE solver (Poisson):
+
+Mathematical model:
+  Right-hand side:                           false
+
+Spatial Discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            1
+  Mapping degree coarse grids:               1
+  FE space:                                  CG
+  Polynomial degree:                         1
+  Use matrix-based operator:                 false
+
+Solver:
+  Solver:                                    CG
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-11
+  Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
+  Preconditioner:                            Multigrid
+  Multigrid type:                            phMG
+  p-sequence:                                Bisect
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        CG
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+
+Numerical parameters:
+  Enable cell-based face loops:              false
+
+Construct Poisson operator ...
+
+
+Continuous Galerkin finite element discretization:
+
+  degree of 1D polynomials:                  1
+  number of dofs per cell:                   8
+  number of dofs (total):                    30
+
+... done!
+
+Setup Poisson operator ...
+
+... done!
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   18
+  number of dofs (total):                    144
+Pressure:
+  degree of 1D polynomials:                  1
+  number of dofs per cell:                   4
+  number of dofs (total):                    32
+Velocity and pressure:
+  number of dofs per cell:                   22
+  number of dofs (total):                    176
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Setup Multistep time integrator ...
+
+User specified time step size:
+
+  time step size:                            1.2500e-02
+
+... done!
+
+WARNING: Fluid-structure interaction with linear elasticity: the fluid traction is applied in the reference configuration of the structure without transformation.
+
+List of parameters for structure:
+
+Mathematical model:
+  Problem type:                              Unsteady
+  Body force:                                false
+  Large deformation:                         false
+
+Physical quantities:
+  Density:                                   1.0000e+02
+
+Temporal discretization:
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e-01
+  Max. number of time steps:                 4294967295
+  Temporal refinements:                      0
+  Time integration type:                     GenAlpha
+  Spectral radius:                           0.0000e+00
+  Solver information:
+  Interval physical time:                    1.0000e-02
+  Interval wall time:                        1.7977e+308
+  Interval time steps:                       4294967295
+
+Spatial Discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            1
+  Mapping degree coarse grids:               1
+  Polynomial degree:                         4
+  Use matrix-based operator:                 false
+
+Solver:
+
+Linear solver:
+  Solver:                                    CG
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-11
+  Relative solver tolerance:                 1.0000e-10
+  Relative tolerance reference:              InitialResidual
+  Preconditioner:                            Multigrid
+  Multigrid type:                            phMG
+  p-sequence:                                Bisect
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        CG
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                1
+  Number of cells:                           8
+
+Construct elasticity operator ...
+
+Continuous Galerkin finite element discretization:
+
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   50
+  number of dofs (total):                    306
+
+... done!
+
+Setup elasticity operator ...
+
+... done!
+
+Setup elasticity time integrator ...
+
+... done!
+
+Setup interface coupling structure -> ALE ...
+
+... done!
+
+Setup interface coupling structure -> fluid ...
+
+... done!
+
+Starting time loop ...
+
+________________________________________________________________________________
+
+ Time step number = 1       t = 0.00000e+00, dt = 1.25000e-02
+________________________________________________________________________________
+
+Starting time loop ...
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 2       t = 1.25000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 3       t = 2.50000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 4       t = 3.75000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 5       t = 5.00000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 6       t = 6.25000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 7       t = 7.50000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+________________________________________________________________________________
+
+ Time step number = 8       t = 8.75000e-02, dt = 1.25000e-02
+________________________________________________________________________________
+
+======================================================================
+ Fixed-point iteration: iteration counter = 0       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 1       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 2       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 3       
+======================================================================
+
+======================================================================
+ Fixed-point iteration: iteration counter = 4       
+======================================================================
+
+Fixed-point iteration took 5 iterations
+until `lambda_check_convergence()` returned `true`.
+
+Calculate error for fluid velocity at time t = 1.0000e-01:
+  Absolute error (L2-norm): 8.96815e-06
+
+Calculate error for fluid pressure at time t = 1.0000e-01:
+  Absolute error (L2-norm): 5.94690e-05
+
+Calculate error for structure displacement at time t = 1.0000e-01:
+  Absolute error (L2-norm): 2.27971e-07
