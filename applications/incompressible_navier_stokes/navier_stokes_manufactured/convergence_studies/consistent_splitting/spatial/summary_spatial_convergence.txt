@@ -1,6 +1,6 @@
 Spatial convergence of navier_stokes_manufactured (generalized Newtonian, Carreau-Yasuda with the
 blood parameters kappa 1, lambda 1.556335, a 2, n 0.462495, nu_0 / nu_oo = 8.45 at nu_oo = 1e-2),
-inputs input_spatial_*.json: Navier-Stokes, explicit convective term, refinements 0..4, T = 0.1,
+inputs from study.json: Navier-Stokes, explicit convective term, refinements 0..4, T = 0.1,
 dt = 1e-5, BDF2.
 Tables printed by `python3 ../../summarize.py .` (from convergence_studies/: `python3 summarize.py <folder>`):
 relative L2 errors at T on the first and last level and the rates (log2) of all refinements;

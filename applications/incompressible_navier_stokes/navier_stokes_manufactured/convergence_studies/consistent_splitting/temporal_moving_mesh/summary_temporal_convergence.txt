@@ -1,0 +1,35 @@
+Temporal convergence of navier_stokes_manufactured on a moving mesh (Newtonian, nu = 1e-2, mesh
+motion of the app: sine in space and time, amplitude 1/15, period 0.4, the boundary moves as well),
+inputs from study.json: Navier-Stokes, explicit convective term, degree 8, refinement 3 (8x8
+cells), T = 0.4, dt = 1/160, 1/320, ..., 1/5120. consistent_splitting_no_leray is
+BDFConsistentSplitting with ApplyLerayProjection = false.
+Tables printed by `python3 ../../summarize.py .` (from convergence_studies/: `python3 summarize.py <folder>`):
+relative L2 errors at T on the first and last level and the rates (log2) of all refinements;
+time = sum of the wall times of all runs of a study (2 MPI processes each, 3 studies at a time).
+
+==== BDF1 (expected rate 1)
+scheme / convective term / viscosity                    dt=1/160 dt=1/5120   rates
+coupled / explicit / explicit                        u  4.41e-03  1.34e-04   1.02  1.01  1.01  1.00  1.00    121s
+                                                     p  3.30e-03  1.05e-04   0.99  1.00  1.00  1.00  1.00
+consistent_splitting / explicit / explicit           u  4.41e-03  1.34e-04   1.02  1.01  1.01  1.00  1.00     80s
+                                                     p  3.30e-03  1.05e-04   0.99  1.00  1.00  1.00  1.00
+consistent_splitting_no_leray / explicit / explicit  u  4.58e-03  1.91e-04   0.97  0.94  0.90  0.88  0.89     81s
+                                                     p  4.36e-03  2.71e-04   0.90  0.81  0.75  0.75  0.81
+
+==== BDF2 (expected rate 2)
+scheme / convective term / viscosity                    dt=1/160 dt=1/5120   rates
+coupled / explicit / explicit                        u  1.34e-04  1.34e-07   2.00  1.98  1.99  1.99  2.00    116s
+                                                     p  9.20e-05  7.25e-08   2.16  2.08  2.04  2.02  2.01
+consistent_splitting / explicit / explicit           u  1.34e-04  1.34e-07   2.00  1.98  1.99  1.99  2.00     75s
+                                                     p  9.17e-05  7.25e-08   2.16  2.08  2.04  2.02  2.01
+consistent_splitting_no_leray / explicit / explicit  u  1.40e-04  2.29e-07   1.99  1.96  1.94  1.93  1.45     77s
+                                                     p  1.26e-04  2.85e-07   2.15  2.03  1.93  1.77  0.91
+
+==== BDF3 (expected rate 3)
+scheme / convective term / viscosity                    dt=1/160 dt=1/5120   rates
+coupled / explicit / explicit                        u  4.25e-05  1.30e-09   2.99  3.00  3.00  3.00  3.00    107s
+                                                     p  2.73e-05  8.31e-10   2.97  2.99  2.99  3.00  3.05
+consistent_splitting / explicit / explicit           u  4.23e-05  1.30e-09   2.99  3.00  3.00  3.00  3.00     66s
+                                                     p  4.04e-05  1.25e-09   2.97  2.99  3.00  3.00  3.02
+consistent_splitting_no_leray / explicit / explicit  u  1.21e-04  1.36e-07   2.20  2.06  1.97  1.97  1.61     69s
+                                                     p  1.43e-04  2.51e-07   2.31  2.09  1.94  1.91  0.91

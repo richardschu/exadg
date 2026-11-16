@@ -1,0 +1,64 @@
+{
+    "prefix": "temporal",
+    "schemes": [
+        "coupled",
+        "consistent_splitting",
+        "consistent_splitting_no_leray"
+    ],
+    "convective_term": [
+        "explicit"
+    ],
+    "viscosity": [
+        "explicit"
+    ],
+    "bdf_orders": [
+        1,
+        2,
+        3
+    ],
+    "base": {
+        "General": {
+            "Precision": "double",
+            "Dim": "2",
+            "IsTest": "false"
+        },
+        "SpatialResolution": {
+            "DegreeMin": "8",
+            "DegreeMax": "8",
+            "RefineSpaceMin": "3",
+            "RefineSpaceMax": "3"
+        },
+        "TemporalResolution": {
+            "RefineTimeMin": "0",
+            "RefineTimeMax": "5"
+        },
+        "Application": {
+            "TriangulationType": "Distributed",
+            "SpatialDiscretization": "L2",
+            "MoveGrid": "true",
+            "ReadRestart": "false",
+            "WriteRestart": "false",
+            "IncludeConvectiveTerm": "true",
+            "BoundaryCondition": "PureDirichlet",
+            "StartTime": "0.0",
+            "EndTime": "0.4",
+            "TimeStepSize": "0.00625",
+            "IntervalStart": "0.0",
+            "IntervalEnd": "1.0",
+            "Density": "1.0",
+            "KinematicViscosity": "1e-2",
+            "UseGeneralizedNewtonianModel": "false",
+            "FormulationViscousTerm": "DivergenceFormulation",
+            "GeneralizedNewtonianViscosityMargin": "0.0",
+            "GeneralizedNewtonianKappa": "1.0",
+            "GeneralizedNewtonianLambda": "1.0",
+            "GeneralizedNewtonianA": "2.0",
+            "GeneralizedNewtonianN": "0.5",
+            "ComputeConvergenceTable": "true"
+        },
+        "Output": {
+            "OutputName": "consistent_splitting_conv_explicit_moving_mesh",
+            "WriteOutput": "false"
+        }
+    }
+}
