@@ -1,0 +1,30 @@
+Spatial convergence of the piston (Serino et al., JCP 2019: linear elastic standing wave, uniform
+fluid velocity, linear pressure), inputs from study.json: E = 200, nu = 0.3, rho_s = 100, rho_f = 1,
+viscosity 0.1, a = 0.005, omega = pi, refinements 1..4 of fluid and structure (4x2 ... 32x16 cells each),
+structure degree 1, 2, 3, fluid degree 2 (the fluid solution is in the discrete space, so the fluid
+errors follow the structure error), T = 0.5, dt = 7.8125e-4 (temporal errors u 5.6e-8, p 1.0e-7,
+d 5.7e-9, see temporal/), BDF2 and generalized-alpha (spectral radius 0), Dirichlet-Neumann coupling
+with IQN-ILS (RelTol 1e-9).
+Tables printed by `python3 ../summarize.py .` (from convergence_studies/: `python3 summarize.py spatial`):
+maximum over the error outputs (every 0.05) of the absolute L2 errors of the fluid velocity (u), the
+fluid pressure (p) and the structure displacement (d) on the first and last level and the rates (log2)
+of all levels; FSI it = partitioned iterations per time step averaged over the runs of a study; time =
+sum of the wall times of all runs of a study (1 MPI process per run, 8 runs at a time).
+
+==== structure degree k = 1 (expected rate of the displacement 2)
+scheme            r=1        r=4   rates
+coupled u  7.72e-05  1.18e-06   1.97  2.01  2.05  FSI it 4.2    103s
+        p  1.38e-04  2.08e-06   1.99  2.01  2.05
+        d  5.87e-05  9.48e-07   1.96  1.99  2.00
+
+==== structure degree k = 2 (expected rate of the displacement 3)
+scheme            r=1        r=4   rates
+coupled u  8.30e-07  5.73e-08   5.28 -1.33 -0.09  FSI it 4.8    116s
+        p  2.53e-06  1.32e-07   3.75  0.85 -0.34
+        d  2.40e-06  6.53e-09   3.02  3.01  2.49
+
+==== structure degree k = 3 (expected rate of the displacement 4)
+scheme            r=1        r=4   rates
+coupled u  6.38e-08  5.67e-08   0.18 -0.01  0.00  FSI it 5.0    129s
+        p  1.78e-07  1.34e-07   0.72 -0.33  0.02
+        d  3.72e-08  5.55e-09   2.68  0.07  0.00

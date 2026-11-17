@@ -1,0 +1,65 @@
+{
+    "prefix": "spatial",
+    "schemes": [
+        "coupled"
+    ],
+    "degrees_structure": [
+        1,
+        2,
+        3
+    ],
+    "refinements": [
+        1,
+        2,
+        3,
+        4
+    ],
+    "base": {
+        "General": {
+            "Precision": "double",
+            "Dim": "2",
+            "IsTest": "false"
+        },
+        "SpatialResolutionFluid": {
+            "Degree": "2",
+            "RefineSpace": "1"
+        },
+        "SpatialResolutionStructure": {
+            "Degree": "4",
+            "RefineSpace": "1"
+        },
+        "Application": {
+            "EndTime": "0.5",
+            "TimeStepSize": "7.8125e-4",
+            "ErrorInterval": "0.05",
+            "YoungsModulus": "200.0"
+        },
+        "Fluid": {
+            "TemporalDiscretization": "BDFCoupledSolution",
+            "TreatmentOfConvectiveTerm": "Explicit",
+            "OrderTimeIntegrator": "2",
+            "MeshMovementType": "Poisson"
+        },
+        "Structure": {
+            "GenAlphaType": "GenAlpha",
+            "SpectralRadius": "0.0"
+        },
+        "FSI": {
+            "AccelerationMethod": "IQN_ILS",
+            "UpdateMethod": "Implicit",
+            "CouplingMethod": "DirichletNeumann",
+            "TractionTransfer": "PointEvaluation",
+            "AbsTol": "1.e-16",
+            "RelTol": "1.e-9",
+            "OmegaInit": "0.5",
+            "InitialGuessCouplingScheme": "SolutionExtrapolatedToEndOfTimeStep",
+            "PartitionedMaxIter": "100",
+            "ReusedTimeSteps": "0",
+            "GeometricTolerance": "1.e-10"
+        },
+        "Output": {
+            "OutputName": "piston",
+            "WriteOutput": "false"
+        }
+    }
+}
