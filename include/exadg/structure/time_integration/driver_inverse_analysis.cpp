@@ -380,7 +380,12 @@ DriverInverseAnalysis<dim, Number>::check_convergence(VectorType const & update,
     double const abs_error = update.l2_norm();
     double const rel_error = abs_error / iterate.l2_norm();
 
-    if(inverse_analysis_solver_parameters.print_solver_info)
+    bool const converged = (abs_error < inverse_analysis_solver_parameters.abs_tol) or
+                           (rel_error < inverse_analysis_solver_parameters.rel_tol);
+
+    // Print the errors of the converged iterate only, the errors of the
+    // previous iterates are sensitive to round-off.
+    if(converged and inverse_analysis_solver_parameters.print_solver_info)
     {
       pcout << "\n"
             << "Inverse analysis errors :\n"
@@ -388,9 +393,6 @@ DriverInverseAnalysis<dim, Number>::check_convergence(VectorType const & update,
             << "  ||d_k+1 - d_k||           = " << abs_error << "\n"
             << "  ||d_k+1 - d_k||/||d_k+1|| = " << rel_error << "\n";
     }
-
-    bool const converged = (abs_error < inverse_analysis_solver_parameters.abs_tol) or
-                           (rel_error < inverse_analysis_solver_parameters.rel_tol);
 
     if(not(converged))
     {

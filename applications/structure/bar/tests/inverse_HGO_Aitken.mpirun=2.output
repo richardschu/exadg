@@ -192,36 +192,20 @@ until `lambda_check_convergence()` returned `true`.
 ======================================================================
  solve non-linear problem for load factor = 1.0000e+00
 
-Inverse analysis errors :
-  ||d_k+1 - d_k||           = 3.76516e+00
-  ||d_k+1 - d_k||/||d_k+1|| = 1.19475e-01
-
 ======================================================================
  Fixed-point iteration: iteration counter = 1       
 ======================================================================
  solve non-linear problem for load factor = 1.0000e+00
-
-Inverse analysis errors :
-  ||d_k+1 - d_k||           = 2.61307e+00
-  ||d_k+1 - d_k||/||d_k+1|| = 8.29764e-02
 
 ======================================================================
  Fixed-point iteration: iteration counter = 2       
 ======================================================================
  solve non-linear problem for load factor = 1.0000e+00
 
-Inverse analysis errors :
-  ||d_k+1 - d_k||           = 3.68438e-05
-  ||d_k+1 - d_k||/||d_k+1|| = 1.17186e-06
-
 ======================================================================
  Fixed-point iteration: iteration counter = 3       
 ======================================================================
  solve non-linear problem for load factor = 1.0000e+00
-
-Inverse analysis errors :
-  ||d_k+1 - d_k||           = 7.22540e-07
-  ||d_k+1 - d_k||/||d_k+1|| = 2.29811e-08
 
 ======================================================================
  Fixed-point iteration: iteration counter = 4       
@@ -229,8 +213,8 @@ Inverse analysis errors :
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 1.63208e-10
-  ||d_k+1 - d_k||/||d_k+1|| = 5.19099e-12
+  ||d_k+1 - d_k||           = 2.20604e-11
+  ||d_k+1 - d_k||/||d_k+1|| = 7.01652e-13
 
 Fixed-point iteration took 5 iterations
 until `lambda_check_convergence()` returned `true`.
