@@ -890,8 +890,15 @@ TimeIntBDFPressureCorrection<dim, Number>::rhs_pressure(VectorType & rhs) const
   /*
    *  I. calculate divergence term
    */
+  // divergence of the intermediate velocity of the momentum step. In coupling
+  // iterations without an update of the velocity, velocity_np holds the final
+  // velocity of an earlier coupling iteration.
+  VectorType const & velocity_intermediate =
+    this->update_velocity ? velocity_np : velocity_momentum_last_iter;
   VectorType temp(pressure_np);
-  pde_operator->evaluate_velocity_divergence_term(temp, velocity_np, this->get_next_time());
+  pde_operator->evaluate_velocity_divergence_term(temp,
+                                                  velocity_intermediate,
+                                                  this->get_next_time());
 
   rhs.equ(-this->bdf.get_gamma0() / this->get_time_step_size(), temp);
 
@@ -938,9 +945,12 @@ TimeIntBDFPressureCorrection<dim, Number>::pressure_update(VectorType const & pr
   // to avoid the storage of another temporary variable).
   if(this->param.rotational_formulation == true)
   {
-    // Automatically sets pressure_np to zero before operator evaluation.
+    // Automatically sets pressure_np to zero before operator evaluation. The
+    // intermediate velocity of the momentum step enters, see rhs_pressure().
+    VectorType const & velocity_intermediate =
+      this->update_velocity ? velocity_np : velocity_momentum_last_iter;
     pde_operator->evaluate_velocity_divergence_term(pressure_np,
-                                                    velocity_np,
+                                                    velocity_intermediate,
                                                     this->get_next_time());
 
     pde_operator->apply_inverse_pressure_mass_operator(pressure_np, pressure_np);
