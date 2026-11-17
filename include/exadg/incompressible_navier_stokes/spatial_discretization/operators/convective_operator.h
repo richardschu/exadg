@@ -182,6 +182,10 @@ public:
   set_velocity_copy(VectorType const & src)
   {
     velocity.own() = src;
+
+    // The copy is read in the cell and face integrals, e.g., on the multigrid
+    // levels, where src comes from a transfer without ghost values.
+    velocity->update_ghost_values();
   }
 
   void

@@ -199,8 +199,10 @@ test(ElementType const element_type, unsigned int const degree)
       solution[i][d] = boundary_values.value(q_points[i], d);
 
   // Inject the cached values into the degrees of freedom on the boundary.
+  // As in the operators, the face integrator reads the ghost entries of dst.
   VectorType dst;
   matrix_free.initialize_dof_vector(dst, dof_index);
+  dst.update_ghost_values();
 
   FaceIntegrator<dim, dim, Number> integrator(matrix_free, true, dof_index, quad_index);
   for(unsigned int face = matrix_free.n_inner_face_batches();

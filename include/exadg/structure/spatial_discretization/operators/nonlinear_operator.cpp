@@ -311,8 +311,12 @@ NonLinearOperator<dim, Number>::export_configuration(OutputData const & output_d
       std::string const filename_binary                 = "vector_in_unmapped_grid";
       bool constexpr point_ordering_from_support_points = false;
 
+      // write_cell_data() evaluates the vector on the locally owned cells.
+      VectorType vector_ghosted(vector);
+      vector_ghosted.update_ghost_values();
+
       ExaDG::MatchCellData::write_cell_data<dim, NumberBinaryFile, VectorType>(
-        vector,
+        vector_ghosted,
         output_data.directory,
         filename_binary,
         dof_handler.get_fe().degree,
