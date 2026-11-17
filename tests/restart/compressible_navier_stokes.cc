@@ -21,6 +21,7 @@
 
 // ExaDG
 #include <exadg/compressible_navier_stokes/driver.h>
+#include <exadg/compressible_navier_stokes/input_file.h>
 #include <exadg/compressible_navier_stokes/user_interface/declare_get_application.h>
 #include <exadg/operators/resolution_parameters.h>
 #include <exadg/time_integration/resolution_parameters.h>
@@ -39,6 +40,8 @@ run(std::string const & input_file,
 {
   dealii::Timer timer;
   timer.restart();
+
+  CompNS::check_input_file<dim, Number>(input_file, mpi_comm);
 
   std::shared_ptr<CompNS::ApplicationBase<dim, Number>> application =
     CompNS::get_application<dim, Number>(input_file, mpi_comm);

@@ -28,6 +28,7 @@
 // ExaDG
 #include <exadg/operators/resolution_parameters.h>
 #include <exadg/structure/driver.h>
+#include <exadg/structure/input_file.h>
 #include <exadg/structure/user_interface/declare_get_application.h>
 #include <exadg/time_integration/resolution_parameters.h>
 #include <exadg/utilities/enum_patterns.h>
@@ -40,20 +41,11 @@ create_input_file(std::string const & input_file)
 {
   dealii::ParameterHandler prm;
 
-  GeneralParameters general;
-  general.add_parameters(prm);
-
-  SpatialResolutionParametersMinMax spatial;
-  spatial.add_parameters(prm);
-
-  TemporalResolutionParameters temporal;
-  temporal.add_parameters(prm);
-
   // we have to assume a default dimension and default Number type
   // for the automatic generation of a default input file
   unsigned int const Dim = 2;
   typedef double     Number;
-  Structure::get_application<Dim, Number>(input_file, MPI_COMM_WORLD)->add_parameters(prm);
+  Structure::add_parameters_input_file<Dim, Number>(prm, input_file, MPI_COMM_WORLD);
 
   prm.print_parameters(input_file,
                        dealii::ParameterHandler::Short |
@@ -71,6 +63,8 @@ run(std::string const & input_file,
 {
   dealii::Timer timer;
   timer.restart();
+
+  Structure::check_input_file<dim, Number>(input_file, mpi_comm);
 
   std::shared_ptr<Structure::ApplicationBase<dim, Number>> application =
     Structure::get_application<dim, Number>(input_file, mpi_comm);

@@ -27,6 +27,7 @@
 
 // ExaDG
 #include <exadg/aero_acoustic/driver.h>
+#include <exadg/aero_acoustic/input_file.h>
 #include <exadg/aero_acoustic/user_interface/declare_get_application.h>
 #include <exadg/utilities/enum_patterns.h>
 #include <exadg/utilities/general_parameters.h>
@@ -38,16 +39,11 @@ create_input_file(std::string const & input_file)
 {
   dealii::ParameterHandler prm;
 
-  GeneralParameters general;
-  general.add_parameters(prm);
-
   // we have to assume a default dimension and default Number type
   // for the automatic generation of a default input file
   unsigned int const Dim = 2;
   using Number           = double;
-
-  auto app = AeroAcoustic::get_application<Dim, Number>(input_file, MPI_COMM_WORLD);
-  app->add_parameters(prm);
+  AeroAcoustic::add_parameters_input_file<Dim, Number>(prm, input_file, MPI_COMM_WORLD);
 
   prm.print_parameters(input_file,
                        dealii::ParameterHandler::Short |
@@ -60,6 +56,8 @@ run(std::string const & input_file, MPI_Comm const & mpi_comm, bool const is_tes
 {
   dealii::Timer timer;
   timer.restart();
+
+  AeroAcoustic::check_input_file<dim, Number>(input_file, mpi_comm);
 
   auto application = AeroAcoustic::get_application<dim, Number>(input_file, mpi_comm);
 

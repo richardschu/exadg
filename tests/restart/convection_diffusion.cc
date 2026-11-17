@@ -21,6 +21,7 @@
 
 // ExaDG
 #include <exadg/convection_diffusion/driver.h>
+#include <exadg/convection_diffusion/input_file.h>
 #include <exadg/convection_diffusion/user_interface/declare_get_application.h>
 #include <exadg/operators/resolution_parameters.h>
 #include <exadg/time_integration/resolution_parameters.h>
@@ -39,6 +40,8 @@ run(std::string const & input_file,
 {
   dealii::Timer timer;
   timer.restart();
+
+  ConvDiff::check_input_file<dim, Number>(input_file, mpi_comm);
 
   std::shared_ptr<ConvDiff::ApplicationBase<dim, Number>> application =
     ConvDiff::get_application<dim, Number>(input_file, mpi_comm);

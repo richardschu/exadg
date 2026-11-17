@@ -21,6 +21,7 @@
 
 // ExaDG
 #include <exadg/incompressible_navier_stokes/driver.h>
+#include <exadg/incompressible_navier_stokes/input_file.h>
 #include <exadg/incompressible_navier_stokes/user_interface/declare_get_application.h>
 #include <exadg/time_integration/resolution_parameters.h>
 #include <exadg/utilities/general_parameters.h>
@@ -38,6 +39,8 @@ run(std::string const & input_file,
 {
   dealii::Timer timer;
   timer.restart();
+
+  IncNS::check_input_file<dim, Number>(input_file, mpi_comm);
 
   std::shared_ptr<IncNS::ApplicationBase<dim, Number>> application =
     IncNS::get_application<dim, Number>(input_file, mpi_comm);
