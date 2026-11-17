@@ -267,6 +267,21 @@ create_triangulation(
 }
 
 /**
+ * Remove all manifolds from `tria` and set the flat manifold ID on the cells of
+ * all levels. Triangulation::set_all_manifold_ids() only sets the active cells,
+ * such that the coarse triangulations for multigrid would keep the manifold ID
+ * of the parent cells without a manifold attached.
+ */
+template<int dim>
+inline void
+remove_manifolds(dealii::Triangulation<dim> & tria)
+{
+  tria.reset_all_manifolds();
+  for(auto const & cell : tria.cell_iterators())
+    cell->set_all_manifold_ids(dealii::numbers::flat_manifold_id);
+}
+
+/**
  * Given a fine_triangulation, this function creates all the coarse triangulations required for
  * multigrid implementations that expect a vector of triangulations.
  *
