@@ -139,13 +139,8 @@ template<int dim>
 class NeumannBoundaryVelocity : public FunctionWithNormal<dim>
 {
 public:
-  NeumannBoundaryVelocity(FormulationViscousTerm const &        formulation_viscous_term,
-                          double const &                        nu_oo,
-                          GeneralizedNewtonianModelData const & data)
-    : FunctionWithNormal<dim>(dim, 0.0),
-      formulation_viscous_term(formulation_viscous_term),
-      nu_oo(nu_oo),
-      data(data)
+  NeumannBoundaryVelocity(FormulationViscousTerm const & formulation_viscous_term)
+    : FunctionWithNormal<dim>(dim, 0.0), formulation_viscous_term(formulation_viscous_term)
   {
   }
 
@@ -163,6 +158,9 @@ public:
      * t* := (-p * I + nu * grad(u)) * n
      *
      * where the pressure contribution is considered in the pressure operator.
+     * The viscous operator expects h = F(u) * n with F(u) = F_nu(u) / nu (see
+     * weak_boundary_conditions.h), i.e., the viscous traction divided by the
+     * (variable) viscosity.
      */
 
     double const t     = this->get_time();
@@ -179,14 +177,6 @@ public:
     double const du2_dx = cos_t * sin_x * sin_y;
     double const du2_dy = -cos_t * cos_x * cos_y;
 
-    // rheological law to obtain the kinematic viscosity nu
-    // nu = nu_oo + (nu_0 - nu_oo) * [kappa + (lambda*shear_rate)^a]^[(n-1)/a]
-    double const shear_rate = 2.0 * cos_t * cos_x * cos_y;
-    double const kinematic_viscosity =
-      nu_oo +
-      data.viscosity_margin *
-        std::pow(data.kappa + std::pow(data.lambda * shear_rate, data.a), (data.n - 1.0) / data.a);
-
     dealii::Tensor<2, dim> grad_u;
     grad_u[0][0] = du1_dx;
     grad_u[0][1] = du1_dy;
@@ -202,17 +192,13 @@ public:
       traction += transpose(grad_u) * normal;
     }
 
-    traction *= kinematic_viscosity;
-
     AssertThrow(component < 2, dealii::ExcMessage("Manufactured solution only valid for 2D."));
 
     return traction[component];
   }
 
 private:
-  FormulationViscousTerm const  formulation_viscous_term;
-  double const                  nu_oo;
-  GeneralizedNewtonianModelData data;
+  FormulationViscousTerm const formulation_viscous_term;
 };
 
 template<int dim>
@@ -781,10 +767,7 @@ private:
           // Neumann boundary condition for pure Neumann problem or on boundary with id 0 for the
           // mixed problem.
           this->boundary_descriptor->velocity->neumann_bc.insert(
-            pair(i,
-                 new NeumannBoundaryVelocity<dim>(this->param.formulation_viscous_term,
-                                                  kinematic_viscosity,
-                                                  generalized_newtonian_model_data)));
+            pair(i, new NeumannBoundaryVelocity<dim>(this->param.formulation_viscous_term)));
 
           this->boundary_descriptor->pressure->dirichlet_bc.insert(
             pair(i, new AnalyticalSolutionPressure<dim>()));
