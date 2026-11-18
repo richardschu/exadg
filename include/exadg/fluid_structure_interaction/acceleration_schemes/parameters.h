@@ -111,6 +111,8 @@ struct Parameters
         InitialGuessCouplingScheme::SolutionExtrapolatedToEndOfTimeStep),
       reused_time_steps(0),
       partitioned_max_iter(100),
+      drop_tol_QR(FixedPointSolver::Parameters().drop_tol_QR),
+      drop_tol_QR_max_norm(FixedPointSolver::Parameters().drop_tol_QR_max_norm),
       geometric_tolerance(1.e-10),
       traction_transfer(TractionTransfer::PointEvaluation)
   {
@@ -168,6 +170,19 @@ struct Parameters
                         "Maximum number of fixed-point iterations.",
                         dealii::Patterns::Integer(1, 1000),
                         true);
+      prm.add_parameter("DropTolQR",
+                        drop_tol_QR,
+                        "IQN methods: drop a column in the QR decomposition if its norm after "
+                        "orthogonalization is below DropTolQR times its initial norm.",
+                        dealii::Patterns::Double(0.0, 1.0),
+                        false);
+      prm.add_parameter("DropTolQRMaxNorm",
+                        drop_tol_QR_max_norm,
+                        "IQN methods: drop a column in the QR decomposition if its norm after "
+                        "orthogonalization is below DropTolQRMaxNorm times the largest initial "
+                        "norm of all columns, 0 disables this criterion.",
+                        dealii::Patterns::Double(0.0, 1.0),
+                        false);
       prm.add_parameter("GeometricTolerance",
                         geometric_tolerance,
                         "Tolerance used to locate points at FSI interface.",
@@ -192,6 +207,8 @@ struct Parameters
   InitialGuessCouplingScheme           initial_guess_coupling_scheme;
   unsigned int                         reused_time_steps;
   unsigned int                         partitioned_max_iter;
+  double                               drop_tol_QR;
+  double                               drop_tol_QR_max_norm;
 
   // tolerance used to locate points at the fluid-structure interface
   double geometric_tolerance;

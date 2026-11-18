@@ -23,6 +23,7 @@
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_UTILITIES_LINEAR_ALGEBRA_H_
 
 // C/C++
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -88,14 +89,28 @@ private:
  * QR decomposition of the matrix whose columns are the vectors `Q` via modified Gram-Schmidt. On
  * output, `Q` contains the orthonormal columns and `R` the upper triangular factor, such that
  * `Q_in = Q R`. A column is dropped if its norm after orthogonalization is smaller than `eps` times
- * its initial norm, i.e., if it is (numerically) linearly dependent on the previous columns: the
- * column is set to zero and the respective column of `R` to the unit vector, which keeps `R`
- * invertible.
+ * its initial norm, i.e., if it is (numerically) linearly dependent on the previous columns, or
+ * smaller than `eps_max` times the largest initial norm of all columns, i.e., if it is negligible
+ * compared to the other columns, e.g., round-off noise. The latter corresponds to the filter QR1
+ * in Haelterman et al. (2016), doi:10.1016/j.compstruc.2016.04.001, with the largest column norm
+ * instead of the norm of `R`, and is disabled for `eps_max = 0`. A dropped column is set to zero
+ * and the respective column of `R` to the unit vector, which keeps `R` invertible. Returns which
+ * columns are dropped.
  */
 template<typename VectorType, typename Number>
-void
-compute_QR_decomposition(std::vector<VectorType> & Q, Matrix<Number> & R, Number const eps = 1.e-2)
+std::vector<bool>
+compute_QR_decomposition(std::vector<VectorType> & Q,
+                         Matrix<Number> &          R,
+                         Number const              eps     = 1.e-2,
+                         Number const              eps_max = 0.0)
 {
+  Number max_norm = 0.0;
+  if(eps_max > 0.0)
+    for(unsigned int i = 0; i < Q.size(); ++i)
+      max_norm = std::max(max_norm, Number(Q[i].l2_norm()));
+
+  std::vector<bool> dropped(Q.size(), false);
+
   for(unsigned int i = 0; i < Q.size(); ++i)
   {
     Number const norm_initial = Number(Q[i].l2_norm());
@@ -108,14 +123,15 @@ compute_QR_decomposition(std::vector<VectorType> & Q, Matrix<Number> & R, Number
       Q[i].add(-r_ji, Q[j]);
     }
 
-    // normalize or drop if linear dependent, `<=` also drops zero columns
+    // normalize or drop if linear dependent or negligible, `<=` also drops zero columns
     Number r_ii = Number(Q[i].l2_norm());
-    if(r_ii <= eps * norm_initial)
+    if(r_ii <= eps * norm_initial or r_ii <= eps_max * max_norm)
     {
       Q[i] = 0.0;
       for(unsigned int j = 0; j < i; ++j)
         R.set(0.0, j, i);
       R.set(1.0, i, i);
+      dropped[i] = true;
     }
     else
     {
@@ -123,6 +139,8 @@ compute_QR_decomposition(std::vector<VectorType> & Q, Matrix<Number> & R, Number
       Q[i] *= 1. / r_ii;
     }
   }
+
+  return dropped;
 }
 
 /*

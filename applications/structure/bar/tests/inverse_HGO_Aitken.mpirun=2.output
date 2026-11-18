@@ -55,6 +55,7 @@ Inverse analysis solver:
   Acceleration method:                       Undefined
   Delay acceleration:                        0
   QR decomposition tolerance:                1.0000e-02
+  QR decomposition tolerance max. norm:      1.0000e-06
   Armijo vector size:                        4
   Use separate fixed point solvers:          true
   Use extrapolation in ramp phase:           false

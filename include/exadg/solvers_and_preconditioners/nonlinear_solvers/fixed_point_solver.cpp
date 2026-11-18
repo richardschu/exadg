@@ -320,27 +320,40 @@ FixedPointSolver<Number, VectorType>::solve(
                         dealii::ExcMessage("Logical error, check control flow."));
           }
 
-          // fill vectors (including reuse)
-          std::vector<VectorType> Q = *R;
-          for(auto R_q : R_history)
-            for(auto delta_residual : *R_q)
-              Q.push_back(delta_residual);
-          std::vector<VectorType> D_all = *D;
-          for(auto D_q : D_history)
-            for(auto delta_x : *D_q)
-              D_all.push_back(delta_x);
+          // Fill the columns including the reused time steps, ordered from the newest to the
+          // oldest difference: the newest columns are orthogonalized against fewer columns, i.e.,
+          // suffer less from round-off, and are kept if older ones are linearly dependent on them.
+          // `columns` stores the time step (0: current, 1: previous, ...) and the index of each
+          // column, to remove the dropped ones.
+          std::vector<std::shared_ptr<std::vector<VectorType>>> R_steps = {R}, D_steps = {D};
+          for(unsigned int q = R_history.size(); q > 0; --q)
+          {
+            R_steps.push_back(R_history[q - 1]);
+            D_steps.push_back(D_history[q - 1]);
+          }
 
-          AssertThrow(D_all.size() == Q.size(),
-                      dealii::ExcMessage("D, Q vectors must have same size."));
+          std::vector<VectorType>                            Q, D_all;
+          std::vector<std::pair<unsigned int, unsigned int>> columns;
+          for(unsigned int s = 0; s < R_steps.size(); ++s)
+          {
+            AssertThrow(D_steps[s]->size() == R_steps[s]->size(),
+                        dealii::ExcMessage("D, R vectors must have same size."));
+            for(unsigned int i = R_steps[s]->size(); i > 0; --i)
+            {
+              Q.push_back((*R_steps[s])[i - 1]);
+              D_all.push_back((*D_steps[s])[i - 1]);
+              columns.emplace_back(s, i - 1);
+            }
+          }
 
           unsigned int const iteration_counter_all = Q.size();
           if(iteration_counter_all >= 1)
           {
             // compute QR-decomposition
             LinearAlgebra::Matrix<Number> U(iteration_counter_all);
-            LinearAlgebra::compute_QR_decomposition<VectorType, Number>(Q,
-                                                                        U,
-                                                                        parameters.drop_tol_QR);
+            std::vector<bool> const       dropped =
+              LinearAlgebra::compute_QR_decomposition<VectorType, Number>(
+                Q, U, parameters.drop_tol_QR, parameters.drop_tol_QR_max_norm);
 
             std::vector<Number> rhs(iteration_counter_all, 0.0);
             for(unsigned int i = 0; i < iteration_counter_all; ++i)
@@ -350,10 +363,23 @@ FixedPointSolver<Number, VectorType>::solve(
             std::vector<Number> alpha(iteration_counter_all, 0.0);
             backward_substitution(U, alpha, rhs);
 
-            // x_{k+1} = x_tilde_{k} + delta x_tilde
+            // x_{k+1} = x_tilde_{k} + delta x_tilde, the dropped columns have alpha = 0
             x = x_tilde;
             for(unsigned int i = 0; i < iteration_counter_all; ++i)
               x.add(alpha[i], D_all[i]);
+
+            // Remove the dropped columns, also from the reused time steps, such that they are not
+            // used again. Within a time step, `columns` is ordered by descending index, such that
+            // erasing does not shift the indices of the columns visited later.
+            for(unsigned int i = 0; i < iteration_counter_all; ++i)
+            {
+              if(dropped[i])
+              {
+                auto const & [s, index] = columns[i];
+                R_steps[s]->erase(R_steps[s]->begin() + index);
+                D_steps[s]->erase(D_steps[s]->begin() + index);
+              }
+            }
           }
           else // despite reuse, the vectors might be empty
           {
@@ -404,9 +430,6 @@ FixedPointSolver<Number, VectorType>::solve(
     lambda_set_up_vector(residual_old);
     lambda_set_up_vector(b);
     lambda_set_up_vector(b_old);
-
-    std::shared_ptr<LinearAlgebra::Matrix<Number>> U;
-    std::vector<VectorType>                        Q;
 
     while(not(converged) and iteration_counter < parameters.max_iter)
     {
@@ -468,13 +491,13 @@ FixedPointSolver<Number, VectorType>::solve(
             delta_b.add(-1.0, b);
             B.push_back(delta_b);
 
-            // compute QR-decomposition
-            unsigned int const size_QR = R->size();
-            U                          = std::make_shared<LinearAlgebra::Matrix<Number>>(size_QR);
-            Q                          = *R;
-            LinearAlgebra::compute_QR_decomposition<VectorType, Number>(Q,
-                                                                        *U,
-                                                                        parameters.drop_tol_QR);
+            // compute QR-decomposition with the newest column first, see IQN-ILS
+            unsigned int const            size_QR = R->size();
+            LinearAlgebra::Matrix<Number> U(size_QR);
+            std::vector<VectorType>       Q(R->rbegin(), R->rend());
+            std::vector<bool> const       dropped =
+              LinearAlgebra::compute_QR_decomposition<VectorType, Number>(
+                Q, U, parameters.drop_tol_QR, parameters.drop_tol_QR_max_norm);
 
             std::vector<Number> rhs(size_QR, 0.0);
             for(unsigned int i = 0; i < size_QR; ++i)
@@ -482,10 +505,25 @@ FixedPointSolver<Number, VectorType>::solve(
 
             // alpha = U^{-1} rhs
             std::vector<Number> alpha(size_QR, 0.0);
-            backward_substitution(*U, alpha, rhs);
+            backward_substitution(U, alpha, rhs);
 
+            // column i belongs to the difference size_QR - 1 - i, the dropped columns have
+            // alpha = 0
             for(unsigned int i = 0; i < size_QR; ++i)
-              x.add(alpha[i], B[i]);
+              x.add(alpha[i], B[size_QR - 1 - i]);
+
+            // Remove the dropped columns, such that they are not used again in this time step
+            // and in the history. Erase from the largest index on.
+            for(unsigned int i = 0; i < size_QR; ++i)
+            {
+              if(dropped[i])
+              {
+                unsigned int const index = size_QR - 1 - i;
+                D->erase(D->begin() + index);
+                R->erase(R->begin() + index);
+                B.erase(B.begin() + index);
+              }
+            }
           }
           else
           {
@@ -510,19 +548,37 @@ FixedPointSolver<Number, VectorType>::solve(
     dealii::Timer timer;
     timer.restart();
 
-    // Update history
-    D_history.push_back(D);
-    R_history.push_back(R);
+    // Update history with the newest column first. `inv_jacobian_times_residual()` combines the
+    // i-th columns of D, R, and Z = Q U^{-T}, hence Z is computed from the QR decomposition of
+    // exactly the stored columns. The dropped columns are removed above, which does not change
+    // the orthogonalization of the remaining ones, i.e., no further column is expected to be
+    // dropped here. A dropped column would have Z = 0 and not contribute anyway.
+    std::shared_ptr<std::vector<VectorType>> D_newest_first =
+      std::make_shared<std::vector<VectorType>>(D->rbegin(), D->rend());
+    std::shared_ptr<std::vector<VectorType>> R_newest_first =
+      std::make_shared<std::vector<VectorType>>(R->rbegin(), R->rend());
+
+    std::shared_ptr<std::vector<VectorType>> Z = std::make_shared<std::vector<VectorType>>();
+    if(R_newest_first->size() > 0)
+    {
+      std::vector<VectorType>       Q = *R_newest_first;
+      LinearAlgebra::Matrix<Number> U(Q.size());
+      LinearAlgebra::compute_QR_decomposition<VectorType, Number>(Q,
+                                                                  U,
+                                                                  parameters.drop_tol_QR,
+                                                                  parameters.drop_tol_QR_max_norm);
+
+      *Z = Q; // make sure that Z has correct size
+      backward_substitution_multiple_rhs(U, *Z, Q);
+    }
+
+    D_history.push_back(D_newest_first);
+    R_history.push_back(R_newest_first);
     if(D_history.size() > parameters.reused_time_steps)
       D_history.erase(D_history.begin());
     if(R_history.size() > parameters.reused_time_steps)
       R_history.erase(R_history.begin());
 
-    // compute Z and add to Z_history
-    std::shared_ptr<std::vector<VectorType>> Z;
-    Z  = std::make_shared<std::vector<VectorType>>();
-    *Z = Q; // make sure that Z has correct size
-    backward_substitution_multiple_rhs(*U, *Z, Q);
     Z_history.push_back(Z);
     if(Z_history.size() > parameters.reused_time_steps)
       Z_history.erase(Z_history.begin());

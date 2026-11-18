@@ -55,6 +55,7 @@ Inverse analysis solver:
   Acceleration method:                       Undefined
   Delay acceleration:                        0
   QR decomposition tolerance:                1.0000e-02
+  QR decomposition tolerance max. norm:      1.0000e-06
   Armijo vector size:                        4
   Use separate fixed point solvers:          true
   Use extrapolation in ramp phase:           false
@@ -228,8 +229,8 @@ until `lambda_check_convergence()` returned `true`.
  solve non-linear problem for load factor = 1.0000e+00
 
 Inverse analysis errors :
-  ||d_k+1 - d_k||           = 8.80848e-11
-  ||d_k+1 - d_k||/||d_k+1|| = 2.80162e-12
+  ||d_k+1 - d_k||           = 8.80877e-11
+  ||d_k+1 - d_k||/||d_k+1|| = 2.80172e-12
 
 Fixed-point iteration took 4 iterations
 until `lambda_check_convergence()` returned `true`.

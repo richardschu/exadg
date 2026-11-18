@@ -46,13 +46,15 @@ PartitionedSolver<dim, Number>::setup(std::shared_ptr<SolverFluid<dim, Number>> 
 
   // Set up fixed-point solver with persistent memory copying parameters.
   FixedPointSolver::Parameters solver_parameters;
-  solver_parameters.acceleration_method = parameters.acceleration_method;
-  solver_parameters.abs_tol             = parameters.abs_tol;
-  solver_parameters.rel_tol             = parameters.rel_tol;
-  solver_parameters.omega_init          = parameters.omega_init;
-  solver_parameters.reused_time_steps   = parameters.reused_time_steps;
-  solver_parameters.max_iter            = parameters.partitioned_max_iter;
-  solver_parameters.print_solver_info   = fluid->time_integrator->print_solver_info();
+  solver_parameters.acceleration_method  = parameters.acceleration_method;
+  solver_parameters.abs_tol              = parameters.abs_tol;
+  solver_parameters.rel_tol              = parameters.rel_tol;
+  solver_parameters.omega_init           = parameters.omega_init;
+  solver_parameters.reused_time_steps    = parameters.reused_time_steps;
+  solver_parameters.max_iter             = parameters.partitioned_max_iter;
+  solver_parameters.drop_tol_QR          = parameters.drop_tol_QR;
+  solver_parameters.drop_tol_QR_max_norm = parameters.drop_tol_QR_max_norm;
+  solver_parameters.print_solver_info    = fluid->time_integrator->print_solver_info();
 
   fixed_point_solver =
     std::make_shared<FixedPointSolver::FixedPointSolver<Number, VectorType>>(solver_parameters,

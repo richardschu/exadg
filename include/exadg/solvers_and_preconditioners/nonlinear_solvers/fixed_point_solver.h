@@ -55,6 +55,7 @@ struct Parameters
       max_iter(100),
       delay_acceleration(0),
       drop_tol_QR(1.0e-2),
+      drop_tol_QR_max_norm(1.0e-6),
       armijo_vector_size(4),
       print_solver_info(true)
   {
@@ -71,6 +72,7 @@ struct Parameters
     print_parameter(pcout, "Acceleration method", acceleration_method);
     print_parameter(pcout, "Delay acceleration", delay_acceleration);
     print_parameter(pcout, "QR decomposition tolerance", drop_tol_QR);
+    print_parameter(pcout, "QR decomposition tolerance max. norm", drop_tol_QR_max_norm);
     print_parameter(pcout, "Armijo vector size", armijo_vector_size);
   }
 
@@ -82,6 +84,7 @@ struct Parameters
   unsigned int       max_iter;
   unsigned int       delay_acceleration;
   double             drop_tol_QR;
+  double             drop_tol_QR_max_norm;
   unsigned int       armijo_vector_size;
   bool               print_solver_info;
 };
