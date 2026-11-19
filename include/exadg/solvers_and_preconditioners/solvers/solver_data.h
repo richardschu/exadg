@@ -118,27 +118,7 @@ struct SolverData
   }
 
   void
-  print(dealii::ConditionalOStream const & pcout) const
-  {
-    // `SolverData` can also be used to control tolerances without specifying the solver type.
-    if(linear_solver != LinearSolver::Undefined)
-    {
-      print_parameter(pcout, "Solver", linear_solver);
-    }
-
-    print_parameter(pcout, "Maximum number of iterations", max_iter);
-    print_parameter(pcout, "Absolute solver tolerance", abs_tol);
-    print_parameter(pcout, "Relative solver tolerance", rel_tol);
-    print_parameter(pcout, "Relative tolerance reference", rel_tol_reference);
-
-    // Print maximum Krylov space size for relevant methods or when using the default
-    // `LinearSolver`.
-    if(linear_solver == LinearSolver::FGMRES or linear_solver == LinearSolver::GMRES or
-       linear_solver == LinearSolver::Undefined)
-    {
-      print_parameter(pcout, "Maximum size of Krylov space", max_krylov_size);
-    }
-  }
+  print(dealii::ConditionalOStream const & pcout) const;
 
   unsigned int max_iter;
   double       abs_tol;

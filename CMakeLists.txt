@@ -108,6 +108,7 @@ SET(TARGET_SRC
      include/exadg/functions_and_boundary_conditions/interface_coupling.cpp
      include/exadg/solvers_and_preconditioners/multigrid/multigrid_preconditioner_base.cpp
      include/exadg/solvers_and_preconditioners/multigrid/multigrid_parameters.cpp
+     include/exadg/solvers_and_preconditioners/solvers/solver_data.cpp
      include/exadg/solvers_and_preconditioners/multigrid/transfer.cpp
      include/exadg/solvers_and_preconditioners/nonlinear_solvers/fixed_point_solver.cpp
      include/exadg/postprocessor/time_control.cpp
