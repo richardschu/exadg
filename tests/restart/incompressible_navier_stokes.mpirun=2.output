@@ -75,10 +75,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            10
-  Mapping degree coarse grids:               10
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   FE space:                                  L2
-  Polynomial degree velocity:                10
+  Polynomial degree velocity:                4
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -192,16 +192,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  10
-  number of dofs per cell:                   242
-  number of dofs (total):                    3872
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   50
+  number of dofs (total):                    800
 Pressure:
-  degree of 1D polynomials:                  9
-  number of dofs per cell:                   100
-  number of dofs (total):                    1600
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   16
+  number of dofs (total):                    256
 Velocity and pressure:
-  number of dofs per cell:                   342
-  number of dofs (total):                    5472
+  number of dofs per cell:                   66
+  number of dofs (total):                    1056
 
 ... done!
 
@@ -220,10 +220,10 @@ User specified time step size:
 Starting time loop ...
 
 Calculate error for velocity at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.21020e-12
+  Relative error (L2-norm): 2.11404e-04
 
 Calculate error for pressure at time t = 0.0000e+00:
-  Relative error (L2-norm): 6.21303e-11
+  Relative error (L2-norm): 2.78544e-03
 
 ________________________________________________________________________________
 
@@ -253,15 +253,15 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
  Writing restart file at time t = 1.25000e-02:
-    vector global l2 norm: 3.11099507e+01      
-    vector global l2 norm: 3.11101001e+01      
-    vector global l2 norm: 1.14944447e+02      
-    vector global l2 norm: 1.14941704e+02      
-    vector global l2 norm: 9.35915724e+00      
-    vector global l2 norm: 9.36021359e+00      
-    vector global l2 norm: 1.99986858e+01      
-    vector global l2 norm: 1.99987441e+01      
-    vector global l2 norm: 1.14944447e+02      
+    vector global l2 norm: 1.41406477e+01      
+    vector global l2 norm: 1.41407272e+01      
+    vector global l2 norm: 5.24600897e+01      
+    vector global l2 norm: 5.24588480e+01      
+    vector global l2 norm: 6.30943507e+00      
+    vector global l2 norm: 6.31017200e+00      
+    vector global l2 norm: 7.99432402e+00      
+    vector global l2 norm: 7.99442294e+00      
+    vector global l2 norm: 5.24600897e+01      
 
  ... done!
 ________________________________________________________________________________
@@ -292,10 +292,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.33307e-06
+  Relative error (L2-norm): 5.28209e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.56923e-05
+  Relative error (L2-norm): 4.26803e-03
 
 
 
@@ -365,10 +365,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            15
-  Mapping degree coarse grids:               15
+  Mapping degree:                            6
+  Mapping degree coarse grids:               6
   FE space:                                  L2
-  Polynomial degree velocity:                15
+  Polynomial degree velocity:                6
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -482,16 +482,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  15
-  number of dofs per cell:                   512
-  number of dofs (total):                    2048
+  degree of 1D polynomials:                  6
+  number of dofs per cell:                   98
+  number of dofs (total):                    392
 Pressure:
-  degree of 1D polynomials:                  14
-  number of dofs per cell:                   225
-  number of dofs (total):                    900
+  degree of 1D polynomials:                  5
+  number of dofs per cell:                   36
+  number of dofs (total):                    144
 Velocity and pressure:
-  number of dofs per cell:                   737
-  number of dofs (total):                    2948
+  number of dofs per cell:                   134
+  number of dofs (total):                    536
 
 ... done!
 
@@ -504,15 +504,15 @@ Setup Multistep time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 3.11099507e+01      
-    vector global l2 norm: 3.11101001e+01      
-    vector global l2 norm: 1.14944447e+02      
-    vector global l2 norm: 1.14941704e+02      
-    vector global l2 norm: 9.35915724e+00      
-    vector global l2 norm: 9.36021359e+00      
-    vector global l2 norm: 1.99986858e+01      
-    vector global l2 norm: 1.99987441e+01      
-    vector global l2 norm: 1.14944447e+02      
+    vector global l2 norm: 1.41406477e+01      
+    vector global l2 norm: 1.41407272e+01      
+    vector global l2 norm: 5.24600897e+01      
+    vector global l2 norm: 5.24588480e+01      
+    vector global l2 norm: 6.30943507e+00      
+    vector global l2 norm: 6.31017200e+00      
+    vector global l2 norm: 7.99432402e+00      
+    vector global l2 norm: 7.99442294e+00      
+    vector global l2 norm: 5.24600897e+01      
 
  ... done!
 ________________________________________________________________________________
@@ -548,10 +548,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.33814e-06
+  Relative error (L2-norm): 5.98523e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.57689e-05
+  Relative error (L2-norm): 3.12271e-03
 
 
 
@@ -629,10 +629,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            10
-  Mapping degree coarse grids:               10
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   FE space:                                  L2
-  Polynomial degree velocity:                10
+  Polynomial degree velocity:                4
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -743,16 +743,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  10
-  number of dofs per cell:                   242
-  number of dofs (total):                    3872
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   50
+  number of dofs (total):                    800
 Pressure:
-  degree of 1D polynomials:                  9
-  number of dofs per cell:                   100
-  number of dofs (total):                    1600
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   16
+  number of dofs (total):                    256
 Velocity and pressure:
-  number of dofs per cell:                   342
-  number of dofs (total):                    5472
+  number of dofs per cell:                   66
+  number of dofs (total):                    1056
 
 ... done!
 
@@ -771,10 +771,10 @@ User specified time step size:
 Starting time loop ...
 
 Calculate error for velocity at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.21020e-12
+  Relative error (L2-norm): 2.11404e-04
 
 Calculate error for pressure at time t = 0.0000e+00:
-  Relative error (L2-norm): 6.21303e-11
+  Relative error (L2-norm): 2.78544e-03
 
 ________________________________________________________________________________
 
@@ -804,13 +804,13 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
  Writing restart file at time t = 1.25000e-02:
-    vector global l2 norm: 3.11099508e+01      
-    vector global l2 norm: 3.11101002e+01      
-    vector global l2 norm: 1.14944447e+02      
-    vector global l2 norm: 1.14941704e+02      
-    vector global l2 norm: 1.99986858e+01      
-    vector global l2 norm: 1.99987441e+01      
-    vector global l2 norm: 1.14944447e+02      
+    vector global l2 norm: 1.41406357e+01      
+    vector global l2 norm: 1.41407157e+01      
+    vector global l2 norm: 5.24600897e+01      
+    vector global l2 norm: 5.24588480e+01      
+    vector global l2 norm: 7.99439544e+00      
+    vector global l2 norm: 7.99449195e+00      
+    vector global l2 norm: 5.24600897e+01      
 
  ... done!
 ________________________________________________________________________________
@@ -841,10 +841,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.33327e-06
+  Relative error (L2-norm): 5.34007e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.56928e-05
+  Relative error (L2-norm): 4.32872e-03
 
 
 
@@ -914,10 +914,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            15
-  Mapping degree coarse grids:               15
+  Mapping degree:                            6
+  Mapping degree coarse grids:               6
   FE space:                                  L2
-  Polynomial degree velocity:                15
+  Polynomial degree velocity:                6
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -1028,16 +1028,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  15
-  number of dofs per cell:                   512
-  number of dofs (total):                    2048
+  degree of 1D polynomials:                  6
+  number of dofs per cell:                   98
+  number of dofs (total):                    392
 Pressure:
-  degree of 1D polynomials:                  14
-  number of dofs per cell:                   225
-  number of dofs (total):                    900
+  degree of 1D polynomials:                  5
+  number of dofs per cell:                   36
+  number of dofs (total):                    144
 Velocity and pressure:
-  number of dofs per cell:                   737
-  number of dofs (total):                    2948
+  number of dofs per cell:                   134
+  number of dofs (total):                    536
 
 ... done!
 
@@ -1050,13 +1050,13 @@ Setup Multistep time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 3.11099508e+01      
-    vector global l2 norm: 3.11101002e+01      
-    vector global l2 norm: 1.14944447e+02      
-    vector global l2 norm: 1.14941704e+02      
-    vector global l2 norm: 1.99986858e+01      
-    vector global l2 norm: 1.99987441e+01      
-    vector global l2 norm: 1.14944447e+02      
+    vector global l2 norm: 1.41406357e+01      
+    vector global l2 norm: 1.41407157e+01      
+    vector global l2 norm: 5.24600897e+01      
+    vector global l2 norm: 5.24588480e+01      
+    vector global l2 norm: 7.99439544e+00      
+    vector global l2 norm: 7.99449195e+00      
+    vector global l2 norm: 5.24600897e+01      
 
  ... done!
 ________________________________________________________________________________
@@ -1092,10 +1092,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.33828e-06
+  Relative error (L2-norm): 5.74178e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.57437e-05
+  Relative error (L2-norm): 2.13019e-03
 
 
 
@@ -1173,10 +1173,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            10
-  Mapping degree coarse grids:               10
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   FE space:                                  L2
-  Polynomial degree velocity:                10
+  Polynomial degree velocity:                4
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -1292,16 +1292,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  10
-  number of dofs per cell:                   242
-  number of dofs (total):                    3872
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   50
+  number of dofs (total):                    800
 Pressure:
-  degree of 1D polynomials:                  9
-  number of dofs per cell:                   100
-  number of dofs (total):                    1600
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   16
+  number of dofs (total):                    256
 Velocity and pressure:
-  number of dofs per cell:                   342
-  number of dofs (total):                    5472
+  number of dofs per cell:                   66
+  number of dofs (total):                    1056
 
 ... done!
 
@@ -1320,10 +1320,10 @@ User specified time step size:
 Starting time loop ...
 
 Calculate error for velocity at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.21020e-12
+  Relative error (L2-norm): 2.11404e-04
 
 Calculate error for pressure at time t = 0.0000e+00:
-  Relative error (L2-norm): 6.21303e-11
+  Relative error (L2-norm): 2.78544e-03
 
 ________________________________________________________________________________
 
@@ -1353,14 +1353,14 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
  Writing restart file at time t = 1.25000e-02:
-    vector global l2 norm: 3.11099508e+01      
-    vector global l2 norm: 3.11101002e+01      
-    vector global l2 norm: 1.14944447e+02      
-    vector global l2 norm: 1.14941704e+02      
-    vector global l2 norm: 1.99986858e+01      
-    vector global l2 norm: 1.99987441e+01      
+    vector global l2 norm: 1.41406346e+01      
+    vector global l2 norm: 1.41407146e+01      
+    vector global l2 norm: 5.24600897e+01      
+    vector global l2 norm: 5.24588480e+01      
+    vector global l2 norm: 7.99439818e+00      
+    vector global l2 norm: 7.99449392e+00      
     vector global l2 norm: 0.00000000e+00      
-    vector global l2 norm: 1.14944447e+02      
+    vector global l2 norm: 5.24600897e+01      
 
  ... done!
 ________________________________________________________________________________
@@ -1391,10 +1391,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.33327e-06
+  Relative error (L2-norm): 5.34028e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.56894e-05
+  Relative error (L2-norm): 4.32878e-03
 
 
 
@@ -1464,10 +1464,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            15
-  Mapping degree coarse grids:               15
+  Mapping degree:                            6
+  Mapping degree coarse grids:               6
   FE space:                                  L2
-  Polynomial degree velocity:                15
+  Polynomial degree velocity:                6
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -1583,16 +1583,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  15
-  number of dofs per cell:                   512
-  number of dofs (total):                    2048
+  degree of 1D polynomials:                  6
+  number of dofs per cell:                   98
+  number of dofs (total):                    392
 Pressure:
-  degree of 1D polynomials:                  14
-  number of dofs per cell:                   225
-  number of dofs (total):                    900
+  degree of 1D polynomials:                  5
+  number of dofs per cell:                   36
+  number of dofs (total):                    144
 Velocity and pressure:
-  number of dofs per cell:                   737
-  number of dofs (total):                    2948
+  number of dofs per cell:                   134
+  number of dofs (total):                    536
 
 ... done!
 
@@ -1605,14 +1605,14 @@ Setup Multistep time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 3.11099508e+01      
-    vector global l2 norm: 3.11101002e+01      
-    vector global l2 norm: 1.14944447e+02      
-    vector global l2 norm: 1.14941704e+02      
-    vector global l2 norm: 1.99986858e+01      
-    vector global l2 norm: 1.99987441e+01      
+    vector global l2 norm: 1.41406346e+01      
+    vector global l2 norm: 1.41407146e+01      
+    vector global l2 norm: 5.24600897e+01      
+    vector global l2 norm: 5.24588480e+01      
+    vector global l2 norm: 7.99439818e+00      
+    vector global l2 norm: 7.99449392e+00      
     vector global l2 norm: 0.00000000e+00      
-    vector global l2 norm: 1.14944447e+02      
+    vector global l2 norm: 5.24600897e+01      
 
  ... done!
 ________________________________________________________________________________
@@ -1648,10 +1648,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.33828e-06
+  Relative error (L2-norm): 5.73204e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.57573e-05
+  Relative error (L2-norm): 5.58490e-03
 
 
 
@@ -1728,13 +1728,13 @@ Temporal discretization:
 Spatial discretization:
   Triangulation type:                        Serial
   Element type:                              Hypercube
-  Number of global refinements:              3
+  Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            6
-  Mapping degree coarse grids:               6
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   FE space:                                  HDIV
-  Polynomial degree velocity (normal):       6
-  Polynomial degree velocity (tangential):   5
+  Polynomial degree velocity (normal):       4
+  Polynomial degree velocity (tangential):   3
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -1813,22 +1813,22 @@ High-order dual splitting scheme:
 
 Generating grid for 2-dimensional problem:
 
-  Max. number of refinements:                3
-  Number of cells:                           64
+  Max. number of refinements:                2
+  Number of cells:                           16
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials (normal):         6
-  degree of 1D polynomials (tangential):     5
-  number of dofs per cell:                   84
-  number of dofs (total):                    4704
+  degree of 1D polynomials (normal):         4
+  degree of 1D polynomials (tangential):     3
+  number of dofs per cell:                   40
+  number of dofs (total):                    544
 Pressure:
-  degree of 1D polynomials:                  5
-  number of dofs per cell:                   36
-  number of dofs (total):                    2304
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   16
+  number of dofs (total):                    256
 Velocity and pressure:
-  number of dofs per cell:                   120
-  number of dofs (total):                    7008
+  number of dofs per cell:                   56
+  number of dofs (total):                    800
 
 ... done!
 
@@ -1847,10 +1847,10 @@ User specified time step size:
 Starting time loop ...
 
 Calculate error for velocity at time t = 0.0000e+00:
-  Relative error (L2-norm): 1.52298e-07
+  Relative error (L2-norm): 1.97325e-03
 
 Calculate error for pressure at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.15299e-07
+  Relative error (L2-norm): 2.78544e-03
 
 ________________________________________________________________________________
 
@@ -1880,14 +1880,14 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
  Writing restart file at time t = 1.25000e-02:
-    vector global l2 norm: 2.66552151e+01      
-    vector global l2 norm: 2.66553179e+01      
-    vector global l2 norm: 6.58982465e-01      
-    vector global l2 norm: 6.58987549e-01      
+    vector global l2 norm: 1.77689828e+01      
+    vector global l2 norm: 1.77690515e+01      
+    vector global l2 norm: 1.08204562e+00      
+    vector global l2 norm: 1.08205393e+00      
     vector global l2 norm: 0.00000000e+00      
     vector global l2 norm: 0.00000000e+00      
-    vector global l2 norm: 2.39981291e+01      
-    vector global l2 norm: 2.39982217e+01      
+    vector global l2 norm: 7.98306112e+00      
+    vector global l2 norm: 7.98309191e+00      
 
  ... done!
 ________________________________________________________________________________
@@ -1918,10 +1918,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.52520e-07
+  Relative error (L2-norm): 1.95306e-03
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 1.69002e-07
+  Relative error (L2-norm): 1.91089e-03
 
 
 
@@ -1989,10 +1989,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            15
-  Mapping degree coarse grids:               15
+  Mapping degree:                            6
+  Mapping degree coarse grids:               6
   FE space:                                  L2
-  Polynomial degree velocity:                15
+  Polynomial degree velocity:                6
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -2106,16 +2106,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  15
-  number of dofs per cell:                   512
-  number of dofs (total):                    2048
+  degree of 1D polynomials:                  6
+  number of dofs per cell:                   98
+  number of dofs (total):                    392
 Pressure:
-  degree of 1D polynomials:                  14
-  number of dofs per cell:                   225
-  number of dofs (total):                    900
+  degree of 1D polynomials:                  5
+  number of dofs per cell:                   36
+  number of dofs (total):                    144
 Velocity and pressure:
-  number of dofs per cell:                   737
-  number of dofs (total):                    2948
+  number of dofs per cell:                   134
+  number of dofs (total):                    536
 
 ... done!
 
@@ -2128,14 +2128,14 @@ Setup Multistep time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 2.66552151e+01      
-    vector global l2 norm: 2.66553179e+01      
-    vector global l2 norm: 6.58982465e-01      
-    vector global l2 norm: 6.58987549e-01      
+    vector global l2 norm: 1.77689828e+01      
+    vector global l2 norm: 1.77690515e+01      
+    vector global l2 norm: 1.08204562e+00      
+    vector global l2 norm: 1.08205393e+00      
     vector global l2 norm: 0.00000000e+00      
     vector global l2 norm: 0.00000000e+00      
-    vector global l2 norm: 2.39981291e+01      
-    vector global l2 norm: 2.39982217e+01      
+    vector global l2 norm: 7.98306112e+00      
+    vector global l2 norm: 7.98309191e+00      
 
  ... done!
 ________________________________________________________________________________
@@ -2171,10 +2171,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 3.19721e-07
+  Relative error (L2-norm): 1.56328e-03
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 5.23448e-06
+  Relative error (L2-norm): 1.83835e-03
 
 
 
@@ -2250,10 +2250,10 @@ Spatial discretization:
   Element type:                              Hypercube
   Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            10
-  Mapping degree coarse grids:               10
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
   FE space:                                  L2
-  Polynomial degree velocity:                10
+  Polynomial degree velocity:                4
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -2367,16 +2367,16 @@ Generating grid for 2-dimensional problem:
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials:                  10
-  number of dofs per cell:                   242
-  number of dofs (total):                    3872
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   50
+  number of dofs (total):                    800
 Pressure:
-  degree of 1D polynomials:                  9
-  number of dofs per cell:                   100
-  number of dofs (total):                    1600
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   16
+  number of dofs (total):                    256
 Velocity and pressure:
-  number of dofs per cell:                   342
-  number of dofs (total):                    5472
+  number of dofs per cell:                   66
+  number of dofs (total):                    1056
 
 ... done!
 
@@ -2395,10 +2395,10 @@ User specified time step size:
 Starting time loop ...
 
 Calculate error for velocity at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.21020e-12
+  Relative error (L2-norm): 2.11404e-04
 
 Calculate error for pressure at time t = 0.0000e+00:
-  Relative error (L2-norm): 6.21303e-11
+  Relative error (L2-norm): 2.78544e-03
 
 ________________________________________________________________________________
 
@@ -2428,14 +2428,14 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
  Writing restart file at time t = 1.25000e-02:
-    vector global l2 norm: 3.11102677e+01      
-    vector global l2 norm: 3.11103877e+01      
-    vector global l2 norm: 6.33036869e-01      
-    vector global l2 norm: 6.33041753e-01      
+    vector global l2 norm: 1.41410276e+01      
+    vector global l2 norm: 1.41410831e+01      
+    vector global l2 norm: 1.49885886e+00      
+    vector global l2 norm: 1.49887046e+00      
     vector global l2 norm: 0.00000000e+00      
     vector global l2 norm: 0.00000000e+00      
-    vector global l2 norm: 1.99984375e+01      
-    vector global l2 norm: 1.99985147e+01      
+    vector global l2 norm: 7.99630523e+00      
+    vector global l2 norm: 7.99639156e+00      
 
  ... done!
 ________________________________________________________________________________
@@ -2466,10 +2466,10 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 2.93130e-09
+  Relative error (L2-norm): 2.48315e-04
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 9.72173e-08
+  Relative error (L2-norm): 1.92231e-03
 
 
 
@@ -2538,13 +2538,13 @@ Temporal discretization:
 Spatial discretization:
   Triangulation type:                        Distributed
   Element type:                              Hypercube
-  Number of global refinements:              3
+  Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            5
-  Mapping degree coarse grids:               5
+  Mapping degree:                            3
+  Mapping degree coarse grids:               3
   FE space:                                  HDIV
-  Polynomial degree velocity (normal):       5
-  Polynomial degree velocity (tangential):   4
+  Polynomial degree velocity (normal):       3
+  Polynomial degree velocity (tangential):   2
   Polynomial degree pressure:                MixedOrder
   Convective term - Upwind factor:           1.0000e+00
   Convective term - Type of Dirichlet BC's:  Mirror
@@ -2623,22 +2623,22 @@ High-order dual splitting scheme:
 
 Generating grid for 2-dimensional problem:
 
-  Max. number of refinements:                3
-  Number of cells:                           64
+  Max. number of refinements:                2
+  Number of cells:                           16
 
 Construct incompressible Navier-Stokes operator ...
 Velocity:
-  degree of 1D polynomials (normal):         5
-  degree of 1D polynomials (tangential):     4
-  number of dofs per cell:                   60
-  number of dofs (total):                    3280
+  degree of 1D polynomials (normal):         3
+  degree of 1D polynomials (tangential):     2
+  number of dofs per cell:                   24
+  number of dofs (total):                    312
 Pressure:
-  degree of 1D polynomials:                  4
-  number of dofs per cell:                   25
-  number of dofs (total):                    1600
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   9
+  number of dofs (total):                    144
 Velocity and pressure:
-  number of dofs per cell:                   85
-  number of dofs (total):                    4880
+  number of dofs per cell:                   33
+  number of dofs (total):                    456
 
 ... done!
 
@@ -2651,14 +2651,14 @@ Setup Multistep time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 3.11102677e+01      
-    vector global l2 norm: 3.11103877e+01      
-    vector global l2 norm: 6.33036869e-01      
-    vector global l2 norm: 6.33041753e-01      
+    vector global l2 norm: 1.41410276e+01      
+    vector global l2 norm: 1.41410831e+01      
+    vector global l2 norm: 1.49885886e+00      
+    vector global l2 norm: 1.49887046e+00      
     vector global l2 norm: 0.00000000e+00      
     vector global l2 norm: 0.00000000e+00      
-    vector global l2 norm: 1.99984375e+01      
-    vector global l2 norm: 1.99985147e+01      
+    vector global l2 norm: 7.99630523e+00      
+    vector global l2 norm: 7.99639156e+00      
 
  ... done!
 ________________________________________________________________________________
@@ -2694,7 +2694,7 @@ ________________________________________________________________________________
 ________________________________________________________________________________
 
 Calculate error for velocity at time t = 2.5000e-02:
-  Relative error (L2-norm): 3.13915e-06
+  Relative error (L2-norm): 1.20179e-02
 
 Calculate error for pressure at time t = 2.5000e-02:
-  Relative error (L2-norm): 4.21146e-06
+  Relative error (L2-norm): 1.73009e-02

@@ -64,8 +64,8 @@ Spatial Discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            6
-  Polynomial degree:                         6
+  Mapping degree:                            3
+  Polynomial degree:                         3
   Quadrature rule convective term:           Standard
   Quadrature rule viscous term:              Standard
   IP factor viscous term:                    1.0000e+00
@@ -83,17 +83,17 @@ Construct compressible Navier-Stokes DG operator ...
 
 Discontinuous Galerkin finite element discretization:
 
-  degree of 1D polynomials:                  6
-  number of dofs per cell:                   196
-  number of dofs (total):                    784
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   64
+  number of dofs (total):                    256
 
 ... done!
 
 Quadrature rules:
 
-  number of 1D q-points (std):               7
-  number of 1D q-points (conv):              7
-  number of 1D q-points (vis):               7
+  number of 1D q-points (std):               4
+  number of 1D q-points (conv):              4
+  number of 1D q-points (vis):               4
 
 Setup compressible Navier-Stokes DG operator ...
 
@@ -104,135 +104,135 @@ Setup time integrator ...
 Calculation of time step size:
 
   CFL:                                       2.5000e-02
-  Time step size (convection):               3.4722e-05
+  Time step size (convection):               1.3889e-04
   Diffusion number:                          1.0000e-01
-  Time step size (diffusion):                4.3403e-04
-  Time step size (combined):                 3.4721e-05
+  Time step size (diffusion):                6.9444e-03
+  Time step size (combined):                 1.3886e-04
 
 ... done!
 
 Starting time loop ...
 
 Calculate error for all fields at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.49361e-16
+  Relative error (L2-norm): 1.75660e-16
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00, dt = 3.47206e-05
+ Time step number = 1       t = 0.00000e+00, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 3.7533e-02:
-  Relative error (L2-norm): 5.85750e-14
+Calculate error for all fields at time t = 3.7632e-02:
+  Relative error (L2-norm): 9.65153e-08
 
-Calculate error for all fields at time t = 7.5031e-02:
-  Relative error (L2-norm): 1.17976e-13
-
-________________________________________________________________________________
-
- Time step number = 2162    t = 7.50312e-02, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 1.1253e-01:
-  Relative error (L2-norm): 1.93727e-13
-
-Calculate error for all fields at time t = 1.5003e-01:
-  Relative error (L2-norm): 3.00348e-13
+Calculate error for all fields at time t = 7.5125e-02:
+  Relative error (L2-norm): 4.22660e-07
 
 ________________________________________________________________________________
 
- Time step number = 4322    t = 1.50028e-01, dt = 3.47206e-05
+ Time step number = 542     t = 7.51250e-02, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 1.8753e-01:
-  Relative error (L2-norm): 4.48772e-13
+Calculate error for all fields at time t = 1.1262e-01:
+  Relative error (L2-norm): 9.66473e-07
 
-Calculate error for all fields at time t = 2.2502e-01:
-  Relative error (L2-norm): 6.40599e-13
-
-________________________________________________________________________________
-
- Time step number = 6482    t = 2.25024e-01, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 2.6252e-01:
-  Relative error (L2-norm): 8.68323e-13
-
-Calculate error for all fields at time t = 3.0002e-01:
-  Relative error (L2-norm): 1.11762e-12
+Calculate error for all fields at time t = 1.5011e-01:
+  Relative error (L2-norm): 1.70005e-06
 
 ________________________________________________________________________________
 
- Time step number = 8642    t = 3.00021e-01, dt = 3.47206e-05
+ Time step number = 1082    t = 1.50111e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 3.3752e-01:
-  Relative error (L2-norm): 1.36950e-12
+Calculate error for all fields at time t = 1.8760e-01:
+  Relative error (L2-norm): 2.58444e-06
 
-Calculate error for all fields at time t = 3.7502e-01:
-  Relative error (L2-norm): 1.60214e-12
-
-________________________________________________________________________________
-
- Time step number = 10802   t = 3.75017e-01, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 4.1252e-01:
-  Relative error (L2-norm): 1.79519e-12
-
-Calculate error for all fields at time t = 4.5001e-01:
-  Relative error (L2-norm): 1.93039e-12
+Calculate error for all fields at time t = 2.2510e-01:
+  Relative error (L2-norm): 3.57171e-06
 
 ________________________________________________________________________________
 
- Time step number = 12962   t = 4.50014e-01, dt = 3.47206e-05
+ Time step number = 1622    t = 2.25097e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 4.8751e-01:
-  Relative error (L2-norm): 1.99493e-12
+Calculate error for all fields at time t = 2.6259e-01:
+  Relative error (L2-norm): 4.60755e-06
 
-Calculate error for all fields at time t = 5.2501e-01:
-  Relative error (L2-norm): 1.98257e-12
-
-________________________________________________________________________________
-
- Time step number = 15122   t = 5.25010e-01, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 5.6251e-01:
-  Relative error (L2-norm): 1.89472e-12
+Calculate error for all fields at time t = 3.0008e-01:
+  Relative error (L2-norm): 5.63434e-06
 
 ________________________________________________________________________________
 
- Writing restart file at time t = 6.00007e-01:
-    vector global l2 norm: 1.37694533e+06      
+ Time step number = 2162    t = 3.00083e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 3.3758e-01:
+  Relative error (L2-norm): 6.59447e-06
+
+Calculate error for all fields at time t = 3.7507e-01:
+  Relative error (L2-norm): 7.43370e-06
+
+________________________________________________________________________________
+
+ Time step number = 2702    t = 3.75069e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 4.1256e-01:
+  Relative error (L2-norm): 8.10438e-06
+
+Calculate error for all fields at time t = 4.5006e-01:
+  Relative error (L2-norm): 8.56828e-06
+
+________________________________________________________________________________
+
+ Time step number = 3242    t = 4.50056e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 4.8755e-01:
+  Relative error (L2-norm): 8.79891e-06
+
+Calculate error for all fields at time t = 5.2504e-01:
+  Relative error (L2-norm): 8.78312e-06
+
+________________________________________________________________________________
+
+ Time step number = 3782    t = 5.25042e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 5.6253e-01:
+  Relative error (L2-norm): 8.52186e-06
+
+________________________________________________________________________________
+
+ Writing restart file at time t = 6.00028e-01:
+    vector global l2 norm: 7.86439273e+05      
 
  ... done!
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 6.0001e-01:
-  Relative error (L2-norm): 1.73975e-12
+Calculate error for all fields at time t = 6.0003e-01:
+  Relative error (L2-norm): 8.03013e-06
 
 ________________________________________________________________________________
 
- Time step number = 17282   t = 6.00007e-01, dt = 3.47206e-05
+ Time step number = 4322    t = 6.00028e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 6.3751e-01:
-  Relative error (L2-norm): 1.53231e-12
+Calculate error for all fields at time t = 6.3752e-01:
+  Relative error (L2-norm): 7.33608e-06
 
-Calculate error for all fields at time t = 6.7500e-01:
-  Relative error (L2-norm): 1.29160e-12
+Calculate error for all fields at time t = 6.7501e-01:
+  Relative error (L2-norm): 6.47925e-06
 
 ________________________________________________________________________________
 
- Time step number = 19442   t = 6.75003e-01, dt = 3.47206e-05
+ Time step number = 4862    t = 6.75014e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 7.1250e-01:
-  Relative error (L2-norm): 1.03883e-12
+Calculate error for all fields at time t = 7.1251e-01:
+  Relative error (L2-norm): 5.50824e-06
 
 Calculate error for all fields at time t = 7.5000e-01:
-  Relative error (L2-norm): 7.94733e-13
+  Relative error (L2-norm): 4.47778e-06
 
 
 
@@ -291,8 +291,8 @@ Spatial Discretization:
   Element type:                              Hypercube
   Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            3
-  Polynomial degree:                         3
+  Mapping degree:                            2
+  Polynomial degree:                         2
   Quadrature rule convective term:           Standard
   Quadrature rule viscous term:              Standard
   IP factor viscous term:                    1.0000e+00
@@ -310,17 +310,17 @@ Construct compressible Navier-Stokes DG operator ...
 
 Discontinuous Galerkin finite element discretization:
 
-  degree of 1D polynomials:                  3
-  number of dofs per cell:                   64
-  number of dofs (total):                    1024
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   36
+  number of dofs (total):                    576
 
 ... done!
 
 Quadrature rules:
 
-  number of 1D q-points (std):               4
-  number of 1D q-points (conv):              4
-  number of 1D q-points (vis):               4
+  number of 1D q-points (std):               3
+  number of 1D q-points (conv):              3
+  number of 1D q-points (vis):               3
 
 Setup compressible Navier-Stokes DG operator ...
 
@@ -331,7 +331,7 @@ Setup time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 1.37694533e+06      
+    vector global l2 norm: 7.86439273e+05      
 
  ... done!
 ________________________________________________________________________________
@@ -343,25 +343,25 @@ Starting time loop ...
 
 ________________________________________________________________________________
 
- Time step number = 17282   t = 6.00007e-01, dt = 3.47206e-05
+ Time step number = 4322    t = 6.00028e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 6.3751e-01:
-  Relative error (L2-norm): 6.58440e-07
+Calculate error for all fields at time t = 6.3752e-01:
+  Relative error (L2-norm): 9.63882e-05
 
-Calculate error for all fields at time t = 6.7500e-01:
-  Relative error (L2-norm): 5.81528e-07
+Calculate error for all fields at time t = 6.7501e-01:
+  Relative error (L2-norm): 9.04261e-05
 
 ________________________________________________________________________________
 
- Time step number = 19442   t = 6.75003e-01, dt = 3.47206e-05
+ Time step number = 4862    t = 6.75014e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 7.1250e-01:
-  Relative error (L2-norm): 4.94338e-07
+Calculate error for all fields at time t = 7.1251e-01:
+  Relative error (L2-norm): 8.32093e-05
 
 Calculate error for all fields at time t = 7.5000e-01:
-  Relative error (L2-norm): 4.01831e-07
+  Relative error (L2-norm): 7.48449e-05
 
 
 
@@ -428,8 +428,8 @@ Spatial Discretization:
   Element type:                              Hypercube
   Number of global refinements:              1
   Create coarse triangulations:              false
-  Mapping degree:                            6
-  Polynomial degree:                         6
+  Mapping degree:                            3
+  Polynomial degree:                         3
   Quadrature rule convective term:           Standard
   Quadrature rule viscous term:              Standard
   IP factor viscous term:                    1.0000e+00
@@ -447,17 +447,17 @@ Construct compressible Navier-Stokes DG operator ...
 
 Discontinuous Galerkin finite element discretization:
 
-  degree of 1D polynomials:                  6
-  number of dofs per cell:                   196
-  number of dofs (total):                    784
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   64
+  number of dofs (total):                    256
 
 ... done!
 
 Quadrature rules:
 
-  number of 1D q-points (std):               7
-  number of 1D q-points (conv):              7
-  number of 1D q-points (vis):               7
+  number of 1D q-points (std):               4
+  number of 1D q-points (conv):              4
+  number of 1D q-points (vis):               4
 
 Setup compressible Navier-Stokes DG operator ...
 
@@ -468,136 +468,136 @@ Setup time integrator ...
 Calculation of time step size:
 
   CFL:                                       2.5000e-02
-  Time step size (convection):               3.4722e-05
+  Time step size (convection):               1.3889e-04
   Diffusion number:                          1.0000e-01
-  Time step size (diffusion):                4.3403e-04
-  Time step size (combined):                 3.4721e-05
+  Time step size (diffusion):                6.9444e-03
+  Time step size (combined):                 1.3886e-04
 
 ... done!
 
 Starting time loop ...
 
 Calculate error for all fields at time t = 0.0000e+00:
-  Relative error (L2-norm): 2.49361e-16
+  Relative error (L2-norm): 1.75660e-16
 
 ________________________________________________________________________________
 
- Time step number = 1       t = 0.00000e+00, dt = 3.47206e-05
+ Time step number = 1       t = 0.00000e+00, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 3.7533e-02:
-  Relative error (L2-norm): 5.85750e-14
+Calculate error for all fields at time t = 3.7632e-02:
+  Relative error (L2-norm): 9.65153e-08
 
-Calculate error for all fields at time t = 7.5031e-02:
-  Relative error (L2-norm): 1.17976e-13
-
-________________________________________________________________________________
-
- Time step number = 2162    t = 7.50312e-02, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 1.1253e-01:
-  Relative error (L2-norm): 1.93727e-13
-
-Calculate error for all fields at time t = 1.5003e-01:
-  Relative error (L2-norm): 3.00348e-13
+Calculate error for all fields at time t = 7.5125e-02:
+  Relative error (L2-norm): 4.22660e-07
 
 ________________________________________________________________________________
 
- Time step number = 4322    t = 1.50028e-01, dt = 3.47206e-05
+ Time step number = 542     t = 7.51250e-02, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 1.8753e-01:
-  Relative error (L2-norm): 4.48772e-13
+Calculate error for all fields at time t = 1.1262e-01:
+  Relative error (L2-norm): 9.66473e-07
 
-Calculate error for all fields at time t = 2.2502e-01:
-  Relative error (L2-norm): 6.40599e-13
-
-________________________________________________________________________________
-
- Time step number = 6482    t = 2.25024e-01, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 2.6252e-01:
-  Relative error (L2-norm): 8.68323e-13
-
-Calculate error for all fields at time t = 3.0002e-01:
-  Relative error (L2-norm): 1.11762e-12
+Calculate error for all fields at time t = 1.5011e-01:
+  Relative error (L2-norm): 1.70005e-06
 
 ________________________________________________________________________________
 
- Time step number = 8642    t = 3.00021e-01, dt = 3.47206e-05
+ Time step number = 1082    t = 1.50111e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 3.3752e-01:
-  Relative error (L2-norm): 1.36950e-12
+Calculate error for all fields at time t = 1.8760e-01:
+  Relative error (L2-norm): 2.58444e-06
 
-Calculate error for all fields at time t = 3.7502e-01:
-  Relative error (L2-norm): 1.60214e-12
-
-________________________________________________________________________________
-
- Time step number = 10802   t = 3.75017e-01, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 4.1252e-01:
-  Relative error (L2-norm): 1.79519e-12
-
-Calculate error for all fields at time t = 4.5001e-01:
-  Relative error (L2-norm): 1.93039e-12
+Calculate error for all fields at time t = 2.2510e-01:
+  Relative error (L2-norm): 3.57171e-06
 
 ________________________________________________________________________________
 
- Time step number = 12962   t = 4.50014e-01, dt = 3.47206e-05
+ Time step number = 1622    t = 2.25097e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 4.8751e-01:
-  Relative error (L2-norm): 1.99493e-12
+Calculate error for all fields at time t = 2.6259e-01:
+  Relative error (L2-norm): 4.60755e-06
 
-Calculate error for all fields at time t = 5.2501e-01:
-  Relative error (L2-norm): 1.98257e-12
-
-________________________________________________________________________________
-
- Time step number = 15122   t = 5.25010e-01, dt = 3.47206e-05
-________________________________________________________________________________
-
-Calculate error for all fields at time t = 5.6251e-01:
-  Relative error (L2-norm): 1.89472e-12
+Calculate error for all fields at time t = 3.0008e-01:
+  Relative error (L2-norm): 5.63434e-06
 
 ________________________________________________________________________________
 
- Writing restart file at time t = 6.00007e-01:
-    vector global l2 norm: 1.37694533e+06      
-    vector global l2 norm: 1.04734513e+01      
+ Time step number = 2162    t = 3.00083e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 3.3758e-01:
+  Relative error (L2-norm): 6.59447e-06
+
+Calculate error for all fields at time t = 3.7507e-01:
+  Relative error (L2-norm): 7.43370e-06
+
+________________________________________________________________________________
+
+ Time step number = 2702    t = 3.75069e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 4.1256e-01:
+  Relative error (L2-norm): 8.10438e-06
+
+Calculate error for all fields at time t = 4.5006e-01:
+  Relative error (L2-norm): 8.56828e-06
+
+________________________________________________________________________________
+
+ Time step number = 3242    t = 4.50056e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 4.8755e-01:
+  Relative error (L2-norm): 8.79891e-06
+
+Calculate error for all fields at time t = 5.2504e-01:
+  Relative error (L2-norm): 8.78312e-06
+
+________________________________________________________________________________
+
+ Time step number = 3782    t = 5.25042e-01, dt = 1.38863e-04
+________________________________________________________________________________
+
+Calculate error for all fields at time t = 5.6253e-01:
+  Relative error (L2-norm): 8.52186e-06
+
+________________________________________________________________________________
+
+ Writing restart file at time t = 6.00028e-01:
+    vector global l2 norm: 7.86439273e+05      
+    vector global l2 norm: 6.06630036e+00      
 
  ... done!
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 6.0001e-01:
-  Relative error (L2-norm): 1.73975e-12
+Calculate error for all fields at time t = 6.0003e-01:
+  Relative error (L2-norm): 8.03013e-06
 
 ________________________________________________________________________________
 
- Time step number = 17282   t = 6.00007e-01, dt = 3.47206e-05
+ Time step number = 4322    t = 6.00028e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 6.3751e-01:
-  Relative error (L2-norm): 1.53231e-12
+Calculate error for all fields at time t = 6.3752e-01:
+  Relative error (L2-norm): 7.33608e-06
 
-Calculate error for all fields at time t = 6.7500e-01:
-  Relative error (L2-norm): 1.29160e-12
+Calculate error for all fields at time t = 6.7501e-01:
+  Relative error (L2-norm): 6.47925e-06
 
 ________________________________________________________________________________
 
- Time step number = 19442   t = 6.75003e-01, dt = 3.47206e-05
+ Time step number = 4862    t = 6.75014e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 7.1250e-01:
-  Relative error (L2-norm): 1.03883e-12
+Calculate error for all fields at time t = 7.1251e-01:
+  Relative error (L2-norm): 5.50824e-06
 
 Calculate error for all fields at time t = 7.5000e-01:
-  Relative error (L2-norm): 7.94733e-13
+  Relative error (L2-norm): 4.47778e-06
 
 
 
@@ -656,8 +656,8 @@ Spatial Discretization:
   Element type:                              Hypercube
   Number of global refinements:              2
   Create coarse triangulations:              false
-  Mapping degree:                            3
-  Polynomial degree:                         3
+  Mapping degree:                            2
+  Polynomial degree:                         2
   Quadrature rule convective term:           Standard
   Quadrature rule viscous term:              Standard
   IP factor viscous term:                    1.0000e+00
@@ -675,17 +675,17 @@ Construct compressible Navier-Stokes DG operator ...
 
 Discontinuous Galerkin finite element discretization:
 
-  degree of 1D polynomials:                  3
-  number of dofs per cell:                   64
-  number of dofs (total):                    1024
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   36
+  number of dofs (total):                    576
 
 ... done!
 
 Quadrature rules:
 
-  number of 1D q-points (std):               4
-  number of 1D q-points (conv):              4
-  number of 1D q-points (vis):               4
+  number of 1D q-points (std):               3
+  number of 1D q-points (conv):              3
+  number of 1D q-points (vis):               3
 
 Setup compressible Navier-Stokes DG operator ...
 
@@ -696,8 +696,8 @@ Setup time integrator ...
 ________________________________________________________________________________
 
  Reading restart file:
-    vector global l2 norm: 1.37694533e+06      
-    vector global l2 norm: 1.04734513e+01      
+    vector global l2 norm: 7.86439273e+05      
+    vector global l2 norm: 6.06630036e+00      
 
  ... done!
 ________________________________________________________________________________
@@ -709,22 +709,22 @@ Starting time loop ...
 
 ________________________________________________________________________________
 
- Time step number = 17282   t = 6.00007e-01, dt = 3.47206e-05
+ Time step number = 4322    t = 6.00028e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 6.3751e-01:
-  Relative error (L2-norm): 6.58440e-07
+Calculate error for all fields at time t = 6.3752e-01:
+  Relative error (L2-norm): 9.63882e-05
 
-Calculate error for all fields at time t = 6.7500e-01:
-  Relative error (L2-norm): 5.81528e-07
+Calculate error for all fields at time t = 6.7501e-01:
+  Relative error (L2-norm): 9.04261e-05
 
 ________________________________________________________________________________
 
- Time step number = 19442   t = 6.75003e-01, dt = 3.47206e-05
+ Time step number = 4862    t = 6.75014e-01, dt = 1.38863e-04
 ________________________________________________________________________________
 
-Calculate error for all fields at time t = 7.1250e-01:
-  Relative error (L2-norm): 4.94338e-07
+Calculate error for all fields at time t = 7.1251e-01:
+  Relative error (L2-norm): 8.32093e-05
 
 Calculate error for all fields at time t = 7.5000e-01:
-  Relative error (L2-norm): 4.01831e-07
+  Relative error (L2-norm): 7.48449e-05
