@@ -127,33 +127,7 @@ struct AMGData
   };
 
   void
-  print(dealii::ConditionalOStream const & pcout) const
-  {
-    print_parameter(pcout, "    AMG type", amg_type);
-
-    if(amg_type == AMGType::ML)
-    {
-#ifdef DEAL_II_WITH_TRILINOS
-      print_parameter(pcout, "    Smoother sweeps", ml_data.smoother_sweeps);
-      print_parameter(pcout, "    Number of cycles", ml_data.n_cycles);
-      print_parameter(pcout, "    Smoother type", ml_data.smoother_type);
-#endif
-    }
-    else if(amg_type == AMGType::BoomerAMG)
-    {
-#ifdef DEAL_II_WITH_PETSC
-      print_parameter(pcout, "    Smoother sweeps", boomer_data.n_sweeps_coarse);
-      print_parameter(pcout, "    Number of cycles", boomer_data.max_iter);
-      print_parameter(pcout, "    Smoother type down", boomer_data.relaxation_type_down);
-      print_parameter(pcout, "    Smoother type up", boomer_data.relaxation_type_up);
-      print_parameter(pcout, "    Smoother type coarse", boomer_data.relaxation_type_coarse);
-#endif
-    }
-    else
-    {
-      AssertThrow(false, dealii::ExcNotImplemented());
-    }
-  }
+  print(dealii::ConditionalOStream const & pcout) const;
 
   AMGType amg_type;
 
@@ -188,23 +162,7 @@ struct SmootherData
   }
 
   void
-  print(dealii::ConditionalOStream const & pcout) const
-  {
-    print_parameter(pcout, "Smoother", smoother);
-    print_parameter(pcout, "Preconditioner smoother", preconditioner);
-    print_parameter(pcout, "Iterations smoother", iterations);
-
-    if(smoother == MultigridSmoother::Jacobi)
-    {
-      print_parameter(pcout, "Relaxation factor", relaxation_factor);
-    }
-
-    if(smoother == MultigridSmoother::Chebyshev)
-    {
-      print_parameter(pcout, "Smoothing range", smoothing_range);
-      print_parameter(pcout, "Iterations eigenvalue estimation", iterations_eigenvalue_estimation);
-    }
-  }
+  print(dealii::ConditionalOStream const & pcout) const;
 
   // Type of smoother
   MultigridSmoother smoother;
@@ -236,19 +194,7 @@ struct CoarseGridData
   }
 
   void
-  print(dealii::ConditionalOStream const & pcout) const
-  {
-    print_parameter(pcout, "Coarse grid solver", solver);
-    print_parameter(pcout, "Coarse grid preconditioner", preconditioner);
-
-    solver_data.print(pcout);
-
-    if(solver == MultigridCoarseGridSolver::AMG or
-       preconditioner == MultigridCoarseGridPreconditioner::AMG)
-    {
-      amg_data.print(pcout);
-    }
-  }
+  print(dealii::ConditionalOStream const & pcout) const;
 
   // Coarse grid solver
   MultigridCoarseGridSolver solver;
@@ -276,21 +222,7 @@ struct MultigridData
   }
 
   void
-  print(dealii::ConditionalOStream const & pcout) const
-  {
-    print_parameter(pcout, "Multigrid type", type);
-
-    if(involves_p_transfer())
-    {
-      print_parameter(pcout, "p-sequence", p_sequence);
-    }
-
-    print_parameter(pcout, "Min degree matrix-free", min_degree_matrix_free);
-
-    smoother_data.print(pcout);
-
-    coarse_problem.print(pcout);
-  }
+  print(dealii::ConditionalOStream const & pcout) const;
 
   bool
   involves_h_transfer() const;
