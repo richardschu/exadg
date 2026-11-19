@@ -23,6 +23,7 @@
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_MULTIGRID_CONSTRAINTS_H_
 
 // deal.II
+#include <deal.II/dofs/dof_tools.h>
 #include <deal.II/multigrid/mg_constrained_dofs.h>
 
 namespace ExaDG
