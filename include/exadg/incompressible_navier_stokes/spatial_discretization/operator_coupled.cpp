@@ -699,6 +699,9 @@ OperatorCoupled<dim, Number>::setup_multigrid_preconditioner_schur_complement()
   laplace_operator_data.operator_is_singular  = this->is_pressure_level_undefined();
   laplace_operator_data.kernel_data.IP_factor = 1.0;
   laplace_operator_data.bc                    = this->boundary_descriptor_laplace;
+  laplace_operator_data.use_cell_based_loops  = this->param.use_cell_based_face_loops;
+  laplace_operator_data.implement_block_diagonal_preconditioner_matrix_free =
+    this->param.implement_block_diagonal_preconditioner_matrix_free;
 
   MultigridData mg_data = this->param.multigrid_data_pressure_block;
 

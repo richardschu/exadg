@@ -1,0 +1,6 @@
+  dim = 2: 20 cells
+    face loops:       6 cached faces, data at the quadrature points: 1
+    cell-based loops: 6 cached faces, data at the quadrature points: 1
+  dim = 3: 56 cells
+    face loops:       20 cached faces, data at the quadrature points: 1
+    cell-based loops: 20 cached faces, data at the quadrature points: 1

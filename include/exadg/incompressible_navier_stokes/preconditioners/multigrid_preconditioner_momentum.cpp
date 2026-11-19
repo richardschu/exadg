@@ -79,6 +79,21 @@ MultigridPreconditioner<dim, Number>::initialize(
     AssertThrow(false, dealii::ExcMessage("Not implemented."));
   }
 
+  // The data of DirichletCached boundary conditions is only available at the
+  // quadrature points of the fine-level operator. Hence, the multigrid levels
+  // treat these boundaries as homogeneous Dirichlet boundaries, as for the
+  // constraints. This only affects the linearized convective term, which
+  // evaluates the boundary data for the linearization velocity.
+  if(not data.bc->dirichlet_cached_bc.empty())
+  {
+    auto bc_levels = std::make_shared<BoundaryDescriptorU<dim>>(*data.bc);
+    for(auto const boundary_id : bc_levels->dirichlet_cached_bc)
+      bc_levels->dirichlet_bc.emplace(boundary_id,
+                                      std::make_shared<dealii::Functions::ZeroFunction<dim>>(dim));
+    bc_levels->dirichlet_cached_bc.clear();
+    data.bc = bc_levels;
+  }
+
   Base::initialize(mg_data,
                    grid,
                    multigrid_mappings,

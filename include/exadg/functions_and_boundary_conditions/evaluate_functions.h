@@ -33,6 +33,7 @@
 #include <exadg/functions_and_boundary_conditions/function_with_normal.h>
 
 // C/C++
+#include <array>
 #include <memory>
 
 namespace ExaDG
@@ -194,6 +195,31 @@ struct FunctionEvaluator<0, dim, Number>
 
     return value;
   }
+
+  // Same as above, but for the faces of FEFaceEvaluation::get_face_ids(). In
+  // contrast to the index of the face batch, this also works for integrators
+  // in cell-based face loops, i.e., after reinit(cell, face), where the lanes
+  // belong to different face batches.
+  static inline DEAL_II_ALWAYS_INLINE //
+    dealii::Tensor<0, dim, dealii::VectorizedArray<Number>>
+    value(ContainerInterfaceData<0, dim, double> const &                            function,
+          std::array<unsigned int, dealii::VectorizedArray<Number>::size()> const & face_ids,
+          unsigned int const                                                        q,
+          unsigned int const                                                        quad_index)
+  {
+    unsigned int constexpr n_lanes = dealii::VectorizedArray<Number>::size();
+
+    dealii::VectorizedArray<Number> value = dealii::make_vectorized_array<Number>(0.0);
+
+    for(unsigned int v = 0; v < n_lanes; ++v)
+      if(face_ids[v] != dealii::numbers::invalid_unsigned_int)
+        value[v] = function.access_data_container(quad_index,
+                                                  face_ids[v] / n_lanes,
+                                                  q,
+                                                  face_ids[v] % n_lanes);
+
+    return value;
+  }
 };
 
 template<int dim, typename Number>
@@ -250,6 +276,35 @@ struct FunctionEvaluator<1, dim, Number>
     {
       for(unsigned int v = 0; v < dealii::VectorizedArray<Number>::size(); ++v)
         value[d][v] = tensor_array[v][d];
+    }
+
+    return value;
+  }
+
+  // Same as above, but for the faces of FEFaceEvaluation::get_face_ids(). In
+  // contrast to the index of the face batch, this also works for integrators
+  // in cell-based face loops, i.e., after reinit(cell, face), where the lanes
+  // belong to different face batches.
+  static inline DEAL_II_ALWAYS_INLINE //
+    dealii::Tensor<1, dim, dealii::VectorizedArray<Number>>
+    value(ContainerInterfaceData<1, dim, double> const &                            function,
+          std::array<unsigned int, dealii::VectorizedArray<Number>::size()> const & face_ids,
+          unsigned int const                                                        q,
+          unsigned int const                                                        quad_index)
+  {
+    unsigned int constexpr n_lanes = dealii::VectorizedArray<Number>::size();
+
+    dealii::Tensor<1, dim, dealii::VectorizedArray<Number>> value;
+
+    for(unsigned int v = 0; v < n_lanes; ++v)
+    {
+      if(face_ids[v] != dealii::numbers::invalid_unsigned_int)
+      {
+        dealii::Tensor<1, dim> const value_v = function.access_data_container(
+          quad_index, face_ids[v] / n_lanes, q, face_ids[v] % n_lanes);
+        for(unsigned int d = 0; d < dim; ++d)
+          value[d][v] = value_v[d];
+      }
     }
 
     return value;

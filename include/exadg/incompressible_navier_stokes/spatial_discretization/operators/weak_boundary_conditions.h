@@ -110,7 +110,7 @@ inline DEAL_II_ALWAYS_INLINE //
       {
         auto bc = boundary_descriptor->get_dirichlet_cached_data();
         g       = FunctionEvaluator<1, dim, Number>::value(*bc,
-                                                     integrator.get_current_cell_index(),
+                                                     integrator.get_face_ids(),
                                                      q,
                                                      integrator.get_quadrature_index());
       }
@@ -198,7 +198,7 @@ inline DEAL_II_ALWAYS_INLINE //
       {
         auto bc = boundary_descriptor->get_dirichlet_cached_data();
         g       = FunctionEvaluator<1, dim, Number>::value(*bc,
-                                                     integrator.get_current_cell_index(),
+                                                     integrator.get_face_ids(),
                                                      q,
                                                      integrator.get_quadrature_index());
       }
