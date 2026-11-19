@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+#ifndef EXADG_STRUCTURE_SPATIAL_DISCRETIZATION_OPERATORS_NONLINEAR_OPERATOR_TEMPLATES_H_
+#define EXADG_STRUCTURE_SPATIAL_DISCRETIZATION_OPERATORS_NONLINEAR_OPERATOR_TEMPLATES_H_
+
 // ExaDG
 #include <exadg/postprocessor/write_output.h>
 #include <exadg/structure/spatial_discretization/operators/boundary_conditions.h>
@@ -1685,11 +1688,7 @@ NonLinearOperator<dim, Number>::calculate_system_matrix(
 }
 #endif
 
-template class NonLinearOperator<2, float>;
-template class NonLinearOperator<2, double>;
-
-template class NonLinearOperator<3, float>;
-template class NonLinearOperator<3, double>;
-
 } // namespace Structure
 } // namespace ExaDG
+
+#endif /* EXADG_STRUCTURE_SPATIAL_DISCRETIZATION_OPERATORS_NONLINEAR_OPERATOR_TEMPLATES_H_ */
