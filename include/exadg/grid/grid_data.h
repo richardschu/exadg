@@ -127,22 +127,7 @@ struct GridData
   }
 
   void
-  print(dealii::ConditionalOStream const & pcout) const
-  {
-    print_parameter(pcout, "Triangulation type", triangulation_type);
-
-    print_parameter(pcout, "Element type", element_type);
-
-    if(triangulation_type == TriangulationType::FullyDistributed)
-      print_parameter(pcout, "Partitioning type (fully-distributed)", partitioning_type);
-
-    print_parameter(pcout, "Number of global refinements", n_refine_global);
-
-    if(not file_name.empty())
-      print_parameter(pcout, "Grid file name", file_name);
-
-    print_parameter(pcout, "Create coarse triangulations", create_coarse_triangulations);
-  }
+  print(dealii::ConditionalOStream const & pcout) const;
 
   TriangulationType triangulation_type;
 
