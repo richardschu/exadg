@@ -39,6 +39,13 @@ EXADG_BIO=$WORKING_DIRECTORY/exadg-bio
 FFTW=$WORKING_DIRECTORY/fftw/install
 LIKWID=$WORKING_DIRECTORY/likwid/install
 
+# Precompiled headers (option in CMakeLists.txt, default ON): the deal.II
+# headers that ExaDG includes in most files are compiled once into
+# build/CMakeFiles/exadg.dir/cmake_pch.hxx.gch (about 1 GB) and reused by the
+# library, the applications and the tests. OFF saves the disk space, but the
+# compilation takes longer.
+PRECOMPILED_HEADERS=ON
+
 cmake \
     -D DEAL_II_DIR="$DEAL" \
     -D EXADG_WITH_EXADG_BIO=ON \
@@ -50,6 +57,7 @@ cmake \
     -D LIKWID_LIB="$LIKWID/lib" \
     -D LIKWID_INCLUDE="$LIKWID/include" \
     -D BUILD_SHARED_LIBS=ON \
+    -D EXADG_WITH_PRECOMPILED_HEADERS=$PRECOMPILED_HEADERS \
     -D PICKUP_TESTS=ON \
     ../
 
