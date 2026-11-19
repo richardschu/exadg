@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+#ifndef EXADG_STRUCTURE_MATERIAL_LIBRARY_INCOMPRESSIBLE_NEO_HOOKEAN_TEMPLATES_H_
+#define EXADG_STRUCTURE_MATERIAL_LIBRARY_INCOMPRESSIBLE_NEO_HOOKEAN_TEMPLATES_H_
+
 #include <exadg/functions_and_boundary_conditions/evaluate_functions.h>
 #include <exadg/structure/material/library/incompressible_neo_hookean.h>
 #include <exadg/structure/spatial_discretization/operators/continuum_mechanics.h>
@@ -961,95 +964,7 @@ IncompressibleNeoHookean<dim, Number, invalid_jacobian_treatment, stable_formula
 // identically. InvalidJacobianTreatment::LocalQuasiNewton requires
 // stable_formulation == false and CacheLevel::ScalarsAndTensors.
 
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::None, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::ClampJacobian, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::ClampJacobian, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::IdentityShift, true, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::None>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::Scalars>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::IdentityShift, false, CacheLevel::ScalarsAndTensors>;
-
-template class IncompressibleNeoHookean<2, float, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<2, double, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, float, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
-template class IncompressibleNeoHookean<3, double, InvalidJacobianTreatment::LocalQuasiNewton, false, CacheLevel::ScalarsAndTensors>;
-// clang-format on
-
 } // namespace Structure
 } // namespace ExaDG
+
+#endif /* EXADG_STRUCTURE_MATERIAL_LIBRARY_INCOMPRESSIBLE_NEO_HOOKEAN_TEMPLATES_H_ */

@@ -78,7 +78,8 @@ SET(TARGET_SRC
      include/exadg/operators/operator_base_2d_double.cpp
      include/exadg/operators/operator_base_2d_float.cpp
      include/exadg/compressible_navier_stokes/spatial_discretization/operator.cpp
-     include/exadg/structure/material/library/incompressible_neo_hookean.cpp
+     include/exadg/structure/material/library/incompressible_neo_hookean_3d.cpp
+     include/exadg/structure/material/library/incompressible_neo_hookean_2d.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.cpp
      include/exadg/structure/material/library/compressible_neo_hookean.cpp
      include/exadg/acoustic_conservation_equations/spatial_discretization/spatial_operator.cpp
