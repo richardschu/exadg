@@ -66,6 +66,7 @@ SET(TARGET_SRC
      include/exadg/utilities/evaluate_convergence_study.cpp
      include/exadg/utilities/timer_tree.cpp
      include/exadg/utilities/print_general_infos.cpp
+     include/exadg/utilities/check_input_file.cpp
      include/exadg/time_integration/bdf_constants.cpp
      include/exadg/time_integration/ab_constants.cpp
      include/exadg/time_integration/am_constants.cpp
