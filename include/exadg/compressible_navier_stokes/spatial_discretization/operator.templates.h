@@ -19,6 +19,9 @@
  *  ______________________________________________________________________
  */
 
+#ifndef EXADG_COMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATOR_TEMPLATES_H_
+#define EXADG_COMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATOR_TEMPLATES_H_
+
 // deal.II
 #include <deal.II/base/timer.h>
 
@@ -750,11 +753,7 @@ Operator<dim, Number>::calculate_time_step_diffusion() const
                                                param.exponent_fe_degree_viscous);
 }
 
-template class Operator<2, float>;
-template class Operator<2, double>;
-
-template class Operator<3, float>;
-template class Operator<3, double>;
-
 } // namespace CompNS
 } // namespace ExaDG
+
+#endif /* EXADG_COMPRESSIBLE_NAVIER_STOKES_SPATIAL_DISCRETIZATION_OPERATOR_TEMPLATES_H_ */
