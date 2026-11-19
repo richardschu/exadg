@@ -304,6 +304,82 @@ DEAL_II_INITIALIZE_CACHED_VARIABLES()
 
 DEAL_II_SETUP_TARGET(exadg)
 
+# Precompiled headers: the deal.II headers that ExaDG includes frequently are
+# parsed once instead of in every source file. The executables reuse them, see
+# EXADG_PICKUP_EXE(), which requires the same compile flags. Hence, the
+# executables are compiled with -fPIC like the library and the library does not
+# define exadg_EXPORTS, which is not used.
+OPTION(EXADG_WITH_PRECOMPILED_HEADERS "Precompile frequently used deal.II headers." ON)
+IF(${EXADG_WITH_PRECOMPILED_HEADERS})
+  SET(EXADG_PRECOMPILED_HEADERS
+      <deal.II/base/aligned_vector.h>
+      <deal.II/base/conditional_ostream.h>
+      <deal.II/base/exceptions.h>
+      <deal.II/base/function.h>
+      <deal.II/base/mpi.h>
+      <deal.II/base/mpi_remote_point_evaluation.h>
+      <deal.II/base/parameter_handler.h>
+      <deal.II/base/patterns.h>
+      <deal.II/base/point.h>
+      <deal.II/base/quadrature_lib.h>
+      <deal.II/base/tensor.h>
+      <deal.II/base/timer.h>
+      <deal.II/base/types.h>
+      <deal.II/base/utilities.h>
+      <deal.II/base/vectorization.h>
+      <deal.II/distributed/fully_distributed_tria.h>
+      <deal.II/distributed/tria_base.h>
+      <deal.II/distributed/tria.h>
+      <deal.II/dofs/dof_handler.h>
+      <deal.II/dofs/dof_tools.h>
+      <deal.II/fe/fe_dgq.h>
+      <deal.II/fe/fe.h>
+      <deal.II/fe/fe_q.h>
+      <deal.II/fe/fe_simplex_p.h>
+      <deal.II/fe/fe_system.h>
+      <deal.II/fe/fe_values.h>
+      <deal.II/fe/mapping_fe.h>
+      <deal.II/fe/mapping.h>
+      <deal.II/fe/mapping_q_generic.h>
+      <deal.II/fe/mapping_q.h>
+      <deal.II/grid/grid_generator.h>
+      <deal.II/grid/grid_tools.h>
+      <deal.II/grid/manifold_lib.h>
+      <deal.II/grid/tria_description.h>
+      <deal.II/grid/tria.h>
+      <deal.II/lac/affine_constraints.h>
+      <deal.II/lac/full_matrix.h>
+      <deal.II/lac/la_parallel_block_vector.h>
+      <deal.II/lac/la_parallel_vector.h>
+      <deal.II/lac/petsc_precondition.h>
+      <deal.II/lac/petsc_sparse_matrix.h>
+      <deal.II/lac/petsc_vector.h>
+      <deal.II/lac/precondition.h>
+      <deal.II/lac/solver_cg.h>
+      <deal.II/lac/solver_control.h>
+      <deal.II/lac/solver_gmres.h>
+      <deal.II/lac/trilinos_precondition.h>
+      <deal.II/lac/trilinos_sparse_matrix.h>
+      <deal.II/lac/vector.h>
+      <deal.II/matrix_free/fe_evaluation.h>
+      <deal.II/matrix_free/fe_point_evaluation.h>
+      <deal.II/matrix_free/matrix_free.h>
+      <deal.II/matrix_free/operators.h>
+      <deal.II/multigrid/mg_constrained_dofs.h>
+      <deal.II/multigrid/mg_tools.h>
+      <deal.II/multigrid/mg_transfer_global_coarsening.h>
+      <deal.II/numerics/data_out.h>
+      <deal.II/numerics/solution_transfer.h>
+      <deal.II/numerics/vector_tools_constraints.h>
+      <deal.II/numerics/vector_tools.h>
+      <deal.II/numerics/vector_tools_mean_value.h>
+      <deal.II/particles/data_out.h>
+      <deal.II/particles/particle_handler.h>
+      )
+  TARGET_PRECOMPILE_HEADERS(exadg PRIVATE ${EXADG_PRECOMPILED_HEADERS})
+  SET_TARGET_PROPERTIES(exadg PROPERTIES DEFINE_SYMBOL "")
+ENDIF()
+
 ENABLE_TESTING()
 
 ADD_SUBDIRECTORY(applications)
