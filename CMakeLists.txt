@@ -62,7 +62,18 @@ CONFIGURE_FILE(
   )
 
 # Set the source files to be compiled
+# The most expensive sources come first, such that parallel builds do not end
+# with a few long compilations.
 SET(TARGET_SRC
+     include/exadg/structure/spatial_discretization/operators/nonlinear_operator.cpp
+     include/exadg/structure/material/library/incompressible_fibrous_tissue.cpp
+     include/exadg/operators/operator_base.cpp
+     include/exadg/compressible_navier_stokes/spatial_discretization/operator.cpp
+     include/exadg/structure/material/library/incompressible_neo_hookean.cpp
+     include/exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.cpp
+     include/exadg/structure/material/library/compressible_neo_hookean.cpp
+     include/exadg/acoustic_conservation_equations/spatial_discretization/spatial_operator.cpp
+     include/exadg/convection_diffusion/spatial_discretization/operator.cpp
      include/exadg/utilities/evaluate_convergence_study.cpp
      include/exadg/utilities/timer_tree.cpp
      include/exadg/utilities/print_general_infos.cpp
@@ -97,7 +108,6 @@ SET(TARGET_SRC
      include/exadg/postprocessor/particle_calculation.cpp
      include/exadg/postprocessor/statistics_manager.cpp
      include/exadg/operators/finite_element.cpp
-     include/exadg/operators/operator_base.cpp
      include/exadg/operators/mass_operator.cpp
      include/exadg/operators/boundary_mass_operator.cpp
      include/exadg/operators/inverse_mass_operator.cpp
@@ -118,7 +128,6 @@ SET(TARGET_SRC
      include/exadg/convection_diffusion/spatial_discretization/operators/convective_operator.cpp
      include/exadg/convection_diffusion/spatial_discretization/operators/diffusive_operator.cpp
      include/exadg/convection_diffusion/spatial_discretization/operators/combined_operator.cpp
-     include/exadg/convection_diffusion/spatial_discretization/operator.cpp
      include/exadg/convection_diffusion/spatial_discretization/interface.cpp
      include/exadg/convection_diffusion/preconditioners/multigrid_preconditioner.cpp
      include/exadg/convection_diffusion/time_integration/time_int_bdf.cpp
@@ -143,7 +152,6 @@ SET(TARGET_SRC
      include/exadg/incompressible_navier_stokes/spatial_discretization/turbulence_model.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/generalized_newtonian_model.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/viscosity_model_functions.cpp
-     include/exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_projection_methods.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_dual_splitting.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/operator_consistent_splitting.cpp
@@ -177,7 +185,6 @@ SET(TARGET_SRC
      include/exadg/compressible_navier_stokes/user_interface/parameters.cpp
      include/exadg/compressible_navier_stokes/time_integration/time_int_explicit_runge_kutta.cpp
      include/exadg/compressible_navier_stokes/spatial_discretization/interface.cpp
-     include/exadg/compressible_navier_stokes/spatial_discretization/operator.cpp
      include/exadg/compressible_navier_stokes/postprocessor/output_generator.cpp
      include/exadg/compressible_navier_stokes/postprocessor/pointwise_output_generator.cpp
      include/exadg/compressible_navier_stokes/postprocessor/postprocessor.cpp
@@ -185,11 +192,7 @@ SET(TARGET_SRC
      # elasticity
      include/exadg/structure/user_interface/parameters.cpp
      include/exadg/structure/material/library/st_venant_kirchhoff.cpp
-     include/exadg/structure/material/library/incompressible_neo_hookean.cpp
-     include/exadg/structure/material/library/compressible_neo_hookean.cpp
-     include/exadg/structure/material/library/incompressible_fibrous_tissue.cpp
      include/exadg/structure/spatial_discretization/operators/elasticity_operator_base.cpp
-     include/exadg/structure/spatial_discretization/operators/nonlinear_operator.cpp
      include/exadg/structure/spatial_discretization/operators/linear_operator.cpp
      include/exadg/structure/spatial_discretization/operators/body_force_operator.cpp
      include/exadg/structure/spatial_discretization/operator.cpp
@@ -207,7 +210,6 @@ SET(TARGET_SRC
      include/exadg/fluid_structure_interaction/acceleration_schemes/partitioned_solver.cpp
      # acoustic conservation equations
      include/exadg/acoustic_conservation_equations/user_interface/parameters.cpp
-     include/exadg/acoustic_conservation_equations/spatial_discretization/spatial_operator.cpp
      include/exadg/acoustic_conservation_equations/postprocessor/pointwise_output_generator.cpp
      include/exadg/acoustic_conservation_equations/postprocessor/postprocessor.cpp
      include/exadg/acoustic_conservation_equations/postprocessor/output_generator.cpp
