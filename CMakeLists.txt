@@ -96,6 +96,7 @@ SET(TARGET_SRC
      include/exadg/postprocessor/kinetic_energy_calculation.cpp
      include/exadg/postprocessor/particle_calculation.cpp
      include/exadg/postprocessor/statistics_manager.cpp
+     include/exadg/operators/finite_element.cpp
      include/exadg/operators/operator_base.cpp
      include/exadg/operators/mass_operator.cpp
      include/exadg/operators/boundary_mass_operator.cpp

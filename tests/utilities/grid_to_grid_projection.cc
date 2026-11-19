@@ -26,6 +26,7 @@
 #include <deal.II/distributed/fully_distributed_tria.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/fe_data.h>
+#include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_raviart_thomas.h>
 #include <deal.II/fe/mapping_fe.h>
 #include <deal.II/grid/grid_generator.h>
