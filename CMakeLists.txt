@@ -73,7 +73,10 @@ SET(TARGET_SRC
      include/exadg/structure/material/library/incompressible_fibrous_tissue_3d_float.cpp
      include/exadg/structure/material/library/incompressible_fibrous_tissue_2d_double.cpp
      include/exadg/structure/material/library/incompressible_fibrous_tissue_2d_float.cpp
-     include/exadg/operators/operator_base.cpp
+     include/exadg/operators/operator_base_3d_double.cpp
+     include/exadg/operators/operator_base_3d_float.cpp
+     include/exadg/operators/operator_base_2d_double.cpp
+     include/exadg/operators/operator_base_2d_float.cpp
      include/exadg/compressible_navier_stokes/spatial_discretization/operator.cpp
      include/exadg/structure/material/library/incompressible_neo_hookean.cpp
      include/exadg/incompressible_navier_stokes/spatial_discretization/spatial_operator_base.cpp
