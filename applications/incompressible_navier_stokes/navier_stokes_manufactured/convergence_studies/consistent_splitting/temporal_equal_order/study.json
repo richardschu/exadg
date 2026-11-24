@@ -1,0 +1,66 @@
+{
+    "prefix": "temporal",
+    "schemes": [
+        "consistent_splitting",
+        "consistent_splitting_equal_order"
+    ],
+    "convective_term": [
+        "explicit",
+        "linearly_implicit",
+        "implicit"
+    ],
+    "viscosity": [
+        "explicit",
+        "implicit"
+    ],
+    "bdf_orders": [
+        1,
+        2,
+        3
+    ],
+    "base": {
+        "General": {
+            "Precision": "double",
+            "Dim": "2",
+            "IsTest": "false"
+        },
+        "SpatialResolution": {
+            "DegreeMin": "8",
+            "DegreeMax": "8",
+            "RefineSpaceMin": "3",
+            "RefineSpaceMax": "3"
+        },
+        "TemporalResolution": {
+            "RefineTimeMin": "0",
+            "RefineTimeMax": "3"
+        },
+        "Application": {
+            "TriangulationType": "Distributed",
+            "SpatialDiscretization": "L2",
+            "MoveGrid": "false",
+            "ReadRestart": "false",
+            "WriteRestart": "false",
+            "IncludeConvectiveTerm": "true",
+            "BoundaryCondition": "PureDirichlet",
+            "StartTime": "0.0",
+            "EndTime": "1.0",
+            "TimeStepSize": "1.953125e-3",
+            "IntervalStart": "0.0",
+            "IntervalEnd": "1.0",
+            "Density": "1000.0",
+            "KinematicViscosity": "5e-2",
+            "UseGeneralizedNewtonianModel": "true",
+            "FormulationViscousTerm": "DivergenceFormulation",
+            "GeneralizedNewtonianViscosityMargin": "5e-2",
+            "GeneralizedNewtonianKappa": "1.0",
+            "GeneralizedNewtonianLambda": "1.0",
+            "GeneralizedNewtonianA": "2.0",
+            "GeneralizedNewtonianN": "0.5",
+            "ComputeConvergenceTable": "true"
+        },
+        "Output": {
+            "OutputName": "test",
+            "WriteOutput": "false"
+        }
+    }
+}

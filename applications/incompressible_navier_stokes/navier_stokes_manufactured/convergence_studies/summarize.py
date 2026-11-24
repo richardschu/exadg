@@ -18,7 +18,7 @@ import re
 import sys
 
 SCHEMES = ['coupled', 'dual_splitting', 'consistent_splitting', 'consistent_splitting_no_leray',
-           'pressure_correction']
+           'consistent_splitting_equal_order', 'pressure_correction']
 TREATMENTS = ['explicit', 'linearly_implicit', 'implicit']
 
 NAME = re.compile(r'(spatial|temporal)_(?:stokes_)?(\w+?)(?:_conv_(\w+?))?_visc_(\w+?)_(k|bdf)(\d+)$')
@@ -89,7 +89,8 @@ def main(folder):
 
     with_convection = any(key[3] is not None for key in studies)
     header = 'scheme / convective term / viscosity' if with_convection else 'scheme / viscosity'
-    width = 52 if with_convection else 32
+    width = max([52 if with_convection else 32] +
+                [len(' / '.join(x for x in key[2:] if x is not None)) for key in studies])
 
     def order(key):
         group, number, scheme, conv, visc = key

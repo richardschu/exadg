@@ -1,0 +1,88 @@
+Spatial convergence of navier_stokes_manufactured (generalized Newtonian, Carreau-Yasuda),
+consistent splitting with mixed-order (pressure degree k - 1) and equal-order (pressure degree k)
+polynomials, inputs from study.json (the settings of dual_splitting/spatial): Navier-Stokes,
+nu_oo = 5e-2, refinements 0..4, T = 0.1, dt = 1e-5, BDF2.
+Tables printed by `python3 ../../summarize.py .` (from convergence_studies/: `python3 summarize.py <folder>`):
+relative L2 errors at T on the first and last level and the rates (log2) of all refinements;
+time = sum of the wall times of all runs of a study (serial runs, 8 studies at a time).
+
+==== degree k = 2 (expected rates: velocity 3, pressure 2)
+scheme / convective term / viscosity                                    r=0       r=4   rates
+consistent_splitting / explicit / explicit                      u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92     85s
+                                                                p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / explicit / implicit                      u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    160s
+                                                                p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / linearly_implicit / explicit             u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92     87s
+                                                                p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / linearly_implicit / implicit             u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    167s
+                                                                p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / implicit / explicit                      u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92     88s
+                                                                p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting / implicit / implicit                      u  1.02e-02  3.60e-06   2.84  2.85  2.86  2.92    140s
+                                                                p  1.67e-01  6.66e-04   1.98  1.99  2.00  2.00
+consistent_splitting_equal_order / explicit / explicit          u  5.90e-03  1.45e-06   2.98  2.98  3.02  3.01     93s
+                                                                p  7.02e-02  9.49e-05   2.61  2.38  2.31  2.24
+consistent_splitting_equal_order / explicit / implicit          u  5.90e-03  1.45e-06   2.98  2.98  3.02  3.01    165s
+                                                                p  7.02e-02  9.49e-05   2.61  2.38  2.31  2.24
+consistent_splitting_equal_order / linearly_implicit / explicit u  5.90e-03  1.45e-06   2.99  2.98  3.02  3.01     92s
+                                                                p  6.86e-02  9.49e-05   2.58  2.37  2.31  2.24
+consistent_splitting_equal_order / linearly_implicit / implicit u  5.90e-03  1.45e-06   2.99  2.98  3.02  3.01    164s
+                                                                p  6.86e-02  9.49e-05   2.58  2.37  2.31  2.24
+consistent_splitting_equal_order / implicit / explicit          u  5.90e-03  1.45e-06   2.98  2.98  3.02  3.01     96s
+                                                                p  7.02e-02  9.49e-05   2.61  2.38  2.31  2.24
+consistent_splitting_equal_order / implicit / implicit          u  5.90e-03  1.45e-06   2.98  2.98  3.02  3.01    144s
+                                                                p  7.02e-02  9.49e-05   2.61  2.38  2.31  2.24
+
+==== degree k = 3 (expected rates: velocity 4, pressure 3)
+scheme / convective term / viscosity                                    r=0       r=4   rates
+consistent_splitting / explicit / explicit                      u  4.68e-04  7.56e-09   3.98  4.01  4.00  3.93    125s
+                                                                p  2.69e-03  6.67e-07   2.98  3.00  3.00  3.00
+consistent_splitting / explicit / implicit                      u  4.68e-04  7.56e-09   3.98  4.01  4.00  3.93    190s
+                                                                p  2.69e-03  6.67e-07   2.98  3.00  3.00  3.00
+consistent_splitting / linearly_implicit / explicit             u  4.66e-04  7.56e-09   3.97  4.01  4.00  3.93    129s
+                                                                p  2.70e-03  6.67e-07   2.99  3.00  3.00  3.00
+consistent_splitting / linearly_implicit / implicit             u  4.66e-04  7.56e-09   3.97  4.01  4.00  3.93    196s
+                                                                p  2.70e-03  6.67e-07   2.99  3.00  3.00  3.00
+consistent_splitting / implicit / explicit                      u  4.68e-04  7.56e-09   3.98  4.01  4.00  3.93    134s
+                                                                p  2.69e-03  6.67e-07   2.98  3.00  3.00  3.00
+consistent_splitting / implicit / implicit                      u  4.68e-04  7.56e-09   3.98  4.01  4.00  3.93    167s
+                                                                p  2.69e-03  6.67e-07   2.98  3.00  3.00  3.00
+consistent_splitting_equal_order / explicit / explicit          u  3.61e-04  5.83e-09   3.79  3.80  4.24  4.09    140s
+                                                                p  4.41e-03  5.45e-07   2.61  2.22  3.59  4.56
+consistent_splitting_equal_order / explicit / implicit          u  3.61e-04  5.83e-09   3.79  3.80  4.24  4.09    201s
+                                                                p  4.41e-03  5.45e-07   2.61  2.22  3.59  4.56
+consistent_splitting_equal_order / linearly_implicit / explicit u  3.60e-04  5.83e-09   3.79  3.79  4.24  4.09    138s
+                                                                p  4.33e-03  5.45e-07   2.61  2.20  3.58  4.56
+consistent_splitting_equal_order / linearly_implicit / implicit u  3.60e-04  5.83e-09   3.79  3.79  4.24  4.09    194s
+                                                                p  4.33e-03  5.45e-07   2.61  2.20  3.58  4.56
+consistent_splitting_equal_order / implicit / explicit          u  3.61e-04  5.83e-09   3.79  3.80  4.24  4.09    143s
+                                                                p  4.41e-03  5.45e-07   2.61  2.22  3.59  4.56
+consistent_splitting_equal_order / implicit / implicit          u  3.61e-04  5.83e-09   3.79  3.80  4.24  4.09    174s
+                                                                p  4.41e-03  5.45e-07   2.61  2.22  3.59  4.56
+
+==== degree k = 4 (expected rates: velocity 5, pressure 4)
+scheme / convective term / viscosity                                    r=0       r=4   rates
+consistent_splitting / explicit / explicit                      u  2.89e-05  3.51e-11   4.96  4.91  4.91  4.87    194s
+                                                                p  5.19e-04  8.21e-09   3.97  3.96  4.00  4.01
+consistent_splitting / explicit / implicit                      u  2.89e-05  3.51e-11   4.96  4.91  4.91  4.87    249s
+                                                                p  5.19e-04  8.21e-09   3.97  3.96  4.00  4.01
+consistent_splitting / linearly_implicit / explicit             u  2.88e-05  3.51e-11   4.95  4.91  4.91  4.87    196s
+                                                                p  5.19e-04  8.21e-09   3.97  3.96  4.00  4.01
+consistent_splitting / linearly_implicit / implicit             u  2.88e-05  3.51e-11   4.95  4.91  4.91  4.87    254s
+                                                                p  5.19e-04  8.21e-09   3.97  3.96  4.00  4.01
+consistent_splitting / implicit / explicit                      u  2.89e-05  3.51e-11   4.96  4.91  4.91  4.87    202s
+                                                                p  5.19e-04  8.21e-09   3.97  3.96  4.00  4.01
+consistent_splitting / implicit / implicit                      u  2.89e-05  3.51e-11   4.96  4.91  4.91  4.87    218s
+                                                                p  5.19e-04  8.21e-09   3.97  3.96  4.00  4.01
+consistent_splitting_equal_order / explicit / explicit          u  2.04e-05  1.83e-11   5.08  5.02  5.02  4.97    205s
+                                                                p  5.46e-04  2.09e-09   4.59  4.44  4.39  4.57
+consistent_splitting_equal_order / explicit / implicit          u  2.04e-05  1.83e-11   5.08  5.02  5.02  4.97    257s
+                                                                p  5.46e-04  2.09e-09   4.59  4.44  4.39  4.57
+consistent_splitting_equal_order / linearly_implicit / explicit u  2.03e-05  1.83e-11   5.08  5.02  5.02  4.97    199s
+                                                                p  5.41e-04  2.09e-09   4.58  4.44  4.39  4.57
+consistent_splitting_equal_order / linearly_implicit / implicit u  2.03e-05  1.83e-11   5.08  5.02  5.02  4.97    241s
+                                                                p  5.41e-04  2.09e-09   4.58  4.44  4.39  4.57
+consistent_splitting_equal_order / implicit / explicit          u  2.04e-05  1.83e-11   5.08  5.02  5.02  4.97    207s
+                                                                p  5.46e-04  2.09e-09   4.59  4.44  4.39  4.57
+consistent_splitting_equal_order / implicit / implicit          u  2.04e-05  1.83e-11   5.08  5.02  5.02  4.97    222s
+                                                                p  5.46e-04  2.09e-09   4.59  4.44  4.39  4.57

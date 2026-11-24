@@ -4,7 +4,8 @@ Carreau-Yasuda): domain (0,1)^2, pure Dirichlet, divergence formulation, L2
 
 Layout: one folder per study, grouped by the scheme the study is about,
   dual_splitting/{spatial,temporal_high_viscosity,temporal_low_viscosity}/
-  consistent_splitting/{spatial,temporal,temporal_moving_mesh}/
+  consistent_splitting/{spatial,temporal,temporal_moving_mesh,
+                        spatial_equal_order,temporal_equal_order}/
 each with
   study.json                   input shared by all runs ("base") and the
                                varied values (schemes, convective term,
@@ -16,7 +17,9 @@ and shared by all studies
   summarize.py         prints the tables of a summary from the logs
 The scheme names are those of TemporalDiscretization (coupled =
 BDFCoupledSolution, ...); consistent_splitting_no_leray is
-BDFConsistentSplitting with ApplyLerayProjection = false.
+BDFConsistentSplitting with ApplyLerayProjection = false,
+consistent_splitting_equal_order is BDFConsistentSplitting with
+DegreePressure = EqualOrder (pressure degree k instead of k - 1).
 
 Rerun a study (8 runs at a time, 1 MPI process each, the defaults):
   ./run_study.sh dual_splitting/spatial <path to solver> 8 1
@@ -109,3 +112,25 @@ consistent_splitting/temporal_moving_mesh/
   - The ALE form without the Leray projection (convective term with u - w and
     no volume term of the time derivative) does not converge (velocity 7e-3,
     pressure 1e-1 for all dt); it is not implemented.
+
+consistent_splitting/{spatial_equal_order,temporal_equal_order}/
+  Consistent splitting with mixed-order (pressure degree k - 1) and
+  equal-order (pressure degree k) polynomials, with the settings of
+  dual_splitting/spatial and dual_splitting/temporal_high_viscosity (nu_oo =
+  5e-2, all treatments of the convective term and the viscosity).
+  - spatial, mixed order: full rates (velocity k + 1, pressure k), errors
+    within 10% of coupled in dual_splitting/spatial.
+  - spatial, equal order: velocity rate k + 1 with errors 1.3-2.5 times
+    smaller than with mixed order. The pressure L2 error is bounded by the
+    velocity H1 error, i.e., rate k as for mixed order, not k + 1; observed
+    about k + 1/2 (k = 2: 2.6 ... 2.2, k = 3 and 4: about 4.5 on the finest
+    levels; one level more, r = 5, k = 2: 2.32, k = 3: 4.52), with smaller
+    errors on the finest level (k = 2: 7x, k = 3: 1.2x, k = 4: 4x). For k = 3
+    and refinements 0..2, the pressure error is larger than with mixed order
+    (up to 3.6x).
+  - temporal: rates 1, 2, 3 for velocity and pressure with both, the errors of
+    mixed and equal order agree to 3 digits (the spatial error is negligible
+    at degree 8); BDF1/2 errors equal to coupled in
+    dual_splitting/temporal_high_viscosity to 3 digits, BDF3 errors about 150
+    times larger than coupled (velocity 5.5e-9 instead of 3.7e-11 at
+    dt = 1/512).

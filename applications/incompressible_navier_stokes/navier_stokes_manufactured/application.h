@@ -331,6 +331,7 @@ public:
       // clang-format off
       prm.add_parameter("TriangulationType",                   triangulation_type,                                "Type of triangulation.");
       prm.add_parameter("SpatialDiscretization",               spatial_discretization,                            "Spatial discretization: L2 or HDIV.");
+      prm.add_parameter("DegreePressure",                      degree_pressure,                                   "Pressure degree: MixedOrder (k - 1) or EqualOrder (k).");
       prm.add_parameter("MoveGrid",                            move_grid,                                         "Should the grid be deformed over time?");
       prm.add_parameter("WriteRestart",                        write_restart,                                     "Should restart files be written?");
       prm.add_parameter("ReadRestart",                         read_restart,                                      "Is this a restarted simulation?");
@@ -415,7 +416,7 @@ private:
     this->param.grid.triangulation_type     = triangulation_type;
     this->param.mapping_degree              = this->param.degree_u;
     this->param.mapping_degree_coarse_grids = this->param.mapping_degree;
-    this->param.degree_p                    = DegreePressure::MixedOrder;
+    this->param.degree_p                    = degree_pressure;
 
     // convective term
     this->param.treatment_of_convective_term = treatment_of_convective_term;
@@ -851,6 +852,7 @@ private:
 
   TriangulationType     triangulation_type     = TriangulationType::Distributed;
   SpatialDiscretization spatial_discretization = SpatialDiscretization::L2;
+  DegreePressure        degree_pressure        = DegreePressure::MixedOrder;
 
   bool              include_convective_term = true;
   BoundaryCondition boundary_condition      = BoundaryCondition::PureDirichlet;

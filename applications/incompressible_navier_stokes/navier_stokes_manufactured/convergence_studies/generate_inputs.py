@@ -10,7 +10,8 @@ values: "schemes", "convective_term" (optional), "viscosity", and "degrees"
 each combination, named as expected by summarize.py:
   <prefix>_<scheme>[_conv_<convective term>]_visc_<viscosity>_<k<degree>|bdf<order>>
 The scheme consistent_splitting_no_leray is BDFConsistentSplitting with
-ApplyLerayProjection = false.
+ApplyLerayProjection = false, consistent_splitting_equal_order is
+BDFConsistentSplitting with DegreePressure = EqualOrder.
 """
 
 import copy
@@ -27,6 +28,10 @@ SCHEMES = {
     'consistent_splitting_no_leray': {
         'TemporalDiscretization': 'BDFConsistentSplitting',
         'ApplyLerayProjection': 'false'
+    },
+    'consistent_splitting_equal_order': {
+        'TemporalDiscretization': 'BDFConsistentSplitting',
+        'DegreePressure': 'EqualOrder'
     },
     'pressure_correction': {'TemporalDiscretization': 'BDFPressureCorrection'}
 }
