@@ -590,11 +590,16 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
                                            get_dof_index_velocity());
   }
 
+  // The viscous operator uses the same quadrature as the momentum operator,
+  // such that the linearized operators are consistent with the residual and
+  // the right-hand side evaluated with the viscous operator on non-affine
+  // cells. Variable viscosity requires the standard rule, see
+  // Parameters::check().
   ViscousOperatorData<dim> viscous_operator_data;
   viscous_operator_data.kernel_data          = viscous_kernel_data;
   viscous_operator_data.bc                   = boundary_descriptor->velocity;
   viscous_operator_data.dof_index            = get_dof_index_velocity();
-  viscous_operator_data.quad_index           = get_quad_index_velocity_standard();
+  viscous_operator_data.quad_index           = get_quad_index_velocity_linearized();
   viscous_operator_data.use_cell_based_loops = param.use_cell_based_face_loops;
   viscous_operator.initialize(*matrix_free,
                               constraint_dummy,
