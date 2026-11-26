@@ -84,8 +84,9 @@ DriverSteadyProblems<dim, Number>::initialize_vectors()
   // solution
   pde_operator->initialize_block_vector_velocity_pressure(solution);
 
-  // rhs_vector
-  if(this->param.equation_type == EquationType::Stokes)
+  // rhs_vector of the linear problems (Stokes equations or fixed-point
+  // iteration)
+  if(not this->param.nonlinear_problem_has_to_be_solved())
     pde_operator->initialize_block_vector_velocity_pressure(rhs_vector);
 }
 
@@ -106,9 +107,35 @@ DriverSteadyProblems<dim, Number>::solve(double const time, bool unsteady_proble
 
   postprocessing(time, unsteady_problem);
 
-  do_solve(time, unsteady_problem);
+  if(this->param.n_continuation_steps > 1)
+  {
+    AssertThrow(not unsteady_problem,
+                dealii::ExcMessage("Continuation is only implemented for steady problems."));
 
-  postprocessing(time, unsteady_problem);
+    // Solve at the continuation times, each starting from the last solution,
+    // and write the output after each step.
+    unsigned int const n_steps = this->param.n_continuation_steps;
+    for(unsigned int i = 0; i < n_steps; ++i)
+    {
+      double const continuation_time =
+        this->param.start_time +
+        (this->param.end_time - this->param.start_time) * double(i) / double(n_steps - 1);
+
+      pcout << std::endl
+            << "Continuation step " << i + 1 << " of " << n_steps << ", time " << std::scientific
+            << std::setprecision(5) << continuation_time << ":" << std::endl;
+
+      do_solve(continuation_time, false /* steady problem: print solver info */);
+
+      postprocessing(continuation_time, true /* time control with time and step number */);
+    }
+  }
+  else
+  {
+    do_solve(time, unsteady_problem);
+
+    postprocessing(time, unsteady_problem);
+  }
 
   timer_tree->insert({"DriverSteady"}, timer.wall_time());
 }
@@ -175,10 +202,21 @@ DriverSteadyProblems<dim, Number>::do_solve(double const time, bool unsteady_pro
     std::get<0>(iterations.second) += std::get<0>(iter);
     std::get<1>(iterations.second) += std::get<1>(iter);
   }
+  else if(this->param.convective_problem()) // linearly implicit convective term
+  {
+    auto const iter = solve_fixed_point(time);
+
+    if(print_solver_info(time, unsteady_problem) and not(this->is_test))
+      print_solver_info_nonlinear(pcout, std::get<0>(iter), std::get<1>(iter), timer.wall_time());
+
+    iterations.first += 1;
+    std::get<0>(iterations.second) += std::get<0>(iter);
+    std::get<1>(iterations.second) += std::get<1>(iter);
+  }
   else // linear problem
   {
-    // linearly implicit convective term does not make sense for steady problems, but we need to
-    // pass a vector to the functions rhs_linear_problem() and solve_linear_problem()
+    // Stokes equations without convective term, but we need to pass a vector
+    // to the functions rhs_linear_problem() and solve_linear_problem()
     VectorType transport_velocity;
 
     // calculate rhs vector
@@ -201,6 +239,62 @@ DriverSteadyProblems<dim, Number>::do_solve(double const time, bool unsteady_pro
 }
 
 template<int dim, typename Number>
+std::tuple<unsigned int, unsigned int>
+DriverSteadyProblems<dim, Number>::solve_fixed_point(double const time)
+{
+  Newton::SolverData const & solver_data = this->param.newton_solver_data_coupled;
+  double const               omega       = this->param.relaxation_factor_fixed_point;
+
+  BlockVectorType residual, solution_linear;
+  residual.reinit(solution, true /* omit_zeroing_entries */);
+  solution_linear.reinit(solution, true /* omit_zeroing_entries */);
+  VectorType transport_velocity;
+
+  pde_operator->evaluate_nonlinear_residual_steady(residual, solution, time);
+  double const norm_r_0 = residual.l2_norm();
+  double       norm_r   = norm_r_0;
+
+  unsigned int n_iter = 0, n_iter_linear = 0;
+  while(norm_r > solver_data.abs_tol and norm_r / norm_r_0 > solver_data.rel_tol and
+        n_iter < solver_data.max_iter)
+  {
+    // Oseen problem linearized about the last iterate, which is also the
+    // initial guess of the linear solver. The operators read the transport
+    // velocity including the ghost values.
+    transport_velocity = solution.block(0);
+    transport_velocity.update_ghost_values();
+    pde_operator->rhs_linear_problem(rhs_vector, transport_velocity, time);
+    solution_linear = solution;
+
+    bool const update_preconditioner =
+      this->param.update_preconditioner_coupled and
+      n_iter % this->param.update_preconditioner_coupled_every_newton_iter == 0;
+
+    unsigned int const n_iter_linear_current =
+      pde_operator->solve_linear_problem(solution_linear,
+                                         rhs_vector,
+                                         transport_velocity,
+                                         update_preconditioner,
+                                         1.0 /* no mass term in steady problems */);
+
+    // relaxed update
+    solution.sadd(1.0 - omega, omega, solution_linear);
+
+    pde_operator->evaluate_nonlinear_residual_steady(residual, solution, time);
+    norm_r = residual.l2_norm();
+
+    ++n_iter;
+    n_iter_linear += n_iter_linear_current;
+  }
+
+  AssertThrow(norm_r <= solver_data.abs_tol or norm_r / norm_r_0 <= solver_data.rel_tol,
+              dealii::ExcMessage("Fixed-point iteration did not converge in " +
+                                 std::to_string(solver_data.max_iter) + " iterations."));
+
+  return {n_iter, n_iter_linear};
+}
+
+template<int dim, typename Number>
 bool
 DriverSteadyProblems<dim, Number>::print_solver_info(double const time, bool unsteady_problem) const
 {
@@ -216,7 +310,7 @@ DriverSteadyProblems<dim, Number>::print_iterations() const
   std::vector<std::string> names;
   std::vector<double>      iterations_avg;
 
-  if(this->param.nonlinear_problem_has_to_be_solved())
+  if(this->param.nonlinear_problem_has_to_be_solved() or this->param.convective_problem())
   {
     names = {"Coupled system (nonlinear)",
              "Coupled system (linear accumulated)",

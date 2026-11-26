@@ -81,6 +81,16 @@ private:
   void
   do_solve(double const time = 0.0, bool unsteady_problem = false);
 
+  /*
+   * Fixed-point iteration for the steady Navier-Stokes equations with a
+   * linearly implicit convective term: each iteration solves the Oseen problem
+   * linearized about the last iterate and relaxes the update, see
+   * Parameters::relaxation_factor_fixed_point. Returns the number of
+   * fixed-point iterations and the accumulated number of linear iterations.
+   */
+  std::tuple<unsigned int, unsigned int>
+  solve_fixed_point(double const time);
+
   bool
   print_solver_info(double const time, bool unsteady_problem = false) const;
 

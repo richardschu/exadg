@@ -1,0 +1,27 @@
+{
+    "General": {
+        "Precision": "double",
+        "Dim": "2",
+        "IsTest": "true"
+    },
+    "SpatialResolution": {
+        "DegreeMin": "2",
+        "DegreeMax": "5",
+        "RefineSpaceMin": "1",
+        "RefineSpaceMax": "1"
+    },
+    "TemporalResolution": {
+        "RefineTimeMin": "0",
+        "RefineTimeMax": "0"
+    },
+    "Application": {
+        "TreatmentOfConvectiveTerm": "LinearlyImplicit",
+        "RelaxationFactorFixedPoint": "0.9",
+        "NumberOfContinuationSteps": "3"
+    },
+    "Output": {
+        "OutputDirectory": "results/",
+        "OutputName": "couette",
+        "WriteOutput": "false"
+    }
+}

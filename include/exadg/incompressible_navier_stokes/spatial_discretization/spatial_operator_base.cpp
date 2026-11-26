@@ -532,6 +532,10 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
 
   convective_kernel_data.exact_linearization_upwind = param.exact_linearization_upwind;
 
+  // fixed-point iteration of the steady solver
+  convective_kernel_data.transport_velocity_boundary_conditions =
+    param.solver_type == SolverType::Steady;
+
   convective_kernel = std::make_shared<Operators::ConvectiveKernel<dim, Number>>();
   convective_kernel->reinit(*matrix_free,
                             convective_kernel_data,

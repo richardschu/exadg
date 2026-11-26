@@ -26,12 +26,18 @@ namespace ExaDG
 {
 namespace IncNS
 {
+/*
+ * For ramp_time > 0, the velocity is scaled by a smooth cosine ramp from 0 at
+ * t = 0 to 1 at t = ramp_time, e.g., for the continuation of the steady solver.
+ */
 template<int dim>
 class AnalyticalSolutionVelocity : public dealii::Function<dim>
 {
 public:
-  AnalyticalSolutionVelocity(double const H, double const max_velocity)
-    : dealii::Function<dim>(dim, 0.0), H(H), max_velocity(max_velocity)
+  AnalyticalSolutionVelocity(double const H,
+                             double const max_velocity,
+                             double const ramp_time = 0.0)
+    : dealii::Function<dim>(dim, 0.0), H(H), max_velocity(max_velocity), ramp_time(ramp_time)
   {
   }
 
@@ -40,14 +46,19 @@ public:
   {
     double result = 0.0;
 
+    double const time   = this->get_time();
+    double const factor = (ramp_time > 0.0 and time < ramp_time) ?
+                            0.5 * (1.0 - std::cos(time * dealii::numbers::PI / ramp_time)) :
+                            1.0;
+
     if(component == 0)
-      result = max_velocity * (p[1] + H / 2.) / H;
+      result = factor * max_velocity * (p[1] + H / 2.) / H;
 
     return result;
   }
 
 private:
-  double const H, max_velocity;
+  double const H, max_velocity, ramp_time;
 };
 
 template<int dim, typename Number>
@@ -57,6 +68,28 @@ public:
   Application(std::string input_file, MPI_Comm const & comm)
     : ApplicationBase<dim, Number>(input_file, comm)
   {
+  }
+
+  void
+  add_parameters(dealii::ParameterHandler & prm) final
+  {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
+    prm.enter_subsection("Application");
+    {
+      prm.add_parameter("TreatmentOfConvectiveTerm",
+                        treatment_of_convective_term,
+                        "Implicit: Newton solver, LinearlyImplicit: fixed-point iteration.");
+      prm.add_parameter("RelaxationFactorFixedPoint",
+                        relaxation_factor_fixed_point,
+                        "Relaxation factor of the fixed-point iteration.",
+                        dealii::Patterns::Double(0.0, 1.0));
+      prm.add_parameter("NumberOfContinuationSteps",
+                        n_continuation_steps,
+                        "Number of steps of the continuation of the steady solver.",
+                        dealii::Patterns::Integer(1));
+    }
+    prm.leave_subsection();
   }
 
 private:
@@ -80,7 +113,9 @@ private:
     this->param.solver_type = SolverType::Steady; // Unsteady;
     this->param.temporal_discretization =
       TemporalDiscretization::BDFCoupledSolution; // BDFDualSplitting;
-    this->param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Implicit; // Explicit;
+    this->param.treatment_of_convective_term  = treatment_of_convective_term;
+    this->param.relaxation_factor_fixed_point = relaxation_factor_fixed_point;
+    this->param.n_continuation_steps          = n_continuation_steps;
     this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
     this->param.max_velocity                  = max_velocity;
     this->param.cfl                           = 1.0e-1;
@@ -244,7 +279,7 @@ private:
 
     // fill boundary descriptor velocity
     this->boundary_descriptor->velocity->dirichlet_bc.insert(
-      pair(0, new AnalyticalSolutionVelocity<dim>(H, max_velocity)));
+      pair(0, new AnalyticalSolutionVelocity<dim>(H, max_velocity, get_ramp_time())));
     this->boundary_descriptor->velocity->neumann_bc.insert(
       pair(1, new dealii::Functions::ZeroFunction<dim>(dim)));
 
@@ -285,7 +320,7 @@ private:
     pp_data.error_data_u.time_control_data.start_time       = start_time;
     pp_data.error_data_u.time_control_data.trigger_interval = (end_time - start_time) / 20.0;
     pp_data.error_data_u.analytical_solution.reset(
-      new AnalyticalSolutionVelocity<dim>(H, max_velocity));
+      new AnalyticalSolutionVelocity<dim>(H, max_velocity, get_ramp_time()));
     pp_data.error_data_u.calculate_relative_errors = false;
     pp_data.error_data_u.name                      = "velocity";
 
@@ -303,12 +338,25 @@ private:
     return pp;
   }
 
+  // ramp of the velocity for the continuation of the steady solver
+  double
+  get_ramp_time() const
+  {
+    return n_continuation_steps > 1 ? end_time : 0.0;
+  }
+
   double const H            = 1.0;
   double const L            = 4.0;
   double const max_velocity = 1.0;
 
   double const start_time = 0.0;
   double const end_time   = 10.0;
+
+  // steady solver: Newton solver (Implicit) or fixed-point iteration
+  // (LinearlyImplicit), number of continuation steps
+  TreatmentOfConvectiveTerm treatment_of_convective_term  = TreatmentOfConvectiveTerm::Implicit;
+  double                    relaxation_factor_fixed_point = 1.0;
+  unsigned int              n_continuation_steps          = 1;
 };
 
 } // namespace IncNS

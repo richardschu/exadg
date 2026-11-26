@@ -1,0 +1,780 @@
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       1
+
+Setting up incompressible Navier-Stokes solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              Steady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            DivergenceFormulation
+  Outflow BC for convective term:            false
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       false
+
+Physical quantities:
+  Viscosity:                                 1.0000e+00
+  Density:                                   1.0000e+00
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            2
+  Mapping degree coarse grids:               2
+  FE space:                                  L2
+  Polynomial degree velocity:                2
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Weak
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Weak
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyZeroMeanValue
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:false
+  Use boundary data:                         false
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+Coupled Navier-Stokes solver:
+  Use scaling of continuity equation:        false
+
+Fixed-point solver:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-14
+  Relaxation factor:                         9.0000e-01
+
+Continuation:
+  Number of steps:                           3
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e+01
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-02
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            BlockTriangular
+  Update preconditioner:                     true
+  Update every Newton iterations:            1
+  Update every time steps:                   1
+
+  Velocity/momentum block:
+  Preconditioner:                            Multigrid
+  Multigrid operator type:                   ReactionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Jacobi
+  Preconditioner smoother:                   BlockJacobi
+  Iterations smoother:                       5
+  Relaxation factor:                         7.0000e-01
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of velocity block:         false
+
+  Pressure/Schur-complement block:
+  Preconditioner:                            PressureConvectionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of Laplace operator:       false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                1
+  Number of cells:                           8
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   18
+  number of dofs (total):                    144
+Pressure:
+  degree of 1D polynomials:                  1
+  number of dofs per cell:                   4
+  number of dofs (total):                    32
+Velocity and pressure:
+  number of dofs per cell:                   22
+  number of dofs (total):                    176
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Calculate error for velocity for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Calculate error for pressure for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Continuation step 1 of 3, time 0.00000e+00:
+
+Solve steady state problem:
+
+Continuation step 2 of 3, time 5.00000e+00:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 5.0000e+00:
+  Absolute error (L2-norm): 1.01122e-13
+
+Calculate error for pressure at time t = 5.0000e+00:
+  Absolute error (L2-norm): 3.44692e-12
+
+Continuation step 3 of 3, time 1.00000e+01:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 1.0000e+01:
+  Absolute error (L2-norm): 3.40719e-14
+
+Calculate error for pressure at time t = 1.0000e+01:
+  Absolute error (L2-norm): 1.24724e-12
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       1
+
+Setting up incompressible Navier-Stokes solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              Steady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            DivergenceFormulation
+  Outflow BC for convective term:            false
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       false
+
+Physical quantities:
+  Viscosity:                                 1.0000e+00
+  Density:                                   1.0000e+00
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            3
+  Mapping degree coarse grids:               3
+  FE space:                                  L2
+  Polynomial degree velocity:                3
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Weak
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Weak
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyZeroMeanValue
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:false
+  Use boundary data:                         false
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+Coupled Navier-Stokes solver:
+  Use scaling of continuity equation:        false
+
+Fixed-point solver:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-14
+  Relaxation factor:                         9.0000e-01
+
+Continuation:
+  Number of steps:                           3
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e+01
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-02
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            BlockTriangular
+  Update preconditioner:                     true
+  Update every Newton iterations:            1
+  Update every time steps:                   1
+
+  Velocity/momentum block:
+  Preconditioner:                            Multigrid
+  Multigrid operator type:                   ReactionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Jacobi
+  Preconditioner smoother:                   BlockJacobi
+  Iterations smoother:                       5
+  Relaxation factor:                         7.0000e-01
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of velocity block:         false
+
+  Pressure/Schur-complement block:
+  Preconditioner:                            PressureConvectionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of Laplace operator:       false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                1
+  Number of cells:                           8
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   32
+  number of dofs (total):                    256
+Pressure:
+  degree of 1D polynomials:                  2
+  number of dofs per cell:                   9
+  number of dofs (total):                    72
+Velocity and pressure:
+  number of dofs per cell:                   41
+  number of dofs (total):                    328
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Calculate error for velocity for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Calculate error for pressure for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Continuation step 1 of 3, time 0.00000e+00:
+
+Solve steady state problem:
+
+Continuation step 2 of 3, time 5.00000e+00:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 5.0000e+00:
+  Absolute error (L2-norm): 1.32771e-13
+
+Calculate error for pressure at time t = 5.0000e+00:
+  Absolute error (L2-norm): 5.09558e-12
+
+Continuation step 3 of 3, time 1.00000e+01:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 1.0000e+01:
+  Absolute error (L2-norm): 6.25030e-14
+
+Calculate error for pressure at time t = 1.0000e+01:
+  Absolute error (L2-norm): 2.06351e-12
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       1
+
+Setting up incompressible Navier-Stokes solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              Steady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            DivergenceFormulation
+  Outflow BC for convective term:            false
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       false
+
+Physical quantities:
+  Viscosity:                                 1.0000e+00
+  Density:                                   1.0000e+00
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            4
+  Mapping degree coarse grids:               4
+  FE space:                                  L2
+  Polynomial degree velocity:                4
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Weak
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Weak
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyZeroMeanValue
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:false
+  Use boundary data:                         false
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+Coupled Navier-Stokes solver:
+  Use scaling of continuity equation:        false
+
+Fixed-point solver:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-14
+  Relaxation factor:                         9.0000e-01
+
+Continuation:
+  Number of steps:                           3
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e+01
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-02
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            BlockTriangular
+  Update preconditioner:                     true
+  Update every Newton iterations:            1
+  Update every time steps:                   1
+
+  Velocity/momentum block:
+  Preconditioner:                            Multigrid
+  Multigrid operator type:                   ReactionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Jacobi
+  Preconditioner smoother:                   BlockJacobi
+  Iterations smoother:                       5
+  Relaxation factor:                         7.0000e-01
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of velocity block:         false
+
+  Pressure/Schur-complement block:
+  Preconditioner:                            PressureConvectionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of Laplace operator:       false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                1
+  Number of cells:                           8
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   50
+  number of dofs (total):                    400
+Pressure:
+  degree of 1D polynomials:                  3
+  number of dofs per cell:                   16
+  number of dofs (total):                    128
+Velocity and pressure:
+  number of dofs per cell:                   66
+  number of dofs (total):                    528
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Calculate error for velocity for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Calculate error for pressure for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Continuation step 1 of 3, time 0.00000e+00:
+
+Solve steady state problem:
+
+Continuation step 2 of 3, time 5.00000e+00:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 5.0000e+00:
+  Absolute error (L2-norm): 3.85139e-13
+
+Calculate error for pressure at time t = 5.0000e+00:
+  Absolute error (L2-norm): 1.21466e-11
+
+Continuation step 3 of 3, time 1.00000e+01:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 1.0000e+01:
+  Absolute error (L2-norm): 9.35699e-14
+
+Calculate error for pressure at time t = 1.0000e+01:
+  Absolute error (L2-norm): 3.06572e-12
+
+
+
+________________________________________________________________________________
+                                                                                
+                ////////                      ///////   ////////                
+                ///                           ///  ///  ///                     
+                //////    ///  ///  ///////   ///  ///  /// ////                
+                ///         ////    //   //   ///  ///  ///  ///                
+                ////////  ///  ///  ///////// ///////   ////////                
+                                                                                
+               High-Order Discontinuous Galerkin for the Exa-Scale              
+________________________________________________________________________________
+
+
+MPI info:
+
+  Number of processes:                       1
+
+Setting up incompressible Navier-Stokes solver:
+
+List of parameters:
+
+Mathematical model:
+  Problem type:                              Steady
+  Equation type:                             NavierStokes
+  Formulation of viscous term:               LaplaceFormulation
+  Formulation of convective term:            DivergenceFormulation
+  Outflow BC for convective term:            false
+  Right-hand side:                           false
+  Boussinesq term:                           false
+  Boussinesq - dynamic part only:            false
+  Use ALE formulation:                       false
+
+Physical quantities:
+  Viscosity:                                 1.0000e+00
+  Density:                                   1.0000e+00
+
+Spatial discretization:
+  Triangulation type:                        Distributed
+  Element type:                              Hypercube
+  Number of global refinements:              1
+  Create coarse triangulations:              false
+  Mapping degree:                            5
+  Mapping degree coarse grids:               5
+  FE space:                                  L2
+  Polynomial degree velocity:                5
+  Polynomial degree pressure:                MixedOrder
+  Convective term - Upwind factor:           1.0000e+00
+  Convective term - Type of Dirichlet BC's:  Mirror
+  Viscous term - IP formulation:             SIPG
+  Viscous term - IP factor:                  1.0000e+00
+  Grad(p) - integration by parts:            true
+  Grad(p) - formulation:                     Weak
+  Grad(p) - use boundary data:               true
+  Div(u) . integration by parts:             true
+  Div(u) - formulation:                      Weak
+  Div(u) - use boundary data:                true
+  Adjust pressure level (if undefined):      ApplyZeroMeanValue
+  Use divergence penalty term:               true
+  Penalty factor divergence:                 1.0000e+00
+  Use continuity penalty term:               true
+  Apply penalty terms in postprocessing step:false
+  Use boundary data:                         false
+  Penalty factor continuity:                 1.0000e+00
+  Continuity penalty term components:        Normal
+  Type of penalty parameter:                 ConvectiveTerm
+
+Turbulence:
+  Use turbulence model:                      false
+
+Rheology:
+  Use generalized Newtonian model:           false
+
+Numerical parameters:
+  Block Jacobi matrix-free:                  false
+  Use cell-based face loops:                 false
+  Quadrature rule linearization:             Overintegration32k
+
+Coupled Navier-Stokes solver:
+  Use scaling of continuity equation:        false
+
+Fixed-point solver:
+  Maximum number of iterations:              100
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-14
+  Relaxation factor:                         9.0000e-01
+
+Continuation:
+  Number of steps:                           3
+  Start time:                                0.0000e+00
+  End time:                                  1.0000e+01
+
+Linear solver:
+  Solver:                                    FGMRES
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-14
+  Relative solver tolerance:                 1.0000e-02
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              100
+  Initial guess type:                        Extrapolation
+  Preconditioner:                            BlockTriangular
+  Update preconditioner:                     true
+  Update every Newton iterations:            1
+  Update every time steps:                   1
+
+  Velocity/momentum block:
+  Preconditioner:                            Multigrid
+  Multigrid operator type:                   ReactionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Jacobi
+  Preconditioner smoother:                   BlockJacobi
+  Iterations smoother:                       5
+  Relaxation factor:                         7.0000e-01
+  Coarse grid solver:                        GMRES
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of velocity block:         false
+
+  Pressure/Schur-complement block:
+  Preconditioner:                            PressureConvectionDiffusion
+  Multigrid type:                            hMG
+  Min degree matrix-free:                    1
+  Smoother:                                  Chebyshev
+  Preconditioner smoother:                   PointJacobi
+  Iterations smoother:                       5
+  Smoothing range:                           2.0000e+01
+  Iterations eigenvalue estimation:          20
+  Coarse grid solver:                        Chebyshev
+  Coarse grid preconditioner:                PointJacobi
+  Maximum number of iterations:              10000
+  Absolute solver tolerance:                 1.0000e-12
+  Relative solver tolerance:                 1.0000e-03
+  Relative tolerance reference:              InitialResidual
+  Maximum size of Krylov space:              30
+  Exact inversion of Laplace operator:       false
+
+Generating grid for 2-dimensional problem:
+
+  Max. number of refinements:                1
+  Number of cells:                           8
+
+Construct incompressible Navier-Stokes operator ...
+Velocity:
+  degree of 1D polynomials:                  5
+  number of dofs per cell:                   72
+  number of dofs (total):                    576
+Pressure:
+  degree of 1D polynomials:                  4
+  number of dofs per cell:                   25
+  number of dofs (total):                    200
+Velocity and pressure:
+  number of dofs per cell:                   97
+  number of dofs (total):                    776
+
+... done!
+
+Setup incompressible Navier-Stokes operator ...
+
+... done!
+
+Calculate error for velocity for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Calculate error for pressure for initial data:
+  Absolute error (L2-norm): 0.00000e+00
+
+Continuation step 1 of 3, time 0.00000e+00:
+
+Solve steady state problem:
+
+Continuation step 2 of 3, time 5.00000e+00:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 5.0000e+00:
+  Absolute error (L2-norm): 4.02617e-13
+
+Calculate error for pressure at time t = 5.0000e+00:
+  Absolute error (L2-norm): 1.41313e-11
+
+Continuation step 3 of 3, time 1.00000e+01:
+
+Solve steady state problem:
+
+Calculate error for velocity at time t = 1.0000e+01:
+  Absolute error (L2-norm): 1.31552e-13
+
+Calculate error for pressure at time t = 1.0000e+01:
+  Absolute error (L2-norm): 5.27245e-12

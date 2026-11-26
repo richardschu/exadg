@@ -693,8 +693,22 @@ public:
   // scaling factor continuity equation
   double scaling_factor_continuity;
 
-  // solver tolerances Newton solver
+  // solver tolerances Newton solver, also the tolerances and the maximum
+  // number of iterations of the fixed-point iteration of the steady solver
   Newton::SolverData newton_solver_data_coupled;
+
+  // SolverType::Steady with TreatmentOfConvectiveTerm::LinearlyImplicit:
+  // fixed-point (Picard) iteration, each iteration solves the Oseen problem
+  // linearized about the last iterate and relaxes the update by this factor in
+  // (0, 1].
+  double relaxation_factor_fixed_point;
+
+  // SolverType::Steady: continuation, i.e., the steady problem is solved at
+  // n_continuation_steps times equally spaced in [start_time, end_time], both
+  // ends included, each starting from the solution at the previous time. The
+  // application defines what depends on the time, e.g., the boundary data. One
+  // step solves at time 0 without continuation.
+  unsigned int n_continuation_steps;
 
   // Solver data for coupled solver
   SolverData solver_data_coupled;
@@ -710,6 +724,7 @@ public:
 
   // Update preconditioner every ... Newton iterations (only relevant for
   // nonlinear problems, i.e., if the convective term is formulated implicitly)
+  // or fixed-point iterations of the steady solver.
   // This variable is only used if update_preconditioner_coupled = true.
   unsigned int update_preconditioner_coupled_every_newton_iter;
 

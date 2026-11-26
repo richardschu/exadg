@@ -43,7 +43,8 @@ struct ConvectiveKernelData
       exact_linearization_upwind(false),
       use_outflow_bc(false),
       type_dirichlet_bc(TypeDirichletBCs::Mirror),
-      ale(false)
+      ale(false),
+      transport_velocity_boundary_conditions(false)
   {
   }
 
@@ -61,6 +62,13 @@ struct ConvectiveKernelData
   TypeDirichletBCs type_dirichlet_bc;
 
   bool ale;
+
+  // TreatmentOfConvectiveTerm::LinearlyImplicit: exterior value of the
+  // transport velocity on boundary faces from the boundary conditions as for
+  // the nonlinear operator instead of the interior value. Then the operator
+  // with the transport velocity u is the nonlinear operator evaluated at u, as
+  // needed by the fixed-point iteration of the steady solver.
+  bool transport_velocity_boundary_conditions;
 };
 
 template<int dim, typename Number>

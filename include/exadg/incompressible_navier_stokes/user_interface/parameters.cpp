@@ -207,6 +207,8 @@ Parameters::Parameters()
 
     // nonlinear solver (Newton solver)
     newton_solver_data_coupled(Newton::SolverData(1e2, 1.e-12, 1.e-6)),
+    relaxation_factor_fixed_point(1.0),
+    n_continuation_steps(1),
 
     // linear solver
     solver_data_coupled(SolverData(1e4, 1.e-12, 1.e-6, LinearSolver::GMRES, 100)),
@@ -338,9 +340,22 @@ Parameters::check(dealii::ConditionalOStream const & pcout) const
   {
     if(convective_problem())
     {
-      AssertThrow(treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit,
+      AssertThrow(treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit or
+                    treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit,
                   dealii::ExcMessage(
-                    "Convective term has to be formulated implicitly when using a steady solver."));
+                    "Convective term has to be formulated implicitly (Newton) or linearly "
+                    "implicitly (fixed-point iteration) when using a steady solver."));
+    }
+
+    AssertThrow(relaxation_factor_fixed_point > 0.0 and relaxation_factor_fixed_point <= 1.0,
+                dealii::ExcMessage("The relaxation factor has to be in (0, 1]."));
+
+    AssertThrow(n_continuation_steps >= 1,
+                dealii::ExcMessage("At least one continuation step is required."));
+    if(n_continuation_steps > 1)
+    {
+      AssertThrow(end_time > start_time,
+                  dealii::ExcMessage("Continuation requires end_time > start_time."));
     }
   }
 
@@ -696,9 +711,8 @@ Parameters::implicit_nonlinear_convective_problem() const
 {
   if(convective_problem())
   {
-    if(solver_type == SolverType::Steady or
-       (solver_type == SolverType::Unsteady and
-        (treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)))
+    if((solver_type == SolverType::Steady or solver_type == SolverType::Unsteady) and
+       treatment_of_convective_term == TreatmentOfConvectiveTerm::Implicit)
     {
       return true;
     }
@@ -1402,6 +1416,32 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
     pcout << std::endl;
   }
 
+  // fixed-point solver and continuation of the steady solver
+  if(solver_type == SolverType::Steady)
+  {
+    if(convective_problem() and
+       treatment_of_convective_term == TreatmentOfConvectiveTerm::LinearlyImplicit)
+    {
+      pcout << "Fixed-point solver:" << std::endl;
+
+      newton_solver_data_coupled.print(pcout);
+      print_parameter(pcout, "Relaxation factor", relaxation_factor_fixed_point);
+
+      pcout << std::endl;
+    }
+
+    if(n_continuation_steps > 1)
+    {
+      pcout << "Continuation:" << std::endl;
+
+      print_parameter(pcout, "Number of steps", n_continuation_steps);
+      print_parameter(pcout, "Start time", start_time);
+      print_parameter(pcout, "End time", end_time);
+
+      pcout << std::endl;
+    }
+  }
+
   // Solver linearized problem
   pcout << "Linear solver:" << std::endl;
 
@@ -1414,7 +1454,9 @@ Parameters::print_parameters_coupled_solver(dealii::ConditionalOStream const & p
 
   if(update_preconditioner_coupled == true)
   {
-    if(nonlinear_problem_has_to_be_solved())
+    // also used by the fixed-point iteration of the steady solver
+    if(nonlinear_problem_has_to_be_solved() or
+       (solver_type == SolverType::Steady and convective_problem()))
     {
       print_parameter(pcout,
                       "Update every Newton iterations",

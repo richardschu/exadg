@@ -186,6 +186,10 @@ OperatorCoupled<dim, Number>::rhs_linear_problem(BlockVectorType &  dst,
     this->convective_operator.set_velocity_ptr(transport_velocity);
     this->convective_operator.set_time(time);
     this->convective_operator.rhs_add(dst.block(0));
+
+    // The boundary values of the transport velocity in the momentum operator
+    // depend on the time, see ConvectiveKernelData.
+    this->momentum_operator.set_time(time);
   }
 
   if(this->param.apply_penalty_terms_in_postprocessing_step == false)
@@ -431,7 +435,11 @@ OperatorCoupled<dim, Number>::evaluate_nonlinear_residual_steady(BlockVectorType
     dst.block(0) *= -1.0;
   }
 
-  if(this->param.implicit_nonlinear_convective_problem())
+  // The residual of the steady Navier-Stokes equations contains the convective
+  // term for any treatment of it, e.g., for the fixed-point iteration of the
+  // steady solver or pseudo-time stepping with a linearly implicit convective
+  // term.
+  if(this->param.convective_problem())
   {
     this->convective_operator.evaluate_nonlinear_operator_add(dst.block(0), src.block(0), time);
   }
