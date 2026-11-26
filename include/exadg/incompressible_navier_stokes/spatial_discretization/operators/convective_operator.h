@@ -686,7 +686,6 @@ public:
       {
         // linearly implicit convective term
 
-        vector flux;
         scalar average_u_normal = 0.5 * (uM + uP) * normalM;
         if(data.ale)
           average_u_normal -= u_grid * normalM;
@@ -778,7 +777,6 @@ public:
       {
         // linearly implicit convective term
 
-        vector flux;
         scalar average_u_normal = 0.5 * (uM + uP) * normalM;
         if(data.ale)
           average_u_normal -= u_grid * normalM;

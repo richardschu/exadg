@@ -551,7 +551,12 @@ OperatorProjectionMethods<dim, Number>::evaluate_linearized_residual(
     {
       this->convective_operator.set_velocity_ptr(transport_velocity);
       this->convective_operator.apply_add(dst, src);
-      this->convective_operator.rhs_add(dst);
+      // rhs_add() adds the inhomogeneous boundary terms with a negative sign
+      // (right-hand side), the residual needs them with a positive sign
+      VectorType inhomogeneous_terms;
+      inhomogeneous_terms.reinit(dst);
+      this->convective_operator.rhs_add(inhomogeneous_terms);
+      dst.add(-1.0, inhomogeneous_terms);
     }
     // The explicit convective term is contained in rhs_vector.
   }

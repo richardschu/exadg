@@ -349,7 +349,11 @@ OperatorCoupled<dim, Number>::evaluate_linearized_residual(BlockVectorType &    
     {
       this->convective_operator.set_velocity_ptr(transport_velocity);
       this->convective_operator.apply_add(dst.block(0), src.block(0));
-      this->convective_operator.rhs_add(dst.block(0));
+      // rhs_add() adds the inhomogeneous boundary terms with a negative sign
+      // (right-hand side), the residual needs them with a positive sign
+      temp_vector = 0.0;
+      this->convective_operator.rhs_add(temp_vector);
+      dst.block(0).add(-1.0, temp_vector);
     }
     // The explicit convective term is contained in rhs_vector.
   }
