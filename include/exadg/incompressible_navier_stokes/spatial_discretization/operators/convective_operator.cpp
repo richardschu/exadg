@@ -571,7 +571,7 @@ ConvectiveOperator<dim, Number>::do_boundary_integral(
     vector u_p;
 
     if(operator_data.kernel_data.temporal_treatment == TreatmentOfConvectiveTerm::Implicit or
-       operator_data.kernel_data.transport_velocity_boundary_conditions)
+       operator_data.kernel_data.consistent_with_nonlinear_operator)
     {
       u_p = calculate_exterior_value_convective(u_m,
                                                 q,
@@ -588,7 +588,7 @@ ConvectiveOperator<dim, Number>::do_boundary_integral(
     {
       // for a linearly implicit treatment of the convective term, we do not
       // impose boundary conditions for the transport velocity u (unless
-      // transport_velocity_boundary_conditions is set, see above). Boundary
+      // consistent_with_nonlinear_operator is set, see above). Boundary
       // conditions are only imposed for the solution variable denoted here as
       // "value_m" and "value_p".
       u_p = u_m;

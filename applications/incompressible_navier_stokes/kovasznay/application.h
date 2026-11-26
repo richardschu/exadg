@@ -133,12 +133,33 @@ public:
   {
   }
 
+  void
+  add_parameters(dealii::ParameterHandler & prm) final
+  {
+    ApplicationBase<dim, Number>::add_parameters(prm);
+
+    prm.enter_subsection("Application");
+    {
+      prm.add_parameter("ProblemType",
+                        problem_type,
+                        "Steady: steady solver or pseudo-time stepping (SolverType).");
+      prm.add_parameter("SolverType", solver_type, "Steady or Unsteady solver.");
+      prm.add_parameter("TemporalDiscretization",
+                        temporal_discretization,
+                        "Time integration scheme.");
+      prm.add_parameter("TreatmentOfConvectiveTerm",
+                        treatment_of_convective_term,
+                        "Treatment of the convective term.");
+    }
+    prm.leave_subsection();
+  }
+
 private:
   void
   set_parameters() final
   {
     // MATHEMATICAL MODEL
-    this->param.problem_type                = ProblemType::Unsteady;
+    this->param.problem_type                = problem_type;
     this->param.equation_type               = EquationType::NavierStokes;
     this->param.formulation_viscous_term    = formulation_viscous;
     this->param.formulation_convective_term = FormulationConvectiveTerm::DivergenceFormulation;
@@ -150,17 +171,33 @@ private:
     this->param.end_time   = end_time;
     this->param.viscosity  = viscosity;
 
+    // pseudo-time stepping: the end time only limits the pseudo time
+    if(problem_type == ProblemType::Steady)
+      this->param.end_time = 1.0e3;
+
 
     // TEMPORAL DISCRETIZATION
-    this->param.solver_type                   = SolverType::Unsteady;
-    this->param.temporal_discretization       = TemporalDiscretization::BDFDualSplitting;
-    this->param.treatment_of_convective_term  = TreatmentOfConvectiveTerm::Explicit;
+    this->param.solver_type                   = solver_type;
+    this->param.temporal_discretization       = temporal_discretization;
+    this->param.treatment_of_convective_term  = treatment_of_convective_term;
     this->param.calculation_of_time_step_size = TimeStepCalculation::CFL;
     this->param.max_velocity                  = 3.6;
     this->param.cfl                           = 1.0e-2;
     this->param.time_step_size                = 1.0e-3;
     this->param.order_time_integrator         = 3;    // 1; // 2; // 3;
     this->param.start_with_low_order          = true; // true; // false;
+
+    // pseudo-time stepping for steady problems: implicit Euler with large time
+    // steps
+    if(problem_type == ProblemType::Steady)
+    {
+      this->param.cfl                   = 100.0;
+      this->param.order_time_integrator = 1;
+    }
+    this->param.convergence_criterion_steady_problem =
+      ConvergenceCriterionSteadyProblem::ResidualSteadyNavierStokes;
+    this->param.abs_tol_steady = 1.e-12;
+    this->param.rel_tol_steady = 1.e-8;
 
     // output of solver information
     this->param.solver_info_data.interval_time =
@@ -176,6 +213,11 @@ private:
 
     // viscous term
     this->param.IP_formulation_viscous = InteriorPenaltyFormulation::SIPG;
+
+    // divergence and continuity penalty terms in the system of equations for
+    // steady problems, i.e., also in the residual of the steady problem
+    if(problem_type == ProblemType::Steady)
+      this->param.apply_penalty_terms_in_postprocessing_step = false;
 
     // PROJECTION METHODS
 
@@ -234,6 +276,8 @@ private:
 
     // preconditioner velocity/momentum block
     this->param.preconditioner_velocity_block = MomentumPreconditioner::Multigrid;
+    this->param.multigrid_operator_type_velocity_block =
+      MultigridOperatorType::ReactionConvectionDiffusion;
     this->param.multigrid_data_velocity_block.smoother_data.smoother =
       MultigridSmoother::Jacobi; // Jacobi; //Chebyshev; //GMRES;
     this->param.multigrid_data_velocity_block.smoother_data.preconditioner =
@@ -368,6 +412,11 @@ private:
 
     return pp;
   }
+
+  ProblemType               problem_type                 = ProblemType::Unsteady;
+  SolverType                solver_type                  = SolverType::Unsteady;
+  TemporalDiscretization    temporal_discretization      = TemporalDiscretization::BDFDualSplitting;
+  TreatmentOfConvectiveTerm treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit;
 
   InitializeSolutionWith const initialize_solution_with =
     InitializeSolutionWith::AnalyticalSolution;

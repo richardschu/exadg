@@ -779,6 +779,22 @@ TimeIntBDF<dim, Number>::get_pressures_and_times_np(std::vector<VectorType const
 
 template<int dim, typename Number>
 void
+TimeIntBDF<dim, Number>::postprocessing_steady_problem() const
+{
+  // pseudo-time stepping for steady problems: postprocessing of the initial
+  // data and of the steady state as for a steady problem, see
+  // TimeIntBDF::postprocessing() for the constraints. The time-dependent data,
+  // e.g., boundary conditions, are those of the current pseudo time.
+  operator_base->distribute_constraint_u(const_cast<VectorType &>(get_velocity(0)));
+
+  postprocessor->do_postprocessing(get_velocity(0),
+                                   get_pressure(0),
+                                   this->get_time(),
+                                   numbers::steady_timestep);
+}
+
+template<int dim, typename Number>
+void
 TimeIntBDF<dim, Number>::postprocessing() const
 {
   dealii::Timer timer;

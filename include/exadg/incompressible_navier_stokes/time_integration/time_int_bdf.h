@@ -303,6 +303,9 @@ private:
   void
   postprocessing() const final;
 
+  void
+  postprocessing_steady_problem() const final;
+
   // postprocessor
   std::shared_ptr<PostProcessorInterface<Number>> postprocessor;
 

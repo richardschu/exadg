@@ -44,7 +44,7 @@ struct ConvectiveKernelData
       use_outflow_bc(false),
       type_dirichlet_bc(TypeDirichletBCs::Mirror),
       ale(false),
-      transport_velocity_boundary_conditions(false)
+      consistent_with_nonlinear_operator(false)
   {
   }
 
@@ -63,12 +63,14 @@ struct ConvectiveKernelData
 
   bool ale;
 
-  // TreatmentOfConvectiveTerm::LinearlyImplicit: exterior value of the
-  // transport velocity on boundary faces from the boundary conditions as for
-  // the nonlinear operator instead of the interior value. Then the operator
-  // with the transport velocity u is the nonlinear operator evaluated at u, as
-  // needed by the fixed-point iteration of the steady solver.
-  bool transport_velocity_boundary_conditions;
+  // TreatmentOfConvectiveTerm::LinearlyImplicit: the operator with transport
+  // velocity w applied to u = w is the nonlinear operator evaluated at u, as
+  // needed by steady problems (fixed-point iteration of the steady solver,
+  // pseudo-time stepping). Therefore, the exterior value of w on boundary faces
+  // follows from the boundary conditions instead of the interior value, and the
+  // divergence formulation uses the Lax-Friedrichs parameter of the nonlinear
+  // operator instead of the halved one of linear transport.
+  bool consistent_with_nonlinear_operator;
 };
 
 template<int dim, typename Number>
@@ -883,9 +885,13 @@ public:
 
     vector jump_value = uM - uP;
 
-    // the function calculate_lambda() is for the nonlinear operator with quadratic nonlinearity. In
-    // case of linear transport, lambda is reduced by a factor of 2.
-    scalar lambda = 0.5 * calculate_lambda(wM_n, wP_n);
+    // the function calculate_lambda() is for the nonlinear operator with
+    // quadratic nonlinearity. In case of linear transport, lambda is reduced by
+    // a factor of 2, unless the operator has to be consistent with the
+    // nonlinear operator (see ConvectiveKernelData).
+    scalar lambda = calculate_lambda(wM_n, wP_n);
+    if(not data.consistent_with_nonlinear_operator)
+      lambda *= 0.5;
 
     return (average_normal_flux + 0.5 * lambda * jump_value);
   }
