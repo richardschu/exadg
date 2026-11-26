@@ -342,6 +342,14 @@ public:
   // step sizes.
   double upwind_factor;
 
+  // Newton linearization of the convective term (implicit treatment): if true,
+  // the factor of the upwind term, |u*n| for the convective formulation and
+  // lambda for the divergence formulation, is linearized as well, such that
+  // the linearized operator is the derivative of the nonlinear operator. If
+  // false, this factor is kept fixed. Where |u*n| is not differentiable,
+  // sign(0) = 0 is used.
+  bool exact_linearization_upwind;
+
   // description: see enum declaration
   TypeDirichletBCs type_dirichlet_bc_convective;
 

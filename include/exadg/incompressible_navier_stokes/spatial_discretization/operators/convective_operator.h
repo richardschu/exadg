@@ -40,6 +40,7 @@ struct ConvectiveKernelData
     : formulation(FormulationConvectiveTerm::DivergenceFormulation),
       temporal_treatment(TreatmentOfConvectiveTerm::Implicit),
       upwind_factor(1.0),
+      exact_linearization_upwind(false),
       use_outflow_bc(false),
       type_dirichlet_bc(TypeDirichletBCs::Mirror),
       ale(false)
@@ -51,6 +52,9 @@ struct ConvectiveKernelData
   TreatmentOfConvectiveTerm temporal_treatment;
 
   double upwind_factor;
+
+  // see Parameters::exact_linearization_upwind
+  bool exact_linearization_upwind;
 
   bool use_outflow_bc;
 
@@ -816,6 +820,22 @@ public:
   }
 
   /*
+   *  Sign of x with sign(0) = 0.
+   */
+  inline DEAL_II_ALWAYS_INLINE //
+    scalar
+    calculate_sign(scalar const & x) const
+  {
+    scalar const zero = dealii::make_vectorized_array<Number>(0.0);
+    scalar const one  = dealii::make_vectorized_array<Number>(1.0);
+    return dealii::compare_and_apply_mask<dealii::SIMDComparison::greater_than>(x,
+                                                                                zero,
+                                                                                one,
+                                                                                zero) -
+           dealii::compare_and_apply_mask<dealii::SIMDComparison::less_than>(x, zero, one, zero);
+  }
+
+  /*
    *  Divergence formulation: Calculate Lax-Friedrichs flux for nonlinear operator.
    */
   inline DEAL_II_ALWAYS_INLINE //
@@ -889,7 +909,23 @@ public:
 
     scalar lambda = calculate_lambda(uM_n, uP_n);
 
-    return (average_normal_flux + 0.5 * lambda * jump_value);
+    vector flux = average_normal_flux + 0.5 * lambda * jump_value;
+
+    if(data.exact_linearization_upwind)
+    {
+      // derivative of max(|uM*n|, |uP*n|) with sign(0) = 0
+      scalar const delta_max_normal_velocity =
+        dealii::compare_and_apply_mask<dealii::SIMDComparison::greater_than_or_equal>(
+          std::abs(uM_n),
+          std::abs(uP_n),
+          calculate_sign(uM_n) * delta_uM_n,
+          calculate_sign(uP_n) * delta_uP_n);
+      scalar const delta_lambda = data.upwind_factor * 2.0 * delta_max_normal_velocity;
+
+      flux += 0.5 * delta_lambda * (uM - uP);
+    }
+
+    return flux;
   }
 
   /*
@@ -934,9 +970,18 @@ public:
 
     vector jump_value = delta_uM - delta_uP;
 
-    return (average_normal_velocity * delta_average_velocity +
-            delta_average_normal_velocity * average_velocity +
-            data.upwind_factor * 0.5 * std::abs(average_normal_velocity) * jump_value);
+    vector flux = average_normal_velocity * delta_average_velocity +
+                  delta_average_normal_velocity * average_velocity +
+                  data.upwind_factor * 0.5 * std::abs(average_normal_velocity) * jump_value;
+
+    if(data.exact_linearization_upwind)
+    {
+      // derivative of |average_normal_velocity| with sign(0) = 0
+      flux += data.upwind_factor * 0.5 * calculate_sign(average_normal_velocity) *
+              delta_average_normal_velocity * (uM - uP);
+    }
+
+    return flux;
   }
 
   /*

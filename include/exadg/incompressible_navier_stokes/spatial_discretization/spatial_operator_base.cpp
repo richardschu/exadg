@@ -529,6 +529,9 @@ SpatialOperatorBase<dim, Number>::initialize_operators(std::string const & dof_i
   convective_kernel_data.use_outflow_bc     = param.use_outflow_bc_convective_term;
   convective_kernel_data.type_dirichlet_bc  = param.type_dirichlet_bc_convective;
   convective_kernel_data.ale                = param.ale_formulation;
+
+  convective_kernel_data.exact_linearization_upwind = param.exact_linearization_upwind;
+
   convective_kernel = std::make_shared<Operators::ConvectiveKernel<dim, Number>>();
   convective_kernel->reinit(*matrix_free,
                             convective_kernel_data,

@@ -103,6 +103,7 @@ Parameters::Parameters()
 
     // convective term
     upwind_factor(1.0),
+    exact_linearization_upwind(false),
     type_dirichlet_bc_convective(TypeDirichletBCs::Mirror),
 
     // viscous term
@@ -1038,6 +1039,10 @@ Parameters::print_parameters_spatial_discretization(dealii::ConditionalOStream c
   if(this->convective_problem())
   {
     print_parameter(pcout, "Convective term - Upwind factor", upwind_factor);
+    if(exact_linearization_upwind)
+      print_parameter(pcout,
+                      "Convective term - Exact linearization of upwind term",
+                      exact_linearization_upwind);
     print_parameter(pcout,
                     "Convective term - Type of Dirichlet BC's",
                     type_dirichlet_bc_convective);
