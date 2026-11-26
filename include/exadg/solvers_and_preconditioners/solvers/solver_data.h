@@ -132,6 +132,10 @@ struct SolverData
 
   // only relevant for GMRES type solvers
   unsigned int max_krylov_size;
+
+  // print the residual every n iterations, 0 = never (diagnostics, not
+  // printed by print())
+  unsigned int print_every_n_iterations = 0;
 };
 
 /*

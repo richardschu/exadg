@@ -54,6 +54,10 @@ struct SolverData
   unsigned int max_iter;
   double       abs_tol;
   double       rel_tol;
+
+  // print the residual, the linear iterations, the damping, and the wall times
+  // of each Newton iteration (diagnostics, not printed by print())
+  bool print_iterations = false;
 };
 
 struct UpdateData

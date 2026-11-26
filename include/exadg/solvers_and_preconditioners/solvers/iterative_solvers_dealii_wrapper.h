@@ -22,7 +22,11 @@
 #ifndef EXADG_SOLVERS_AND_PRECONDITIONERS_SOLVERS_ITERATIVE_SOLVERS_DEALII_WRAPPER_H_
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_SOLVERS_ITERATIVE_SOLVERS_DEALII_WRAPPER_H_
 
+// C/C++
+#include <iostream>
+
 // deal.II
+#include <deal.II/base/mpi.h>
 #include <deal.II/base/timer.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/solver_cg.h>
@@ -38,6 +42,43 @@ namespace ExaDG
 {
 namespace Krylov
 {
+/**
+ * dealii::ReductionControl that prints the residual every n iterations and at
+ * the last iteration on the root process of MPI_COMM_WORLD, never for n = 0
+ * (diagnostics).
+ */
+class PrintingReductionControl : public dealii::ReductionControl
+{
+public:
+  PrintingReductionControl(dealii::ReductionControl const & control,
+                           unsigned int const               print_every_n_iterations,
+                           std::string const &              solver_name)
+    : dealii::ReductionControl(control),
+      print_every_n_iterations(print_every_n_iterations),
+      solver_name(solver_name),
+      print(print_every_n_iterations > 0 and
+            dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  {
+  }
+
+  dealii::SolverControl::State
+  check(unsigned int const step, double const check_value) override
+  {
+    dealii::SolverControl::State const state = dealii::ReductionControl::check(step, check_value);
+
+    if(print and (step % print_every_n_iterations == 0 or state != dealii::SolverControl::iterate))
+      std::cout << "    " << solver_name << " iteration " << step << ": residual " << check_value
+                << ", relative " << check_value / this->initial_value() << std::endl;
+
+    return state;
+  }
+
+private:
+  unsigned int const print_every_n_iterations;
+  std::string const  solver_name;
+  bool const         print;
+};
+
 /*
  * Krylov solver base class agnostic of the operator used.
  */
@@ -138,11 +179,13 @@ public:
   {
     dealii::Timer timer;
 
-    dealii::ReductionControl solver_control = create_solver_control(solver_data.max_iter,
-                                                                    solver_data.abs_tol,
-                                                                    solver_data.rel_tol,
-                                                                    solver_data.rel_tol_reference,
-                                                                    rhs);
+    PrintingReductionControl solver_control(create_solver_control(solver_data.max_iter,
+                                                                  solver_data.abs_tol,
+                                                                  solver_data.rel_tol,
+                                                                  solver_data.rel_tol_reference,
+                                                                  rhs),
+                                            solver_data.print_every_n_iterations,
+                                            solver_name);
 
     dealii::SolverSelector<VectorType> solver(solver_name, solver_control);
 

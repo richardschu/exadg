@@ -254,7 +254,12 @@ DriverSteadyProblems<dim, Number>::solve_fixed_point(double const time)
   double const norm_r_0 = residual.l2_norm();
   double       norm_r   = norm_r_0;
 
-  unsigned int n_iter = 0, n_iter_linear = 0;
+  bool const print = solver_data.print_iterations;
+  if(print)
+    pcout << "  Fixed-point iteration 0: residual " << norm_r_0 << std::endl;
+
+  unsigned int  n_iter = 0, n_iter_linear = 0;
+  dealii::Timer timer;
   while(norm_r > solver_data.abs_tol and norm_r / norm_r_0 > solver_data.rel_tol and
         n_iter < solver_data.max_iter)
   {
@@ -270,12 +275,14 @@ DriverSteadyProblems<dim, Number>::solve_fixed_point(double const time)
       this->param.update_preconditioner_coupled and
       n_iter % this->param.update_preconditioner_coupled_every_newton_iter == 0;
 
+    timer.restart();
     unsigned int const n_iter_linear_current =
       pde_operator->solve_linear_problem(solution_linear,
                                          rhs_vector,
                                          transport_velocity,
                                          update_preconditioner,
                                          1.0 /* no mass term in steady problems */);
+    double const time_linear = timer.wall_time();
 
     // relaxed update
     solution.sadd(1.0 - omega, omega, solution_linear);
@@ -285,6 +292,12 @@ DriverSteadyProblems<dim, Number>::solve_fixed_point(double const time)
 
     ++n_iter;
     n_iter_linear += n_iter_linear_current;
+
+    if(print)
+      pcout << "  Fixed-point iteration " << n_iter << ": residual " << norm_r << ", relative "
+            << norm_r / norm_r_0 << ", linear iterations " << n_iter_linear_current
+            << ", wall time linear solver (incl. preconditioner update) " << time_linear << " s"
+            << std::endl;
   }
 
   AssertThrow(norm_r <= solver_data.abs_tol or norm_r / norm_r_0 <= solver_data.rel_tol,

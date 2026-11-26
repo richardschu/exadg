@@ -22,8 +22,13 @@
 #ifndef EXADG_SOLVERS_AND_PRECONDITIONERS_NONLINEAR_SOLVERS_NEWTON_SOLVER_H_
 #define EXADG_SOLVERS_AND_PRECONDITIONERS_NONLINEAR_SOLVERS_NEWTON_SOLVER_H_
 
+// C/C++
+#include <iostream>
+
 // deal.II
 #include <deal.II/base/exceptions.h>
+#include <deal.II/base/mpi.h>
+#include <deal.II/base/timer.h>
 
 // ExaDG
 #include <exadg/solvers_and_preconditioners/nonlinear_solvers/newton_solver_data.h>
@@ -88,6 +93,12 @@ public:
     double norm_r   = residual.l2_norm();
     double norm_r_0 = norm_r;
 
+    bool const print = solver_data.print_iterations and
+                       dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0;
+    if(print)
+      std::cout << "  Newton iteration 0: residual " << norm_r_0 << std::endl;
+    dealii::Timer timer;
+
     while(norm_r > this->solver_data.abs_tol and norm_r / norm_r_0 > solver_data.rel_tol and
           newton_iterations < solver_data.max_iter)
     {
@@ -105,10 +116,14 @@ public:
         update.do_update and (newton_iterations % update.update_every_newton_iter == 0);
 
       // update the preconditioner
+      timer.restart();
       linear_solver.update_preconditioner(update_now);
+      double const time_preconditioner = timer.wall_time();
 
       // solve linear problem
+      timer.restart();
       unsigned int const n_iter_linear = linear_solver.solve(increment, residual);
+      double const       time_linear   = timer.wall_time();
 
       // damped Newton scheme
       double             omega         = 1.0; // damping factor (begin with 1)
@@ -134,6 +149,14 @@ public:
         // increment counter
         n_iter_damp++;
       } while(norm_r_damp >= (1.0 - tau * omega) * norm_r and n_iter_damp < max_iter_damp);
+
+      // omega was halved after the last trial
+      if(print)
+        std::cout << "  Newton iteration " << newton_iterations + 1 << ": residual "
+                  << norm_r_damp << ", relative " << norm_r_damp / norm_r_0 << ", damping "
+                  << 2.0 * omega << ", linear iterations " << n_iter_linear
+                  << ", wall time preconditioner " << time_preconditioner << " s, linear solver "
+                  << time_linear << " s" << std::endl;
 
       if(norm_r_damp >= (1.0 - tau * omega) * norm_r)
       {
